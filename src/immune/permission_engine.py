@@ -277,6 +277,134 @@ def match_rule(rule_content: str | None, tool_name: str, tool_input: dict) -> bo
     return rule_content in payload
 
 
+# ── P0-3 参数粒度数据外泄检测（credential exfiltration） ──────────────
+# 缺口来源：SUMMARY.md P0-3「路径/参数粒度」+ 上轮遗留「工具参数级命令注入
+# （curl外发/凭据窃取类终端命令）」。参照 Warp secret_redaction（凭据识别）+
+# agent-zero _infection_check（外发通道）。
+# 语义：网络出口工具（curl/wget/nc/scp/ssh/ftp…）把**机密文件**当载荷上传、
+# 管道喂入或重定向，= 凭据外泄 → hard deny（任何模式/规则不可覆盖）。
+# 普通网络请求/下载、非机密文件传输不在此列（负控制零误伤）。
+
+# 网络出口（数据能离机的通道）
+_NETWORK_SINK_RE = re.compile(
+    r"(?:^|[|;&\s])(?:curl|wget|nc|ncat|netcat|ftp|sftp|scp|ssh|telnet|socat|certutil)\b"
+    r"|/dev/(?:tcp|udp)/",
+    re.IGNORECASE,
+)
+# 反弹shell / 交互式远程执行通道（本身即外泄通道，不需再判网络出口）
+_REVERSE_SHELL_RE = re.compile(
+    r"/dev/(?:tcp|udp)/|\bbash\s+-i\b|\bsh\s+-i\b|\bnc\s+(?:-\w*\s+)*-e\b|\bncat\b[^\n]*\s-e\b|>&\s*/dev/tcp",
+    re.IGNORECASE,
+)
+# 强凭据文件路径（scp位置操作数判定用，降低误伤）
+_SENSITIVE_FILE_RE = re.compile(
+    r"\.ssh/|id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem\b|\.key\b|\.env\b|/etc/passwd|/etc/shadow"
+    r"|\.aws/credentials|\.aws/config|\.gnupg|\.netrc|\.git-credentials|\.npmrc|\.pypirc"
+    r"|\.kube/config|\.docker/config|\.bash_history|\.zsh_history",
+    re.IGNORECASE,
+)
+# 弱机密命名词（@/管道语境明确，允许更宽）
+_SENSITIVE_WORD_RE = re.compile(
+    r"(?:api[_-]?key|access[_-]?token|secret|password|passwd|credential|private[_-]?key|token)",
+    re.IGNORECASE,
+)
+# 上传位置 @path（curl -d @file / --data-binary @file / -F name=@file / --form ...@file）
+_AT_FILE_RE = re.compile(r"@(?:'[^']*'|\"[^\"]*\"|[^\s'\"]+)")
+# --post-file=PATH / --upload-file=PATH
+_UPLOAD_FLAG_RE = re.compile(r"--(?:post-file|upload-file)[= ]([^\s;]+)", re.IGNORECASE)
+# cat PATH | / < PATH（喂入网络出口）
+_PIPE_SRC_RE = re.compile(r"(?:cat|head|tail|less|more|grep)\s+([^\s|;]+)\s*\|", re.IGNORECASE)
+_REDIR_SRC_RE = re.compile(r"<\s*([^\s;]+)")
+# scp/sftp/ftp 位置操作数（本地源，含@的远端目标跳过）
+_TRANSFER_CMD_RE = re.compile(r"(?:^|[|;&\s])(?:scp|sftp|ftp)\b", re.IGNORECASE)
+
+
+def _is_sensitive_ref(text: str) -> bool:
+    return bool(_SENSITIVE_FILE_RE.search(text or "") or _SENSITIVE_WORD_RE.search(text or ""))
+
+
+def detect_exfiltration(tool_input: dict | None) -> dict | None:
+    """参数粒度数据外泄检测。命中返回 finding dict，否则 None。
+
+    只在 shell/execute_code 命令载荷上判定；finding 形状：
+    ``{"kind", "risk", "hard", "reason", "matched"}``。
+    """
+    cmd = _shell_command_of(tool_input or {})
+    if not cmd:
+        return None
+
+    # 1) 反弹shell / 交互式远程执行通道 —— 本身就是外泄通道
+    m = _REVERSE_SHELL_RE.search(cmd)
+    if m:
+        return {
+            "kind": "reverse_shell",
+            "risk": "high",
+            "hard": True,
+            "reason": "interactive/reverse shell channel (/dev/tcp, bash -i, nc -e)",
+            "matched": m.group(0).strip(),
+        }
+
+    # 无网络出口则谈不上数据外泄
+    if not _NETWORK_SINK_RE.search(cmd):
+        return None
+
+    # 2) 上传位置引用机密：@file / --post-file / --upload-file
+    for am in _AT_FILE_RE.finditer(cmd):
+        path = am.group(0)[1:].strip("'\"")
+        if _is_sensitive_ref(path):
+            return {
+                "kind": "upload",
+                "risk": "high",
+                "hard": True,
+                "reason": "sensitive file referenced as network upload payload",
+                "matched": path,
+            }
+    for fm in _UPLOAD_FLAG_RE.finditer(cmd):
+        if _is_sensitive_ref(fm.group(1)):
+            return {
+                "kind": "upload",
+                "risk": "high",
+                "hard": True,
+                "reason": "sensitive file referenced as network upload payload",
+                "matched": fm.group(1),
+            }
+
+    # 3) 管道/重定向喂入网络出口
+    for pm in _PIPE_SRC_RE.finditer(cmd):
+        if _is_sensitive_ref(pm.group(1)):
+            return {
+                "kind": "pipe",
+                "risk": "high",
+                "hard": True,
+                "reason": "sensitive file piped into a network sink",
+                "matched": pm.group(1),
+            }
+    for rm in _REDIR_SRC_RE.finditer(cmd):
+        if _is_sensitive_ref(rm.group(1)):
+            return {
+                "kind": "redirect",
+                "risk": "high",
+                "hard": True,
+                "reason": "sensitive file redirected into a network sink",
+                "matched": rm.group(1),
+            }
+
+    # 4) scp/sftp/ftp 本地源操作数（强凭据文件路径，避免远端路径误伤）
+    if _TRANSFER_CMD_RE.search(cmd):
+        for tok in re.findall(r"[\w~./\-]+", cmd):
+            if "@" in tok:
+                continue  # 远端目标 user@host:/path
+            if _SENSITIVE_FILE_RE.search(tok):
+                return {
+                    "kind": "transfer",
+                    "risk": "high",
+                    "hard": True,
+                    "reason": "sensitive local file sent to a remote host",
+                    "matched": tok,
+                }
+    return None
+
+
 def _is_shell_read_only(cmd: str) -> bool:
     c = cmd.strip()
     return any(c == p or c.startswith(p + " ") for p in _SHELL_READONLY_PREFIXES)
@@ -502,6 +630,28 @@ class PermissionEngine:
 
     def check(self, tool_name: str, tool_input: dict | None = None) -> PermissionDecision:
         tool_input = tool_input or {}
+
+        # Step 0a: 参数粒度数据外泄检测 —— 凭据外泄 hard deny（任何模式/规则不可覆盖）
+        # SUMMARY.md P0-3 缺口：curl外发/凭据窃取类终端命令此前不归任何门禁。
+        exfil = detect_exfiltration(tool_input)
+        if exfil is not None:
+            return PermissionDecision(
+                behavior=PermissionBehavior.DENY,
+                message=(
+                    f"[HARD DENY] {tool_name} blocked: credential exfiltration "
+                    f"detected ({exfil['kind']})"
+                ),
+                decision_reason=(
+                    f"Exfiltration guard ({exfil['kind']}): {exfil['reason']} "
+                    f"(matched: {exfil.get('matched', '')})"
+                ),
+                rule_id="guard-exfiltration",
+                rule_source="engine",
+                rule_content=exfil.get("matched", ""),
+                requires_human=False,
+                risk="high",
+                mode=self.mode.value,
+            )
 
         # Step 0: hard deny — 硬否决，任何模式不可覆盖（kilocode hardRuleset）
         hard = self._first_matching(PermissionBehavior.DENY, tool_name, tool_input, hard=True)
