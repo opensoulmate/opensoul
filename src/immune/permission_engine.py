@@ -19,6 +19,7 @@ OpenSoul现状（SUMMARY.md原文）："casbin用户级RBAC——无工具/路�
 
 from __future__ import annotations
 
+import ast
 import fnmatch
 import hashlib
 import json
@@ -231,8 +232,15 @@ _SOURCE_PRIORITY = {"session": 3, "user": 2, "builtin": 1}
 
 
 def _shell_command_of(tool_input: dict) -> str:
-    # acp-proxy execute_code工具的代码载荷在"code"键（非"command"/"cmd"）
-    return str(tool_input.get("command") or tool_input.get("cmd") or tool_input.get("code") or "")
+    # acp-proxy execute_code工具的代码载荷在"code"键（非"command"/"cmd"）；
+    # batch_execute（code-mode）脚本载荷在"script"键（或"code"回退）
+    return str(
+        tool_input.get("command")
+        or tool_input.get("cmd")
+        or tool_input.get("code")
+        or tool_input.get("script")
+        or ""
+    )
 
 
 def _path_of(tool_input: dict) -> str:
@@ -344,9 +352,9 @@ def detect_exfiltration(tool_input: dict | None) -> dict | None:
             "matched": m.group(0).strip(),
         }
 
-    # 无网络出口则谈不上数据外泄
+    # 无网络出口则谈不上shell数据外泄（Python载荷库级外发另行分析）
     if not _NETWORK_SINK_RE.search(cmd):
-        return None
+        return detect_python_exfiltration(cmd)
 
     # 2) 上传位置引用机密：@file / --post-file / --upload-file
     for am in _AT_FILE_RE.finditer(cmd):
@@ -402,7 +410,324 @@ def detect_exfiltration(tool_input: dict | None) -> dict | None:
                     "reason": "sensitive local file sent to a remote host",
                     "matched": tok,
                 }
+    return detect_python_exfiltration(cmd)
+
+
+# ── P0-3 补充：Python载荷库级外泄（execute_code / batch_execute script / python -c）──
+# 上轮遗留#1：「execute_code的Python载荷内的库级外发（requests.post把secret发出去）
+# 不在shell正则检测面」——shell正则只认curl/wget等命令字面量，Python以库调用出网
+# （requests/httpx/urllib/socket/smtp/ftp）时完全不可见。本节以 ast 做轻量污点分析：
+# **强凭据文件读取**（与shell侧 _SENSITIVE_FILE_RE 同一真源）流入网络出口调用 = 外泄
+# → hard deny（kind=py_upload）；Python经subprocess/os.system外带shell命令时把字面量
+# 重组回 shell 检测面（kind=py_shellout）；dup2/pty.spawn+socket.connect反弹shell签名
+# （kind=reverse_shell）。
+# 与上轮同款取舍（负控制零误伤优先）：污点源只收强凭据文件路径（弱词命名文件外发
+# 与scp弱词同列遗留，需先讨论误伤容忍度）；os.environ类环境变量密钥不做污点源
+# （OAuth令牌交换类合法流会把client_secret发进body，误伤面大，同列遗留）。
+# 参照：Warp secret_redaction（凭据识别）+ agent-zero _infection_check（外发通道）。
+
+_PY_NET_MODULES = {
+    "requests",
+    "httpx",
+    "urllib",
+    "urllib3",
+    "aiohttp",
+    "socket",
+    "smtplib",
+    "ftplib",
+    "telnetlib",
+    "http",
+    "httplib",
+}
+# 网络出口方法（数据能离机的调用）；retr*/get下载类不收
+_PY_SINK_METHODS = {
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "head",
+    "options",
+    "request",
+    "urlopen",
+    "send",
+    "sendall",
+    "sendto",
+    "sendmail",
+    "send_message",
+    "storbinary",
+    "storlines",
+    "putfile",
+    "upload",
+}
+# 句柄工厂（赋值即持有网络出口能力：socket.socket()/requests.Session()/ftplib.FTP()…）
+_PY_HANDLE_FACTORIES = _PY_SINK_METHODS | {
+    "socket",
+    "create_connection",
+    "Session",
+    "Client",
+    "SMTP",
+    "SMTP_SSL",
+    "FTP",
+    "FTP_TLS",
+    "HTTPConnection",
+    "HTTPSConnection",
+    "urlopen",
+}
+_PY_SHELL_OUT_TAILS = {
+    "system",
+    "popen",
+    "run",
+    "call",
+    "check_call",
+    "check_output",
+    "Popen",
+    "getoutput",
+    "getstatusoutput",
+}
+_PY_READ_TAILS = {"read", "readline", "readlines", "read_text", "read_bytes"}
+_PY_OPEN_TAILS = {"open"}
+_PY_C_RE = re.compile(r"python[23]?(?:\.\d+)?\s+(?:-[a-zA-Z]\S*\s+)*-c\s+([\"'])(.+?)\1", re.DOTALL)
+_PY_HEREDOC_RE = re.compile(
+    r"python[23]?(?:\.\d+)?\s*<<[\"']?(\w+)[\"']?\s*\n(.*?)\n\s*\1", re.DOTALL
+)
+# 语法兜底（载荷不可解析时的保守启发式）：敏感文件读取 + 网络出口签名同现
+_PY_SINK_HINT_RE = re.compile(
+    r"requests\s*\.|httpx\s*\.|urllib|urlopen|socket\s*\.\s*(?:socket|create_connection)"
+    r"|smtplib|ftplib|aiohttp|\w+\s*\.\s*(?:post|put|sendall|sendto|storbinary)\s*\(",
+    re.IGNORECASE,
+)
+_PY_OPEN_HINT_RE = re.compile(r"\bopen\s*\(|read_text\s*\(|read_bytes\s*\(")
+
+
+def _py_qualname(node: ast.AST) -> str:
+    """a.b.c 形式的限定名（Call包一层也续接，如 requests.Session().post）"""
+    parts: list[str] = []
+    cur: ast.AST = node
+    while isinstance(cur, ast.Attribute):
+        parts.append(cur.attr)
+        cur = cur.value
+    if isinstance(cur, ast.Name):
+        parts.append(cur.id)
+        return ".".join(reversed(parts))
+    if isinstance(cur, ast.Call):
+        inner = _py_qualname(cur.func)
+        if inner:
+            parts.append(inner)
+        return ".".join(reversed(parts))
+    return ".".join(reversed(parts))
+
+
+def _py_str_constants(node: ast.AST) -> list[str]:
+    return [
+        n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+    ]
+
+
+def _py_names_used(node: ast.AST) -> set[str]:
+    return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+
+
+def _py_secret_read(
+    node: ast.AST, tainted: set[str], sensitive_paths: set[str] | None = None
+) -> str | None:
+    """表达式是否读取了强凭据文件（或经污点句柄.read()取得其内容）。返回命中标识。"""
+    sensitive_paths = sensitive_paths or set()
+    for sub in ast.walk(node):
+        if not isinstance(sub, ast.Call):
+            continue
+        tail = _py_qualname(sub.func).rsplit(".", 1)[-1]
+        if tail in _PY_OPEN_TAILS or tail in _PY_READ_TAILS:
+            for s in _py_str_constants(sub):
+                if _SENSITIVE_FILE_RE.search(s):
+                    return s
+            # open(path) 其中 path 是敏感路径字面量变量
+            if _py_names_used(sub) & sensitive_paths:
+                return sorted(_py_names_used(sub) & sensitive_paths)[0]
+            # 污点句柄读取：fh.read()/fh.read_text() 其中 fh 来自敏感 open()
+            if tail in _PY_READ_TAILS and isinstance(sub.func, ast.Attribute):
+                base = sub.func.value
+                if isinstance(base, ast.Name) and base.id in tainted:
+                    return base.id
     return None
+
+
+def _analyze_python_ast(code: str) -> dict | None:
+    """单个Python载荷的污点分析。语法错误返回None（由上层走保守兜底）。"""
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return None
+
+    tainted: set[str] = set()
+    sensitive_paths: set[str] = set()
+    net_handles: set[str] = set()
+    dup2 = connect = pty_spawn = False
+
+    def _taint_targets(target: ast.AST, value: ast.AST) -> None:
+        names = (
+            [target.id]
+            if isinstance(target, ast.Name)
+            else [t.id for t in ast.walk(target) if isinstance(t, ast.Name)]
+        )
+        # 敏感路径字面量变量：p = '~/.ssh/id_rsa' / f-string含敏感路径
+        for s in _py_str_constants(value):
+            if _SENSITIVE_FILE_RE.search(s):
+                sensitive_paths.update(names)
+                break
+        if _py_names_used(value) & sensitive_paths:
+            sensitive_paths.update(names)
+        secret = _py_secret_read(value, tainted, sensitive_paths)
+        flowing = bool(_py_names_used(value) & tainted) or secret is not None
+        if secret is not None or flowing:
+            tainted.update(names)
+        for t in names:
+            for sub in ast.walk(value):
+                if isinstance(sub, ast.Call):
+                    q = _py_qualname(sub.func)
+                    root = q.split(".", 1)[0]
+                    if root in _PY_NET_MODULES and q.rsplit(".", 1)[-1] in _PY_HANDLE_FACTORIES:
+                        net_handles.add(t)
+                        break
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for tgt in node.targets:
+                _taint_targets(tgt, node.value)
+        elif isinstance(node, ast.AnnAssign) and node.value is not None and node.target is not None:
+            _taint_targets(node.target, node.value)
+        elif isinstance(node, ast.AugAssign):
+            _taint_targets(node.target, node.value)
+        elif isinstance(node, ast.withitem):
+            if node.optional_vars is not None:
+                _taint_targets(node.optional_vars, node.context_expr)
+
+    def _sink_call(call: ast.Call) -> bool:
+        q = _py_qualname(call.func)
+        tail = q.rsplit(".", 1)[-1]
+        if tail not in _PY_SINK_METHODS:
+            return False
+        root = q.split(".", 1)[0]
+        if root in _PY_NET_MODULES:
+            return True
+        base = call.func.value if isinstance(call.func, ast.Attribute) else None
+        return isinstance(base, ast.Name) and base.id in net_handles
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        q = _py_qualname(node.func)
+        tail = q.rsplit(".", 1)[-1]
+
+        if tail == "dup2":
+            dup2 = True
+        if q.rsplit(".", 1)[-1] == "spawn" and "pty" in q:
+            pty_spawn = True
+        if tail == "connect":
+            connect = True
+
+        # ① 网络出口调用携带敏感读取/污点数据 = py_upload
+        if _sink_call(node):
+            args = list(node.args) + [kw.value for kw in node.keywords]
+            for arg in args:
+                secret = _py_secret_read(arg, tainted, sensitive_paths)
+                if secret is not None:
+                    return {
+                        "kind": "py_upload",
+                        "risk": "high",
+                        "hard": True,
+                        "reason": "sensitive file content flows into a network sink call",
+                        "matched": secret,
+                    }
+                hit = _py_names_used(arg) & tainted
+                if hit:
+                    return {
+                        "kind": "py_upload",
+                        "risk": "high",
+                        "hard": True,
+                        "reason": "tainted sensitive-file data flows into a network sink call",
+                        "matched": sorted(hit)[0],
+                    }
+
+        # ② subprocess/os.system 外带shell命令：字面量重组回shell检测面 + 污点外带
+        if tail in _PY_SHELL_OUT_TAILS and (
+            q.split(".", 1)[0] in ("os", "subprocess", "commands") or q in ("os.system", "os.popen")
+        ):
+            pseudo = " ".join(_py_str_constants(node))
+            if pseudo:
+                shell_hit = detect_exfiltration({"command": pseudo})
+                if shell_hit is not None:
+                    return {
+                        "kind": "py_shellout",
+                        "risk": "high",
+                        "hard": True,
+                        "reason": (
+                            "shell-out command carries exfiltration pattern "
+                            f"({shell_hit.get('kind', '')})"
+                        ),
+                        "matched": shell_hit.get("matched", pseudo[:80]),
+                    }
+            tainted_hit = _py_names_used(node) & (tainted | sensitive_paths)
+            if tainted_hit and _NETWORK_SINK_RE.search(pseudo):
+                return {
+                    "kind": "py_shellout",
+                    "risk": "high",
+                    "hard": True,
+                    "reason": "tainted sensitive-file data passed to a network shell-out",
+                    "matched": sorted(tainted_hit)[0],
+                }
+
+    # ③ 反弹shell签名：fd重定向/pty注入 + socket连接（本身即外泄通道）
+    if (dup2 or pty_spawn) and connect:
+        return {
+            "kind": "reverse_shell",
+            "risk": "high",
+            "hard": True,
+            "reason": "reverse shell signature (os.dup2/pty.spawn + socket connect)",
+            "matched": "dup2+connect" if dup2 else "pty.spawn+connect",
+        }
+    return None
+
+
+def _python_regex_fallback(code: str) -> dict | None:
+    """载荷不可解析时的保守兜底：敏感文件读取与网络出口签名同现才命中。"""
+    if (
+        _PY_SINK_HINT_RE.search(code)
+        and _SENSITIVE_FILE_RE.search(code)
+        and _PY_OPEN_HINT_RE.search(code)
+    ):
+        return {
+            "kind": "py_unparsed",
+            "risk": "high",
+            "hard": True,
+            "reason": (
+                "unparseable payload contains both sensitive-file read and network sink signatures"
+            ),
+            "matched": "sensitive-read+network-sink",
+        }
+    return None
+
+
+def detect_python_exfiltration(code: str) -> dict | None:
+    """Python载荷库级外泄检测。命中返回 finding dict，否则 None。
+
+    覆盖 execute_code 的"code"载荷、batch_execute的script载荷、terminal内
+    python -c / heredoc 子载荷；finding 形状与 detect_exfiltration 一致。
+    """
+    if not code or not code.strip():
+        return None
+    candidates = [code]
+    m = _PY_C_RE.search(code)
+    if m:
+        candidates.append(m.group(2))
+    m2 = _PY_HEREDOC_RE.search(code)
+    if m2:
+        candidates.append(m2.group(2))
+    for cand in candidates:
+        finding = _analyze_python_ast(cand)
+        if finding is not None:
+            return finding
+    return _python_regex_fallback(code)
 
 
 def _is_shell_read_only(cmd: str) -> bool:
