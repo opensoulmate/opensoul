@@ -807,6 +807,17 @@ async def wakeup_folded(
     return get_wakeup_scheduler().folded_view(agent_id=agent_id, session_id=session_id, limit=limit)
 
 
+@router.get("/wakeup/overview")
+async def wakeup_overview():
+    """全部唤醒循环状态聚合（monitoring面板数据源：不指定key一屏看全）。
+
+    每个 (agent_id, session_id) 键给 status() 同语义摘要（active/streak/倒计时/
+    fire执行侧状态），前端Wakeup面板按此渲染，逐key展开再查/wakeup/folded。"""
+    from src.will.wakeup import get_wakeup_scheduler
+
+    return get_wakeup_scheduler().overview()
+
+
 # ── 执行侧闭环（claude-code runtime"到点重新唤醒agent"）──
 # 接线：acp-proxy agent/wakeup_executor.py（a/b双实例）→ GET /wakeup/due 轮询 →
 # POST /wakeup/claim CAS领取（at-most-once，双实例不双跑）→ 执行唤醒回合 →

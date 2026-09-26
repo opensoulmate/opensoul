@@ -390,6 +390,29 @@ class WakeupScheduler:
             "total_events": total,
         }
 
+    # ── 查询：overview（monitoring面板：全部唤醒循环一屏可见） ──
+
+    def overview(self) -> dict:
+        """全部 (agent_id, session_id) 唤醒循环的状态聚合——monitoring面板数据源。
+
+        每个键复用 status() 同一语义（判定逻辑单一真源，不复制）；due_count 由
+        各键 fire.due_now 汇总（与 due_wakeups 同一判定谓词）。
+        "我都不知道他们在干嘛"的面板面：active循环/倒计时/空转streak/执行侧
+        fire状态全部一屏可见，不再要求逐key问status。"""
+        with self._lock, self._conn() as conn:
+            keys = conn.execute(
+                "SELECT DISTINCT agent_id, session_id FROM wakeup_events"
+            ).fetchall()
+        # status() 自身取锁，不能嵌套在 _lock 内调用（threading.Lock 不可重入）
+        loops = [self.status(k["agent_id"], k["session_id"]) for k in keys]
+        loops.sort(key=lambda s: (s["next_wakeup_at"] is None, s["next_wakeup_at"] or 0))
+        return {
+            "total_keys": len(loops),
+            "active_count": sum(1 for s in loops if s["active"]),
+            "due_count": sum(1 for s in loops if s["fire"]["due_now"]),
+            "loops": loops,
+        }
+
     # ── 调度：due_wakeups（执行侧按此拉取到点唤醒） ───────────
 
     def due_wakeups(self, now: float | None = None) -> list[dict]:
@@ -401,13 +424,17 @@ class WakeupScheduler:
         失败被ack_fire释放回 fired_at=NULL 后重新可见=自动进入重试。"""
         now = time.time() if now is None else now
         with self._lock, self._conn() as conn:
-            rows = conn.execute("SELECT * FROM wakeup_events ORDER BY ts DESC, id DESC").fetchall()
+            # 每key只取最新一行（多轮遗留"全表扫描取每key最新"销账）：id自增≡ts序
+            # （record()是唯一写入路径，ts=now），MAX(id) per key 即最新事件——
+            # 不再把全表加载进Python做per-key去重，行数=键数而非事件总数。
+            rows = conn.execute(
+                "SELECT * FROM wakeup_events WHERE id IN ("
+                " SELECT MAX(id) FROM wakeup_events GROUP BY agent_id, session_id)"
+            ).fetchall()
         latest: dict[tuple[str, str], dict] = {}
         for r in rows:
             ev = self._row_to_event(r)
-            key = (ev["agent_id"], ev["session_id"])
-            if key not in latest:
-                latest[key] = ev
+            latest[(ev["agent_id"], ev["session_id"])] = ev
         due = [
             e
             for e in latest.values()
