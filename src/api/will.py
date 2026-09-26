@@ -752,3 +752,54 @@ async def job_requeue(job_id: str):
     if result.get("reason") == "not_found":
         raise HTTPException(404, "Job not found")
     return result
+
+
+# ── ScheduleWakeup（claude-code SDK：agent自报noop+streak折叠） ──
+# 接线：agent工具 schedule_wakeup（acp-proxy soulmate_agent）→ POST /api/will/wakeup/schedule；
+# 前端折叠UI → GET /api/will/wakeup/folded（连续noop折叠成 noop_streak 块）
+
+
+class WakeupScheduleRequest(BaseModel):
+    agent_id: str = "default"
+    session_id: str = ""
+    reason: str = Field(description="一句话：这次唤醒检查了什么（必填，展示给用户）")
+    noop: bool = Field(description="true=这次检查什么都没发生；false=有进展")
+    delay_seconds: float = Field(default=60.0, description="下次唤醒延迟（会被钳到[60,3600]秒）")
+    stop: bool = Field(default=False, description="true=结束唤醒循环")
+
+
+@router.post("/wakeup/schedule")
+async def wakeup_schedule(req: WakeupScheduleRequest):
+    """记录一次 ScheduleWakeup 自报：钳制延迟 + noop streak + 折叠状态。"""
+    from src.will.wakeup import get_wakeup_scheduler
+
+    try:
+        event = get_wakeup_scheduler().record(
+            reason=req.reason,
+            noop=req.noop,
+            delay_seconds=req.delay_seconds,
+            stop=req.stop,
+            agent_id=req.agent_id,
+            session_id=req.session_id,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return event
+
+
+@router.get("/wakeup/status")
+async def wakeup_status(agent_id: str = "default", session_id: str = ""):
+    """唤醒循环状态：active / current_streak / next_wakeup_at / 倒计时。"""
+    from src.will.wakeup import get_wakeup_scheduler
+
+    return get_wakeup_scheduler().status(agent_id=agent_id, session_id=session_id)
+
+
+@router.get("/wakeup/folded")
+async def wakeup_folded(
+    agent_id: str = "default", session_id: str = "", limit: int = Query(default=50)
+):
+    """折叠显示：连续 noop 折叠成一个 noop_streak 块（count/streak_max/时间段/全部reason）。"""
+    from src.will.wakeup import get_wakeup_scheduler
+
+    return get_wakeup_scheduler().folded_view(agent_id=agent_id, session_id=session_id, limit=limit)
