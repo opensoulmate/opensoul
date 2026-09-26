@@ -7,6 +7,11 @@
 - **连续 noop 被折叠显示并统计 streak**——用户一眼看到"它在干嘛/是不是空转"；
 - stop=true 结束唤醒循环。
 
+执行侧闭环（claude-code runtime"delay到点后重新唤醒agent"，本模块的执行语义）：
+- due_wakeups() 给出到点事件；executor经 claim_fire() CAS领取执行权（at-most-once，
+  双实例并发领取只有一个赢家）；执行结果 ack_fire() 回执——失败释放回待执行=自动重试，
+  达 MAX_FIRE_ATTEMPTS 上限进 EXHAUSTED 终态（留痕，绝不无限重试烧钱）。
+
 设计纪律（与源码注释语义一致）：
 1. 钳制必须显式可见：requested_delay_s 原样留档，clamped=True 标记，禁止静默改值；
 2. 禁止静默截断同族：reason 超长只截显式标记（[+N chars]），不留无痕截断；
@@ -30,6 +35,9 @@ MIN_WAKEUP_DELAY_S = 60.0
 MAX_WAKEUP_DELAY_S = 3600.0
 # claude-code：reason 一句话——超长截断但必须显式标记（禁止静默截断）
 REASON_MAX_CHARS = 500
+# 执行侧唤醒循环（claude-code runtime"到点重新唤醒agent"）：fire失败重试上限。
+# 超限后事件进 EXHAUSTED 终态（fired_at 保持 + last_fire_error 留痕），绝不无限重试。
+MAX_FIRE_ATTEMPTS = 5
 
 
 def clamp_delay(delay_seconds: float) -> tuple[float, float, bool]:
@@ -83,7 +91,11 @@ class WakeupScheduler:
                     noop INTEGER NOT NULL DEFAULT 0,
                     streak INTEGER NOT NULL DEFAULT 0,
                     stopped INTEGER NOT NULL DEFAULT 0,
-                    next_wakeup_at REAL
+                    next_wakeup_at REAL,
+                    source TEXT NOT NULL DEFAULT '',
+                    fired_at REAL,
+                    fire_attempts INTEGER NOT NULL DEFAULT 0,
+                    last_fire_error TEXT NOT NULL DEFAULT ''
                 )
                 """
             )
@@ -91,6 +103,25 @@ class WakeupScheduler:
                 "CREATE INDEX IF NOT EXISTS idx_wakeup_agent_ts "
                 "ON wakeup_events(agent_id, session_id, ts)"
             )
+            # 旧库迁移（执行侧闭环新增列）：上一轮的 wakeup.db 没有这些列，
+            # CREATE IF NOT EXISTS 不会补——必须显式 ALTER（幂等：存在即跳过）。
+            existing = {
+                r["name"] for r in conn.execute("PRAGMA table_info(wakeup_events)").fetchall()
+            }
+            for col, ddl in (
+                ("source", "ALTER TABLE wakeup_events ADD COLUMN source TEXT NOT NULL DEFAULT ''"),
+                ("fired_at", "ALTER TABLE wakeup_events ADD COLUMN fired_at REAL"),
+                (
+                    "fire_attempts",
+                    "ALTER TABLE wakeup_events ADD COLUMN fire_attempts INTEGER NOT NULL DEFAULT 0",
+                ),
+                (
+                    "last_fire_error",
+                    "ALTER TABLE wakeup_events ADD COLUMN last_fire_error TEXT NOT NULL DEFAULT ''",
+                ),
+            ):
+                if col not in existing:
+                    conn.execute(ddl)
 
     @staticmethod
     def _key(agent_id: str, session_id: str) -> tuple[str, str]:
@@ -111,6 +142,15 @@ class WakeupScheduler:
             "streak": row["streak"],
             "stopped": bool(row["stopped"]),
             "next_wakeup_at": row["next_wakeup_at"],
+            "source": row["source"] or "",
+            "fired_at": row["fired_at"],
+            "fire_attempts": int(row["fire_attempts"]),
+            "last_fire_error": row["last_fire_error"] or "",
+            # 执行侧派生态：fired=已领取执行权（at-most-once）；exhausted=重试用尽终态
+            "fired": row["fired_at"] is not None,
+            "exhausted": (row["fired_at"] is not None)
+            and int(row["fire_attempts"]) >= MAX_FIRE_ATTEMPTS
+            and bool(row["last_fire_error"]),
         }
 
     # ── 核心：record（agent 调用 ScheduleWakeup 的唯一入口） ─
@@ -123,6 +163,7 @@ class WakeupScheduler:
         stop: bool = False,
         agent_id: str = "default",
         session_id: str = "",
+        source: str = "",
     ) -> dict:
         """记录一次 ScheduleWakeup 自报。
 
@@ -159,8 +200,8 @@ class WakeupScheduler:
             cur = conn.execute(
                 "INSERT INTO wakeup_events "
                 "(agent_id, session_id, ts, requested_delay_s, delay_s, clamped, "
-                " reason, noop, streak, stopped, next_wakeup_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                " reason, noop, streak, stopped, next_wakeup_at, source) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     aid,
                     sid,
@@ -173,6 +214,7 @@ class WakeupScheduler:
                     streak,
                     1 if stop else 0,
                     next_at,
+                    source or "",
                 ),
             )
             event_id = cur.lastrowid
@@ -191,6 +233,10 @@ class WakeupScheduler:
             "clamped": was_clamped,
             "next_wakeup_at": next_at,
             "active": not stop,
+            "source": source or "",
+            "fired": False,
+            "fire_attempts": 0,
+            "last_fire_error": "",
         }
 
     # ── 查询：status（"它现在在干嘛"） ────────────────────────
@@ -214,6 +260,17 @@ class WakeupScheduler:
                 "WHERE agent_id=? AND session_id=? AND noop=1 AND stopped=0",
                 (aid, sid),
             ).fetchone()["n"]
+            fired_n = conn.execute(
+                "SELECT COUNT(*) AS n FROM wakeup_events "
+                "WHERE agent_id=? AND session_id=? AND fired_at IS NOT NULL "
+                "AND last_fire_error=''",
+                (aid, sid),
+            ).fetchone()["n"]
+            exhausted_n = conn.execute(
+                "SELECT COUNT(*) AS n FROM wakeup_events "
+                "WHERE agent_id=? AND session_id=? AND last_fire_error LIKE 'EXHAUSTED%'",
+                (aid, sid),
+            ).fetchone()["n"]
 
         if row is None:
             return {
@@ -226,12 +283,21 @@ class WakeupScheduler:
                 "last_event": None,
                 "total_events": 0,
                 "noop_events": 0,
+                "fire": {"due_now": False, "fired": 0, "exhausted": 0},
             }
         ev = self._row_to_event(row)
         active = (not ev["stopped"]) and (ev["next_wakeup_at"] is not None)
         countdown = None
         if active and ev["next_wakeup_at"] is not None:
             countdown = round(ev["next_wakeup_at"] - now, 1)
+        # 执行侧闭环可观测："到点了还没人来叫醒我吗"一眼可见
+        due_now = (
+            (not ev["stopped"])
+            and ev["next_wakeup_at"] is not None
+            and ev["next_wakeup_at"] <= now
+            and not ev["fired"]
+            and ev["fire_attempts"] < MAX_FIRE_ATTEMPTS
+        )
         return {
             "agent_id": aid,
             "session_id": sid,
@@ -242,6 +308,7 @@ class WakeupScheduler:
             "last_event": ev,
             "total_events": total,
             "noop_events": noop_n,
+            "fire": {"due_now": due_now, "fired": fired_n, "exhausted": exhausted_n},
         }
 
     # ── 查询：folded_view（"连续noop折叠显示"） ─────────────
@@ -327,7 +394,11 @@ class WakeupScheduler:
 
     def due_wakeups(self, now: float | None = None) -> list[dict]:
         """到点应唤醒的循环（每个 (agent_id, session_id) 取最新事件判定——
-        stop事件是循环终态，必须参与"最新"判定，否则旧的未stop事件会复活成due）。"""
+        stop事件是循环终态，必须参与"最新"判定，否则旧的未stop事件会复活成due）。
+
+        执行侧闭环过滤：已被领取执行权（fired_at非空）或重试用尽（EXHAUSTED）的
+        事件不再返回——at-most-once，双实例executor靠claim_fire CAS保证不双跑。
+        失败被ack_fire释放回 fired_at=NULL 后重新可见=自动进入重试。"""
         now = time.time() if now is None else now
         with self._lock, self._conn() as conn:
             rows = conn.execute("SELECT * FROM wakeup_events ORDER BY ts DESC, id DESC").fetchall()
@@ -340,10 +411,79 @@ class WakeupScheduler:
         due = [
             e
             for e in latest.values()
-            if (not e["stopped"]) and e["next_wakeup_at"] is not None and e["next_wakeup_at"] <= now
+            if (not e["stopped"])
+            and e["next_wakeup_at"] is not None
+            and e["next_wakeup_at"] <= now
+            and not e["fired"]
+            and e["fire_attempts"] < MAX_FIRE_ATTEMPTS
         ]
         due.sort(key=lambda e: e["next_wakeup_at"] or 0)
         return due
+
+    # ── 执行：claim_fire / ack_fire（executor到点真正"再醒"） ──
+
+    def claim_fire(self, event_id: int) -> dict | None:
+        """CAS领取一次到点唤醒的执行权（at-most-once）。
+
+        UPDATE ... WHERE fired_at IS NULL AND fire_attempts < MAX 的 rowcount==1
+        即唯一赢家（双实例executor并发领取时输家拿None，绝不双跑）。
+        领取即 fire_attempts+1（失败重试计数在领取时发生，ack只决定释放/终结）。"""
+        now = time.time()
+        with self._lock, self._conn() as conn:
+            cur = conn.execute(
+                "UPDATE wakeup_events SET fired_at=?, fire_attempts=fire_attempts+1 "
+                "WHERE id=? AND fired_at IS NULL AND fire_attempts < ?",
+                (now, int(event_id), MAX_FIRE_ATTEMPTS),
+            )
+            if cur.rowcount != 1:
+                return None
+            row = conn.execute(
+                "SELECT * FROM wakeup_events WHERE id=?", (int(event_id),)
+            ).fetchone()
+        return self._row_to_event(row) if row is not None else None
+
+    def ack_fire(self, event_id: int, ok: bool, error: str = "") -> dict:
+        """执行结果回执。ok=True：保持fired终态；ok=False：
+        - 未达MAX_FIRE_ATTEMPTS → 释放（fired_at=NULL）重新可见=自动重试；
+        - 已达上限 → EXHAUSTED终态（fired_at保持+last_fire_error留痕），绝不再烧。"""
+        text = _trim_reason(error)
+        with self._lock, self._conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM wakeup_events WHERE id=?", (int(event_id),)
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"wakeup事件不存在: {event_id}")
+            attempts = int(row["fire_attempts"])
+            if ok:
+                conn.execute(
+                    "UPDATE wakeup_events SET last_fire_error='' WHERE id=?", (int(event_id),)
+                )
+                state = "fired"
+            elif attempts >= MAX_FIRE_ATTEMPTS:
+                conn.execute(
+                    "UPDATE wakeup_events SET last_fire_error=? WHERE id=?",
+                    (f"EXHAUSTED after {attempts} attempts: {text}", int(event_id)),
+                )
+                state = "exhausted"
+            else:
+                conn.execute(
+                    "UPDATE wakeup_events SET fired_at=NULL, last_fire_error=? WHERE id=?",
+                    (text, int(event_id)),
+                )
+                state = "retry"
+            row2 = conn.execute(
+                "SELECT * FROM wakeup_events WHERE id=?", (int(event_id),)
+            ).fetchone()
+        ev = self._row_to_event(row2)
+        return {
+            "event_id": int(event_id),
+            "state": state,
+            "retryable": state == "retry",
+            "fire_attempts": ev["fire_attempts"],
+            "last_fire_error": ev["last_fire_error"],
+            "fired": ev["fired"],
+            "exhausted": ev["exhausted"],
+        }
 
 
 # ── 单例（get_job_queue 同款惯例） ──────────────────────────

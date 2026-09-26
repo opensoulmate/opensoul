@@ -766,6 +766,7 @@ class WakeupScheduleRequest(BaseModel):
     noop: bool = Field(description="true=这次检查什么都没发生；false=有进展")
     delay_seconds: float = Field(default=60.0, description="下次唤醒延迟（会被钳到[60,3600]秒）")
     stop: bool = Field(default=False, description="true=结束唤醒循环")
+    source: str = Field(default="", description="调度来源标识（可观测用，可空）")
 
 
 @router.post("/wakeup/schedule")
@@ -781,6 +782,7 @@ async def wakeup_schedule(req: WakeupScheduleRequest):
             stop=req.stop,
             agent_id=req.agent_id,
             session_id=req.session_id,
+            source=req.source,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -803,3 +805,53 @@ async def wakeup_folded(
     from src.will.wakeup import get_wakeup_scheduler
 
     return get_wakeup_scheduler().folded_view(agent_id=agent_id, session_id=session_id, limit=limit)
+
+
+# ── 执行侧闭环（claude-code runtime"到点重新唤醒agent"）──
+# 接线：acp-proxy agent/wakeup_executor.py（a/b双实例）→ GET /wakeup/due 轮询 →
+# POST /wakeup/claim CAS领取（at-most-once，双实例不双跑）→ 执行唤醒回合 →
+# POST /wakeup/fire-result 回执（失败释放重试/上限EXHAUSTED留痕）。
+
+
+class WakeupClaimRequest(BaseModel):
+    event_id: int = Field(description="wakeup事件id")
+
+
+class WakeupFireResultRequest(BaseModel):
+    event_id: int
+    ok: bool = Field(description="唤醒回合是否成功执行")
+    error: str = Field(default="", description="失败原因（ok=False时进last_fire_error留痕）")
+
+
+@router.get("/wakeup/due")
+async def wakeup_due():
+    """到点应唤醒的事件（executor轮询入口；已领取/已终结的不再返回）。"""
+    from src.will.wakeup import get_wakeup_scheduler
+
+    due = get_wakeup_scheduler().due_wakeups()
+    return {"count": len(due), "due": due}
+
+
+@router.post("/wakeup/claim")
+async def wakeup_claim(req: WakeupClaimRequest):
+    """CAS领取执行权：并发领取只有一个赢家（409=已被领取/已终结/超重试上限）。"""
+    from src.will.wakeup import get_wakeup_scheduler
+
+    event = get_wakeup_scheduler().claim_fire(req.event_id)
+    if event is None:
+        raise HTTPException(
+            409,
+            f"wakeup事件{req.event_id}不可领取（已被领取/已终结/超过重试上限）",
+        )
+    return {"claimed": True, "event": event}
+
+
+@router.post("/wakeup/fire-result")
+async def wakeup_fire_result(req: WakeupFireResultRequest):
+    """执行结果回执：失败→释放重试或EXHAUSTED终态（mem0 §1.1失败必须可见）。"""
+    from src.will.wakeup import get_wakeup_scheduler
+
+    try:
+        return get_wakeup_scheduler().ack_fire(req.event_id, ok=req.ok, error=req.error)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
