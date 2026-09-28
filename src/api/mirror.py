@@ -1,9 +1,12 @@
 """OpenMirror API — 镜像系统：沙箱测试环境管理、沙箱模板。"""
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.mirror.sandbox import SandboxManager
+from src.mirror import isolation
+from src.mirror.sandbox import SandboxManager, SandboxNotActive
 from src.mirror.templates import SandboxTemplateEngine
 from src.nerve.event_bridge import push_event
 
@@ -36,6 +39,21 @@ class VariableRequest(BaseModel):
 
 
 class SnapshotRequest(BaseModel):
+    name: str = ""
+
+
+class ExecRequest(BaseModel):
+    command: str
+    timeout_seconds: float = 30
+    env: dict[str, str] = {}
+
+
+class NetworkPolicyRequest(BaseModel):
+    policy: str  # "allow" | "deny"
+
+
+class ForkRequest(BaseModel):
+    snapshot_id: str
     name: str = ""
 
 
@@ -164,6 +182,84 @@ async def take_snapshot(sandbox_id: str, req: SnapshotRequest):
     if not result:
         raise HTTPException(404, "Sandbox not found")
     return result
+
+
+# ── 真隔离执行（E2B 网络策略热更新 + snapshot-fork 语义）────────
+
+
+@router.post("/sandboxes/{sandbox_id}/exec")
+async def exec_in_sandbox(sandbox_id: str, req: ExecRequest):
+    """Execute a command inside the sandbox (real namespace isolation)."""
+    try:
+        result = await asyncio.to_thread(
+            manager.exec,
+            sandbox_id,
+            req.command,
+            req.timeout_seconds,
+            req.env,
+        )
+    except SandboxNotActive as exc:
+        raise HTTPException(409, str(exc))
+    except isolation.IsolationUnavailable as exc:
+        # fail-closed：真隔离不可用时拒绝执行并显式报错（绝不宿主直跑）
+        raise HTTPException(503, f"isolation unavailable: {exc}")
+    if result is None:
+        raise HTTPException(404, "Sandbox not found")
+    push_event(
+        {
+            "organ": "mirror",
+            "emoji": "🪞",
+            "type": "sandbox_exec",
+            "summary": f"🧪 Sandbox exec: exit={result['exit_code']} {req.command[:60]}",
+            "detail": {
+                "sandbox_id": sandbox_id,
+                "exit_code": result["exit_code"],
+                "timed_out": result["timed_out"],
+                "truncated": result["stdout_truncated"] or result["stderr_truncated"],
+                "network_policy": result["network_policy"],
+            },
+        }
+    )
+    return result
+
+
+@router.post("/sandboxes/{sandbox_id}/network-policy")
+async def set_network_policy(sandbox_id: str, req: NetworkPolicyRequest):
+    """Hot-update sandbox network policy (takes effect on next exec, no recreate)."""
+    try:
+        isolation.validate_policy(req.policy)
+    except isolation.SandboxExecError as exc:
+        raise HTTPException(400, str(exc))
+    if not manager.set_network_policy(sandbox_id, req.policy):
+        raise HTTPException(404, "Sandbox not found")
+    return {"message": "network policy updated", "sandbox_id": sandbox_id, "policy": req.policy}
+
+
+@router.post("/sandboxes/{sandbox_id}/fork")
+async def fork_from_snapshot(sandbox_id: str, req: ForkRequest):
+    """E2B snapshot-fork: create a new sandbox from a snapshot."""
+    child = manager.fork_from_snapshot(sandbox_id, req.snapshot_id, req.name)
+    if not child:
+        raise HTTPException(404, "Sandbox or snapshot not found")
+    push_event(
+        {
+            "organ": "mirror",
+            "emoji": "🪞",
+            "type": "sandbox_fork",
+            "summary": f"🍴 Sandbox forked from snapshot: {child.name}",
+            "detail": {
+                "sandbox_id": child.sandbox_id,
+                "forked_from": sandbox_id,
+                "snapshot_id": req.snapshot_id,
+            },
+        }
+    )
+    return {
+        "sandbox_id": child.sandbox_id,
+        "name": child.name,
+        "forked_from": sandbox_id,
+        "snapshot_id": req.snapshot_id,
+    }
 
 
 # ── Maintenance ────────────────────────────────────────────

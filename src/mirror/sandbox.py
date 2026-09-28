@@ -13,6 +13,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.mirror import isolation
+
+
+class SandboxNotActive(RuntimeError):
+    """沙箱不存在/已暂停/已销毁时拒绝执行（失败必须可见，不静默执行）。"""
+
 
 @dataclass
 class Sandbox:
@@ -29,6 +35,7 @@ class Sandbox:
     snapshot_count: int = 0
     ttl_seconds: int = 3600  # auto-cleanup after 1 hour
     data_dir: str = ""
+    workspace: str = ""  # 真隔离执行目录（bwrap 只暴露此目录为 /workspace）
 
 
 class SandboxManager:
@@ -52,6 +59,8 @@ class SandboxManager:
         sandbox_id = f"sandbox-{uuid.uuid4().hex[:8]}"
         data_dir = self.sandbox_dir / sandbox_id
         data_dir.mkdir(parents=True, exist_ok=True)
+        workspace_dir = data_dir / "workspace"
+        workspace_dir.mkdir(parents=True, exist_ok=True)
 
         sandbox = Sandbox(
             sandbox_id=sandbox_id,
@@ -62,6 +71,7 @@ class SandboxManager:
             tags=tags or [],
             ttl_seconds=ttl_seconds,
             data_dir=str(data_dir),
+            workspace=str(workspace_dir),
         )
 
         with self._lock:
@@ -152,12 +162,20 @@ class SandboxManager:
             "created_at": time.time(),
             "variables": copy.deepcopy(sandbox.variables),
             "log_length": len(sandbox.log),
+            "network_policy": self.network_policy(sandbox_id),
         }
 
         # Save snapshot to disk
         if sandbox.data_dir:
             snap_path = Path(sandbox.data_dir) / f"{snapshot_id}.json"
             snap_path.write_text(json.dumps(snapshot_data, ensure_ascii=False, indent=2))
+            # E2B snapshot-fork 语义：快照必须携带文件系统状态（目录级拷贝），
+            # fork_from_snapshot 才能从快照恢复出完整 workspace。
+            if sandbox.workspace and os.path.isdir(sandbox.workspace):
+                snap_ws = Path(sandbox.data_dir) / "snapshots" / snapshot_id / "workspace"
+                snap_ws.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(sandbox.workspace, snap_ws, dirs_exist_ok=True)
+                snapshot_data["workspace_copied"] = True
 
         sandbox.snapshot_count += 1
         return snapshot_data
@@ -210,4 +228,108 @@ class SandboxManager:
                 "active": active,
                 "paused": paused,
                 "sandbox_dir": str(self.sandbox_dir),
+                "isolation_available": isolation.probe_isolation(),
             }
+
+    # ── 真隔离执行（SUMMARY §五 mirror: E2B 网络策略热更新 + snapshot-fork）──
+
+    def network_policy(self, sandbox_id: str) -> str:
+        """当前网络策略：allow | deny（默认 deny，最小权限）。"""
+        with self._lock:
+            sandbox = self._sandboxes.get(sandbox_id)
+        if not sandbox:
+            return "deny"
+        return str(sandbox.config.get("network_policy", "deny"))
+
+    def set_network_policy(self, sandbox_id: str, policy: str) -> bool:
+        """热更新网络策略（E2B 语义）：改后立即对后续 exec 生效，无需重建沙箱。"""
+        isolation.validate_policy(policy)
+        with self._lock:
+            sandbox = self._sandboxes.get(sandbox_id)
+            if not sandbox:
+                return False
+            sandbox.config["network_policy"] = policy
+        self.log_action(sandbox_id, "network_policy_changed", {"policy": policy})
+        return True
+
+    def exec(
+        self,
+        sandbox_id: str,
+        command: str,
+        timeout_seconds: float = isolation.DEFAULT_TIMEOUT_S,
+        env: dict[str, str] | None = None,
+    ) -> dict | None:
+        """在真隔离环境内执行命令。
+
+        - 沙箱不存在 → None（调用方 404）
+        - 沙箱暂停/销毁 → SandboxNotActive（调用方 409）
+        - 真隔离不可用 → IsolationUnavailable（fail-closed，绝不宿主直跑）
+        成功/失败一律 log_action 留痕（mem0 §1.2 审计语义）。
+        """
+        with self._lock:
+            sandbox = self._sandboxes.get(sandbox_id)
+        if not sandbox:
+            return None
+        if sandbox.status != "active":
+            raise SandboxNotActive(f"sandbox {sandbox_id} is {sandbox.status}, exec refused")
+
+        policy = self.network_policy(sandbox_id)
+        result = isolation.run_in_sandbox(
+            command,
+            sandbox.workspace or sandbox.data_dir,
+            network_policy=policy,
+            timeout=timeout_seconds,
+            env=env or {},
+        )
+        self.log_action(
+            sandbox_id,
+            "exec",
+            {
+                "command": command,
+                "exit_code": result.exit_code,
+                "timed_out": result.timed_out,
+                "truncated": result.stdout_truncated or result.stderr_truncated,
+                "network_policy": policy,
+                "duration_s": round(result.duration_s, 3),
+            },
+        )
+        return result.to_dict()
+
+    def fork_from_snapshot(
+        self, sandbox_id: str, snapshot_id: str, name: str = ""
+    ) -> Sandbox | None:
+        """E2B snapshot-fork：从快照分叉出新沙箱（workspace 目录拷贝 + 变量恢复）。
+
+        血缘记录在新沙箱 config（forked_from / forked_from_snapshot），网络策略继承源沙箱。
+        """
+        with self._lock:
+            source = self._sandboxes.get(sandbox_id)
+        if not source:
+            return None
+        snap_json = Path(source.data_dir) / f"{snapshot_id}.json"
+        snap_ws = Path(source.data_dir) / "snapshots" / snapshot_id / "workspace"
+        if not snap_json.is_file():
+            return None
+        snapshot_data = json.loads(snap_json.read_text())
+
+        child = self.create(
+            name=name or f"Fork of {source.name} ({snapshot_id})",
+            description=f"forked from {sandbox_id} snapshot {snapshot_id}",
+            tags=list(source.tags) + ["fork"],
+            config={
+                "network_policy": self.network_policy(sandbox_id),
+                "forked_from": sandbox_id,
+                "forked_from_snapshot": snapshot_id,
+            },
+            ttl_seconds=source.ttl_seconds,
+        )
+        if snap_ws.is_dir() and child.workspace:
+            shutil.copytree(snap_ws, child.workspace, dirs_exist_ok=True)
+        for key, value in (snapshot_data.get("variables") or {}).items():
+            self.set_variable(child.sandbox_id, key, value)
+        self.log_action(
+            child.sandbox_id,
+            "forked_from_snapshot",
+            {"source_sandbox_id": sandbox_id, "snapshot_id": snapshot_id},
+        )
+        return child
