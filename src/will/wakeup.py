@@ -153,6 +153,70 @@ class WakeupScheduler:
             and bool(row["last_fire_error"]),
         }
 
+    # ── 判定单一真源：status()/overview()/due_wakeups() 共用谓词与payload组装 ──
+
+    @staticmethod
+    def _is_due_now(ev: dict, now: float) -> bool:
+        """到点判定谓词（"到点了还没人来叫醒我吗"一眼可见）。
+
+        status().fire.due_now / overview().due_count / due_wakeups() 三处同一真源——
+        任何一处改动即全改，杜绝判定漂移。"""
+        return (
+            (not ev["stopped"])
+            and ev["next_wakeup_at"] is not None
+            and ev["next_wakeup_at"] <= now
+            and not ev["fired"]
+            and ev["fire_attempts"] < MAX_FIRE_ATTEMPTS
+        )
+
+    @staticmethod
+    def _status_payload(
+        aid: str,
+        sid: str,
+        ev: dict | None,
+        *,
+        total: int,
+        noop_n: int,
+        fired_n: int,
+        exhausted_n: int,
+        now: float,
+    ) -> dict:
+        """status() 响应的唯一组装点（status() 与 overview() 共用，语义不复制）。"""
+        aid, sid = WakeupScheduler._key(aid, sid)
+        if ev is None:
+            return {
+                "agent_id": aid,
+                "session_id": sid,
+                "active": False,
+                "current_streak": 0,
+                "next_wakeup_at": None,
+                "countdown_s": None,
+                "last_event": None,
+                "total_events": 0,
+                "noop_events": 0,
+                "fire": {"due_now": False, "fired": 0, "exhausted": 0},
+            }
+        active = (not ev["stopped"]) and (ev["next_wakeup_at"] is not None)
+        countdown = None
+        if active and ev["next_wakeup_at"] is not None:
+            countdown = round(ev["next_wakeup_at"] - now, 1)
+        return {
+            "agent_id": aid,
+            "session_id": sid,
+            "active": active,
+            "current_streak": ev["streak"],
+            "next_wakeup_at": ev["next_wakeup_at"],
+            "countdown_s": countdown,
+            "last_event": ev,
+            "total_events": total,
+            "noop_events": noop_n,
+            "fire": {
+                "due_now": WakeupScheduler._is_due_now(ev, now),
+                "fired": fired_n,
+                "exhausted": exhausted_n,
+            },
+        }
+
     # ── 核心：record（agent 调用 ScheduleWakeup 的唯一入口） ─
 
     def record(
@@ -272,44 +336,17 @@ class WakeupScheduler:
                 (aid, sid),
             ).fetchone()["n"]
 
-        if row is None:
-            return {
-                "agent_id": aid,
-                "session_id": sid,
-                "active": False,
-                "current_streak": 0,
-                "next_wakeup_at": None,
-                "countdown_s": None,
-                "last_event": None,
-                "total_events": 0,
-                "noop_events": 0,
-                "fire": {"due_now": False, "fired": 0, "exhausted": 0},
-            }
-        ev = self._row_to_event(row)
-        active = (not ev["stopped"]) and (ev["next_wakeup_at"] is not None)
-        countdown = None
-        if active and ev["next_wakeup_at"] is not None:
-            countdown = round(ev["next_wakeup_at"] - now, 1)
-        # 执行侧闭环可观测："到点了还没人来叫醒我吗"一眼可见
-        due_now = (
-            (not ev["stopped"])
-            and ev["next_wakeup_at"] is not None
-            and ev["next_wakeup_at"] <= now
-            and not ev["fired"]
-            and ev["fire_attempts"] < MAX_FIRE_ATTEMPTS
+        ev = self._row_to_event(row) if row is not None else None
+        return self._status_payload(
+            aid,
+            sid,
+            ev,
+            total=total,
+            noop_n=noop_n,
+            fired_n=fired_n,
+            exhausted_n=exhausted_n,
+            now=now,
         )
-        return {
-            "agent_id": aid,
-            "session_id": sid,
-            "active": active,
-            "current_streak": ev["streak"],
-            "next_wakeup_at": ev["next_wakeup_at"],
-            "countdown_s": countdown,
-            "last_event": ev,
-            "total_events": total,
-            "noop_events": noop_n,
-            "fire": {"due_now": due_now, "fired": fired_n, "exhausted": exhausted_n},
-        }
 
     # ── 查询：folded_view（"连续noop折叠显示"） ─────────────
 
@@ -395,16 +432,49 @@ class WakeupScheduler:
     def overview(self) -> dict:
         """全部 (agent_id, session_id) 唤醒循环的状态聚合——monitoring面板数据源。
 
-        每个键复用 status() 同一语义（判定逻辑单一真源，不复制）；due_count 由
-        各键 fire.due_now 汇总（与 due_wakeups 同一判定谓词）。
+        每个键经 _status_payload 与 status() 同一语义（判定逻辑单一真源，不复制）；
+        due_count 由各键 fire.due_now 汇总（与 due_wakeups 同一判定谓词 _is_due_now）。
         "我都不知道他们在干嘛"的面板面：active循环/倒计时/空转streak/执行侧
-        fire状态全部一屏可见，不再要求逐key问status。"""
+        fire状态全部一屏可见，不再要求逐key问status。
+
+        查询数固定2条（旧实现逐key调status()=5N+1查询+N+1次取锁开连接，键多时
+        面板从秒开变秒卡）：①每key最新行（id自增≡ts序，MAX(id) per key 即最新——
+        due_wakeups同一不变量）；②GROUP BY per key聚合计数（谓词与status()的
+        4个COUNT逐字同义）。"""
+        now = time.time()
         with self._lock, self._conn() as conn:
-            keys = conn.execute(
-                "SELECT DISTINCT agent_id, session_id FROM wakeup_events"
+            rows = conn.execute(
+                "SELECT * FROM wakeup_events WHERE id IN ("
+                " SELECT MAX(id) FROM wakeup_events GROUP BY agent_id, session_id)"
             ).fetchall()
-        # status() 自身取锁，不能嵌套在 _lock 内调用（threading.Lock 不可重入）
-        loops = [self.status(k["agent_id"], k["session_id"]) for k in keys]
+            counts = {
+                (r["agent_id"], r["session_id"]): r
+                for r in conn.execute(
+                    "SELECT agent_id, session_id, COUNT(*) AS total,"
+                    " SUM(CASE WHEN noop=1 AND stopped=0 THEN 1 ELSE 0 END) AS noop_n,"
+                    " SUM(CASE WHEN fired_at IS NOT NULL AND last_fire_error='' "
+                    "THEN 1 ELSE 0 END) AS fired_n,"
+                    " SUM(CASE WHEN last_fire_error LIKE 'EXHAUSTED%' "
+                    "THEN 1 ELSE 0 END) AS exhausted_n"
+                    " FROM wakeup_events GROUP BY agent_id, session_id"
+                ).fetchall()
+            }
+        loops = []
+        for r in rows:
+            ev = self._row_to_event(r)
+            c = counts[(ev["agent_id"], ev["session_id"])]
+            loops.append(
+                self._status_payload(
+                    ev["agent_id"],
+                    ev["session_id"],
+                    ev,
+                    total=int(c["total"] or 0),
+                    noop_n=int(c["noop_n"] or 0),
+                    fired_n=int(c["fired_n"] or 0),
+                    exhausted_n=int(c["exhausted_n"] or 0),
+                    now=now,
+                )
+            )
         loops.sort(key=lambda s: (s["next_wakeup_at"] is None, s["next_wakeup_at"] or 0))
         return {
             "total_keys": len(loops),
@@ -435,15 +505,7 @@ class WakeupScheduler:
         for r in rows:
             ev = self._row_to_event(r)
             latest[(ev["agent_id"], ev["session_id"])] = ev
-        due = [
-            e
-            for e in latest.values()
-            if (not e["stopped"])
-            and e["next_wakeup_at"] is not None
-            and e["next_wakeup_at"] <= now
-            and not e["fired"]
-            and e["fire_attempts"] < MAX_FIRE_ATTEMPTS
-        ]
+        due = [e for e in latest.values() if self._is_due_now(e, now)]
         due.sort(key=lambda e: e["next_wakeup_at"] or 0)
         return due
 

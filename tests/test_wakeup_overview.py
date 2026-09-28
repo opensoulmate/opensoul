@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from src.will.wakeup import WakeupScheduler
+from src.will.wakeup import MAX_FIRE_ATTEMPTS, WakeupScheduler
 
 
 @pytest.fixture
@@ -140,7 +140,111 @@ class TestDueWakeupsWindowed:
         assert ov["total_keys"] == 3
 
 
-# ── ③ live API（:8090 真实服务，重启后运行） ─────────────────────
+# ── ③ overview 批量查询（N+1销账：旧1+N×status()=5N+1查询 → 固定2条） ──
+
+
+class _CountingConn:
+    """sqlite3.Connection代理：统计execute次数（overview查询数断言用）。"""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self.executes = 0
+
+    def execute(self, *args, **kwargs):
+        self.executes += 1
+        return self._conn.execute(*args, **kwargs)
+
+    def __enter__(self):
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        return self._conn.__exit__(*exc)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def _overview_executes(sched) -> int:
+    """跑一次 overview() 返回期间的 SQL execute 总次数（连接代理计数）。"""
+    boxes: list = []
+    real_conn = WakeupScheduler._conn
+
+    def factory():
+        c = _CountingConn(real_conn(sched))
+        boxes.append(c)
+        return c
+
+    sched._conn = factory  # 实例属性遮蔽类方法，仅本helper作用域内生效
+    try:
+        ov = sched.overview()
+        assert ov["total_keys"] >= 1
+    finally:
+        del sched._conn  # 还原类方法查找
+    return sum(b.executes for b in boxes)
+
+
+class TestOverviewBatched:
+    def test_overview_query_count_constant_in_keys(self, tmp_path):
+        """N+1销账接线钉：overview查询数必须与键数无关（旧=5N+1，50键≈251条）。"""
+        small = WakeupScheduler(db_path=str(tmp_path / "small.db"))
+        big = WakeupScheduler(db_path=str(tmp_path / "big.db"))
+        for i in range(5):
+            small.record(reason=f"r{i}", noop=True, delay_seconds=60, agent_id=f"k{i}")
+        for i in range(50):
+            big.record(reason=f"r{i}", noop=True, delay_seconds=60, agent_id=f"k{i}")
+        n_small = _overview_executes(small)
+        n_big = _overview_executes(big)
+        assert n_small == n_big, f"查询数随键数增长：{n_small}(5键) vs {n_big}(50键)"
+        assert n_big <= 4, f"overview查询数应固定≈2，实测{n_big}"
+        assert big.overview()["total_keys"] == 50
+
+    def test_overview_does_not_call_status_per_key(self, sched):
+        """接线钉：overview()走批量路径，不得回退成逐key调status()（N+1根源）。"""
+        sched.record(reason="n1", noop=True, delay_seconds=60, agent_id="a", session_id="s")
+
+        def _boom(*args, **kwargs):
+            raise AssertionError("overview()不得逐key调status()（N+1根源）")
+
+        sched.status = _boom  # 实例属性遮蔽：谁调谁炸
+        ov = sched.overview()
+        assert ov["total_keys"] == 1 and ov["loops"][0]["agent_id"] == "a"
+
+    def test_overview_fire_counts_match_status_on_fire_states(self, sched):
+        """批量聚合计数在 fired/exhausted 执行侧状态下与 status() 逐字同义。"""
+        # 键 a：成功 fired（claim + ack ok）
+        ev = sched.record(reason="fire me", noop=False, delay_seconds=60, agent_id="a")
+        assert sched.claim_fire(ev["event_id"]) is not None
+        sched.ack_fire(ev["event_id"], ok=True)
+        # 键 b：重试用尽 EXHAUSTED（claim + ack失败 × MAX_FIRE_ATTEMPTS）
+        ev2 = sched.record(reason="retry me", noop=False, delay_seconds=60, agent_id="b")
+        for _ in range(MAX_FIRE_ATTEMPTS):
+            assert sched.claim_fire(ev2["event_id"]) is not None
+            sched.ack_fire(ev2["event_id"], ok=False, error="boom")
+        # 键 c：纯noop空转
+        sched.record(reason="n1", noop=True, delay_seconds=60, agent_id="c")
+        sched.record(reason="n2", noop=True, delay_seconds=60, agent_id="c")
+
+        loops = {(s["agent_id"], s["session_id"]): s for s in sched.overview()["loops"]}
+        for key in (("a", ""), ("b", ""), ("c", "")):
+            st = sched.status(agent_id=key[0], session_id=key[1])
+            lp = loops[key]
+            for field in (
+                "active",
+                "current_streak",
+                "next_wakeup_at",
+                "total_events",
+                "noop_events",
+            ):
+                assert lp[field] == st[field], f"{key} {field}"
+            assert lp["fire"] == st["fire"], key
+        assert loops[("a", "")]["fire"]["fired"] == 1
+        assert loops[("b", "")]["fire"]["exhausted"] == 1
+        assert loops[("c", "")]["noop_events"] == 2
+        assert sched.overview()["due_count"] == 0  # 三键next均未到点
+
+
+# ── ④ live API（:8090 真实服务，重启后运行） ─────────────────────
 
 
 @pytest.mark.live
