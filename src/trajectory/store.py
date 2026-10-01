@@ -234,6 +234,7 @@ class TrajectoryStore:
 
     async def create_session(
         self,
+        id: str = "",
         agent_id: str = "",
         task_description: str = "",
         forked_from: str | None = None,
@@ -242,6 +243,7 @@ class TrajectoryStore:
     ) -> TrajectorySession:
         await self.ensure_tables()
         s = TrajectorySession(
+            id=id,
             agent_id=agent_id,
             task_description=task_description,
             forked_from=forked_from,

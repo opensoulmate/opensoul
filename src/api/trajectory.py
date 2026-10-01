@@ -24,6 +24,10 @@ class SessionCreateRequest(BaseModel):
     agent_id: str = ""
     task_description: str = ""
     tags: list[str] = []
+    # 客户端稳定id（幂等ensure语义）：长生命周期chat session跨进程重启
+    # 累积turn的单一真源标识（acp-proxy TrajectoryRecorder按chat session id
+    # ensure）；空=服务端生成uuid（既有行为不变）。
+    session_id: str = ""
 
 
 class EventRecordRequest(BaseModel):
@@ -68,8 +72,19 @@ async def stats():
 
 @router.post("/sessions")
 async def create_session(req: SessionCreateRequest):
-    """Create a new trajectory session."""
+    """Create a new trajectory session.
+
+    When ``session_id`` is provided the call is an idempotent *ensure*:
+    an existing session with that id is returned unchanged (HTTP 200)
+    instead of creating a duplicate row — repeated ensures across turns
+    and process restarts must converge on one session per chat session.
+    """
+    if req.session_id:
+        existing = await trajectory_store.get_session(req.session_id)
+        if existing:
+            return existing.to_dict()
     session = await trajectory_store.create_session(
+        id=req.session_id,
         agent_id=req.agent_id,
         task_description=req.task_description,
         tags=req.tags,
