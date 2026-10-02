@@ -285,12 +285,17 @@ async def extract_skill(req: SkillExtractRequest):
         success=req.success,
     )
     if not skill:
-        raise HTTPException(400, "Failed to extract skill from log")
+        # 失败执行已进失败记忆分支（skill_audit FAIL，mem0 §1.1失败可见）——
+        # 这里400表达"没提炼出技能"，但失败本身已留痕，非静默丢弃
+        raise HTTPException(
+            400, "No skill extracted (failed executions are recorded in skill_audit)"
+        )
     return {
         "skill_id": skill.skill_id,
         "name": skill.name,
         "description": skill.description,
         "success_rate": skill.success_rate,
+        "event": skill.audit_event,
     }
 
 
@@ -317,3 +322,26 @@ async def recommend_skills(req: SkillRecommendRequest):
 async def skill_context(skill_id: str, task: str = Query(default="")):
     """Get skill context for prompt injection."""
     return {"context": skill_learner.get_context_prompt(task)}
+
+
+# ── Skill进化审计（mem0 §1.2 记账：谁/何时/从什么改成什么） ────────
+
+
+@router.get("/skill/audit")
+async def skill_audit_tail(limit: int = Query(default=50, ge=1, le=500)):
+    """最近的技能审计事件（ADD/UPDATE/DELETE/FAIL），新→旧。"""
+    return {"events": skill_learner.audit_tail(limit=limit)}
+
+
+@router.get("/skill/{skill_id}/history")
+async def skill_history(skill_id: str, limit: int = Query(default=50, ge=1, le=500)):
+    """单个技能的审计历史——这条策略是被谁、因为哪次执行、从什么改成什么。"""
+    return {"skill_id": skill_id, "events": skill_learner.history(skill_id, limit=limit)}
+
+
+@router.delete("/skill/{skill_id}")
+async def delete_learned_skill(skill_id: str, reason: str = Query(default="")):
+    """删除学习型技能并记DELETE审计（old留档=回滚依据）。"""
+    if not skill_learner.delete_skill(skill_id, reason=reason):
+        raise HTTPException(404, f"skill not found: {skill_id}")
+    return {"status": "deleted", "skill_id": skill_id}

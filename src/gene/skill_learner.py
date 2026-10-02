@@ -33,6 +33,7 @@ class Skill:
     last_used_at: float = 0.0
     tags: list[str] = field(default_factory=list)
     source_session: str = ""
+    audit_event: str = ""  # 本次extract落的审计事件：ADD / UPDATE（mem0 §1.2记账）
 
     @property
     def success_rate(self) -> float:
@@ -73,7 +74,110 @@ class SkillLearner:
                 CREATE INDEX IF NOT EXISTS idx_skills_category
                 ON learned_skills(category, success_count)
             """)
+            # 进化审计表（mem0 §1.2 可直接抄的schema：old/new/event，此处加FAIL分支）
+            # "这条技能是被谁、因为哪次执行、从什么改成什么"全程可追溯
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS skill_audit (
+                    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    skill_id TEXT NOT NULL,
+                    event TEXT NOT NULL,
+                    old_json TEXT DEFAULT '',
+                    new_json TEXT DEFAULT '',
+                    actor TEXT DEFAULT '',
+                    reason TEXT DEFAULT '',
+                    created_at REAL NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_skill_audit_skill
+                ON skill_audit(skill_id, audit_id)
+            """)
             conn.commit()
+
+    def _audit(
+        self,
+        skill_id: str,
+        event: str,
+        old: dict | None = None,
+        new: dict | None = None,
+        actor: str = "",
+        reason: str = "",
+    ) -> None:
+        """写一条进化审计记录（mem0 §1.2 schema: old/new/event）。
+
+        记账失败绝不阻塞主流程（CowAgent记账哲学），但必须大声记日志——
+        静默丢审计=记账体系失真（mem0 §1.1 失败可见）。
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    """INSERT INTO skill_audit
+                       (skill_id, event, old_json, new_json, actor, reason, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        skill_id,
+                        event,
+                        json.dumps(old, ensure_ascii=False) if old is not None else "",
+                        json.dumps(new, ensure_ascii=False) if new is not None else "",
+                        actor,
+                        reason,
+                        time.time(),
+                    ),
+                )
+                conn.commit()
+        except Exception:
+            logger.exception(f"skill_audit write failed (skill_id={skill_id}, event={event})")
+
+    @staticmethod
+    def _audit_row_to_dict(row: sqlite3.Row) -> dict:
+        d = dict(row)
+        d["old"] = json.loads(d["old_json"]) if d["old_json"] else None
+        d["new"] = json.loads(d["new_json"]) if d["new_json"] else None
+        del d["old_json"], d["new_json"]
+        return d
+
+    def history(self, skill_id: str, limit: int = 50) -> list[dict]:
+        """审计历史（mem0 §1.2 history()查询接口）：这条技能被谁、因为哪次执行、从什么改成什么。"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT * FROM skill_audit WHERE skill_id = ?
+                   ORDER BY audit_id DESC LIMIT ?""",
+                (skill_id, limit),
+            ).fetchall()
+        return [self._audit_row_to_dict(r) for r in rows]
+
+    def audit_tail(self, limit: int = 50) -> list[dict]:
+        """跨技能的最近审计事件（ADD/UPDATE/DELETE/FAIL），新→旧。"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM skill_audit ORDER BY audit_id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [self._audit_row_to_dict(r) for r in rows]
+
+    def delete_skill(self, skill_id: str, actor: str = "api", reason: str = "") -> bool:
+        """删除技能并记DELETE审计（old留档=回滚依据，mem0 §1.2 is_deleted语义）。"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM learned_skills WHERE skill_id = ?", (skill_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            old = {
+                "name": row["name"],
+                "description": row["description"],
+                "category": row["category"],
+                "code_template": row["code_template"],
+                "usage_count": row["usage_count"],
+                "success_count": row["success_count"],
+            }
+            conn.execute("DELETE FROM learned_skills WHERE skill_id = ?", (skill_id,))
+            conn.commit()
+        self._audit(skill_id, "DELETE", old=old, actor=actor, reason=reason)
+        return True
 
     def extract_from_execution(
         self,
@@ -82,12 +186,38 @@ class SkillLearner:
         tool_calls: list[dict],
         success: bool,
     ) -> Skill | None:
-        """Extract a reusable skill from a successful execution."""
-        if not success or not tool_calls:
+        """Extract a reusable skill from an execution.
+
+        成功 → skill行（首见ADD；再见到同一skill_id=UPDATE且**累计计数不重置**）
+        + 一条审计记录（mem0 §1.2：谁/何时/从什么改成什么）。
+        失败且有tool_calls → FAIL审计记录（mem0 §1.1：失败必须可见，进失败记忆
+        分支而非静默丢弃），返回None。
+        """
+        if not tool_calls:
             return None
 
         tools_used = [tc.get("function", {}).get("name", "") for tc in tool_calls]
         tool_sequence = " → ".join(t for t in tools_used if t)
+
+        skill_id = f"skill_{hashlib.sha256(f'{task_description}:{tool_sequence}'.encode()).hexdigest()[:12]}"
+
+        if not success:
+            # 失败记忆分支：可见、可按skill_id检索到失败族谱（mem0 §1.1 静默吞错误=失败记忆失真）
+            self._audit(
+                skill_id,
+                "FAIL",
+                new={
+                    "task_description": task_description,
+                    "tool_sequence": tool_sequence,
+                },
+                actor=session_id,
+                reason="execution failed",
+            )
+            logger.warning(
+                f"Recorded failed execution into failure memory (skill family {skill_id}): "
+                f"{task_description[:50]}"
+            )
+            return None
 
         # Only extract if meaningful pattern detected
         meaningful_patterns = [
@@ -100,7 +230,6 @@ class SkillLearner:
         if len(tools_used) < 2 and not is_pattern:
             return None
 
-        skill_id = f"skill_{hashlib.sha256(f'{task_description}:{tool_sequence}'.encode()).hexdigest()[:12]}"
         parameters = self._extract_parameters(tool_calls)
         code_template = self._generate_template(tool_calls)
 
@@ -115,32 +244,97 @@ class SkillLearner:
             source_session=session_id,
         )
 
+        now = time.time()
+        snapshot = {
+            "name": skill.name,
+            "description": skill.description,
+            "category": skill.category,
+            "code_template": skill.code_template,
+            "parameters": skill.parameters,
+            "tags": skill.tags,
+            "source_session": session_id,
+        }
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT OR REPLACE INTO learned_skills
-                   (skill_id, name, description, category, code_template,
-                    parameters, usage_count, success_count, avg_duration_ms,
-                    created_at, last_used_at, tags, source_session)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    skill.skill_id,
-                    skill.name,
-                    skill.description,
-                    skill.category,
-                    skill.code_template,
-                    json.dumps(skill.parameters),
-                    1,
-                    1,
-                    0,
-                    time.time(),
-                    time.time(),
-                    json.dumps(skill.tags),
-                    session_id,
-                ),
-            )
+            conn.row_factory = sqlite3.Row
+            existing = conn.execute(
+                "SELECT * FROM learned_skills WHERE skill_id = ?", (skill.skill_id,)
+            ).fetchone()
+            if existing is None:
+                conn.execute(
+                    """INSERT INTO learned_skills
+                       (skill_id, name, description, category, code_template,
+                        parameters, usage_count, success_count, avg_duration_ms,
+                        created_at, last_used_at, tags, source_session)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        skill.skill_id,
+                        skill.name,
+                        skill.description,
+                        skill.category,
+                        skill.code_template,
+                        json.dumps(skill.parameters),
+                        1,
+                        1,
+                        0,
+                        now,
+                        now,
+                        json.dumps(skill.tags),
+                        session_id,
+                    ),
+                )
+                event, old = "ADD", None
+                skill.usage_count, skill.success_count = 1, 1
+            else:
+                # 再见到同一skill（同task+tool序列）= UPDATE：
+                # 禁止INSERT OR REPLACE——那会把usage_count/success_count静默重置为1、
+                # created_at被覆盖（进化数据丢失）。此处内容字段更新+计数累加+created_at保留，
+                # old/new全量留档进审计（mem0 §1.2）。
+                conn.execute(
+                    """UPDATE learned_skills SET
+                       name = ?, description = ?, category = ?, code_template = ?,
+                       parameters = ?, tags = ?, source_session = ?,
+                       usage_count = usage_count + 1,
+                       success_count = success_count + 1,
+                       last_used_at = ?
+                       WHERE skill_id = ?""",
+                    (
+                        skill.name,
+                        skill.description,
+                        skill.category,
+                        skill.code_template,
+                        json.dumps(skill.parameters),
+                        json.dumps(skill.tags),
+                        session_id,
+                        now,
+                        skill.skill_id,
+                    ),
+                )
+                event = "UPDATE"
+                skill.usage_count = existing["usage_count"] + 1
+                skill.success_count = existing["success_count"] + 1
+                old = {
+                    "name": existing["name"],
+                    "description": existing["description"],
+                    "category": existing["category"],
+                    "code_template": existing["code_template"],
+                    "parameters": json.loads(existing["parameters"] or "[]"),
+                    "tags": json.loads(existing["tags"] or "[]"),
+                    "source_session": existing["source_session"],
+                    "usage_count": existing["usage_count"],
+                    "success_count": existing["success_count"],
+                }
             conn.commit()
 
-        logger.info(f"Extracted skill: {skill.name} ({skill.category})")
+        self._audit(
+            skill.skill_id,
+            event,
+            old=old,
+            new=snapshot,
+            actor=session_id,
+            reason="extract_from_execution",
+        )
+        skill.audit_event = event
+        logger.info(f"Extracted skill: {skill.name} ({skill.category}) [{event}]")
         return skill
 
     def _extract_parameters(self, tool_calls: list[dict]) -> list[str]:
@@ -256,9 +450,15 @@ class SkillLearner:
                 """SELECT name, usage_count, success_count
                    FROM learned_skills ORDER BY usage_count DESC LIMIT 5"""
             ).fetchall()
+            audit_total = conn.execute("SELECT COUNT(*) FROM skill_audit").fetchone()[0]
+            failed = conn.execute(
+                "SELECT COUNT(*) FROM skill_audit WHERE event = 'FAIL'"
+            ).fetchone()[0]
 
         return {
             "total_skills": total,
             "by_category": {c[0]: c[1] for c in by_category},
             "top_skills": [{"name": s[0], "uses": s[1], "successes": s[2]} for s in top],
+            "audit_events": audit_total,
+            "failed_extractions": failed,
         }
