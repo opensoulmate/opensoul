@@ -1,6 +1,7 @@
 """OpenTrajectory API — Agent execution trace, replay, and fork endpoints."""
 
 import json
+import os
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -15,6 +16,31 @@ from src.trajectory.store import (
 
 router = APIRouter()
 session_fsm = SessionStateMachine()
+
+
+# ── session活跃度收口（04:20轮遗留#2销账）────────────────────────
+# session.status不再恒running。三层收口合起来给session活跃度生命周期：
+# ①显式收口（实时）：acp-proxy ws_acp连接teardown调POST /sessions/{id}/end；
+# ②闲置清扫（兜底，本文件）：读列表/单session时顺带清扫——running但超过
+#   TRAJ_SESSION_IDLE_S（默认1800s）无事件的session翻completed（崩溃没走到
+#   收尾的session也不会永远running）；
+# ③自愈重开：store.add_event把completed翻回running（长生命周期chat session
+#   跨连接/跨天继续不卡死）。
+
+
+def _session_idle_s() -> float:
+    try:
+        return max(float(os.getenv("TRAJ_SESSION_IDLE_S", "1800")), 0.0)
+    except (TypeError, ValueError):
+        return 1800.0
+
+
+async def _sweep_idle_sessions() -> None:
+    """读路径顺带闲置清扫。清扫失败绝不影响读（fail-safe）。"""
+    try:
+        await trajectory_store.sweep_idle_sessions(idle_seconds=_session_idle_s())
+    except Exception:
+        pass
 
 
 # ── Request Schemas ──────────────────────────────────────────
@@ -100,6 +126,7 @@ async def list_sessions(
     offset: int = Query(default=0, ge=0),
 ):
     """List trajectory sessions with optional filters."""
+    await _sweep_idle_sessions()
     sessions = await trajectory_store.list_sessions(
         agent_id=agent_id,
         status=status,
@@ -118,6 +145,7 @@ async def list_sessions(
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
     """Get a single trajectory session."""
+    await _sweep_idle_sessions()
     session = await trajectory_store.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found")

@@ -258,8 +258,17 @@ class TestTrajectoryStore:
         pool = _mock_db_pool()
         with patch("src.trajectory.store.db_pool", pool):
             await self.store.end_session("s1", status="completed")
-            # end_session: just 1 UPDATE call
-            assert pool.execute.call_count == 1
+            # end_session: just 1 UPDATE call（ensure_tables的DDL不计；
+            # 2026-10-02 session收口轮有意演进：end_session补ensure_tables
+            # 与其余store方法对齐，fresh DB上调用不再炸no such table）
+            updates = [
+                c
+                for c in pool.execute.call_args_list
+                if "UPDATE trajectory_sessions" in str(c.args[0])
+            ]
+            assert len(updates) == 1
+            # 首收口守卫：重复收口no-op（ended_at只记第一次）
+            assert "status = 'running' OR ended_at IS NULL" in str(updates[0].args[0])
 
     @pytest.mark.asyncio
     async def test_get_events(self):

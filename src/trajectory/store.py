@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
@@ -298,14 +298,48 @@ class TrajectoryStore:
         return [self._row_to_session(r) for r in rows]
 
     async def end_session(self, session_id: str, status: str = "completed"):
+        """收口session（04:20轮遗留#2销账：session.status不再恒running）。
+
+        session.status = 活跃度生命周期：running（有在途/最近活动）↔ completed
+        （已收口不再活跃）。首收口生效（ended_at只记第一次，重复收口no-op）；
+        后续add_event自愈翻回running（见add_event）。span/event级status仍是
+        结果语义（ok/error）——失败可见性不在此层。
+        """
+        await self.ensure_tables()
         await db_pool.execute(
             """UPDATE trajectory_sessions
                SET status = ?, ended_at = ?
-               WHERE id = ?""",
+               WHERE id = ? AND (status = 'running' OR ended_at IS NULL)""",
             status,
             datetime.now(UTC).isoformat(),
             session_id,
         )
+
+    async def sweep_idle_sessions(self, idle_seconds: float = 1800.0) -> int:
+        """闲置收口兜底：running但超过idle_seconds无事件的session翻completed。
+
+        显式收口点（acp-proxy ws_acp连接teardown调end_session）覆盖不到的面
+        （进程崩溃没走到收尾/opensoul自身写入方/HTTP工具入口）由本清扫兜底，
+        保证session列表不会永远一片running。最后活跃时间=该session最新事件的
+        created_at（无事件回退session.created_at；ISO同格式字符串字典序=时间序）。
+        返回本次翻转的session数。清扫只翻running行——已收口/其他status不动。
+        """
+        await self.ensure_tables()
+        cutoff = (datetime.now(UTC) - timedelta(seconds=max(float(idle_seconds), 0.0))).isoformat()
+        rows = await db_pool.fetch(
+            """SELECT s.id FROM trajectory_sessions s
+               WHERE s.status = 'running' AND COALESCE(
+                   (SELECT MAX(e.created_at) FROM trajectory_events e
+                    WHERE e.session_id = s.id),
+                   s.created_at) <= ?""",
+            cutoff,
+        )
+        flipped = 0
+        for row in rows:
+            sid = row["id"]
+            await self.end_session(sid, status="completed")
+            flipped += 1
+        return flipped
 
     async def delete_session(self, session_id: str):
         await self.ensure_tables()
@@ -342,11 +376,15 @@ class TrajectoryStore:
             event.created_at,
             event.end_at,
         )
-        # Update session counters
+        # Update session counters + 活跃度自愈重开（session收口语义，04:20轮遗留#2）：
+        # 事件=活动——已收口（completed）的session被新事件翻回running并清ended_at，
+        # 长生命周期chat session跨连接/跨天继续时不卡死在completed。
         await db_pool.execute(
             """UPDATE trajectory_sessions
                SET total_events = total_events + 1,
-                   total_tokens = total_tokens + ?
+                   total_tokens = total_tokens + ?,
+                   status = 'running',
+                   ended_at = NULL
                WHERE id = ?""",
             event.token_usage,
             event.session_id,
