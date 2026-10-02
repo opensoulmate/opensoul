@@ -265,6 +265,10 @@ class SkillRecommendRequest(BaseModel):
     task_description: str
 
 
+class SkillUsageRequest(BaseModel):
+    success: bool = True
+
+
 @router.post("/skill/extract")
 async def extract_skill(req: SkillExtractRequest):
     """Extract a skill from execution log."""
@@ -316,6 +320,19 @@ async def recommend_skills(req: SkillRecommendRequest):
         ],
         "count": len(skills),
     }
+
+
+@router.post("/skill/{skill_id}/usage")
+async def report_skill_usage(skill_id: str, req: SkillUsageRequest):
+    """技能使用回执（使用遥测）：消费方用完推荐技能后回执成败。
+
+    usage_count恒+1、success_count仅成功时+1——success_rate随真实成败漂移，
+    find_relevant排序据此降权/提权（record_usage单一入口）。
+    """
+    result = skill_learner.record_usage(skill_id, success=req.success)
+    if not result["updated"]:
+        raise HTTPException(404, f"skill not found: {skill_id}")
+    return {"skill_id": skill_id, **result}
 
 
 @router.get("/skill/{skill_id}/context")

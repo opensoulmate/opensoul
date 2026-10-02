@@ -387,9 +387,20 @@ class SkillLearner:
                 actor=session_id,
                 reason="execution failed",
             )
+            # 使用遥测真实接线（02:15轮遗留"record_usage无调用方"销账）：失败执行也是
+            # "使用"——usage_count+1、success_count不动，success_rate随失败下降，
+            # find_relevant排序自动降权。技能族尚无成功提炼行时updated=False纯no-op
+            # （没技能可归因，只留FAIL审计，不落learned_skills行）。
+            usage = self.record_usage(skill_id, success=False)
             logger.warning(
                 f"Recorded failed execution into failure memory (skill family {skill_id}): "
                 f"{task_description[:50]}"
+                + (
+                    f" (usage now {usage['success_count']}/{usage['usage_count']}, "
+                    f"success_rate={usage['success_rate']:.2f})"
+                    if usage["updated"]
+                    else " (no learned skill row yet, usage not attributable)"
+                )
             )
             return None
 
@@ -579,7 +590,13 @@ class SkillLearner:
             d = dict(row)
             d["tags"] = json.loads(d.get("tags", "[]"))
             d["parameters"] = json.loads(d.get("parameters", "[]"))
-            score = d["success_count"] * 0.3 + d["usage_count"] * 0.1
+            # success_rate如实回填（learned_skills行里没这列，此前recommend恒返回
+            # get缺省0.0——指标说谎：真实成败率被0.0掩盖）
+            d["success_rate"] = d["success_count"] / d["usage_count"] if d["usage_count"] else 0.0
+            # 排序=成功率主导+有限证据权重（usage封顶10次）：失败计入usage后，
+            # 旧公式 success*0.3 + usage*0.1 会因失败而加分——失败越多反而排越前。
+            # 现在失败只稀释success_rate不抬排名；封顶防老技能靠堆量躺赢。
+            score = d["success_rate"] * 0.6 + min(d["usage_count"], 10) * 0.02
             if any(kw in d["name"].lower() for kw in task_lower.split()):
                 score += 0.5
             if any(kw in d["description"].lower() for kw in task_lower.split()):
@@ -607,8 +624,17 @@ class SkillLearner:
 
         return "\n".join(lines)
 
-    def record_usage(self, skill_id: str, success: bool):
+    def record_usage(self, skill_id: str, success: bool) -> dict:
+        """使用遥测单一入口：记一次"技能被使用"（成功/失败）。
+
+        usage_count恒+1；success_count仅成功时+1；last_used_at=使用时刻。
+        skill_id无learned_skills行时纯no-op（updated=False，没技能可归因不落新行）。
+        返回更新后计数（可观测：调用方/日志能立刻看到success_rate漂移）。
+        刻意不写审计：USAGE遥测量大，skill_audit记"进化变更"（ADD/UPDATE/DELETE/
+        FAIL/REVERT），计数变更的留痕由extract路径的UPDATE审计承担。
+        """
         with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
             conn.execute(
                 """UPDATE learned_skills SET
                    usage_count = usage_count + 1,
@@ -618,6 +644,26 @@ class SkillLearner:
                 (1 if success else 0, time.time(), skill_id),
             )
             conn.commit()
+            row = conn.execute(
+                """SELECT usage_count, success_count FROM learned_skills
+                   WHERE skill_id = ?""",
+                (skill_id,),
+            ).fetchone()
+        if row is None:
+            return {
+                "updated": False,
+                "usage_count": 0,
+                "success_count": 0,
+                "success_rate": 0.0,
+            }
+        usage_count = row["usage_count"]
+        success_count = row["success_count"]
+        return {
+            "updated": True,
+            "usage_count": usage_count,
+            "success_count": success_count,
+            "success_rate": success_count / usage_count if usage_count else 0.0,
+        }
 
     def get_stats(self) -> dict:
         with sqlite3.connect(self.db_path) as conn:
