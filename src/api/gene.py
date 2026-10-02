@@ -345,3 +345,40 @@ async def delete_learned_skill(skill_id: str, reason: str = Query(default="")):
     if not skill_learner.delete_skill(skill_id, reason=reason):
         raise HTTPException(404, f"skill not found: {skill_id}")
     return {"status": "deleted", "skill_id": skill_id}
+
+
+# ── 进化回滚（Agent Zero _time_travel：preview先行 + travel/revert） ──
+
+
+@router.get("/skill/{skill_id}/revert-preview")
+async def skill_revert_preview(skill_id: str, audit_id: int = Query(default=None)):
+    """回滚预览（Agent Zero _time_travel preview）：逐字段diff看清将发生什么，零写入。
+
+    缺省audit_id=预览"回滚上一次改动"；显式audit_id=预览回到该事件之前。
+    """
+    try:
+        preview = skill_learner.revert_preview(skill_id, audit_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if preview is None:
+        raise HTTPException(404, f"no revertible audit event for skill: {skill_id}")
+    return preview
+
+
+@router.post("/skill/{skill_id}/revert")
+async def revert_learned_skill(
+    skill_id: str,
+    audit_id: int = Query(default=None),
+    reason: str = Query(default=""),
+):
+    """一键回滚：技能恢复到目标审计事件之前的状态（缺省=上一次改动）。
+
+    回滚本身记REVERT审计（可再回滚）；审计表只追加不改写。
+    """
+    try:
+        result = skill_learner.revert_skill(skill_id, audit_id, actor="api", reason=reason)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if result is None:
+        raise HTTPException(404, f"no revertible audit event for skill: {skill_id}")
+    return result

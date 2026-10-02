@@ -171,13 +171,187 @@ class SkillLearner:
                 "description": row["description"],
                 "category": row["category"],
                 "code_template": row["code_template"],
+                "parameters": json.loads(row["parameters"] or "[]"),
+                "tags": json.loads(row["tags"] or "[]"),
+                "source_session": row["source_session"],
                 "usage_count": row["usage_count"],
                 "success_count": row["success_count"],
+                # 全保真快照：回滚（revert_skill）需要无损恢复整行，
+                # created_at/last_used_at/avg_duration_ms缺失会让undelete丢字段
+                "avg_duration_ms": row["avg_duration_ms"],
+                "created_at": row["created_at"],
+                "last_used_at": row["last_used_at"],
             }
             conn.execute("DELETE FROM learned_skills WHERE skill_id = ?", (skill_id,))
             conn.commit()
         self._audit(skill_id, "DELETE", old=old, actor=actor, reason=reason)
         return True
+
+    # ── 进化回滚（Agent Zero _time_travel travel/revert语义 + preview先行） ──
+    # 状态字段全集：revert预览的diff面与_apply_state的恢复面共用同一真源
+    STATE_FIELDS = (
+        "name",
+        "description",
+        "category",
+        "code_template",
+        "parameters",
+        "tags",
+        "source_session",
+        "usage_count",
+        "success_count",
+        "avg_duration_ms",
+        "created_at",
+        "last_used_at",
+    )
+
+    @staticmethod
+    def _skill_row_state(row: sqlite3.Row) -> dict:
+        d = dict(row)
+        d["parameters"] = json.loads(d["parameters"] or "[]")
+        d["tags"] = json.loads(d["tags"] or "[]")
+        return d
+
+    def current_state(self, skill_id: str) -> dict | None:
+        """技能当前全量状态（learned_skills整行），不存在=已删除态(None)。"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM learned_skills WHERE skill_id = ?", (skill_id,)
+            ).fetchone()
+        return self._skill_row_state(row) if row else None
+
+    def _pick_event(self, skill_id: str, audit_id: int | None) -> dict | None:
+        """选定回滚目标事件。
+
+        - 显式audit_id：回滚到该事件发生之前（含ADD→删除技能、REVERT→再翻回去）。
+        - 缺省：最近一次有状态变更的事件（UPDATE/DELETE/REVERT）=一键回滚上一次改动；
+          只有ADD史的技能不自动选（防误删），必须显式传audit_id。
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if audit_id is None:
+                row = conn.execute(
+                    """SELECT * FROM skill_audit
+                       WHERE skill_id = ? AND event IN ('UPDATE','DELETE','REVERT')
+                       ORDER BY audit_id DESC LIMIT 1""",
+                    (skill_id,),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM skill_audit WHERE skill_id = ? AND audit_id = ?",
+                    (skill_id, audit_id),
+                ).fetchone()
+        return self._audit_row_to_dict(row) if row else None
+
+    def revert_preview(self, skill_id: str, audit_id: int | None = None) -> dict | None:
+        """回滚预览（Agent Zero _time_travel：破坏性动作前先看清diff）——零写入。
+
+        返回action（restore/update/delete）+逐字段changes{from,to}；
+        无可回滚事件=None；FAIL事件无状态变更→ValueError。
+        """
+        event = self._pick_event(skill_id, audit_id)
+        if event is None:
+            return None
+        if event["event"] == "FAIL":
+            raise ValueError(f"audit event {event['audit_id']} is FAIL (no skill state to revert)")
+        target = event["old"]  # 该事件发生之前的状态；None=之前不存在（回滚=删除）
+        current = self.current_state(skill_id)
+        changes = {}
+        for f in self.STATE_FIELDS:
+            cur_v = current.get(f) if current else None
+            tgt_v = target.get(f) if target else None
+            if cur_v != tgt_v:
+                changes[f] = {"from": cur_v, "to": tgt_v}
+        return {
+            "skill_id": skill_id,
+            "event": {k: event[k] for k in ("audit_id", "event", "actor", "reason", "created_at")},
+            "action": "delete" if target is None else ("restore" if current is None else "update"),
+            "changes": changes,
+            "current": current,
+            "target": target,
+        }
+
+    def _apply_state(self, skill_id: str, target: dict | None, current: dict | None) -> None:
+        """把learned_skills行写成target状态（None=删除行）。target没记录的字段保留当前值。"""
+        with sqlite3.connect(self.db_path) as conn:
+            if target is None:
+                conn.execute("DELETE FROM learned_skills WHERE skill_id = ?", (skill_id,))
+                conn.commit()
+                return
+            base = dict(current or {})
+            base.update(target)  # 快照记录的字段以旧快照为准，老审计行缺的字段不回退
+            now = time.time()
+            vals = (
+                base.get("name", ""),
+                base.get("description", ""),
+                base.get("category", "general"),
+                base.get("code_template", ""),
+                json.dumps(base.get("parameters", [])),
+                int(base.get("usage_count", 0) or 0),
+                int(base.get("success_count", 0) or 0),
+                float(base.get("avg_duration_ms", 0) or 0),
+                float(base.get("created_at", now) or now),
+                float(base.get("last_used_at", 0) or 0),
+                json.dumps(base.get("tags", [])),
+                base.get("source_session", ""),
+            )
+            if current is None:
+                conn.execute(
+                    """INSERT INTO learned_skills
+                       (name, description, category, code_template, parameters,
+                        usage_count, success_count, avg_duration_ms,
+                        created_at, last_used_at, tags, source_session, skill_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    vals + (skill_id,),
+                )
+            else:
+                conn.execute(
+                    """UPDATE learned_skills SET
+                       name=?, description=?, category=?, code_template=?, parameters=?,
+                       usage_count=?, success_count=?, avg_duration_ms=?,
+                       created_at=?, last_used_at=?, tags=?, source_session=?
+                       WHERE skill_id=?""",
+                    vals + (skill_id,),
+                )
+            conn.commit()
+
+    def revert_skill(
+        self,
+        skill_id: str,
+        audit_id: int | None = None,
+        actor: str = "api",
+        reason: str = "",
+    ) -> dict | None:
+        """一键回滚：技能状态恢复到目标审计事件发生之前（Agent Zero travel/revert）。
+
+        - 缺省=回滚上一次改动；显式audit_id=回到任意事件之前（ADD→删除技能）。
+        - 回滚本身记REVERT审计（old=回滚前、new=恢复后）——回滚可再被回滚（travel链不断）。
+        - 审计表只追加不改写（进化引擎保护区：回滚点/审计本身不可被改写）。
+        """
+        preview = self.revert_preview(skill_id, audit_id)
+        if preview is None:
+            return None
+        target, current = preview["target"], preview["current"]
+        self._apply_state(skill_id, target, current)
+        self._audit(
+            skill_id,
+            "REVERT",
+            old=current,
+            new=target if target is not None else {"deleted": True},
+            actor=actor,
+            reason=(f"{reason} revert_to_before_audit_id={preview['event']['audit_id']}".strip()),
+        )
+        logger.info(
+            f"Reverted skill {skill_id} to before audit_id={preview['event']['audit_id']} "
+            f"(action={preview['action']}, actor={actor})"
+        )
+        return {
+            "skill_id": skill_id,
+            "action": preview["action"],
+            "reverted_to_before": preview["event"]["audit_id"],
+            "restored": target,
+            "changes": preview["changes"],
+        }
 
     def extract_from_execution(
         self,
@@ -322,6 +496,11 @@ class SkillLearner:
                     "source_session": existing["source_session"],
                     "usage_count": existing["usage_count"],
                     "success_count": existing["success_count"],
+                    # 全保真快照（回滚依据，Agent Zero _time_travel"preview后可travel"）：
+                    # 三个时间/时长字段缺失会让revert丢数据
+                    "avg_duration_ms": existing["avg_duration_ms"],
+                    "created_at": existing["created_at"],
+                    "last_used_at": existing["last_used_at"],
                 }
             conn.commit()
 
