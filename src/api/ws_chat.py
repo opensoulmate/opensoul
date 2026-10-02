@@ -183,6 +183,10 @@ async def chat_websocket(websocket: WebSocket):
                         response_text, source, success = await run_agent_proxy(agent_id, text)
                     else:
                         acp = get_acp_process()
+                        if not session_id:
+                            # 无会话时先建会话：否则 session/prompt 对未知
+                            # sessionId 秒回 stopReason=refusal，客户端只见"无响应"
+                            await acp.new_session()
 
                         if image_attachments and mode in ("hermes", "acp"):
                             # Send with image via ACP (no streaming for images)

@@ -194,7 +194,13 @@ class ACPProcess:
             await self._proc.stdin.drain()
             start = time.time()
             while time.time() - start < 30:
-                raw = await asyncio.wait_for(self._proc.stdout.readline(), timeout=5)
+                try:
+                    raw = await asyncio.wait_for(self._proc.stdout.readline(), timeout=5)
+                except TimeoutError:
+                    # 单次读等待超时不等于调用失败——继续等到 30s 总预算
+                    # （原实现让 TimeoutError 直接炸掉 RPC，冷启动 session/new
+                    # 稍慢就误报"WS chat error:"）
+                    continue
                 if not raw:
                     break
                 msg = self._parse(raw)
