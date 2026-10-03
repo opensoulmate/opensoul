@@ -358,9 +358,22 @@ async def list_learned_skills(
     与/skill/recommend分工：recommend是"按任务找技能"（相关性排序），本端点是
     "库存盘点"（用户看/审/回滚自己的技能库）。success_rate单一真源回填
     （find_relevant同口径），category过滤+limit/offset分页。
+
+    分页真值字段（"指标不许说谎"）：total=库存真实总数（不是本页条数——count是
+    len(本页)保持兼容），has_more=还有下一页；revertible_events=可回滚事件集单一
+    真源（AUDIT_STATE_EVENTS），前端按钮可见性据此判断，不再硬编码"FAIL除外"。
     """
     skills = skill_learner.list_skills(category=category, limit=limit, offset=offset)
-    return {"skills": skills, "count": len(skills)}
+    total = skill_learner.count_skills(category=category)
+    return {
+        "skills": skills,
+        "count": len(skills),
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(skills) < total,
+        "revertible_events": list(SkillLearner.AUDIT_STATE_EVENTS),
+    }
 
 
 @router.post("/skill/{skill_id}/usage")

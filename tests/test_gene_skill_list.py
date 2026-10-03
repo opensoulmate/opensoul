@@ -108,7 +108,9 @@ class TestSkillListApi:
     def test_list_endpoint_empty_then_after_extract(self, gene_client):
         r = gene_client.get("/api/gene/skill")
         assert r.status_code == 200, r.text
-        assert r.json() == {"skills": [], "count": 0}
+        body = r.json()
+        assert body["skills"] == [] and body["count"] == 0
+        assert body["total"] == 0 and body["has_more"] is False
 
         r = gene_client.post("/api/gene/skill/extract", json=self._EXTRACT_PAYLOAD)
         assert r.status_code == 200, r.text
@@ -150,7 +152,7 @@ class TestSkillListApi:
         assert r.json()["count"] >= 1
         assert all(s["category"] == "file_operations" for s in r.json()["skills"])
         r = gene_client.get("/api/gene/skill", params={"category": "nope"})
-        assert r.json() == {"skills": [], "count": 0}
+        assert r.json()["skills"] == [] and r.json()["count"] == 0
 
     def test_list_rows_land_in_isolated_db_not_prod(self, gene_client):
         """列表面只读tmp隔离库（隔离护栏同门：绝不碰生产skills.db）。"""

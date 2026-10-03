@@ -393,11 +393,15 @@ class SkillLearner:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             if audit_id is None:
+                # 事件集从AUDIT_STATE_EVENTS派生（单一真源）：ADD排除在外——只有
+                # ADD史的技能不自动选（防误删），必须显式传audit_id。
+                events = tuple(e for e in self.AUDIT_STATE_EVENTS if e != "ADD")
+                placeholders = ",".join("?" for _ in events)
                 row = conn.execute(
-                    """SELECT * FROM skill_audit
-                       WHERE skill_id = ? AND event IN ('UPDATE','DELETE','REVERT')
-                       ORDER BY audit_id DESC LIMIT 1""",
-                    (skill_id,),
+                    f"SELECT * FROM skill_audit WHERE skill_id = ?"
+                    f" AND event IN ({placeholders})"
+                    " ORDER BY audit_id DESC LIMIT 1",
+                    (skill_id, *events),
                 ).fetchone()
             else:
                 row = conn.execute(
@@ -410,13 +414,17 @@ class SkillLearner:
         """回滚预览（Agent Zero _time_travel：破坏性动作前先看清diff）——零写入。
 
         返回action（restore/update/delete）+逐字段changes{from,to}；
-        无可回滚事件=None；FAIL事件无状态变更→ValueError。
+        无可回滚事件=None；非状态变更事件（如FAIL，不在AUDIT_STATE_EVENTS）无状态
+        变更→ValueError——可回滚事件集单一真源=AUDIT_STATE_EVENTS（API透出给前端
+        决定按钮可见性，不再两端各硬编码一份）。
         """
         event = self._pick_event(skill_id, audit_id)
         if event is None:
             return None
-        if event["event"] == "FAIL":
-            raise ValueError(f"audit event {event['audit_id']} is FAIL (no skill state to revert)")
+        if event["event"] not in self.AUDIT_STATE_EVENTS:
+            raise ValueError(
+                f"audit event {event['audit_id']} is {event['event']} (no skill state to revert)"
+            )
         target = event["old"]  # 该事件发生之前的状态；None=之前不存在（回滚=删除）
         current = self.current_state(skill_id)
         changes = {}
@@ -773,6 +781,20 @@ class SkillLearner:
             d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])
             out.append(d)
         return out
+
+    def count_skills(self, category: str = "") -> int:
+        """库存总数（与list_skills同口径过滤）——分页"还有多少没显示"的真源。
+
+        list_skills受limit/offset截断（生产库122技能 vs 默认limit=100曾把count=100
+        当总数展示，22条技能对用户不可见）；total必须来自COUNT(*)而非len(本页)。
+        """
+        sql = "SELECT COUNT(*) FROM learned_skills"
+        params: list = []
+        if category:
+            sql += " WHERE category = ?"
+            params.append(category)
+        with sqlite3.connect(self.db_path) as conn:
+            return int(conn.execute(sql, params).fetchone()[0])
 
     def find_relevant(self, task_description: str, limit: int = 3) -> list[dict]:
         """Find skills relevant to a task description."""
