@@ -18,6 +18,15 @@ from typing import Optional
 logger = logging.getLogger("opensoul.gene.skill_learner")
 
 
+def _is_wire_sentinel(tc: dict) -> bool:
+    """wire元数据哨兵判定（gene_wire约定：__x__ dunder名=元数据条目非真实工具）。
+
+    如 __TRUNCATED__（截断记账 dropped/total）——不进tool_sequence/参数/模板。
+    """
+    name = str((tc.get("function") or {}).get("name", "") or "")
+    return name.startswith("__") and name.endswith("__") and len(name) > 4
+
+
 @dataclass
 class Skill:
     skill_id: str
@@ -370,6 +379,13 @@ class SkillLearner:
         if not tool_calls:
             return None
 
+        # wire哨兵过滤（gene_wire约定：__x__ dunder名=元数据条目非真实工具）：
+        # __TRUNCATED__截断标记不进tool_sequence/参数/模板——否则同一任务不同
+        # 截断点产生不同skill_id碎片。过滤后为空=本回合只有元数据，同样不提炼。
+        tool_calls = [tc for tc in tool_calls if not _is_wire_sentinel(tc)]
+        if not tool_calls:
+            return None
+
         tools_used = [tc.get("function", {}).get("name", "") for tc in tool_calls]
         tool_sequence = " → ".join(t for t in tools_used if t)
 
@@ -577,12 +593,12 @@ class SkillLearner:
         """Find skills relevant to a task description."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """SELECT * FROM learned_skills
-                   ORDER BY usage_count DESC, success_count DESC
-                   LIMIT ?""",
-                (limit * 3,),
-            ).fetchall()
+            # 候选全集而非usage序窗口（冷启动盲区修复）：先按usage开LIMIT*3窗口
+            # 再做相关性过滤，会让新学技能（usage=1/2）永远挤不进高usage旧技能
+            # 占满的窗口——再相关也查不到（live API实锤：135行库中12条(2,2)旧测试
+            # 行把9窗口占满→刚提炼的技能recommend查无此技能）。相关性/评分对全集
+            # 做，最后才按relevance_score截limit；表规模（学习技能数）远够全扫。
+            rows = conn.execute("SELECT * FROM learned_skills").fetchall()
 
         task_lower = task_description.lower()
         scored = []

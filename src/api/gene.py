@@ -272,15 +272,33 @@ class SkillUsageRequest(BaseModel):
 @router.post("/skill/extract")
 async def extract_skill(req: SkillExtractRequest):
     """Extract a skill from execution log."""
+    import ast
     import json
 
     # Parse execution_log as JSON list of tool calls
     try:
         tool_calls = json.loads(req.execution_log)
-        if not isinstance(tool_calls, list):
-            tool_calls = []
     except (json.JSONDecodeError, TypeError):
+        # 旧客户端载荷是 str(list)（Python repr：单引号/True/False）——宽容
+        # 解码（goose宽容反序列化同门）：能救一截是一截；两种都解析不出=空
+        # 列表照旧走extract空契约（None→400，非静默吞）
+        try:
+            tool_calls = ast.literal_eval(req.execution_log)
+        except (ValueError, SyntaxError, TypeError):
+            tool_calls = []
+    if not isinstance(tool_calls, list):
         tool_calls = []
+
+    # 形态归一（wire边界单一真源）：旧扁平账本 {name, arguments, result_preview}
+    # → 契约 {"function": {"name", "arguments"}}——不补的话tools_used全空名、
+    # tool_sequence空、同一任务不同载荷形态→不同skill_id碎片化（live E2E实锤）。
+    # 只补缺function包装的条目，不覆盖已有形态。
+    tool_calls = [
+        {"function": {"name": tc.get("name", ""), "arguments": tc.get("arguments", {})}}
+        if isinstance(tc, dict) and "function" not in tc and "name" in tc
+        else tc
+        for tc in tool_calls
+    ]
 
     skill = skill_learner.extract_from_execution(
         session_id=f"skill_{int(time.time() * 1000)}",
