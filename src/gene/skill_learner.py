@@ -72,6 +72,16 @@ def _token_coverage(query_tokens: set[str], text: str | None, text_tokens: set[s
     return hit / len(query_tokens)
 
 
+def _success_rate(usage_count: int, success_count: int) -> float:
+    """成败率单一真源：usage=0→0.0（没证据不冒充全胜/全败），否则success/usage。
+
+    find_relevant（检索排序）、list_skills（库存盘点）、record_usage（遥测回执）与
+    Skill.success_rate共用本口径——指标不许说谎（06:47轮遥测闭环语义：
+    失败计入usage，只稀释不加分）。
+    """
+    return success_count / usage_count if usage_count else 0.0
+
+
 @dataclass
 class Skill:
     skill_id: str
@@ -91,7 +101,7 @@ class Skill:
 
     @property
     def success_rate(self) -> float:
-        return self.success_count / self.usage_count if self.usage_count else 0.0
+        return _success_rate(self.usage_count, self.success_count)
 
 
 class SkillLearner:
@@ -733,6 +743,37 @@ class SkillLearner:
             return "coding"
         return "general"
 
+    def list_skills(self, category: str = "", limit: int = 100, offset: int = 0) -> list[dict]:
+        """技能库库存盘点（learned_skills全量，最近活动新→旧）——回滚UI/审计视图的枚举端。
+
+        与find_relevant分工：find_relevant是"按任务找技能"（相关性四因子排序），
+        本方法是"无任务的库存列表"（用户看/审/回滚自己的技能库——Khoj记忆CRUD
+        信任设计同门：AI对自己的记忆/技能必须可看可改可删）。success_rate与
+        find_relevant同一单一真源（_success_rate），tags/parameters在此解JSON。
+        """
+        sql = "SELECT * FROM learned_skills"
+        params: list = []
+        if category:
+            sql += " WHERE category = ?"
+            params.append(category)
+        # 最近活动（last_used_at，未使用过的按created_at）新→旧
+        sql += (
+            " ORDER BY (CASE WHEN last_used_at > 0 THEN last_used_at"
+            " ELSE created_at END) DESC, created_at DESC LIMIT ? OFFSET ?"
+        )
+        params.extend([int(limit), int(offset)])
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(sql, params).fetchall()
+        out = []
+        for row in rows:
+            d = dict(row)
+            d["tags"] = json.loads(d.get("tags", "[]") or "[]")
+            d["parameters"] = json.loads(d.get("parameters", "[]") or "[]")
+            d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])
+            out.append(d)
+        return out
+
     def find_relevant(self, task_description: str, limit: int = 3) -> list[dict]:
         """Find skills relevant to a task description."""
         with sqlite3.connect(self.db_path) as conn:
@@ -763,7 +804,7 @@ class SkillLearner:
             d["parameters"] = json.loads(d.get("parameters", "[]"))
             # success_rate如实回填（learned_skills行里没这列，此前recommend恒返回
             # get缺省0.0——指标说谎：真实成败率被0.0掩盖）
-            d["success_rate"] = d["success_count"] / d["usage_count"] if d["usage_count"] else 0.0
+            d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])
             name_cov = _token_coverage(
                 task_tokens, d.get("name") or "", _relevance_tokens(d.get("name"))
             )
@@ -845,7 +886,7 @@ class SkillLearner:
             "updated": True,
             "usage_count": usage_count,
             "success_count": success_count,
-            "success_rate": success_count / usage_count if usage_count else 0.0,
+            "success_rate": _success_rate(usage_count, success_count),
         }
 
     def get_stats(self) -> dict:

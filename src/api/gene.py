@@ -347,6 +347,22 @@ async def recommend_skills(req: SkillRecommendRequest):
     }
 
 
+@router.get("/skill")
+async def list_learned_skills(
+    category: str = Query(default=""),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """技能库库存列表（learned_skills全量，最近活动新→旧）——回滚UI/审计视图的枚举端。
+
+    与/skill/recommend分工：recommend是"按任务找技能"（相关性排序），本端点是
+    "库存盘点"（用户看/审/回滚自己的技能库）。success_rate单一真源回填
+    （find_relevant同口径），category过滤+limit/offset分页。
+    """
+    skills = skill_learner.list_skills(category=category, limit=limit, offset=offset)
+    return {"skills": skills, "count": len(skills)}
+
+
 @router.post("/skill/{skill_id}/usage")
 async def report_skill_usage(skill_id: str, req: SkillUsageRequest):
     """技能使用回执（使用遥测）：消费方用完推荐技能后回执成败。
