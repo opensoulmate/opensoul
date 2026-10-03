@@ -6,6 +6,7 @@ import copy
 import json
 import logging
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass, field
@@ -29,6 +30,32 @@ class Template:
     builtin: bool = False
 
 
+# ── 写入护栏（2026-10-03 gene模板写入护栏轮）─────────────────────────────
+# 参照kilocode discovery.ts"origin钉死+原子swap+校验"三件套：
+# - 校验：template_id白名单字符集（首字符字母数字，禁路径分隔符/前导点）→
+#   堵死 _save_template 的 `storage_dir / f"{template_id}.json"` 路径穿越写
+#   （template_id经POST /api/gene/templates、/import、clone完全用户可控）
+# - 钉死：落盘文件名==template_id，加载时文件名与内部id不符即拒载（防伪造来源）
+# - 原子swap：tmp+os.replace，崩溃不留半截JSON（半截文件曾被_load_user_templates
+#   静默跳过=静默丢模板）
+
+_TEMPLATE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class TemplateValidationError(ValueError):
+    """写入护栏拒绝：非法template_id或缺失必填字段。API层映射为HTTP 400。"""
+
+
+def _validate_template_id(template_id: Any) -> str:
+    """校验template_id安全合规（白名单字符集），非法即raise TemplateValidationError。"""
+    if not isinstance(template_id, str) or not _TEMPLATE_ID_RE.match(template_id):
+        raise TemplateValidationError(
+            f"invalid template_id: {template_id!r} "
+            f"(allowed: [A-Za-z0-9][A-Za-z0-9._-]{{0,127}}, no path separators)"
+        )
+    return template_id
+
+
 class TemplateEngine:
     """Template registry with built-in and user-defined templates."""
 
@@ -45,13 +72,25 @@ class TemplateEngine:
             try:
                 data = json.loads(f.read_text())
                 t = Template(**data)
+                # origin钉死：文件名必须==template_id，且id过白名单校验
+                if t.template_id != f.stem:
+                    raise TemplateValidationError(
+                        f"template_id {t.template_id!r} != filename stem {f.stem!r}"
+                    )
+                _validate_template_id(t.template_id)
                 self._templates[t.template_id] = t
             except Exception as exc:
-                logging.getLogger(__name__).debug("probe skipped: %s", exc)
+                # 拒载必须可观测（曾为debug静默跳过=假模板/丢模板无感知）
+                logging.getLogger(__name__).warning("template load rejected: %s (%s)", f.name, exc)
 
     def _save_template(self, template: Template):
-        path = self.storage_dir / f"{template.template_id}.json"
-        path.write_text(
+        tid = _validate_template_id(template.template_id)
+        path = self.storage_dir / f"{tid}.json"
+        # 路径穿越双重保险：解析后必须仍在storage_dir内
+        if path.resolve().parent != self.storage_dir.resolve():
+            raise TemplateValidationError(f"template_id escapes storage dir: {tid!r}")
+        tmp = self.storage_dir / f".{tid}.json.tmp"
+        tmp.write_text(
             json.dumps(
                 {
                     "template_id": template.template_id,
@@ -71,6 +110,7 @@ class TemplateEngine:
                 indent=2,
             )
         )
+        os.replace(tmp, path)  # 原子swap：崩溃不留半截JSON
 
     def _register_builtins(self):
         """Register built-in starter templates."""
@@ -954,8 +994,18 @@ class TemplateEngine:
 
     def create_template(self, data: dict) -> Template:
         """Create a new user template."""
+        missing = [
+            f
+            for f in ("name", "category")
+            if not isinstance(data.get(f), str) or not data[f].strip()
+        ]
+        if missing:
+            # 明确400语义（曾data["name"]直接KeyError→API 500）
+            raise TemplateValidationError(f"missing/empty required field(s): {missing}")
+        tid = data.get("template_id") or f"user-{int(time.time())}"
+        _validate_template_id(tid)
         template = Template(
-            template_id=data.get("template_id", f"user-{int(time.time())}"),
+            template_id=tid,
             name=data["name"],
             category=data["category"],
             description=data.get("description", ""),
@@ -971,6 +1021,10 @@ class TemplateEngine:
         return template
 
     def delete_template(self, template_id: str) -> bool:
+        try:
+            _validate_template_id(template_id)
+        except TemplateValidationError:
+            return False  # 非法id不触盘（路径穿越删除面）
         with self._lock:
             t = self._templates.get(template_id)
             if not t:
@@ -1095,6 +1149,10 @@ class TemplateEngine:
                 return None, f"Missing required field: {req_field}"
 
         tid = data.get("template_id", f"imported-{int(time.time())}")
+        try:
+            _validate_template_id(tid)
+        except TemplateValidationError as exc:
+            return None, str(exc)  # 按import契约回(error msg)，不炸整批导入
 
         # Check if already exists
         with self._lock:

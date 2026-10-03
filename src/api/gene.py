@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from src.gene.skill_learner import SkillLearner
-from src.gene.templates import TemplateEngine
+from src.gene.templates import TemplateEngine, TemplateValidationError
 
 router = APIRouter()
 
@@ -102,7 +102,11 @@ async def create_template(req: TemplateCreateRequest):
     data = req.model_dump()
     if not data.get("template_id"):
         data.pop("template_id", None)
-    template = engine.create_template(data)
+    try:
+        template = engine.create_template(data)
+    except TemplateValidationError as exc:
+        # 写入护栏拒绝→400（非法id/缺必填），非500
+        raise HTTPException(400, str(exc))
     return {
         "template_id": template.template_id,
         "name": template.name,
