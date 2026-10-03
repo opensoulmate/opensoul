@@ -2,8 +2,8 @@
 
 
 class TestGeneHealth:
-    def test_health(self, client):
-        resp = client.get("/api/gene/health")
+    def test_health(self, gene_client):
+        resp = gene_client.get("/api/gene/health")
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
@@ -12,26 +12,26 @@ class TestGeneHealth:
 
 
 class TestGeneTemplates:
-    def test_list_templates(self, client):
-        resp = client.get("/api/gene/templates")
+    def test_list_templates(self, gene_client):
+        resp = gene_client.get("/api/gene/templates")
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list) or "templates" in data
 
-    def test_get_template(self, client):
+    def test_get_template(self, gene_client):
         # List first to get a valid ID
-        resp = client.get("/api/gene/templates")
+        resp = gene_client.get("/api/gene/templates")
         assert resp.status_code == 200
         templates = (
             resp.json() if isinstance(resp.json(), list) else resp.json().get("templates", [])
         )
         if templates:
             tid = templates[0]["template_id"]
-            resp = client.get(f"/api/gene/templates/{tid}")
+            resp = gene_client.get(f"/api/gene/templates/{tid}")
             assert resp.status_code == 200
 
-    def test_create_and_delete_user_template(self, client):
-        resp = client.post(
+    def test_create_and_delete_user_template(self, gene_client):
+        resp = gene_client.post(
             "/api/gene/templates",
             json={
                 "name": "test_template",
@@ -46,5 +46,5 @@ class TestGeneTemplates:
         tid = data["template_id"]
 
         # Delete
-        resp = client.delete(f"/api/gene/templates/{tid}")
+        resp = gene_client.delete(f"/api/gene/templates/{tid}")
         assert resp.status_code == 200

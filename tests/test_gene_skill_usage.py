@@ -5,7 +5,8 @@
 2. find_relevant/recommend的success_rate如实回填（此前行里没这列恒get缺省0.0）；
 3. 排序失败不抬名次（旧公式usage*0.1失败反而加分）。
 
-单元测试tmp db直跑SkillLearner；API测试走live服务（conftest client→:8090）。
+单元测试tmp db直跑SkillLearner；API测试走进程内隔离面（conftest gene_client，
+tmp独立库——测试绝不写生产skills.db）。
 """
 
 import json
@@ -164,14 +165,14 @@ class TestApiWiring:
             "success": success,
         }
 
-    def test_usage_endpoint_recommend_rate_via_api(self, client):
+    def test_usage_endpoint_recommend_rate_via_api(self, gene_client):
         marker = f"遥测接线测试-{uuid.uuid4().hex[:8]}"
-        r1 = client.post("/api/gene/skill/extract", json=self._payload(marker))
+        r1 = gene_client.post("/api/gene/skill/extract", json=self._payload(marker))
         assert r1.status_code == 200, r1.text
         skill_id = r1.json()["skill_id"]
 
         # 使用回执（失败）→ success_rate 1.0 → 0.5
-        ru = client.post(f"/api/gene/skill/{skill_id}/usage", json={"success": False})
+        ru = gene_client.post(f"/api/gene/skill/{skill_id}/usage", json={"success": False})
         assert ru.status_code == 200, ru.text
         du = ru.json()
         assert du["updated"] is True
@@ -179,36 +180,36 @@ class TestApiWiring:
         assert du["success_rate"] == 0.5
 
         # recommend不再恒0.0（修复前此处恒返回get缺省0.0）
-        rr = client.post("/api/gene/skill/recommend", json={"task_description": marker})
+        rr = gene_client.post("/api/gene/skill/recommend", json={"task_description": marker})
         assert rr.status_code == 200
         rec = next(s for s in rr.json()["skills"] if s["skill_id"] == skill_id)
         assert rec["success_rate"] == 0.5
 
         # 未知技能404（不静默吞）
-        ru404 = client.post("/api/gene/skill/skill_nonexistent/usage", json={"success": True})
+        ru404 = gene_client.post("/api/gene/skill/skill_nonexistent/usage", json={"success": True})
         assert ru404.status_code == 404
 
-        rd = client.delete(f"/api/gene/skill/{skill_id}?reason=usage-test-cleanup")
+        rd = gene_client.delete(f"/api/gene/skill/{skill_id}?reason=usage-test-cleanup")
         assert rd.status_code == 200
 
-    def test_fail_extract_via_api_counts_into_usage(self, client):
+    def test_fail_extract_via_api_counts_into_usage(self, gene_client):
         """FAIL执行路径（extract success=false）真实调用record_usage——API面实证。"""
         marker = f"遥测接线测试-{uuid.uuid4().hex[:8]}"
-        r1 = client.post("/api/gene/skill/extract", json=self._payload(marker))
+        r1 = gene_client.post("/api/gene/skill/extract", json=self._payload(marker))
         assert r1.status_code == 200
         skill_id = r1.json()["skill_id"]
 
-        rf = client.post("/api/gene/skill/extract", json=self._payload(marker, success=False))
+        rf = gene_client.post("/api/gene/skill/extract", json=self._payload(marker, success=False))
         assert rf.status_code == 400  # 没提炼出技能（契约不变）
 
-        rh = client.get(f"/api/gene/skill/{skill_id}/history")
+        rh = gene_client.get(f"/api/gene/skill/{skill_id}/history")
         assert rh.status_code == 200
         assert [e["event"] for e in rh.json()["events"]][:2] == ["FAIL", "ADD"]
 
-        rr = client.post("/api/gene/skill/recommend", json={"task_description": marker})
+        rr = gene_client.post("/api/gene/skill/recommend", json={"task_description": marker})
         rec = next(s for s in rr.json()["skills"] if s["skill_id"] == skill_id)
         assert rec["usage_count"] == 2  # FAIL计入usage
         assert rec["success_rate"] == 0.5
 
-        rd = client.delete(f"/api/gene/skill/{skill_id}?reason=usage-test-cleanup")
+        rd = gene_client.delete(f"/api/gene/skill/{skill_id}?reason=usage-test-cleanup")
         assert rd.status_code == 200

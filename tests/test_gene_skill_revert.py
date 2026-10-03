@@ -1,7 +1,7 @@
 """gene技能库一键回滚（Agent Zero _time_travel travel/revert + preview先行）。
 
-单元测试用tmp db直跑SkillLearner真实行为；API测试走live服务（conftest client→:8090）
-验证router接线（GET /skill/{id}/revert-preview、POST /skill/{id}/revert）。
+单元测试用tmp db直跑SkillLearner真实行为；API测试走进程内隔离面（conftest
+gene_client，tmp独立库）验证router接线（GET /skill/{id}/revert-preview、POST /skill/{id}/revert）。
 核心契约：
 - 缺省回滚=最近一次有状态变更的事件（UPDATE/DELETE/REVERT），只有ADD史不自动选（防误删）
 - 显式audit_id=回到任意事件之前（含ADD→删除、REVERT→再翻回去=travel链不断）
@@ -274,57 +274,59 @@ class TestApiWiring:
             "success": True,
         }
 
-    def test_revert_flow_via_api(self, client):
-        r1 = client.post("/api/gene/skill/extract", json=self._payload(content="v1"))
+    def test_revert_flow_via_api(self, gene_client):
+        r1 = gene_client.post("/api/gene/skill/extract", json=self._payload(content="v1"))
         assert r1.status_code == 200, r1.text
         sid = r1.json()["skill_id"]
-        r2 = client.post("/api/gene/skill/extract", json=self._payload(content="v2"))
+        r2 = gene_client.post("/api/gene/skill/extract", json=self._payload(content="v2"))
         assert r2.status_code == 200 and r2.json()["event"] == "UPDATE"
 
-        rp = client.get(f"/api/gene/skill/{sid}/revert-preview")
+        rp = gene_client.get(f"/api/gene/skill/{sid}/revert-preview")
         assert rp.status_code == 200, rp.text
         p = rp.json()
         assert p["action"] == "update"
         assert "code_template" in p["changes"]
 
-        rv = client.post(f"/api/gene/skill/{sid}/revert?reason=api-revert-test")
+        rv = gene_client.post(f"/api/gene/skill/{sid}/revert?reason=api-revert-test")
         assert rv.status_code == 200, rv.text
         d = rv.json()
         assert d["action"] == "update" and d["reverted_to_before"] == p["event"]["audit_id"]
 
-        rh = client.get(f"/api/gene/skill/{sid}/history")
+        rh = gene_client.get(f"/api/gene/skill/{sid}/history")
         assert rh.status_code == 200
         assert rh.json()["events"][0]["event"] == "REVERT"
 
         # travel链：再revert一次=翻回v2
-        rv2 = client.post(f"/api/gene/skill/{sid}/revert")
+        rv2 = gene_client.post(f"/api/gene/skill/{sid}/revert")
         assert rv2.status_code == 200
 
-        rd = client.delete(f"/api/gene/skill/{sid}?reason=api-revert-cleanup")
+        rd = gene_client.delete(f"/api/gene/skill/{sid}?reason=api-revert-cleanup")
         assert rd.status_code == 200
 
-    def test_revert_preview_errors_via_api(self, client):
-        r = client.get("/api/gene/skill/skill_nonexistent/revert-preview")
+    def test_revert_preview_errors_via_api(self, gene_client):
+        r = gene_client.get("/api/gene/skill/skill_nonexistent/revert-preview")
         assert r.status_code == 404
-        r2 = client.post("/api/gene/skill/skill_nonexistent/revert")
+        r2 = gene_client.post("/api/gene/skill/skill_nonexistent/revert")
         assert r2.status_code == 404
 
         # FAIL事件→400
-        rf = client.post(
+        rf = gene_client.post(
             "/api/gene/skill/extract",
             json={**self._payload(), "task_description": f"{self.MARKER}-fail", "success": False},
         )
         assert rf.status_code == 400
-        ra = client.get("/api/gene/skill/audit?limit=50")
+        ra = gene_client.get("/api/gene/skill/audit?limit=50")
         fail = [
             e
             for e in ra.json()["events"]
             if e["event"] == "FAIL"
             and self.MARKER in (e.get("new") or {}).get("task_description", "")
         ][0]
-        r3 = client.get(
+        r3 = gene_client.get(
             f"/api/gene/skill/{fail['skill_id']}/revert-preview?audit_id={fail['audit_id']}"
         )
         assert r3.status_code == 400
-        r4 = client.post(f"/api/gene/skill/{fail['skill_id']}/revert?audit_id={fail['audit_id']}")
+        r4 = gene_client.post(
+            f"/api/gene/skill/{fail['skill_id']}/revert?audit_id={fail['audit_id']}"
+        )
         assert r4.status_code == 400

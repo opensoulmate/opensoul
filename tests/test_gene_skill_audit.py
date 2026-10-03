@@ -1,7 +1,7 @@
 """gene技能库进化审计（mem0 §1.2）+ 失败记忆分支（mem0 §1.1）+ 静默覆盖计数重置修复。
 
-单元测试用tmp db直跑SkillLearner真实行为；API测试走live服务（conftest client→:8090）
-验证router接线（GET /skill/audit、GET /skill/{id}/history、DELETE /skill/{id}）。
+单元测试用tmp db直跑SkillLearner真实行为；API测试走进程内隔离面（conftest
+gene_client，tmp独立库）验证router接线（GET /skill/audit、GET /skill/{id}/history、DELETE /skill/{id}）。
 """
 
 import json
@@ -221,38 +221,38 @@ class TestApiWiring:
             "success": success,
         }
 
-    def test_extract_history_delete_via_api(self, client):
-        r1 = client.post("/api/gene/skill/extract", json=self._payload(content="v1"))
+    def test_extract_history_delete_via_api(self, gene_client):
+        r1 = gene_client.post("/api/gene/skill/extract", json=self._payload(content="v1"))
         assert r1.status_code == 200, r1.text
         d1 = r1.json()
         assert d1["event"] == "ADD"
         skill_id = d1["skill_id"]
 
-        r2 = client.post("/api/gene/skill/extract", json=self._payload(content="v2"))
+        r2 = gene_client.post("/api/gene/skill/extract", json=self._payload(content="v2"))
         assert r2.status_code == 200
         d2 = r2.json()
         assert d2["skill_id"] == skill_id
         assert d2["event"] == "UPDATE"
         assert d2["success_rate"] == 1.0  # 计数回填，不再恒0
 
-        rh = client.get(f"/api/gene/skill/{skill_id}/history")
+        rh = gene_client.get(f"/api/gene/skill/{skill_id}/history")
         assert rh.status_code == 200
         events = rh.json()["events"]
         assert [e["event"] for e in events] == ["UPDATE", "ADD"]
         # v1→v2的模板演进留档（old/new可diff=回滚依据）
         assert events[0]["old"]["code_template"] != events[0]["new"]["code_template"]
 
-        rd = client.delete(f"/api/gene/skill/{skill_id}?reason=api-test-cleanup")
+        rd = gene_client.delete(f"/api/gene/skill/{skill_id}?reason=api-test-cleanup")
         assert rd.status_code == 200
-        rd2 = client.delete(f"/api/gene/skill/{skill_id}")
+        rd2 = gene_client.delete(f"/api/gene/skill/{skill_id}")
         assert rd2.status_code == 404
 
-    def test_failure_and_audit_tail_via_api(self, client):
-        rf = client.post("/api/gene/skill/extract", json=self._payload(success=False))
+    def test_failure_and_audit_tail_via_api(self, gene_client):
+        rf = gene_client.post("/api/gene/skill/extract", json=self._payload(success=False))
         assert rf.status_code == 400  # 没提炼出技能
         assert "skill_audit" in rf.text  # 但失败已留痕的声明在错误契约里
 
-        ra = client.get("/api/gene/skill/audit?limit=20")
+        ra = gene_client.get("/api/gene/skill/audit?limit=20")
         assert ra.status_code == 200
         events = ra.json()["events"]
         fails = [
