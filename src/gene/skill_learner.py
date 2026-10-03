@@ -9,6 +9,8 @@ Borrowed from: Voyager skill library, CodeAct
 import hashlib
 import json
 import logging
+import math
+import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -25,6 +27,49 @@ def _is_wire_sentinel(tc: dict) -> bool:
     """
     name = str((tc.get("function") or {}).get("name", "") or "")
     return name.startswith("__") and name.endswith("__") and len(name) > 4
+
+
+# ── 检索分词（CJK bigram + 拉丁词token）──────────────────────────
+# find_relevant旧公式的关键词命中是 `any(kw in name for kw in task.split())`
+# ——whitespace分词对中文**整句一个token**（中文无空格），而技能名=提炼时刻的
+# 任务描述（task_description[:50]）：换种说法复述同一任务（「清理下日志」vs
+# 「帮我把日志文件清理一下」）子串匹配永不命中→相关性增益(+0.5/+0.3)从不触发
+# →find_relevant退化成"只按success_rate排"=与任务无关的推荐（进化链检索失灵）。
+# 反面：英文靠空格分词能命中，却被the/a等停用词刷分（'a' in 任意含a名字=+0.5）。
+# 对齐DeerMem近重复门的CJK bigram先例：CJK连续段→字符bigram（单字段收单字），
+# 拉丁/数字→小写单词（len>=2+停用词过滤）。
+_CJK_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
+_LATIN_TOKEN_RE = re.compile(r"[a-z0-9_]+")
+_LATIN_STOPWORDS = frozenset(
+    "the a an of to in on at for and or is are was be been do does did "
+    "not no yes it its this that these those with from by as please".split()
+)
+
+
+def _relevance_tokens(text: str | None) -> set[str]:
+    """任务/技能名/描述 → 检索token集（CJK bigram + 拉丁词，全小写）。"""
+    t = (text or "").lower()
+    tokens: set[str] = set()
+    for run in _CJK_RUN_RE.findall(t):
+        if len(run) == 1:
+            tokens.add(run)
+        else:
+            tokens.update(run[i : i + 2] for i in range(len(run) - 1))
+    for w in _LATIN_TOKEN_RE.findall(t):
+        if len(w) >= 2 and w not in _LATIN_STOPWORDS:
+            tokens.add(w)
+    return tokens
+
+
+def _token_coverage(query_tokens: set[str], text: str | None, text_tokens: set[str]) -> float:
+    """查询token被文本覆盖的比例（0.0~1.0）。单字token（CJK单字段）按字符出现
+    判中——bigram集里没有单字，不能漏。空查询=0（不算全中，避免空任务乱抬分）。"""
+    if not query_tokens:
+        return 0.0
+    hit = sum(
+        1 for tok in query_tokens if tok in text_tokens or (len(tok) == 1 and tok in (text or ""))
+    )
+    return hit / len(query_tokens)
 
 
 @dataclass
@@ -699,7 +744,18 @@ class SkillLearner:
             # 做，最后才按relevance_score截limit；表规模（学习技能数）远够全扫。
             rows = conn.execute("SELECT * FROM learned_skills").fetchall()
 
-        task_lower = task_description.lower()
+        # 三因子评分（generative-agents recency+importance+relevance范式的技能侧）：
+        #   relevance  = 0.6*名字覆盖 + 0.4*描述覆盖（CJK bigram/词token覆盖度，见
+        #                _relevance_tokens——旧whitespace子串匹配对中文整句一个token
+        #                从不命中，"usage排序公式启发式"遗留销账）
+        #   trust      = success_rate（失败只稀释不加分——失败越多不得排越前）
+        #   evidence   = min(usage_count,10)/10（证据量封顶，防老技能靠堆量躺赢）
+        #   recency    = exp(-age/30天)（last_used_at/created_at锚点，久未用的技能
+        #                轻微降权——新鲜经验优先，权重小不翻盘相关性/成败）
+        # score = 0.45*relevance + 0.35*trust + 0.10*evidence + 0.10*recency
+        # 每行带relevance_breakdown（可观测：为什么这行排这——覆盖率/四因子裸值）。
+        task_tokens = _relevance_tokens(task_description)
+        now = time.time()
         scored = []
         for row in rows:
             d = dict(row)
@@ -708,15 +764,27 @@ class SkillLearner:
             # success_rate如实回填（learned_skills行里没这列，此前recommend恒返回
             # get缺省0.0——指标说谎：真实成败率被0.0掩盖）
             d["success_rate"] = d["success_count"] / d["usage_count"] if d["usage_count"] else 0.0
-            # 排序=成功率主导+有限证据权重（usage封顶10次）：失败计入usage后，
-            # 旧公式 success*0.3 + usage*0.1 会因失败而加分——失败越多反而排越前。
-            # 现在失败只稀释success_rate不抬排名；封顶防老技能靠堆量躺赢。
-            score = d["success_rate"] * 0.6 + min(d["usage_count"], 10) * 0.02
-            if any(kw in d["name"].lower() for kw in task_lower.split()):
-                score += 0.5
-            if any(kw in d["description"].lower() for kw in task_lower.split()):
-                score += 0.3
+            name_cov = _token_coverage(
+                task_tokens, d.get("name") or "", _relevance_tokens(d.get("name"))
+            )
+            desc_cov = _token_coverage(
+                task_tokens, d.get("description") or "", _relevance_tokens(d.get("description"))
+            )
+            relevance = 0.6 * name_cov + 0.4 * desc_cov
+            trust = d["success_rate"]
+            evidence = min(d["usage_count"], 10) / 10
+            anchor = d.get("last_used_at") or d.get("created_at") or now
+            recency = math.exp(-max(0.0, now - float(anchor)) / (30.0 * 86400))
+            score = 0.45 * relevance + 0.35 * trust + 0.10 * evidence + 0.10 * recency
             d["relevance_score"] = score
+            d["relevance_breakdown"] = {
+                "name_coverage": round(name_cov, 4),
+                "description_coverage": round(desc_cov, 4),
+                "relevance": round(relevance, 4),
+                "trust": round(trust, 4),
+                "evidence": round(evidence, 4),
+                "recency": round(recency, 4),
+            }
             scored.append(d)
 
         scored.sort(key=lambda x: x["relevance_score"], reverse=True)

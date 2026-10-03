@@ -337,6 +337,9 @@ async def recommend_skills(req: SkillRecommendRequest):
                 "description": s.get("description", ""),
                 "success_rate": s.get("success_rate", 0.0),
                 "usage_count": s.get("usage_count", 0),
+                # 排序可观测（"为什么这行排这"）：三因子裸值随recommend一并透出
+                "relevance_score": s.get("relevance_score", 0.0),
+                "relevance_breakdown": s.get("relevance_breakdown", {}),
             }
             for s in skills
         ],
