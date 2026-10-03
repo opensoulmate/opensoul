@@ -368,6 +368,28 @@ async def skill_audit_tail(limit: int = Query(default=50, ge=1, le=500)):
     return {"events": skill_learner.audit_tail(limit=limit)}
 
 
+@router.post("/skill/audit/prune")
+async def prune_skill_audit(
+    max_per_skill: int = Query(default=None, ge=1),
+    max_total: int = Query(default=None, ge=1),
+    fail_max_age_days: float = Query(default=None, ge=0),
+):
+    """审计账本retention三层裁剪（过龄FAIL→per-skill上限→全局上限）。
+
+    回滚语义红线：每技能最近一次状态变更事件（ADD/UPDATE/DELETE/REVERT）永不清除。
+    参数缺省走skill_learner.audit_retention配置；返回各层删除计数。
+    """
+    try:
+        result = skill_learner.prune_audit(
+            max_per_skill=max_per_skill,
+            max_total=max_total,
+            fail_max_age_days=fail_max_age_days,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return result
+
+
 @router.get("/skill/{skill_id}/history")
 async def skill_history(skill_id: str, limit: int = Query(default=50, ge=1, le=500)):
     """单个技能的审计历史——这条策略是被谁、因为哪次执行、从什么改成什么。"""

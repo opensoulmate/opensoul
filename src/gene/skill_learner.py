@@ -52,12 +52,23 @@ class Skill:
 class SkillLearner:
     """Extracts and manages reusable skills from executions."""
 
+    # 状态变更事件=回滚语义红线：每技能"最近一次"状态变更事件是revert缺省目标
+    # (_pick_event)与删除恢复(old留档)的唯一依据，任何retention上限都不得清掉。
+    AUDIT_STATE_EVENTS = ("ADD", "UPDATE", "DELETE", "REVERT")
+
     def __init__(self, db_path: str = ""):
         if not db_path:
             base = Path.home() / ".hermes" / "opensoul" / "gene"
             base.mkdir(parents=True, exist_ok=True)
             db_path = str(base / "skills.db")
         self.db_path = db_path
+        # 审计账本retention缺省（真实学习审计只增不减的膨胀治理，dev-reports挂账#4）。
+        # 实例属性而非类常量：测试/运维可按需收紧或放宽。
+        self.audit_retention = {
+            "max_per_skill": 200,  # 每技能审计行上限（超出裁最旧）
+            "max_total": 5000,  # 全局审计行上限（超出裁最旧）
+            "fail_max_age_days": 30.0,  # FAIL事件过龄即清（无状态快照、非回滚依据）
+        }
         self._init_db()
 
     def _init_db(self):
@@ -136,6 +147,94 @@ class SkillLearner:
                 conn.commit()
         except Exception:
             logger.exception(f"skill_audit write failed (skill_id={skill_id}, event={event})")
+            return
+        # 写路径自动retention（防账本只增不减的膨胀，dev-reports挂账#4）：
+        # 门槛内只花一个COUNT，超限才真正裁剪。
+        self._maybe_prune()
+
+    def _maybe_prune(self) -> None:
+        """_audit落账后触发的自动retention。裁剪失败绝不阻塞主流程（CowAgent记账哲学）。"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                total = conn.execute("SELECT COUNT(*) FROM skill_audit").fetchone()[0]
+            if total > self.audit_retention["max_total"]:
+                result = self.prune_audit()
+                logger.info(f"skill_audit auto-pruned: {result}")
+        except Exception:
+            logger.exception("skill_audit auto-prune failed (non-blocking)")
+
+    def prune_audit(
+        self,
+        max_per_skill: int | None = None,
+        max_total: int | None = None,
+        fail_max_age_days: float | None = None,
+    ) -> dict:
+        """审计账本retention三层裁剪（每层都守回滚语义红线）。
+
+        1. 过龄FAIL：FAIL无状态快照、不是回滚依据，>fail_max_age_days天直接清；
+        2. per-skill上限：每技能保最新max_per_skill行；
+        3. 全局上限：总行数保最新max_total行。
+        红线：每技能"最近一次状态变更事件"（ADD/UPDATE/DELETE/REVERT）任何层都不清——
+        它是revert缺省目标(_pick_event)与删除恢复(old留档)的唯一依据；红线行数超过
+        上限时账本可暂时高于上限（正确性>瘦身），下次裁剪再收敛。
+        返回各层删除计数（可观测：调用方/日志立刻看到裁了多少）。
+        """
+        cfg = self.audit_retention
+        max_per_skill = cfg["max_per_skill"] if max_per_skill is None else max_per_skill
+        max_total = cfg["max_total"] if max_total is None else max_total
+        fail_max_age_days = (
+            cfg["fail_max_age_days"] if fail_max_age_days is None else fail_max_age_days
+        )
+        if max_per_skill < 1 or max_total < 1 or fail_max_age_days < 0:
+            raise ValueError("invalid retention params (caps >= 1, age >= 0)")
+
+        events = ",".join(f"'{e}'" for e in self.AUDIT_STATE_EVENTS)
+        anchor_sql = (
+            f"SELECT MAX(audit_id) FROM skill_audit WHERE event IN ({events}) GROUP BY skill_id"
+        )
+        with sqlite3.connect(self.db_path) as conn:
+            before = conn.execute("SELECT COUNT(*) FROM skill_audit").fetchone()[0]
+            # ① 过龄FAIL（非回滚依据，先清噪声）
+            cutoff = time.time() - fail_max_age_days * 86400
+            deleted_fail = conn.execute(
+                "DELETE FROM skill_audit WHERE event = 'FAIL' AND created_at < ?",
+                (cutoff,),
+            ).rowcount
+            # ② per-skill上限：每技能最新N行 ∪ 红线锚点行
+            deleted_per_skill = conn.execute(
+                f"""DELETE FROM skill_audit WHERE audit_id NOT IN (
+                        SELECT audit_id FROM (
+                            SELECT audit_id,
+                                   ROW_NUMBER() OVER (
+                                       PARTITION BY skill_id ORDER BY audit_id DESC
+                                   ) AS rn
+                            FROM skill_audit
+                        ) WHERE rn <= ?
+                        UNION {anchor_sql}
+                    )""",
+                (max_per_skill,),
+            ).rowcount
+            # ③ 全局上限：最新M行 ∪ 红线锚点行（子查询包一层：ORDER BY/LIMIT只作用于自身）
+            deleted_total = conn.execute(
+                f"""DELETE FROM skill_audit WHERE audit_id NOT IN (
+                        SELECT audit_id FROM (
+                            SELECT audit_id FROM skill_audit
+                            ORDER BY audit_id DESC LIMIT ?
+                        )
+                        UNION {anchor_sql}
+                    )""",
+                (max_total,),
+            ).rowcount
+            conn.commit()
+            after = conn.execute("SELECT COUNT(*) FROM skill_audit").fetchone()[0]
+
+        return {
+            "before": before,
+            "after": after,
+            "deleted_aged_fail": deleted_fail,
+            "deleted_per_skill_cap": deleted_per_skill,
+            "deleted_total_cap": deleted_total,
+        }
 
     @staticmethod
     def _audit_row_to_dict(row: sqlite3.Row) -> dict:
