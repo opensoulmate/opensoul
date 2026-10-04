@@ -82,6 +82,21 @@ def _success_rate(usage_count: int, success_count: int) -> float:
     return success_count / usage_count if usage_count else 0.0
 
 
+# ── 技能来源provenance（learned_skills.source列，多轮挂账"测试marker字符串识别"解法）──
+# 此前测试/E2E垃圾清理靠名字marker字符串模式匹配+人工核对（wire解码测试-/遥测接线
+# 测试-/e2e-*等），无schema级来源标记=清理永远是启发式（mem0 §1.2"被谁写入"缺失）。
+# 写入时如实记来源，清理=WHERE source=?精确打击，不再猜名字。
+#   extract = 执行提炼（生产学习链，缺省）
+#   seed    = 标准技能种子落库（seed_standard_skills）
+#   test    = 测试/E2E脚本**显式**标记（只有显式传source='test'才会是test）
+#   unknown = 来源列上线前的存量行（迁移回填，不猜来源；unknown≠test，永不被purge误删）
+SKILL_SOURCES = ("extract", "seed", "test")
+SOURCE_UNKNOWN = "unknown"
+# purge_by_source允许整批清的来源：test=测试垃圾、seed=标准技能可重新播种；
+# extract（真实学习行）**硬拒绝**——真实学习行必须逐条走delete_skill留DELETE审计。
+PURGEABLE_SOURCES = ("test", "seed")
+
+
 # ── keyset分页游标（"分页offset稳定性"挂账解法的编解码面） ──────────────
 # 游标=排序键三元组(activity_at, created_at, skill_id)的不透明串："act:created:id"。
 # 浮点用repr往返（最短往返表示，float()解析回同一double）——%.6f截断会让页边界行
@@ -132,6 +147,7 @@ class Skill:
     last_used_at: float = 0.0
     tags: list[str] = field(default_factory=list)
     source_session: str = ""
+    source: str = "extract"  # 来源provenance（见SKILL_SOURCES）
     audit_event: str = ""  # 本次extract落的审计事件：ADD / UPDATE（mem0 §1.2记账）
 
     @property
@@ -177,9 +193,20 @@ class SkillLearner:
                     created_at REAL NOT NULL,
                     last_used_at REAL DEFAULT 0,
                     tags TEXT DEFAULT '[]',
-                    source_session TEXT DEFAULT ''
+                    source_session TEXT DEFAULT '',
+                    source TEXT DEFAULT ''
                 )
             """)
+            # source列schema迁移（存量库ALTER + 回填）：来源列上线前的行**不猜来源**，
+            # 统一回填SOURCE_UNKNOWN（unknown≠test，purge永不误删存量真实学习行）。
+            # 迁移幂等：列已在/回填只触source=''行，重复init无副作用。
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(learned_skills)")}
+            if "source" not in cols:
+                conn.execute("ALTER TABLE learned_skills ADD COLUMN source TEXT DEFAULT ''")
+            conn.execute(
+                "UPDATE learned_skills SET source = ? WHERE source = ''",
+                (SOURCE_UNKNOWN,),
+            )
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_skills_category
                 ON learned_skills(category, success_count)
@@ -372,6 +399,7 @@ class SkillLearner:
                 "parameters": json.loads(row["parameters"] or "[]"),
                 "tags": json.loads(row["tags"] or "[]"),
                 "source_session": row["source_session"],
+                "source": row["source"],
                 "usage_count": row["usage_count"],
                 "success_count": row["success_count"],
                 # 全保真快照：回滚（revert_skill）需要无损恢复整行，
@@ -385,6 +413,52 @@ class SkillLearner:
         self._audit(skill_id, "DELETE", old=old, actor=actor, reason=reason)
         return True
 
+    def purge_by_source(self, source: str, actor: str = "ops", reason: str = "") -> dict:
+        """按来源整批清除（"测试marker字符串识别"挂账的清理端解法）。
+
+        只允许清PURGEABLE_SOURCES（test测试垃圾 / seed标准技能可重新播种）；
+        extract（真实学习行）**硬拒绝**——真实学习行必须逐条走delete_skill留DELETE
+        审计（mem0 §1.2：真实进化变更全程可追溯，不许整批无痕蒸发）。
+
+        整批purge不写DELETE审计：被清的是测试/播种artifact而非进化变更，写审计
+        反而把清理噪声灌回账本（17:01轮清理测试噪声同语义）；同时清掉这些技能的
+        skill_audit行——"skill_id not in learned_skills删审计行"的既有清理模式收进
+        单一入口，不再靠marker字符串匹配+人工核对。
+
+        返回删除计数（可观测：调用方立刻看到清了多少）。
+        """
+        if source not in PURGEABLE_SOURCES:
+            raise ValueError(
+                f"purge refused for source={source!r} (allowed: {PURGEABLE_SOURCES}; "
+                "real learned rows must go through delete_skill with audit)"
+            )
+        with sqlite3.connect(self.db_path) as conn:
+            ids = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT skill_id FROM learned_skills WHERE source = ?", (source,)
+                ).fetchall()
+            ]
+            if not ids:
+                return {"source": source, "deleted_skills": 0, "deleted_audit": 0}
+            placeholders = ",".join("?" for _ in ids)
+            deleted_skills = conn.execute(
+                "DELETE FROM learned_skills WHERE source = ?", (source,)
+            ).rowcount
+            deleted_audit = conn.execute(
+                f"DELETE FROM skill_audit WHERE skill_id IN ({placeholders})", ids
+            ).rowcount
+            conn.commit()
+        logger.info(
+            f"purged {deleted_skills} skill rows (source={source}) + "
+            f"{deleted_audit} orphan audit rows (actor={actor}, reason={reason})"
+        )
+        return {
+            "source": source,
+            "deleted_skills": deleted_skills,
+            "deleted_audit": deleted_audit,
+        }
+
     # ── 进化回滚（Agent Zero _time_travel travel/revert语义 + preview先行） ──
     # 状态字段全集：revert预览的diff面与_apply_state的恢复面共用同一真源
     STATE_FIELDS = (
@@ -395,6 +469,7 @@ class SkillLearner:
         "parameters",
         "tags",
         "source_session",
+        "source",
         "usage_count",
         "success_count",
         "avg_duration_ms",
@@ -500,14 +575,17 @@ class SkillLearner:
                 float(base.get("last_used_at", 0) or 0),
                 json.dumps(base.get("tags", [])),
                 base.get("source_session", ""),
+                # 旧审计快照（source列上线前）没有source键 → 保留当前值（base已含）；
+                # 恢复已删行且快照也没有 → SOURCE_UNKNOWN（不猜来源）
+                base.get("source") or SOURCE_UNKNOWN,
             )
             if current is None:
                 conn.execute(
                     """INSERT INTO learned_skills
                        (name, description, category, code_template, parameters,
                         usage_count, success_count, avg_duration_ms,
-                        created_at, last_used_at, tags, source_session, skill_id)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        created_at, last_used_at, tags, source_session, source, skill_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     vals + (skill_id,),
                 )
             else:
@@ -515,7 +593,7 @@ class SkillLearner:
                     """UPDATE learned_skills SET
                        name=?, description=?, category=?, code_template=?, parameters=?,
                        usage_count=?, success_count=?, avg_duration_ms=?,
-                       created_at=?, last_used_at=?, tags=?, source_session=?
+                       created_at=?, last_used_at=?, tags=?, source_session=?, source=?
                        WHERE skill_id=?""",
                     vals + (skill_id,),
                 )
@@ -565,6 +643,7 @@ class SkillLearner:
         task_description: str,
         tool_calls: list[dict],
         success: bool,
+        source: str = "extract",
     ) -> Skill | None:
         """Extract a reusable skill from an execution.
 
@@ -572,7 +651,12 @@ class SkillLearner:
         + 一条审计记录（mem0 §1.2：谁/何时/从什么改成什么）。
         失败且有tool_calls → FAIL审计记录（mem0 §1.1：失败必须可见，进失败记忆
         分支而非静默丢弃），返回None。
+
+        source=写入来源（SKILL_SOURCES之一）：生产学习链缺省extract；测试/E2E脚本
+        显式传test（清理端purge_by_source按列精确打击，不再marker猜名字）。
         """
+        if source not in SKILL_SOURCES:
+            raise ValueError(f"unknown skill source: {source!r} (allowed: {SKILL_SOURCES})")
         if not tool_calls:
             return None
 
@@ -640,6 +724,7 @@ class SkillLearner:
             parameters=parameters,
             tags=list(set(t for t in tools_used if t)),
             source_session=session_id,
+            source=source,
         )
 
         now = time.time()
@@ -651,6 +736,7 @@ class SkillLearner:
             "parameters": skill.parameters,
             "tags": skill.tags,
             "source_session": session_id,
+            "source": source,
         }
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -662,8 +748,8 @@ class SkillLearner:
                     """INSERT INTO learned_skills
                        (skill_id, name, description, category, code_template,
                         parameters, usage_count, success_count, avg_duration_ms,
-                        created_at, last_used_at, tags, source_session)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        created_at, last_used_at, tags, source_session, source)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         skill.skill_id,
                         skill.name,
@@ -678,6 +764,7 @@ class SkillLearner:
                         now,
                         json.dumps(skill.tags),
                         session_id,
+                        source,
                     ),
                 )
                 event, old = "ADD", None
@@ -687,10 +774,18 @@ class SkillLearner:
                 # 禁止INSERT OR REPLACE——那会把usage_count/success_count静默重置为1、
                 # created_at被覆盖（进化数据丢失）。此处内容字段更新+计数累加+created_at保留，
                 # old/new全量留档进审计（mem0 §1.2）。
+                # 来源粘性（防purge误伤，fail-closed双向）：
+                #   真实行被test触碰 → 保留原来源（真实行不许降级成可整批清的test）；
+                #   test行被真实提炼触碰 → 升级成extract（该技能族已被真实学习链确认，
+                #   不再是纯测试垃圾，purge不再收走）。
+                if source == "test" and existing["source"] != "test":
+                    effective_source = existing["source"]
+                else:
+                    effective_source = source
                 conn.execute(
                     """UPDATE learned_skills SET
                        name = ?, description = ?, category = ?, code_template = ?,
-                       parameters = ?, tags = ?, source_session = ?,
+                       parameters = ?, tags = ?, source_session = ?, source = ?,
                        usage_count = usage_count + 1,
                        success_count = success_count + 1,
                        last_used_at = ?
@@ -703,11 +798,14 @@ class SkillLearner:
                         json.dumps(skill.parameters),
                         json.dumps(skill.tags),
                         session_id,
+                        effective_source,
                         now,
                         skill.skill_id,
                     ),
                 )
                 event = "UPDATE"
+                skill.source = effective_source
+                snapshot["source"] = effective_source
                 skill.usage_count = existing["usage_count"] + 1
                 skill.success_count = existing["success_count"] + 1
                 old = {
@@ -718,6 +816,7 @@ class SkillLearner:
                     "parameters": json.loads(existing["parameters"] or "[]"),
                     "tags": json.loads(existing["tags"] or "[]"),
                     "source_session": existing["source_session"],
+                    "source": existing["source"],
                     "usage_count": existing["usage_count"],
                     "success_count": existing["success_count"],
                     # 全保真快照（回滚依据，Agent Zero _time_travel"preview后可travel"）：
@@ -844,6 +943,7 @@ class SkillLearner:
             d["tags"] = json.loads(d.get("tags", "[]") or "[]")
             d["parameters"] = json.loads(d.get("parameters", "[]") or "[]")
             d["category"] = d.get("category") or "general"  # 口径归一与facet/过滤同源
+            d["source"] = d.get("source") or SOURCE_UNKNOWN  # 来源列口径归一（不猜）
             d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])
             out.append(d)
         return out
@@ -924,6 +1024,7 @@ class SkillLearner:
             d = dict(row)
             d["tags"] = json.loads(d.get("tags", "[]"))
             d["parameters"] = json.loads(d.get("parameters", "[]"))
+            d["source"] = d.get("source") or SOURCE_UNKNOWN  # 来源列口径归一（不猜）
             # success_rate如实回填（learned_skills行里没这列，此前recommend恒返回
             # get缺省0.0——指标说谎：真实成败率被0.0掩盖）
             d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])

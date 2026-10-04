@@ -62,8 +62,8 @@ def seed_standard_skills() -> list[dict]:
             conn.execute(
                 """INSERT OR IGNORE INTO learned_skills
                    (skill_id, name, description, category, code_template,
-                    parameters, tags, created_at, source_session)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    parameters, tags, created_at, source_session, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     skill_id,
                     name,
@@ -74,6 +74,9 @@ def seed_standard_skills() -> list[dict]:
                     json.dumps(["agent_standard", skill_dir.name]),
                     now,
                     "agent_standard_sync",
+                    # 来源provenance（learned_skills.source列）：种子落库≠执行提炼，
+                    # 重播种前可按source='seed'整批清（purge_by_source）
+                    "seed",
                 ),
             )
             seeded.append({"skill_id": skill_id, "name": name, "dir": skill_dir.name})

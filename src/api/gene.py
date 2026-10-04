@@ -5,7 +5,13 @@ import time
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.gene.skill_learner import SkillLearner, decode_cursor, encode_cursor
+from src.gene.skill_learner import (
+    PURGEABLE_SOURCES,
+    SKILL_SOURCES,
+    SkillLearner,
+    decode_cursor,
+    encode_cursor,
+)
 from src.gene.templates import TemplateEngine, TemplateValidationError
 
 router = APIRouter()
@@ -263,6 +269,14 @@ class SkillExtractRequest(BaseModel):
     execution_log: str
     success: bool = True
     metadata: dict = {}
+    # 写入来源（learned_skills.source列，SKILL_SOURCES）：生产学习链缺省extract；
+    # 测试/E2E脚本显式传test——清理端按列精确打击（不再marker字符串猜名字）
+    source: str = "extract"
+
+
+class SkillPurgeRequest(BaseModel):
+    source: str = "test"
+    reason: str = ""
 
 
 class SkillRecommendRequest(BaseModel):
@@ -293,6 +307,10 @@ async def extract_skill(req: SkillExtractRequest):
     if not isinstance(tool_calls, list):
         tool_calls = []
 
+    # 来源校验（wire边界：非法source→400，不落"猜出来的来源"）
+    if req.source not in SKILL_SOURCES:
+        raise HTTPException(400, f"bad source: {req.source!r} (allowed: {list(SKILL_SOURCES)})")
+
     # 形态归一（wire边界单一真源）：旧扁平账本 {name, arguments, result_preview}
     # → 契约 {"function": {"name", "arguments"}}——不补的话tools_used全空名、
     # tool_sequence空、同一任务不同载荷形态→不同skill_id碎片化（live E2E实锤）。
@@ -309,6 +327,7 @@ async def extract_skill(req: SkillExtractRequest):
         task_description=req.task_description,
         tool_calls=tool_calls,
         success=req.success,
+        source=req.source,
     )
     if not skill:
         # 失败执行已进失败记忆分支（skill_audit FAIL，mem0 §1.1失败可见）——
@@ -322,6 +341,8 @@ async def extract_skill(req: SkillExtractRequest):
         "description": skill.description,
         "success_rate": skill.success_rate,
         "event": skill.audit_event,
+        # 来源如实回显（粘性规则后生效值：真实行被test触碰不降级）
+        "source": skill.source,
     }
 
 
@@ -459,6 +480,25 @@ async def delete_learned_skill(skill_id: str, reason: str = Query(default="")):
     if not skill_learner.delete_skill(skill_id, reason=reason):
         raise HTTPException(404, f"skill not found: {skill_id}")
     return {"status": "deleted", "skill_id": skill_id}
+
+
+@router.post("/skill/purge-source")
+async def purge_skills_by_source(req: SkillPurgeRequest):
+    """按来源整批清除测试/播种artifact（"测试marker字符串识别"挂账的清理端）。
+
+    只接受可purge来源（test/seed）；extract（真实学习行）硬拒绝——真实学习行必须
+    逐条走DELETE /skill/{id}留审计。清理不再靠名字marker字符串匹配+人工核对。
+    """
+    if req.source not in PURGEABLE_SOURCES:
+        raise HTTPException(
+            400,
+            f"purge refused for source: {req.source!r} (allowed: {list(PURGEABLE_SOURCES)})",
+        )
+    try:
+        result = skill_learner.purge_by_source(req.source, reason=req.reason)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"status": "purged", **result}
 
 
 # ── 进化回滚（Agent Zero _time_travel：preview先行 + travel/revert） ──
