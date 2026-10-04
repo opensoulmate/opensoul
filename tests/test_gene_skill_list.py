@@ -167,3 +167,88 @@ class TestSkillListApi:
             )
         r = gene_client.get("/api/gene/skill")
         assert any(s["skill_id"] == "iso-list-1" for s in r.json()["skills"])
+
+
+class TestCategoryFacet:
+    """分类facet（过滤控件真值源）：categories选项集+计数与count_skills同口径。
+
+    前端过滤chip此前"写了≠接线了"（API支持category参数但无控件消费）；接线的
+    前提是facet必须有真值源——不许从分页rows推断选项集（limit截断会漏分类）。
+    钉住三条：①facet计数=各分类count_skills（两面数字不许各说各话）②facet不受
+    category过滤影响（全局分布语义）而total受影响 ③NULL/空串category归一进
+    "general"（facet/过滤/总数三面同源）。
+    """
+
+    def test_facet_counts_match_count_skills_and_sum(self, learner):
+        learner.extract_from_execution(
+            "sess-1", "读取文件并写入文件", _tool_calls("read_file", "write_file"), success=True
+        )
+        learner.extract_from_execution(
+            "sess-2", "搜索网页信息", _tool_calls("web_search", "read_file"), success=True
+        )
+        learner.extract_from_execution(
+            "sess-3", "调试代码测试", _tool_calls("terminal", "read_file"), success=True
+        )
+        facet = learner.category_counts()
+        assert {f["category"] for f in facet} == {"file_operations", "web_operations", "coding"}
+        # 每个facet计数与count_skills(过滤)两面一致
+        for f in facet:
+            assert f["count"] == learner.count_skills(category=f["category"])
+        # facet计数之和=库存总数（无漏项无重复）
+        assert sum(f["count"] for f in facet) == learner.count_skills() == 3
+        # 排序：计数降序、同数分类名典序（稳定可断言）
+        assert facet == sorted(facet, key=lambda f: (-f["count"], f["category"]))
+
+    def test_null_and_empty_category_normalized_to_general(self, learner):
+        """NULL/空串category按general计——facet、过滤、总数三面数字一致。"""
+        with sqlite3.connect(learner.db_path) as conn:
+            conn.execute(
+                "INSERT INTO learned_skills (skill_id, name, category, usage_count,"
+                " success_count, created_at) VALUES ('null-cat', '空分类行', '', 0, 0, 1.0)"
+            )
+            conn.execute(
+                "INSERT INTO learned_skills (skill_id, name, category, usage_count,"
+                " success_count, created_at) VALUES ('norm-cat', '正常行', 'coding', 0, 0, 1.0)"
+            )
+        facet = {f["category"]: f["count"] for f in learner.category_counts()}
+        assert facet["general"] == 1 and facet["coding"] == 1
+        assert learner.count_skills(category="general") == facet["general"]
+        # 过滤面同口径：空串行可被category=general召回，且输出category已归一
+        rows = learner.list_skills(category="general")
+        assert [r["skill_id"] for r in rows] == ["null-cat"]
+        assert rows[0]["category"] == "general"
+        # 总数面：2行（facet之和=总数）
+        assert sum(facet.values()) == learner.count_skills() == 2
+
+    def test_api_facet_global_while_total_follows_filter(self, gene_client):
+        """API面：categories是全局分布（过滤后chip计数不变），total随过滤变。"""
+        for desc in ("读取文件并写入文件", "搜索网页信息"):
+            gene_client.post(
+                "/api/gene/skill/extract",
+                json={
+                    "task_description": desc,
+                    "execution_log": (
+                        '[{"function": {"name": "read_file", "arguments": {"path": "a.txt"}}},'
+                        ' {"function": {"name": "write_file", "arguments": {"path": "b.txt"}}}]'
+                    ),
+                    "success": True,
+                },
+            )
+        r_all = gene_client.get("/api/gene/skill")
+        assert r_all.status_code == 200, r_all.text
+        body_all = r_all.json()
+        facet_all = {f["category"]: f["count"] for f in body_all["categories"]}
+        assert facet_all == {"file_operations": 1, "web_operations": 1}
+
+        r_f = gene_client.get("/api/gene/skill", params={"category": "file_operations"})
+        assert r_f.status_code == 200, r_f.text
+        body_f = r_f.json()
+        # total/列表随过滤变……
+        assert body_f["total"] == 1
+        assert all(s["category"] == "file_operations" for s in body_f["skills"])
+        # ……但facet不变（全局分布语义：过滤后web_operations chip仍显示1）
+        assert {f["category"]: f["count"] for f in body_f["categories"]} == facet_all
+        # 空过滤结果的分类：facet与total两面不许打架（facet里有=总数里该有）
+        r_none = gene_client.get("/api/gene/skill", params={"category": "nope"})
+        assert r_none.json()["total"] == 0
+        assert {f["category"]: f["count"] for f in r_none.json()["categories"]} == facet_all

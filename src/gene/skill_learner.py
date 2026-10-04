@@ -751,6 +751,10 @@ class SkillLearner:
             return "coding"
         return "general"
 
+    # 分类口径归一单一真源（COALESCE表达式三处共用，禁双实现漂移）：category为
+    # NULL/空串的行统一按"general"计——facet计数、过滤、总数三面数字不许各说各话。
+    _CATEGORY_NORM_SQL = "COALESCE(NULLIF(category, ''), 'general')"
+
     def list_skills(self, category: str = "", limit: int = 100, offset: int = 0) -> list[dict]:
         """技能库库存盘点（learned_skills全量，最近活动新→旧）——回滚UI/审计视图的枚举端。
 
@@ -762,7 +766,7 @@ class SkillLearner:
         sql = "SELECT * FROM learned_skills"
         params: list = []
         if category:
-            sql += " WHERE category = ?"
+            sql += f" WHERE {self._CATEGORY_NORM_SQL} = ?"
             params.append(category)
         # 最近活动（last_used_at，未使用过的按created_at）新→旧
         sql += (
@@ -778,6 +782,7 @@ class SkillLearner:
             d = dict(row)
             d["tags"] = json.loads(d.get("tags", "[]") or "[]")
             d["parameters"] = json.loads(d.get("parameters", "[]") or "[]")
+            d["category"] = d.get("category") or "general"  # 口径归一与facet/过滤同源
             d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])
             out.append(d)
         return out
@@ -791,10 +796,26 @@ class SkillLearner:
         sql = "SELECT COUNT(*) FROM learned_skills"
         params: list = []
         if category:
-            sql += " WHERE category = ?"
+            sql += f" WHERE {self._CATEGORY_NORM_SQL} = ?"
             params.append(category)
         with sqlite3.connect(self.db_path) as conn:
             return int(conn.execute(sql, params).fetchone()[0])
+
+    def category_counts(self) -> list[dict]:
+        """分类facet（过滤控件真值源）——每category条数，计数降序、同数按分类名典序。
+
+        faceted-search语义：facet是**库存全局分布，不受category过滤影响**——过滤后
+        各chip仍显示全局计数（"coding 31"），随过滤变的是total/count_skills。过滤
+        控件的选项集+计数不许从分页rows推断（limit截断会漏分类=指标说谎）；计数
+        与count_skills(category)同一张表同一归一口径，两面数字必须相等。
+        """
+        sql = (
+            f"SELECT {self._CATEGORY_NORM_SQL} AS cat, COUNT(*) AS n"
+            " FROM learned_skills GROUP BY cat ORDER BY n DESC, cat ASC"
+        )
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(sql).fetchall()
+        return [{"category": r[0], "count": int(r[1])} for r in rows]
 
     def find_relevant(self, task_description: str, limit: int = 3) -> list[dict]:
         """Find skills relevant to a task description."""

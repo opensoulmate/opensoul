@@ -362,6 +362,8 @@ async def list_learned_skills(
     分页真值字段（"指标不许说谎"）：total=库存真实总数（不是本页条数——count是
     len(本页)保持兼容），has_more=还有下一页；revertible_events=可回滚事件集单一
     真源（AUDIT_STATE_EVENTS），前端按钮可见性据此判断，不再硬编码"FAIL除外"。
+    categories=分类facet单一真源（全局分布，**不受category过滤影响**——前端过滤
+    chip的选项集+计数据此渲染，不从分页rows推断）；total随category过滤变。
     """
     skills = skill_learner.list_skills(category=category, limit=limit, offset=offset)
     total = skill_learner.count_skills(category=category)
@@ -373,6 +375,7 @@ async def list_learned_skills(
         "limit": limit,
         "has_more": offset + len(skills) < total,
         "revertible_events": list(SkillLearner.AUDIT_STATE_EVENTS),
+        "categories": skill_learner.category_counts(),
     }
 
 
