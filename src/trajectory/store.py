@@ -408,28 +408,130 @@ class TrajectoryStore:
         row = await db_pool.fetchrow("SELECT * FROM trajectory_events WHERE id = ?", event_id)
         return self._row_to_event(row) if row else None
 
-    async def search_events(
-        self, session_id: str = "", event_type: str = "", keyword: str = "", limit: int = 50
-    ) -> list[TrajectoryEvent]:
-        await self.ensure_tables()
+    @staticmethod
+    def _search_where(
+        session_id: str = "", event_type: str = "", keyword: str = "", status: str = ""
+    ) -> tuple[str, list[Any]]:
+        """搜索过滤条件单一真源——search_events与search_events_by_session共用。
+
+        两处各写WHERE会漂移出"分组计数与事件列表对不上"（指标不许说谎）。
+        列全带e.限定：JOIN trajectory_sessions后status列两表都有，裸列名歧义。
+        调用方须把轨迹事件表别名为e（两查询同款）。
+        """
         clauses = []
         params: list[Any] = []
         if session_id:
-            clauses.append("session_id = ?")
+            clauses.append("e.session_id = ?")
             params.append(session_id)
         if event_type:
-            clauses.append("event_type = ?")
+            clauses.append("e.event_type = ?")
             params.append(event_type)
         if keyword:
-            clauses.append("content LIKE ?")
+            clauses.append("e.content LIKE ?")
             params.append(f"%{keyword}%")
+        if status:
+            clauses.append("e.status = ?")
+            params.append(status)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        return where, params
+
+    async def search_events(
+        self,
+        session_id: str = "",
+        event_type: str = "",
+        keyword: str = "",
+        status: str = "",
+        limit: int = 50,
+    ) -> list[TrajectoryEvent]:
+        await self.ensure_tables()
+        where, params = self._search_where(session_id, event_type, keyword, status)
         params.append(limit)
         rows = await db_pool.fetch(
-            f"SELECT * FROM trajectory_events{where} ORDER BY created_at DESC LIMIT ?",
+            f"SELECT * FROM trajectory_events e{where} ORDER BY e.created_at DESC LIMIT ?",
             *params,
         )
         return [self._row_to_event(r) for r in rows]
+
+    async def search_events_by_session(
+        self,
+        session_id: str = "",
+        event_type: str = "",
+        keyword: str = "",
+        status: str = "",
+        limit: int = 50,
+    ) -> list[dict]:
+        """跨会话命中分组——"哪个session有error的tool_call"观察面。
+
+        调研来源：SUMMARY P0-4可观测性（"我都不知道他们在干嘛"）+树内搜索只搜
+        当前session树的遗留（dev-reports "跨session搜索…会话列表级过滤"）。
+        纪律：
+        - match_count=SQL GROUP BY真值，不从截断的事件列表推算（"total推算说谎"同门）；
+        - 每组样本=最近一条命中（窗口函数rn=1），snippet超500字符截断必须显式
+          标记sample_truncated（AIHawk SHOWN/SENT：截断必须显式标记）；
+        - 会话元数据LEFT JOIN——事件还在但会话行已删时task_description为None，
+          不猜不冒充。
+        """
+        await self.ensure_tables()
+        where, params = self._search_where(session_id, event_type, keyword, status)
+        group_params = list(params)
+        group_params.append(limit)
+        rows = await db_pool.fetch(
+            f"""SELECT e.session_id AS session_id,
+                       COUNT(*) AS match_count,
+                       MIN(e.created_at) AS first_match_at,
+                       MAX(e.created_at) AS last_match_at,
+                       s.task_description AS task_description,
+                       s.agent_id AS agent_id,
+                       s.status AS session_status
+                FROM trajectory_events e
+                LEFT JOIN trajectory_sessions s ON s.id = e.session_id
+                {where}
+                GROUP BY e.session_id
+                ORDER BY MAX(e.created_at) DESC
+                LIMIT ?""",
+            *group_params,
+        )
+        if not rows:
+            return []
+        sample_where, sample_params = self._search_where(session_id, event_type, keyword, status)
+        sample_rows = await db_pool.fetch(
+            f"""SELECT id, session_id, event_type, status, content, created_at FROM (
+                    SELECT e.*, ROW_NUMBER() OVER (
+                        PARTITION BY e.session_id ORDER BY e.created_at DESC, e.id DESC
+                    ) AS rn
+                    FROM trajectory_events e{sample_where}
+                ) WHERE rn = 1""",
+            *sample_params,
+        )
+        samples = {dict(r)["session_id"]: dict(r) for r in sample_rows}
+        out: list[dict] = []
+        for r in rows:
+            d = dict(r)
+            s = samples.get(d["session_id"])
+            sample = None
+            if s is not None:
+                content = s.get("content") or ""
+                sample = {
+                    "event_id": s["id"],
+                    "event_type": s["event_type"],
+                    "status": s["status"],
+                    "created_at": s["created_at"],
+                    "snippet": content[:500],
+                    "sample_truncated": len(content) > 500,
+                }
+            out.append(
+                {
+                    "session_id": d["session_id"],
+                    "match_count": d["match_count"],
+                    "first_match_at": d["first_match_at"],
+                    "last_match_at": d["last_match_at"],
+                    "task_description": d["task_description"],
+                    "agent_id": d["agent_id"],
+                    "session_status": d["session_status"],
+                    "sample": sample,
+                }
+            )
+        return out
 
     # ── Spans (langfuse Observation layer) ───────────────────
 

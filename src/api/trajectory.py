@@ -251,19 +251,67 @@ async def search_events(
     session_id: str = Query(default=""),
     event_type: str = Query(default=""),
     keyword: str = Query(default=""),
+    q: str = Query(default="", description="keyword的容错别名"),
+    status: str = Query(default=""),
     limit: int = Query(default=50, ge=1, le=200),
 ):
-    """Search across trajectory events."""
+    """Search across trajectory events.
+
+    参数容错：前端历史误传``q``而本端点只读``keyword``→文本搜索被静默忽略
+    （q=探测词返回全量事件，2026-10-04 live实锤P0 bug）。canonical=keyword，
+    ``q``仅作容错别名（keyword非空优先），两端谁先改都不再哑掉文本过滤。
+    """
+    kw = keyword or q
     events = await trajectory_store.search_events(
         session_id=session_id,
         event_type=event_type,
-        keyword=keyword,
+        keyword=kw,
+        status=status,
         limit=limit,
     )
     return {
         "events": [e.to_dict() for e in events],
         "count": len(events),
-        "filters": {"session_id": session_id, "event_type": event_type, "keyword": keyword},
+        "filters": {
+            "session_id": session_id,
+            "event_type": event_type,
+            "keyword": kw,
+            "status": status,
+        },
+    }
+
+
+@router.get("/search/sessions")
+async def search_sessions_grouped(
+    session_id: str = Query(default=""),
+    event_type: str = Query(default=""),
+    keyword: str = Query(default=""),
+    q: str = Query(default="", description="keyword的容错别名"),
+    status: str = Query(default=""),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """跨会话命中分组——"哪个session有error的tool_call"。
+
+    每组match_count=SQL GROUP BY真值（不从/search截断列表推算），带最近命中
+    样本+会话元数据；前端会话列表级过滤/分组头吃本端点（跨session搜索）。
+    """
+    kw = keyword or q
+    groups = await trajectory_store.search_events_by_session(
+        session_id=session_id,
+        event_type=event_type,
+        keyword=kw,
+        status=status,
+        limit=limit,
+    )
+    return {
+        "sessions": groups,
+        "count": len(groups),
+        "filters": {
+            "session_id": session_id,
+            "event_type": event_type,
+            "keyword": kw,
+            "status": status,
+        },
     }
 
 
