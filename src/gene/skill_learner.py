@@ -82,6 +82,41 @@ def _success_rate(usage_count: int, success_count: int) -> float:
     return success_count / usage_count if usage_count else 0.0
 
 
+# ── keyset分页游标（"分页offset稳定性"挂账解法的编解码面） ──────────────
+# 游标=排序键三元组(activity_at, created_at, skill_id)的不透明串："act:created:id"。
+# 浮点用repr往返（最短往返表示，float()解析回同一double）——%.6f截断会让页边界行
+# 的比较值与库中真实值错位（=边界行重复/漏出），往返精度是keyset正确性的地基。
+# skill_id取split(":", 2)第三段整段，含冒号的id不破坏解码。
+
+
+def encode_cursor(row: dict) -> str:
+    """把list_skills返回的行编码成keyset游标（排序键元组取自行本身=不重算）。"""
+    activity = float(row.get("last_used_at") or 0.0)
+    created = float(row.get("created_at") or 0.0)
+    if activity <= 0:
+        activity = created  # 未使用过的行排序键=created_at（与_ACTIVITY_SQL同口径）
+    return f"{activity!r}:{created!r}:{row.get('skill_id', '')}"
+
+
+def decode_cursor(cursor) -> tuple[float, float, str]:
+    """游标解析（str或已解析元组直通）。畸形游标抛ValueError（API层转400）。
+
+    str形如 "act:created:id"——id段split(":", 2)取整段rest；前两段必须是float。
+    """
+    if isinstance(cursor, (tuple, list)):
+        if len(cursor) != 3:
+            raise ValueError(f"cursor tuple must be 3 items, got {len(cursor)}")
+        return float(cursor[0]), float(cursor[1]), str(cursor[2])
+    text = str(cursor)
+    parts = text.split(":", 2)
+    if len(parts) != 3 or not parts[2]:
+        raise ValueError(f"malformed cursor: {text!r}")
+    try:
+        return float(parts[0]), float(parts[1]), parts[2]
+    except ValueError as e:
+        raise ValueError(f"malformed cursor: {text!r}") from e
+
+
 @dataclass
 class Skill:
     skill_id: str
@@ -755,24 +790,50 @@ class SkillLearner:
     # NULL/空串的行统一按"general"计——facet计数、过滤、总数三面数字不许各说各话。
     _CATEGORY_NORM_SQL = "COALESCE(NULLIF(category, ''), 'general')"
 
-    def list_skills(self, category: str = "", limit: int = 100, offset: int = 0) -> list[dict]:
+    # 排序键单一真源（"最近活动新→旧"的SQL表达式）：list_skills的ORDER BY与keyset
+    # 游标的WHERE边界共用此表达式——两边各写一遍CASE会漂移出"页边界与序不一致"。
+    _ACTIVITY_SQL = "(CASE WHEN last_used_at > 0 THEN last_used_at ELSE created_at END)"
+
+    def list_skills(
+        self, category: str = "", limit: int = 100, offset: int = 0, after=None
+    ) -> list[dict]:
         """技能库库存盘点（learned_skills全量，最近活动新→旧）——回滚UI/审计视图的枚举端。
 
         与find_relevant分工：find_relevant是"按任务找技能"（相关性四因子排序），
         本方法是"无任务的库存列表"（用户看/审/回滚自己的技能库——Khoj记忆CRUD
         信任设计同门：AI对自己的记忆/技能必须可看可改可删）。success_rate与
         find_relevant同一单一真源（_success_rate），tags/parameters在此解JSON。
+
+        分页双模：
+        - offset（兼容保留）：按行数偏移翻页——库存表是活的（学习链每回合可落新
+          技能、record_usage改变排序键），翻页间隙的增删会让后续页整体移位=重复/漏行。
+        - after=keyset游标（首选）：锚定上一页末行的排序键元组
+          (activity_at, created_at, skill_id)，页边界不随插入/删除移位——
+          "分页offset稳定性"挂账的解法。排序键三元组含skill_id作最终tiebreak，
+          同秒创建的行也有确定序（纯created_at序曾是并列=页边界抖动源）。
+          已知极限（如实记账）：翻页间隙被record_usage激活的未显示行会前移越过
+          游标而本批不可见（语义上"它升到顶部了"，刷新可见）——比offset的确定性
+          重/漏面小得多。
         """
         sql = "SELECT * FROM learned_skills"
         params: list = []
+        where: list[str] = []
         if category:
-            sql += f" WHERE {self._CATEGORY_NORM_SQL} = ?"
+            where.append(f"{self._CATEGORY_NORM_SQL} = ?")
             params.append(category)
-        # 最近活动（last_used_at，未使用过的按created_at）新→旧
-        sql += (
-            " ORDER BY (CASE WHEN last_used_at > 0 THEN last_used_at"
-            " ELSE created_at END) DESC, created_at DESC LIMIT ? OFFSET ?"
-        )
+        if after is not None:
+            a_ts, c_ts, a_id = decode_cursor(after)
+            where.append(
+                f"({self._ACTIVITY_SQL} < ?"
+                f" OR ({self._ACTIVITY_SQL} = ? AND created_at < ?)"
+                f" OR ({self._ACTIVITY_SQL} = ? AND created_at = ? AND skill_id < ?))"
+            )
+            params.extend([a_ts, a_ts, c_ts, a_ts, c_ts, a_id])
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        # 最近活动（last_used_at，未使用过的按created_at）新→旧，skill_id终裁tiebreak
+        sql += f" ORDER BY {self._ACTIVITY_SQL} DESC, created_at DESC, skill_id DESC"
+        sql += " LIMIT ? OFFSET ?"
         params.extend([int(limit), int(offset)])
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -786,6 +847,24 @@ class SkillLearner:
             d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])
             out.append(d)
         return out
+
+    def list_skills_page(self, category: str = "", limit: int = 100, after=None) -> dict:
+        """keyset分页单页：{skills, has_more, next_cursor}——"还有下一页"的真值页。
+
+        has_more用limit+1探底（多取一行看是否存在）而不是"offset+len<total"推算：
+        total是全局计数，翻页间隙的增删会让推算式说谎（07:35轮"库存盘点自己说谎"
+        同病）。next_cursor=本页末行的排序键游标（encode_cursor单一真源）；无下一页
+        时空串——前端只在has_more时消费游标。
+        """
+        limit = int(limit)
+        rows = self.list_skills(category=category, limit=limit + 1, after=after)
+        has_more = len(rows) > limit
+        page = rows[:limit]
+        return {
+            "skills": page,
+            "has_more": has_more,
+            "next_cursor": encode_cursor(page[-1]) if has_more and page else "",
+        }
 
     def count_skills(self, category: str = "") -> int:
         """库存总数（与list_skills同口径过滤）——分页"还有多少没显示"的真源。

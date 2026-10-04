@@ -5,7 +5,7 @@ import time
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.gene.skill_learner import SkillLearner
+from src.gene.skill_learner import SkillLearner, decode_cursor, encode_cursor
 from src.gene.templates import TemplateEngine, TemplateValidationError
 
 router = APIRouter()
@@ -352,28 +352,46 @@ async def list_learned_skills(
     category: str = Query(default=""),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    cursor: str = Query(default=""),
 ):
     """技能库库存列表（learned_skills全量，最近活动新→旧）——回滚UI/审计视图的枚举端。
 
     与/skill/recommend分工：recommend是"按任务找技能"（相关性排序），本端点是
     "库存盘点"（用户看/审/回滚自己的技能库）。success_rate单一真源回填
-    （find_relevant同口径），category过滤+limit/offset分页。
+    （find_relevant同口径），category过滤+双模分页（cursor游标首选，offset兼容保留）。
 
     分页真值字段（"指标不许说谎"）：total=库存真实总数（不是本页条数——count是
-    len(本页)保持兼容），has_more=还有下一页；revertible_events=可回滚事件集单一
-    真源（AUDIT_STATE_EVENTS），前端按钮可见性据此判断，不再硬编码"FAIL除外"。
+    len(本页)保持兼容），has_more=还有下一页（cursor模=limit+1探底真值，offset模=
+    推算式保持兼容），next_cursor=keyset游标（list_skills_page/encode_cursor单一
+    真源；无下一页=空串）。cursor模页边界不随翻页间隙的增删移位（offset稳定性
+    挂账）；畸形cursor→400（decode_cursor ValueError转出）。
+    revertible_events=可回滚事件集单一真源（AUDIT_STATE_EVENTS），前端按钮可见性
+    据此判断，不再硬编码"FAIL除外"。
     categories=分类facet单一真源（全局分布，**不受category过滤影响**——前端过滤
     chip的选项集+计数据此渲染，不从分页rows推断）；total随category过滤变。
     """
-    skills = skill_learner.list_skills(category=category, limit=limit, offset=offset)
     total = skill_learner.count_skills(category=category)
+    if cursor:
+        try:
+            page = skill_learner.list_skills_page(category=category, limit=limit, after=cursor)
+        except ValueError as e:
+            raise HTTPException(400, f"bad cursor: {e}")
+        skills = page["skills"]
+        has_more = page["has_more"]
+        next_cursor = page["next_cursor"]
+    else:
+        skills = skill_learner.list_skills(category=category, limit=limit, offset=offset)
+        has_more = offset + len(skills) < total
+        # offset模也回填游标：前端翻页中途切游标模不丢进度
+        next_cursor = encode_cursor(skills[-1]) if skills and has_more else ""
     return {
         "skills": skills,
         "count": len(skills),
         "total": total,
         "offset": offset,
         "limit": limit,
-        "has_more": offset + len(skills) < total,
+        "has_more": has_more,
+        "next_cursor": next_cursor,
         "revertible_events": list(SkillLearner.AUDIT_STATE_EVENTS),
         "categories": skill_learner.category_counts(),
     }
