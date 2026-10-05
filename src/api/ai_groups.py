@@ -28,7 +28,7 @@ DB_PATH = Path.home() / "opensoul" / "data" / "ai_groups.db"
 
 def get_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
@@ -634,6 +634,9 @@ async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
             ),
         )
         # 更新Agent能力画像
+        # 必须先提交外层事务再调用（update_agent_capability开独立连接写库，
+        # 外层未提交持有写锁时内层必死锁'sqlite3.OperationalError: database is locked'）
+        conn.commit()
         update_agent_capability(group_id, req.agent_id, capability, auto_score)
 
         conn.commit()
@@ -1535,6 +1538,8 @@ async def auto_evaluate_task(group_id: str, task_id: str, req: AutoEvaluateReque
         )
 
         # Update capability profile
+        # 先提交外层事务再调用（独立连接写库，防嵌套连接死锁 database is locked）
+        conn.commit()
         update_agent_capability(group_id, assigned_agent, capability, score)
 
         # Mark task as scored
