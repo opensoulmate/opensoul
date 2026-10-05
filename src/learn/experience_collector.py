@@ -96,6 +96,25 @@ def _user_turn_origin(row: sqlite3.Row, first_line: str) -> str:
     return "wakeup" if is_system_turn_intent(first_line) else ""
 
 
+def _row_session_source(row: sqlite3.Row) -> str:
+    """该落库行携带的会话级provenance（metadata.session_source，无则空串）。
+
+    jobs.source同款"产生侧标注"：测试探针会话由 acp-proxy SoulMateAgent.
+    _bind_session_source（new_session经_meta.source绑定）落库时全行携带，
+    采集侧只认这个schema标记，不做名字/内容猜测。
+    """
+    raw_meta = row["metadata"] if "metadata" in row.keys() else None
+    if not raw_meta:
+        return ""
+    try:
+        meta = json.loads(raw_meta)
+    except (ValueError, TypeError):
+        return ""
+    if isinstance(meta, dict) and meta.get("session_source"):
+        return str(meta["session_source"])
+    return ""
+
+
 # ── 错误分组键归一化（20:36轮遗留#3销账）────────────────────────────
 # SelfEvolution._analyze_failure_patterns 按 error 精确文本 GROUP BY 计数，
 # job_queue 的运行时终态标记会让同根因错误分裂成多个组（单组计数达不到
@@ -303,7 +322,9 @@ class ExperienceCollector:
         intent_summary=同会话最近一条用户消息（回合的真实任务语境）；
         系统自动回合（wakeup等，_user_turn_origin判定）例外：意图落结构化
         provenance key "system_turn:{origin}"（非用户话术不冒充intent，
-        background_job:{name}同款约定），原文保全在metadata.intent_raw。"""
+        background_job:{name}同款约定），原文保全在metadata.intent_raw。
+        测试会话（metadata.session_source='test'，会话级产生侧标记）不产经验
+        ——jobs.source同款provenance门，探针会话不再污染生产experiences。"""
         stats: dict = {
             "scanned": 0,
             "written": 0,
@@ -311,6 +332,7 @@ class ExperienceCollector:
             "successes": 0,
             "deduped": 0,
             "system_turns": 0,
+            "skipped_test": 0,
         }
         if not self._table_exists(conn, "agent_messages"):
             stats["note"] = "agent_messages table missing"
@@ -329,10 +351,22 @@ class ExperienceCollector:
             ).fetchall()
         last_user: dict[str, str] = {}
         last_user_origin: dict[str, str] = {}
+        # 会话级provenance（先扫全表建映射：任一行标记即整会话生效，
+        # 与行序无关——会话出身不是逐行猜测）
+        session_sources: dict[str, str] = {}
+        for row in rows:
+            src = _row_session_source(row)
+            if src:
+                session_sources[row["session_id"] or ""] = src
         for row in rows:
             session_id = row["session_id"] or ""
             role = row["role"] or ""
             content = row["content"] or ""
+            if session_sources.get(session_id) == "test":
+                # provenance门（jobs.source同款）：测试探针会话不产经验；
+                # 只认schema标记，名字/内容不参与判定
+                stats["skipped_test"] += 1
+                continue
             if role == "user":
                 first_line = content.splitlines()[0].strip() if content.splitlines() else ""
                 if first_line:

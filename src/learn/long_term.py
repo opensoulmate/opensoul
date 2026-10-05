@@ -310,7 +310,13 @@ class LongTermLearning:
         1) key过不了admit_intent（模板/寒暄/占位符/过短）→ 删除；
         2) key≠normalize_intent_key(key) 的未归一旧行 → 删除——本轮
            _extract_strategy_patterns按归一key重建（experiences是唯一
-           事实源，pattern行只是缓存视图）。
+           事实源，pattern行只是缓存视图）；
+        3) 无任何经验背书的行 → 删除（缓存视图语义的兑现）：经验行被清账
+           （测试垃圾/探针污染治理）后，派生pattern行不许留——"请回复ok两个字
+           即可"这类探针话术在证据删掉后自动出清，不再需要逐行人工删。
+           保守边界：key还剩任意背书（哪怕聚合<3不触发重建）就保留，只驱逐
+           零背书行，防证据分裂（变体各自<3）时误删。experiences表缺失时跳过
+           本规则（fail-safe：不知道证据不乱删）。
         """
         rows = await self.db.fetch(
             "SELECT id, pattern_key FROM learned_patterns "
@@ -321,6 +327,7 @@ class LongTermLearning:
             "scanned": len(rows),
             "removed_inadmissible": 0,
             "removed_stale_key": 0,
+            "removed_unbacked": 0,
         }
         for row in rows:
             key = row["pattern_key"]
@@ -331,7 +338,37 @@ class LongTermLearning:
             elif normalize_intent_key(key) != key:
                 await self.db.execute("DELETE FROM learned_patterns WHERE id = ?", (row["id"],))
                 stats["removed_stale_key"] += 1
+        # 规则3：零背书驱逐（重查剩余行，只看没被规则1/2删掉的）
+        backed = await self._backed_pattern_keys()
+        if backed is not None:
+            remaining = await self.db.fetch(
+                "SELECT id, pattern_key FROM learned_patterns "
+                "WHERE tenant_id = ? AND agent_id = ? AND pattern_type = 'strategy'",
+                (self.tenant_id, self.agent_id),
+            )
+            for row in remaining:
+                if row["pattern_key"] not in backed:
+                    await self.db.execute("DELETE FROM learned_patterns WHERE id = ?", (row["id"],))
+                    stats["removed_unbacked"] += 1
         return stats
+
+    async def _backed_pattern_keys(self) -> set | None:
+        """当前有经验背书的归一key集合（experiences表缺失/查询失败→None跳过规则3）。"""
+        try:
+            exp_rows = await self.db.fetch(
+                "SELECT DISTINCT intent_summary FROM experiences "
+                "WHERE tenant_id = ? AND agent_id = ?",
+                (self.tenant_id, self.agent_id),
+            )
+        except Exception:
+            return None  # experiences表缺失等：不知道证据就不乱删（fail-safe）
+        backed: set = set()
+        for r in exp_rows:
+            intent = r["intent_summary"]
+            ok, _reason = admit_intent(intent)
+            if ok:
+                backed.add(normalize_intent_key(intent))
+        return backed
 
     async def _extract_strategy_patterns(self) -> dict:
         """提取：什么意图用什么策略最成功。

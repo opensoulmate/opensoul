@@ -246,14 +246,21 @@ class TestExtractGate(_Base):
 
 class TestPruneLegacy(_Base):
     def test_legacy_noise_pruned_and_stale_rebuilt(self, tmp_path):
-        """存量自愈：噪声旧行删除、未归一旧行删后按归一key重建。"""
-        exps = [("帮我查看当前目录", "success")] * 4
+        """存量自愈：噪声旧行删除、未归一旧行删后按归一key重建。
+
+        background_job:hippo.dream 只给2条背书（<3不触发extract重建）——
+        它的存活证明规则3的保守边界：有任意证据就不驱逐，只删零背书行。
+        """
+        exps = (
+            [("帮我查看当前目录", "success")] * 4
+            + [("background_job:hippo.dream", "success")] * 2  # 背书2条<3，不重建
+        )
         path = self._mk_db(tmp_path, exps)
         self._seed_pattern(path, "strategy", "## 角色", 65)  # template
         self._seed_pattern(path, "strategy", "你好", 15)  # phatic
         self._seed_pattern(path, "strategy", "unknown", 3)  # placeholder
         self._seed_pattern(path, "strategy", "帮我查看当前目录", 4)  # 未归一陈旧key
-        self._seed_pattern(path, "strategy", "background_job:hippo.dream", 50)  # 结构化合法
+        self._seed_pattern(path, "strategy", "background_job:hippo.dream", 50)  # 结构化合法+有背书
 
         stats = self._run(path, lambda l: l.extract_patterns())
         keys = {k for _t, k, _c in self._pattern_keys(path)}
@@ -262,9 +269,10 @@ class TestPruneLegacy(_Base):
         assert "unknown" not in keys
         assert "帮我查看当前目录" not in keys  # 陈旧key删后重建
         assert "查看当前目录" in keys  # 归一key重建自experiences
-        assert "background_job:hippo.dream" in keys  # 合法结构化key不动
+        assert "background_job:hippo.dream" in keys  # 合法结构化key+有背书不动
         assert stats["pruned"]["removed_inadmissible"] == 3
         assert stats["pruned"]["removed_stale_key"] == 1
+        assert stats["pruned"]["removed_unbacked"] == 0  # 有背书不驱逐
 
     def test_prune_idempotent(self, tmp_path):
         exps = [("帮我查看当前目录", "success")] * 4
@@ -276,6 +284,7 @@ class TestPruneLegacy(_Base):
             "scanned": 1,
             "removed_inadmissible": 0,
             "removed_stale_key": 0,
+            "removed_unbacked": 0,
         }
 
 
