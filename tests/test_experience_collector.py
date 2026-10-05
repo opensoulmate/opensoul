@@ -368,6 +368,103 @@ class TestCollectJobs:
         assert stats["status"] == "ok"  # 其余源照常
 
 
+class TestJobSourceProvenance:
+    """jobs.source provenance门（本轮）：source='test'的测试作业不产经验。
+
+    背景：systemic_test往生产 /api/will/jobs/submit 提交test_job/test_cancel/
+    stress_test（无标记）→ job_queue.db 1092行垃圾 → experiences 1092行假经验
+    → evolution_log 279行假"高频失败"进化。修复=source列+本门。
+    名字不参与判定（test_job_outcomes钉住：名字叫test_job的作业照常采集）。
+    """
+
+    @staticmethod
+    def _mk_jobs_db_with_source(path, rows):
+        conn = sqlite3.connect(path)
+        conn.execute(
+            JOB_SCHEMA.replace(
+                "idempotency_key TEXT DEFAULT ''",
+                "idempotency_key TEXT DEFAULT '', source TEXT DEFAULT 'real'",
+            )
+        )
+        for jid, name, status, error, ts, source in rows:
+            conn.execute(
+                "INSERT INTO jobs (id, name, status, error, created_at, source) VALUES (?,?,?,?,?,?)",
+                (jid, name, status, error, ts, source),
+            )
+        conn.commit()
+        conn.close()
+
+    def test_test_source_skipped_real_collected(self, tmp_path):
+        self._mk_jobs_db_with_source(
+            tmp_path / "jobs.db",
+            [
+                ("t1", "test_job", "failed", "No handler for job type 'test_job'", 2000.0, "test"),
+                ("r1", "hippo.dream", "completed", "", 2001.0, "real"),
+                ("r2", "test_job", "failed", "No handler for job type 'test_job'", 2002.0, "real"),
+            ],
+        )
+        c = _collector(tmp_path)
+        stats = c.collect()
+        job = stats["sources"]["jobs"]
+        assert job["skipped_test"] == 1  # t1（source=test）不产经验
+        assert job["scanned"] == 2 and job["failures"] == 1
+        conn = sqlite3.connect(c.db_path)
+        refs = {
+            r[0]
+            for r in conn.execute(
+                "SELECT source_ref FROM experiences WHERE source_ref LIKE 'job:%'"
+            )
+        }
+        conn.close()
+        # r2名字同为test_job但source=real照常采集（名字不参与判定）
+        assert refs == {"job:r1", "job:r2"}
+
+    def test_legacy_jobs_db_without_source_column(self, tmp_path):
+        # 老库无source列（迁移前）：fallback按real采集，不误杀存量真实作业
+        _mk_jobs_db(
+            tmp_path / "jobs.db",
+            [("b", "test_job", "failed", "No handler for job type 'test_job'", 2001.0)],
+        )
+        c = _collector(tmp_path)
+        stats = c.collect()
+        job = stats["sources"]["jobs"]
+        assert job["skipped_test"] == 0 and job["scanned"] == 1
+        conn = sqlite3.connect(c.db_path)
+        n = conn.execute("SELECT COUNT(*) FROM experiences WHERE source_ref='job:b'").fetchone()[0]
+        conn.close()
+        assert n == 1
+
+    def test_test_rows_not_counted_as_failures(self, tmp_path):
+        # 测试垃圾不再进失败计数——"高频失败"提案不再被test作业刷屏
+        self._mk_jobs_db_with_source(
+            tmp_path / "jobs.db",
+            [
+                ("t1", "test_job", "failed", "No handler for job type 'test_job'", 2000.0, "test"),
+                (
+                    "t2",
+                    "test_cancel",
+                    "failed",
+                    "No handler for job type 'test_cancel'",
+                    2001.0,
+                    "test",
+                ),
+                (
+                    "t3",
+                    "stress_test",
+                    "failed",
+                    "No handler for job type 'stress_test'",
+                    2002.0,
+                    "test",
+                ),
+            ],
+        )
+        c = _collector(tmp_path)
+        stats = c.collect()
+        job = stats["sources"]["jobs"]
+        assert job["skipped_test"] == 3
+        assert job["failures"] == 0 and job["scanned"] == 0
+
+
 class TestCollectEval:
     def test_eval_case_outcomes(self, tmp_path):
         results_pass = {

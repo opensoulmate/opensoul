@@ -70,6 +70,10 @@ class Job:
     retries: int = 0
     max_retries: int = 2
     next_retry_at: float = 0  # agno retry_or_fail退避：下一次重试执行时间（0=无退避等待）
+    source: str = "real"  # provenance（learned_skills.source同款哲学）：real=生产作业 /
+    # test=测试作业——测试垃圾不进经验/进化链（systemic_test往生产API提交test_job/
+    # test_cancel/stress_test曾污染job_queue.db 1092行→experiences 1092行→
+    # evolution_log 279行假"高频失败进化"）
 
     @property
     def duration_s(self) -> float:
@@ -92,6 +96,7 @@ class Job:
             "retries": self.retries,
             "timeout_s": self.timeout_s,
             "next_retry_at": self.next_retry_at,
+            "source": self.source,
         }
 
 
@@ -149,7 +154,8 @@ class JobQueue:
                     retries INTEGER DEFAULT 0,
                     max_retries INTEGER DEFAULT 2,
                     idempotency_key TEXT DEFAULT '',
-                    next_retry_at REAL DEFAULT 0
+                    next_retry_at REAL DEFAULT 0,
+                    source TEXT DEFAULT 'real'
                 )
             """)
             # 幂等键列迁移（既有库补列；重复列错误按消息匹配安全吞掉）
@@ -161,6 +167,13 @@ class JobQueue:
             # 退避列迁移（agno retry_or_fail：next_retry_at跨重启保留退避窗口）
             try:
                 conn.execute("ALTER TABLE jobs ADD COLUMN next_retry_at REAL DEFAULT 0")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+            # provenance列迁移（learned_skills.source同款：既有库补列，存量行
+            # DEFAULT 'real'——存量测试垃圾另行purge/清理，不靠列默认值区分）
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN source TEXT DEFAULT 'real'")
             except sqlite3.OperationalError as e:
                 if "duplicate column" not in str(e).lower():
                     raise
@@ -275,6 +288,7 @@ class JobQueue:
             retries=row["retries"] or 0,
             max_retries=row["max_retries"] if row["max_retries"] is not None else 2,
             next_retry_at=(row["next_retry_at"] or 0) if "next_retry_at" in row.keys() else 0,
+            source=(row["source"] or "real") if "source" in row.keys() else "real",
         )
 
     async def stop(self):
@@ -295,11 +309,14 @@ class JobQueue:
         timeout_s: int = 300,
         max_retries: int = 2,
         idempotency_key: str = "",
+        source: str = "real",
     ) -> str:
         """提交后台作业，立即返回job_id。
 
         idempotency_key（agno §5.2）：同key已有pending/running作业时返回既有job_id，
         不静默重复执行；已完成/失败的同key作业不拦新提交（重试是合法意图）。
+        source（provenance）：'test'=测试作业（经验采集侧跳过，learned_skills.source
+        同款）；其他值原样保留（未知不猜不归一）。
         """
         if idempotency_key:
             with self._conn() as conn:
@@ -319,6 +336,7 @@ class JobQueue:
             params=params or {},
             timeout_s=timeout_s,
             max_retries=max_retries,
+            source=(source or "real").strip() or "real",
         )
         self._jobs[job_id] = job
         self._persist(job, idempotency_key=idempotency_key)
@@ -375,8 +393,18 @@ class JobQueue:
             return True
         return False
 
-    def purge(self, status: str = "", name_pattern: str = "", older_than_days: int = 0) -> int:
-        """清理作业历史 — 集成修复#4: 测试噪声积压(test_job failed×20等)。"""
+    def purge(
+        self, status: str = "", name_pattern: str = "", older_than_days: int = 0, source: str = ""
+    ) -> int:
+        """清理作业历史 — 集成修复#4: 测试噪声积压(test_job failed×20等)。
+
+        source过滤（provenance精确打击）：source='test'只清测试作业行——
+        不按名字猜（LIKE误伤含'test'的真实作业名），按schema标记清。
+        零过滤=DELETE全表footgun：调用方（API层）必须给至少一个过滤条件。
+        """
+        if not (status or name_pattern or older_than_days or source):
+            logger.warning("JobQueue.purge拒绝零过滤调用（防误清全表）")
+            return 0
         where: list[str] = []
         params: list = []
         if status:
@@ -385,14 +413,33 @@ class JobQueue:
         if name_pattern:
             where.append("name LIKE ?")
             params.append(f"%{name_pattern}%")
+        if source:
+            where.append("source = ?")
+            params.append(source)
         if older_than_days > 0:
             where.append("created_at < ?")
             params.append(time.time() - older_than_days * 86400)
-        sql = "DELETE FROM jobs" + (" WHERE " + " AND ".join(where) if where else "")
+        sql = "DELETE FROM jobs" + (f" WHERE {' AND '.join(where)}" if where else "")
         with self._conn() as conn:
+            ids = [
+                r["id"]
+                for r in conn.execute(
+                    "SELECT id FROM jobs" + (f" WHERE {' AND '.join(where)}" if where else ""),
+                    params,
+                ).fetchall()
+            ]
             cur = conn.execute(sql, params)
         purged = cur.rowcount or 0
-        logger.info("JobQueue.purge: %d条 (status=%s pattern=%s)", purged, status, name_pattern)
+        # 内存注册表同步清理：否则purge后get()仍返回已删行的内存副本（指标说谎）
+        for jid in ids:
+            self._jobs.pop(jid, None)
+        logger.info(
+            "JobQueue.purge: %d条 (status=%s pattern=%s source=%s)",
+            purged,
+            status,
+            name_pattern,
+            source,
+        )
         return purged
 
     def get_stats(self) -> dict:
@@ -620,8 +667,8 @@ class JobQueue:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO jobs
-                    (id, name, status, params, result, error, created_at, started_at, finished_at, timeout_s, retries, max_retries, idempotency_key, next_retry_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, (SELECT idempotency_key FROM jobs WHERE id = ?), ''), ?)
+                    (id, name, status, params, result, error, created_at, started_at, finished_at, timeout_s, retries, max_retries, idempotency_key, next_retry_at, source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, (SELECT idempotency_key FROM jobs WHERE id = ?), ''), ?, COALESCE(?, (SELECT source FROM jobs WHERE id = ?), 'real'))
                 """,
                     (
                         job.id,
@@ -641,6 +688,10 @@ class JobQueue:
                         idempotency_key or None,
                         job.id,
                         job.next_retry_at,
+                        # source粘性（idempotency_key同款COALESCE）：状态更新轮的
+                        # REPLACE不把既有provenance冲回默认值——'test'永不被洗白
+                        (job.source or "").strip() or None,
+                        job.id,
                     ),
                 )
         except Exception as e:

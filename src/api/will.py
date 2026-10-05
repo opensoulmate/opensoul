@@ -657,6 +657,7 @@ class JobSubmitRequest(BaseModel):
     timeout_s: int = 300
     max_retries: int = 2
     idempotency_key: str = ""  # agno §5.2：同key pending/running不重复执行
+    source: str = "real"  # provenance：'test'=测试作业（经验/进化链跳过）
 
 
 @router.post("/seed-system")
@@ -691,6 +692,7 @@ async def job_submit(req: JobSubmitRequest):
         req.timeout_s,
         req.max_retries,
         idempotency_key=req.idempotency_key,
+        source=req.source,
     )
     return {
         "job_id": job_id,
@@ -701,12 +703,23 @@ async def job_submit(req: JobSubmitRequest):
 
 
 @router.post("/jobs/purge")
-async def job_purge(status: str = "", name_pattern: str = "", older_than_days: int = 0):
-    """清理作业历史 — 集成修复#4: test_job/stress_test等测试噪声积压清理。"""
+async def job_purge(
+    status: str = "", name_pattern: str = "", older_than_days: int = 0, source: str = ""
+):
+    """清理作业历史 — 集成修复#4: test_job/stress_test等测试噪声积压清理。
+
+    source='test'：provenance精确打击（只清标记为测试的行，不按名字猜）。
+    零过滤拒绝：无任何过滤条件=DELETE全表——误清footgun，强制至少一个过滤。
+    """
+    if not (status or name_pattern or older_than_days or source):
+        raise HTTPException(
+            status_code=400,
+            detail="purge requires at least one filter (status/name_pattern/older_than_days/source)",
+        )
     from src.will.job_queue import get_job_queue
 
     purged = get_job_queue().purge(
-        status=status, name_pattern=name_pattern, older_than_days=older_than_days
+        status=status, name_pattern=name_pattern, older_than_days=older_than_days, source=source
     )
     return {"purged": purged}
 

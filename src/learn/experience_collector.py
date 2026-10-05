@@ -84,6 +84,12 @@ def _message_failure(content: str) -> tuple[str, str]:
 BREAKER_PREFIX = "[breaker_open] "
 STALE_PREFIX = "stale recovery:"
 
+# ── 测试作业provenance（learned_skills.source同款哲学，jobs.source列配套）──
+# 主门=jobs.source列（'test'精确标记）——采集侧不做名字猜测（既有测试
+# test_job_outcomes钉住"作业名不参与判定"语义：名字叫test_job的作业照常采集）。
+# 测试垃圾的清理责任在产生侧：systemic_test提交时标source='test'并在跑完按
+# provenance+自有保留名自清（见acp-proxy/systemic_test.py S3/S6自清理块）。
+
 
 def normalize_error_key(error: str) -> str:
     """失败error → 稳定分组键。
@@ -324,7 +330,14 @@ class ExperienceCollector:
         """jobs（job_queue.db）→ 经验：作业真实执行结果（completed=success；
         failed/timeout/orphaned=failure带error原文；pending/running未有结果跳过
         ——TradingAgents"pending不冒充outcome"）。"""
-        stats: dict = {"scanned": 0, "written": 0, "failures": 0, "successes": 0, "deduped": 0}
+        stats: dict = {
+            "scanned": 0,
+            "written": 0,
+            "failures": 0,
+            "successes": 0,
+            "deduped": 0,
+            "skipped_test": 0,
+        }
         path = self.job_db_path
         if not path or not Path(path).exists():
             stats["note"] = "job_queue.db missing"
@@ -335,7 +348,15 @@ class ExperienceCollector:
             if not self._table_exists(conn, "jobs"):
                 stats["note"] = "jobs table missing"
                 return stats
-            rows = conn.execute("SELECT id, name, status, error, created_at FROM jobs").fetchall()
+            try:
+                rows = conn.execute(
+                    "SELECT id, name, status, error, created_at, source FROM jobs"
+                ).fetchall()
+            except sqlite3.OperationalError:
+                # 老库无source列（迁移前）：按real处理（fail-safe不误杀存量真实作业）
+                rows = conn.execute(
+                    "SELECT id, name, status, error, created_at FROM jobs"
+                ).fetchall()
         finally:
             conn.close()
         main = sqlite3.connect(self.db_path)
@@ -346,6 +367,16 @@ class ExperienceCollector:
                 status = (row["status"] or "").lower()
                 if status not in ("completed", "failed", "timeout", "orphaned"):
                     continue  # pending/running：无执行结果，不产经验
+                # provenance门（learned_skills.source同款哲学）：source='test'的
+                # 测试作业不产经验——systemic_test往生产API提交test_job/test_cancel/
+                # stress_test曾污染job_queue.db 1092行→experiences 1092行→evolution_log
+                # 279行假"高频失败"进化（"没有进化啊"的污染源之一）。
+                # 只认schema标记，不做名字猜测（test_job_outcomes钉住的语义：
+                # 名字不参与判定——清理责任在产生侧的source标记+自清）。
+                src = (row["source"] or "real") if "source" in row.keys() else "real"
+                if src == "test":
+                    stats["skipped_test"] += 1
+                    continue
                 stats["scanned"] += 1
                 outcome = "success" if status == "completed" else "failure"
                 error = ""

@@ -373,3 +373,132 @@ class TestLiveJobQueueAPI:
         assert len(jobs) >= 1
         names = {j["name"] for j in jobs}
         assert "heredity.evaluate_triggers" in names or "hippo.dream" in names
+
+
+# ════════════════════════════════════════════════════════════════
+# ⑥ jobs.source provenance（learned_skills.source同款哲学）
+# ════════════════════════════════════════════════════════════════
+# 背景（本轮修复）：systemic_test往生产 /api/will/jobs/submit 提交test_job/
+# test_cancel/stress_test（无标记）→ 生产job_queue.db 1092行垃圾 → experiences
+# 1092行假经验 → evolution_log 279行假"高频失败"进化。修复=source列provenance
+# +采集侧跳过+产生侧自清。名字不参与判定（test_job_outcomes同款钉）。
+
+
+@pytest.fixture()
+def will_client(tmp_path, monkeypatch):
+    """will jobs API隔离测试面：真实router + tmp独立job库——绝不写生产
+    job_queue.db，也不依赖live :8090（gene_client同款路线）。
+
+    src.api.will延迟import：模块import有单例构造副作用
+    （_register_job_handlers(_get_job_queue())）——先换tmp单例再import，
+    副作用落tmp库，生产库零触碰。live purge?source=test在旧部署上会退化成
+    零过滤purge（=DELETE全表footgun），故API面测试必须走隔离面。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.will.job_queue as jq_mod
+    from src.will.job_queue import JobQueue
+
+    jq = JobQueue(db_path=str(tmp_path / "jobs.db"), max_workers=1)
+    monkeypatch.setattr(jq_mod, "_job_queue", jq)
+
+    import src.api.will as will_api  # noqa: E402 —— 必须在单例替换后import
+
+    app = FastAPI()
+    app.include_router(will_api.router, prefix="/api/will")
+    with TestClient(app) as c:
+        yield c
+
+
+_LEGACY_JOB_SCHEMA = """
+CREATE TABLE jobs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    params TEXT DEFAULT '{}',
+    result TEXT,
+    error TEXT DEFAULT '',
+    created_at REAL,
+    started_at REAL DEFAULT 0,
+    finished_at REAL DEFAULT 0,
+    timeout_s INTEGER DEFAULT 300,
+    retries INTEGER DEFAULT 0,
+    max_retries INTEGER DEFAULT 2,
+    idempotency_key TEXT DEFAULT ''
+)
+"""
+
+
+class TestJobSourceProvenance:
+    def test_default_source_real(self, jq):
+        jid = run(jq.submit("heredity.evaluate_triggers", {"idle_seconds": 0}))
+        info = jq.get(jid)
+        assert info is not None and info["source"] == "real"
+
+    def test_explicit_test_source(self, jq):
+        jid = run(jq.submit("test_job", {}, source="test"))
+        info = jq.get(jid)
+        assert info is not None and info["source"] == "test"
+
+    def test_unknown_source_kept_verbatim(self, jq):
+        # 未知不猜不归一：非'test'原样保留（只有显式test被采集侧跳过）
+        jid = run(jq.submit("x.y", {}, source="custom"))
+        assert jq.get(jid)["source"] == "custom"
+
+    def test_source_sticky_through_persist_and_reopen(self, tmp_path):
+        db = str(tmp_path / "jobs.db")
+        jq1 = JobQueue(db_path=db, max_workers=1)
+        jid = run(jq1.submit("test_job", {}, source="test"))
+        job = jq1._jobs[jid]
+        job.status = JobStatus.FAILED
+        job.error = "No handler for job type 'test_job'"
+        jq1._persist(job)  # 状态更新轮（INSERT OR REPLACE）不洗白provenance
+        jq2 = JobQueue(db_path=db, max_workers=1)  # 模拟进程重启
+        info = jq2.get(jid)
+        assert info is not None and info["source"] == "test"
+
+    def test_legacy_db_migration_and_idempotent(self, tmp_path):
+        db = tmp_path / "jobs.db"
+        conn = sqlite3.connect(db)
+        conn.execute(_LEGACY_JOB_SCHEMA)  # 迁移前老schema（无source列）
+        conn.execute(
+            "INSERT INTO jobs (id, name, status, created_at) VALUES ('old1','hippo.dream','completed',1000.0)"
+        )
+        conn.commit()
+        conn.close()
+        JobQueue(db_path=str(db), max_workers=1)  # 迁移补列
+        jq = JobQueue(db_path=str(db), max_workers=1)  # 幂等：重复init不炸
+        info = jq.get("old1")
+        assert info["source"] == "real"  # 存量行默认real（清理靠一次性purge不靠列默认值）
+
+    def test_purge_by_source_only_removes_test(self, tmp_path):
+        jq = JobQueue(db_path=str(tmp_path / "jobs.db"), max_workers=1)
+        jid_test = run(jq.submit("test_job", {}, source="test"))
+        jid_real = run(jq.submit("heredity.evaluate_triggers", {}))
+        assert jq.purge(source="test") == 1
+        assert jq.get(jid_test) is None  # 内存注册表同步清理（不留幽灵副本）
+        assert jq.get(jid_real) is not None
+
+    def test_purge_zero_filter_refused(self, tmp_path):
+        # 零过滤purge=DELETE全表footgun——拒绝且不动任何行
+        jq = JobQueue(db_path=str(tmp_path / "jobs.db"), max_workers=1)
+        jid = run(jq.submit("heredity.evaluate_triggers", {}))
+        assert jq.purge() == 0
+        assert jq.get(jid) is not None
+
+    def test_api_submit_carries_source(self, will_client):
+        # API面（隔离in-process真实router）：source经submit请求→API→queue落库
+        r = will_client.post(
+            "/api/will/jobs/submit",
+            json={"name": "test_job", "params": {}, "timeout_s": 1, "source": "test"},
+        )
+        assert r.status_code == 200
+        jid = r.json()["job_id"]
+        info = will_client.get(f"/api/will/jobs/{jid}").json()
+        assert info.get("source") == "test"
+        # purge端点按source精确清（零过滤guard同面验证）
+        assert will_client.post("/api/will/jobs/purge").status_code == 400  # 零过滤拒绝
+        p = will_client.post("/api/will/jobs/purge?source=test")
+        assert p.status_code == 200 and p.json()["purged"] == 1
+        assert will_client.get(f"/api/will/jobs/{jid}").status_code == 404
