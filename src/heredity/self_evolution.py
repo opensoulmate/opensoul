@@ -9,10 +9,18 @@ Agent自动优化自己的策略：
 
 import json
 import logging
+import re
 import time
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# 提案生命周期（2026-10-05轮，LobeChat declareSelfFeedbackIntent去重语义）：
+# 同一发现不重复立案。生产实证：evolution_log曾积压190行同reason复读
+# （同一对已修复bug各95行"高频失败: ...(5次)"）——此前analyze_and_evolve每次
+# 运行都无条件INSERT。治理三件套：签名去重（无新证据不复读）+ 新鲜度窗口
+# （陈旧已修复模式不再进入分析）+ 存量归档（compact_duplicate_logs）。
+FRESH_PATTERN_WINDOW_S = 7 * 86400  # 失败模式活跃度窗口：last_seen超窗=不再提案
 
 
 class SelfEvolution:
@@ -38,16 +46,39 @@ class SelfEvolution:
                     after_state TEXT,
                     reason TEXT,
                     impact_score REAL DEFAULT 0.0,
-                    created_at REAL NOT NULL
+                    created_at REAL NOT NULL,
+                    meta TEXT,
+                    status TEXT DEFAULT 'active'
                 )
             """)
+            await self._migrate_columns()
         self._initialized = True
+
+    async def _migrate_columns(self):
+        """老库自愈：meta/status列PRAGMA探测+ALTER（schema_doctor同款幂等模式）。
+
+        meta=结构化提案签名JSON（去重匹配+证据计数），status=active/superseded
+        （重复立案归档不删行——历史可审计，mem0 §1.1）。
+        """
+        try:
+            cols = {r["name"] for r in await self.db.fetch("PRAGMA table_info(evolution_log)")}
+        except Exception as e:
+            logger.warning(f"[self-evolution] 列探测失败(跳过迁移): {e}")
+            return
+        if "meta" not in cols:
+            await self.db.execute("ALTER TABLE evolution_log ADD COLUMN meta TEXT")
+        if "status" not in cols:
+            await self.db.execute(
+                "ALTER TABLE evolution_log ADD COLUMN status TEXT DEFAULT 'active'"
+            )
 
     async def analyze_and_evolve(self) -> list[dict]:
         """分析当前状态，自动进化"""
         await self._ensure_table()
         if not self.db:
             return []
+        # 存量重复立案归档（幂等，清账与增量防复发一体）
+        await self.compact_duplicate_logs()
 
         evolutions = []
 
@@ -59,17 +90,36 @@ class SelfEvolution:
                 "reason": f"成功率下降: {success_trend['current']:.0%} vs {success_trend['previous']:.0%}",
                 "action": "切换到更保守的策略",
             }
-            await self._log_evolution(evolution)
-            evolutions.append(evolution)
+            evolution["signature"] = self._row_signature(
+                {"evolution_type": evolution["type"], "reason": evolution["reason"], "meta": None}
+            )
+            if await self._last_proposal(evolution) is None:
+                await self._log_evolution(evolution)
+                evolutions.append(evolution)
 
-        # 2. 分析高频失败模式
+        # 2. 分析高频失败模式（提案生命周期：无新证据不重复立案）
         failure_patterns = await self._analyze_failure_patterns()
         for pattern in failure_patterns:
             evolution = {
                 "type": "failure_avoidance",
                 "reason": f"高频失败: {pattern['error_type']} ({pattern['count']}次)",
                 "action": f"自动规避: {pattern['recommendation']}",
+                "meta": {
+                    "pattern_key": pattern.get("pattern_key", ""),
+                    "count": pattern["count"],
+                },
             }
+            evolution["signature"] = self._row_signature(
+                {"evolution_type": evolution["type"], "reason": evolution["reason"], "meta": None}
+            )
+            prior = await self._last_proposal(evolution)
+            if prior is not None:
+                # 有案在先：仅当立案后该签名又有新失败发生才再立新案（新证据驱动），
+                # 否则同发现复读（190行同reason刷屏的根因）
+                if not await self._new_failures_since(
+                    pattern.get("pattern_key", ""), prior["created_at"]
+                ):
+                    continue
             await self._log_evolution(evolution)
             evolutions.append(evolution)
 
@@ -81,8 +131,12 @@ class SelfEvolution:
                 "reason": f"用户满意度下降: {feedback_trend['avg_rating']:.1f}/5",
                 "action": "调整交互风格",
             }
-            await self._log_evolution(evolution)
-            evolutions.append(evolution)
+            evolution["signature"] = self._row_signature(
+                {"evolution_type": evolution["type"], "reason": evolution["reason"], "meta": None}
+            )
+            if await self._last_proposal(evolution) is None:
+                await self._log_evolution(evolution)
+                evolutions.append(evolution)
 
         return evolutions
 
@@ -136,7 +190,7 @@ class SelfEvolution:
 
         rows = await self.db.fetch(
             """
-            SELECT error, COUNT(*) as cnt FROM experiences
+            SELECT error, COUNT(*) as cnt, MAX(created_at) as last_seen FROM experiences
             WHERE tenant_id = ? AND agent_id = ? AND outcome = 'failure'
             AND created_at > ? AND error IS NOT NULL
             GROUP BY error
@@ -145,17 +199,25 @@ class SelfEvolution:
             (self.tenant_id, self.agent_id, time.time() - 30 * 86400),
         )
 
-        merged: dict[str, int] = {}
+        merged: dict[str, dict] = {}
         for row in rows:
             key = normalize_error_key(row["error"] or "")
             if not key:
                 continue
-            merged[key] = merged.get(key, 0) + int(row["cnt"])
+            entry = merged.setdefault(key, {"count": 0, "last_seen": 0.0})
+            entry["count"] += int(row["cnt"])
+            entry["last_seen"] = max(entry["last_seen"], float(row["last_seen"] or 0))
 
         patterns = []
-        for error, cnt in sorted(merged.items(), key=lambda kv: -kv[1]):
+        cutoff = time.time() - FRESH_PATTERN_WINDOW_S
+        for error, agg in sorted(merged.items(), key=lambda kv: -kv[1]["count"]):
+            cnt = agg["count"]
             if cnt < 3:
                 break  # 合并后按count降序，首个低于阈值后全部低于
+            # 新鲜度门：陈旧模式（7天窗口内无新失败=已修复/已消失）不再提案——
+            # 190行复读的两个bug都是3周前已修复的历史错误
+            if agg["last_seen"] < cutoff:
+                continue
             recommendation = "增加前置检查"
             if "syntax" in error.lower():
                 recommendation = "执行前做语法检查"
@@ -164,7 +226,9 @@ class SelfEvolution:
             patterns.append(
                 {
                     "error_type": error[:100],
+                    "pattern_key": error,
                     "count": cnt,
+                    "last_seen": agg["last_seen"],
                     "recommendation": recommendation,
                 }
             )
@@ -213,16 +277,112 @@ class SelfEvolution:
         stats["feedback_count"] = count or 0
         return stats
 
+    # ------------------------------------------------------------------
+    # 提案生命周期：签名去重 + 新证据门槛 + 存量归档
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _row_signature(row) -> str:
+        """行/候选提案 → 稳定签名（同签名=同一发现）。
+
+        新行用meta.signature；存量行（meta空）回退推导——
+        failure_avoidance剥reason的"(N次)"计数后缀与"高频失败: "前缀
+        （不同时间的计数快照归并为同一签），其余类型=type+reason全等。
+        """
+        meta = {}
+        try:
+            meta = (
+                json.loads(row.get("meta") or "{}")
+                if isinstance(row, dict)
+                else json.loads(row["meta"] or "{}")
+            )
+        except Exception:
+            meta = {}
+        sig = meta.get("signature")
+        if sig:
+            return str(sig)
+        ev_type = (
+            row["evolution_type"] if not isinstance(row, dict) else row.get("evolution_type", "")
+        )
+        reason = (row["reason"] if not isinstance(row, dict) else row.get("reason", "")) or ""
+        if ev_type == "failure_avoidance":
+            body = re.sub(r"\s*\(\d+次\)\s*$", "", reason).strip()
+            if body.startswith("高频失败:"):
+                body = body[len("高频失败:") :].strip()
+            return f"failure_avoidance:{body[:100]}"
+        return f"{ev_type}:{reason}"
+
+    async def _last_proposal(self, evolution: dict) -> dict | None:
+        """找同签名的最近一次立案（含存量行兼容匹配）。
+
+        不按status过滤——superseded行同样是"立过案"的证据，去重不看归档与否。
+        """
+        sig = evolution.get("signature", "")
+        if not sig:
+            return None
+        rows = await self.db.fetch(
+            """SELECT id, evolution_type, reason, meta, created_at FROM evolution_log
+               WHERE tenant_id = ? AND agent_id = ? AND evolution_type = ?
+               ORDER BY created_at DESC, id DESC LIMIT 300""",
+            (self.tenant_id, self.agent_id, evolution.get("type", "")),
+        )
+        for row in rows:
+            if self._row_signature(row) == sig:
+                return {"id": row["id"], "created_at": float(row["created_at"] or 0)}
+        return None
+
+    async def _new_failures_since(self, pattern_key: str, since: float) -> bool:
+        """立案后该签名是否有新失败发生（新证据驱动再立案的唯一依据）。"""
+        if not pattern_key:
+            return False
+        from src.learn.experience_collector import normalize_error_key
+
+        rows = await self.db.fetch(
+            """SELECT error FROM experiences
+               WHERE tenant_id = ? AND agent_id = ? AND outcome = 'failure'
+               AND created_at > ? AND error IS NOT NULL""",
+            (self.tenant_id, self.agent_id, since),
+        )
+        return any(normalize_error_key(r["error"] or "") == pattern_key for r in rows)
+
+    async def compact_duplicate_logs(self) -> dict:
+        """重复立案归档（幂等）：同签名保留最新1条active，更早的标superseded。
+
+        不删行（历史可审计，mem0 §1.1）；get_stats只数active——
+        "进化数"指标不再被复读刷屏灌水（生产190行同reason复读的存量清账）。
+        """
+        rows = await self.db.fetch(
+            """SELECT id, evolution_type, reason, meta FROM evolution_log
+               WHERE tenant_id = ? AND agent_id = ? AND (status IS NULL OR status = 'active')
+               ORDER BY created_at ASC, id ASC""",
+            (self.tenant_id, self.agent_id),
+        )
+        keep: dict[str, int] = {}
+        for row in rows:
+            keep[self._row_signature(row)] = int(row["id"])  # 升序→后者覆盖=保最新
+        drop = [int(row["id"]) for row in rows if keep[self._row_signature(row)] != int(row["id"])]
+        for i in range(0, len(drop), 100):
+            chunk = drop[i : i + 100]
+            placeholders = ",".join("?" for _ in chunk)
+            await self.db.execute(
+                f"UPDATE evolution_log SET status = 'superseded' WHERE id IN ({placeholders})",
+                *chunk,
+            )
+        return {"superseded": len(drop)}
+
     async def _log_evolution(self, evolution: dict):
+        meta = dict(evolution.get("meta") or {})
+        if evolution.get("signature"):
+            meta["signature"] = evolution["signature"]
         await self.db.execute(
             """INSERT INTO evolution_log
-               (tenant_id, agent_id, evolution_type, reason, impact_score, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               (tenant_id, agent_id, evolution_type, reason, meta, impact_score, created_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'active')""",
             (
                 self.tenant_id,
                 self.agent_id,
                 evolution["type"],
                 evolution["reason"],
+                json.dumps(meta, ensure_ascii=False) if meta else None,
                 0.5,
                 time.time(),
             ),
@@ -232,8 +392,10 @@ class SelfEvolution:
         await self._ensure_table()
         if not self.db:
             return {"evolutions": 0}
+        # 只数active（superseded=重复立案归档，不代表独立发现）
         count = await self.db.fetchval(
-            "SELECT COUNT(*) FROM evolution_log WHERE tenant_id = ? AND agent_id = ?",
+            "SELECT COUNT(*) FROM evolution_log WHERE tenant_id = ? AND agent_id = ? "
+            "AND (status IS NULL OR status = 'active')",
             (self.tenant_id, self.agent_id),
         )
         return {"evolutions": count}

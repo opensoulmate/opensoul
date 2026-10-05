@@ -350,7 +350,10 @@ class TestWiring:
     def test_self_evolution_merges_by_normalized_key(self):
         text = Path("src/heredity/self_evolution.py").read_text()
         assert "from src.learn.experience_collector import normalize_error_key" in text
-        assert 'merged[key] = merged.get(key, 0) + int(row["cnt"])' in text
+        # 合并载体从dict[int]升级为dict[{count,last_seen}]（提案生命周期新鲜度门），
+        # "按归一化键合并计数"的接线语义不变（行为由TestSelfEvolutionMerge钉住）
+        assert 'entry = merged.setdefault(key, {"count": 0, "last_seen": 0.0})' in text
+        assert 'entry["count"] += int(row["cnt"])' in text
 
     def test_brain_feedback_writes_user_feedback_table(self):
         """写了≠接线了：/api/brain/feedback必须调用UserMemory.record_feedback。"""
