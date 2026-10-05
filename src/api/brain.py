@@ -310,13 +310,14 @@ async def get_feedback(tenant_id: str = "default", user_id: str = "default", lim
 
 @router.post("/learn")
 async def learn_endpoint(tenant_id: str = "default", agent_id: str = "default"):
-    """从经验中学习"""
+    """从经验中学习（extraction统计=准入门可观测面：pruned存量自愈
+    + skipped按原因码计数——被拒的噪声不再静默消失）。"""
     from src.database.postgres import db_pool
     from src.learn.long_term import LongTermLearning
 
     learning = LongTermLearning(db_pool, tenant_id, agent_id)
-    await learning.extract_patterns()
-    return {"status": "learned", **await learning.get_stats()}
+    extraction = await learning.extract_patterns()
+    return {"status": "learned", **await learning.get_stats(), "extraction": extraction}
 
 
 @router.get("/recommendations")

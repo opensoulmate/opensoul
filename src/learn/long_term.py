@@ -9,10 +9,215 @@
 
 import json
 import logging
+import re
 import time
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# ── intent准入 gatekeeper（pattern_key唯一归一化/准入真源）──────────────
+# 调研来源：LobeChat gatekeeper（feature-matrix/26-lobe-chat-source.md：
+# "守门员：判断这条该不该进长期记忆……不加过滤的记忆=垃圾堆积"）。
+# 生产实证（2026-10-05）：learned_patterns.strategy 被四类噪声占据——
+# prompt模板片段（"## 角色"×65/"## 任务"×57）、寒暄（"你好"×15）、
+# 占位符（"unknown"）、原样用户话术直提key（措辞不归并：同一任务的
+# "帮我查看当前目录"/"请帮我查看一下当前目录"是两个pattern，不泛化）。
+# 契约：写入（_extract_strategy_patterns）与查询（get_recommendations）
+# 必须走同一组函数——否则"查得到写不进/写进查不到"。
+
+# 口语填充词：仅在字符串首/尾剥离（最长优先）。不收单字"帮"/"请"：
+# "帮助X"/"请求X"会被误伤成"助X"/"求X"。
+_FILLER_PREFIXES = (
+    "能不能帮我",
+    "可不可以帮我",
+    "能不能",
+    "可不可以",
+    "麻烦帮我",
+    "麻烦你",
+    "麻烦",
+    "帮我",
+    "请你帮",
+    "请你",
+    "请帮我",
+    "请问",
+    "我想请",
+    "我想",
+    "我要",
+)
+_FILLER_SUFFIXES = (
+    "一下",
+    "谢谢",
+    "感谢",
+    "多谢",
+    "辛苦了",
+    "辛苦",
+    "吧",
+    "呢",
+    "啊",
+    "哦",
+    "呀",
+    "嘛",
+    "哈",
+    "呗",
+)
+# 占位符（collector对无用户消息回合的默认值等）——不是意图
+_PLACEHOLDER_KEYS = {"unknown", "none", "null", "undefined", "n/a", "na", "nil", "-", "未知"}
+# 寒暄/应答话术（归一化后全等匹配）——无任务内容，没有"策略"可学
+_PHATIC_KEYS = {
+    "你好",
+    "您好",
+    "你们好",
+    "哈喽",
+    "嗨",
+    "嗨嗨",
+    "在吗",
+    "在么",
+    "在不在",
+    "好的",
+    "好",
+    "好哒",
+    "好呀",
+    "好嘞",
+    "好叭",
+    "行",
+    "行的",
+    "可以",
+    "没问题",
+    "嗯",
+    "嗯嗯",
+    "嗯呐",
+    "嗯嗯嗯",
+    "哦",
+    "噢",
+    "哦哦",
+    "额",
+    "呃",
+    "谢谢",
+    "感谢",
+    "多谢",
+    "谢谢了",
+    "谢谢你",
+    "辛苦",
+    "辛苦了",
+    "辛苦你了",
+    "拜拜",
+    "再见",
+    "晚安",
+    "早安",
+    "早上好",
+    "中午好",
+    "下午好",
+    "晚上好",
+    "新年好",
+    "对不起",
+    "抱歉",
+    "不好意思",
+    "没关系",
+    "没事",
+    "收到",
+    "明白",
+    "了解",
+    "知道",
+    "知道了",
+    "hi",
+    "hello",
+    "hey",
+    "yo",
+    "sup",
+    "ok",
+    "okay",
+    "okk",
+    "kk",
+    "yes",
+    "yep",
+    "yeah",
+    "no",
+    "nope",
+    "thanks",
+    "thank you",
+    "thankyou",
+    "ty",
+    "thx",
+    "thanx",
+    "sorry",
+    "my bad",
+    "bye",
+    "goodbye",
+    "good morning",
+    "good night",
+    "gm",
+    "gn",
+    "nice",
+    "cool",
+    "great",
+    "wow",
+}
+_TEMPLATE_RE = re.compile(r"^#{1,6}(\s|$)")
+_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+# 保留：CJK/字母数字/下划线 + 路径与结构化key需要的 / . : - + @ 与空格；其余（emoji/标点）→ 空格
+_ILLEGAL_CHARS_RE = re.compile(r"[^\w/.:\-+@ ]", re.UNICODE)
+
+
+def normalize_intent_key(raw: str) -> str:
+    """原样话术 → 可泛化的意图key（写/查同一真源）。
+
+    去emoji标点 → 剥口语填充词（首/尾，最长优先）→ 折叠空白 → casefold。
+    结构化key（background_job:*/eval_case:*）不经填充词误伤、原样保留。
+    已知边界（保守取舍，宁可分裂不误合并）："帮我X一下O"型内嵌"一下"
+    只在尾部剥（"查看一下"→"查看"），中间不剥——"查一下午日志/看一下天气"
+    等时间/宾语用法会被误伤成错key，错合并比不合并更坏；残余分裂由
+    pattern_data.variants计数可观测。
+    """
+    text = _ILLEGAL_CHARS_RE.sub(" ", raw or "")
+    text = re.sub(r"\s+", " ", text).strip()
+    changed = True
+    while changed and text:
+        changed = False
+        low = text.casefold()
+        for prefix in _FILLER_PREFIXES:
+            if low.startswith(prefix):
+                text = text[len(prefix) :].strip()
+                changed = True
+                break
+        if not text:
+            break
+        for suffix in _FILLER_SUFFIXES:
+            if text.casefold().endswith(suffix):
+                text = text[: len(text) - len(suffix)].strip()
+                changed = True
+                break
+    return text.casefold()
+
+
+def admit_intent(raw: str) -> tuple[bool, str]:
+    """准入判定（LobeChat gatekeeper范式）→ (是否准入, 原因码)。
+
+    原因码：ok / empty / template / placeholder / phatic / too_short。
+    判定顺序：模板/占位在原文上判（归一会剥掉'#'等证据），寒暄/长度在归一key上判。
+    寒暄双路判：去标点原文（"谢谢！"→"谢谢"）+ 归一key（"你好啊"→"你好"）
+    ——语气词/标点剥净后为空的寒暄不能退化成"empty"，原因码要指认真因。
+    """
+    text = (raw or "").strip()
+    if not text:
+        return False, "empty"
+    low = text.casefold()
+    if (
+        _TEMPLATE_RE.match(text)
+        or text.startswith("```")
+        or low.startswith(("system:", "user:", "assistant:", "tool:", "human:", "<!--"))
+    ):
+        return False, "template"
+    collapsed = re.sub(r"\s+", " ", _ILLEGAL_CHARS_RE.sub(" ", text)).strip().casefold()
+    key = normalize_intent_key(raw)
+    if collapsed in _PHATIC_KEYS or key in _PHATIC_KEYS:
+        return False, "phatic"
+    if not key:
+        return False, "empty"
+    if key in _PLACEHOLDER_KEYS:
+        return False, "placeholder"
+    if len(_CJK_RE.findall(key)) < 2 and len(key.replace(" ", "")) < 4:
+        return False, "too_short"
+    return True, "ok"
 
 
 class LongTermLearning:
@@ -45,23 +250,61 @@ class LongTermLearning:
             """)
         self._initialized = True
 
-    async def extract_patterns(self):
-        """从经验表中提取模式（定期运行）"""
+    async def extract_patterns(self) -> dict:
+        """从经验表中提取模式（定期运行）。返回清理/提取统计（可观测）。"""
         await self._ensure_table()
         if not self.db:
-            return
-
-        # 1. 提取"意图→策略"模式
-        await self._extract_strategy_patterns()
+            return {}
+        # 存量自愈先行（compact_duplicate_logs同款"自动化优先"）：过不了
+        # 准入门的旧噪声行、未归一的陈旧key行删掉，本轮extract从experiences
+        # （唯一事实源）按归一key重建。
+        pruned = await self._prune_inadmissible_patterns()
+        strategy = await self._extract_strategy_patterns()
 
         # 2. 提取"文件组合"模式
         await self._extract_file_combo_patterns()
 
         # 3. 提取"失败规避"模式
         await self._extract_failure_patterns()
+        return {"pruned": pruned, "strategy": strategy}
 
-    async def _extract_strategy_patterns(self):
-        """提取：什么意图用什么策略最成功"""
+    async def _prune_inadmissible_patterns(self) -> dict:
+        """存量strategy行自愈（幂等）：
+        1) key过不了admit_intent（模板/寒暄/占位符/过短）→ 删除；
+        2) key≠normalize_intent_key(key) 的未归一旧行 → 删除——本轮
+           _extract_strategy_patterns按归一key重建（experiences是唯一
+           事实源，pattern行只是缓存视图）。
+        """
+        rows = await self.db.fetch(
+            "SELECT id, pattern_key FROM learned_patterns "
+            "WHERE tenant_id = ? AND agent_id = ? AND pattern_type = 'strategy'",
+            (self.tenant_id, self.agent_id),
+        )
+        stats = {
+            "scanned": len(rows),
+            "removed_inadmissible": 0,
+            "removed_stale_key": 0,
+        }
+        for row in rows:
+            key = row["pattern_key"]
+            ok, _reason = admit_intent(key)
+            if not ok:
+                await self.db.execute("DELETE FROM learned_patterns WHERE id = ?", (row["id"],))
+                stats["removed_inadmissible"] += 1
+            elif normalize_intent_key(key) != key:
+                await self.db.execute("DELETE FROM learned_patterns WHERE id = ?", (row["id"],))
+                stats["removed_stale_key"] += 1
+        return stats
+
+    async def _extract_strategy_patterns(self) -> dict:
+        """提取：什么意图用什么策略最成功。
+
+        准入门（admit_intent单一真源）：模板片段/寒暄/占位符/过短话术不进
+        pattern_key，按原因码计数可观测；原样用户话术按normalize_intent_key
+        归并（"帮我查看当前目录"≡"请帮我查看当前目录"→"查看当前目录"），
+        措辞变体聚成同一意图、cnt求和（变体数入pattern_data.variants，
+        内嵌"一下X"类不剥的残余分裂可见可观测，见normalize_intent_key）。
+        """
         rows = await self.db.fetch(
             """
             SELECT intent_summary, outcome, COUNT(*) as cnt
@@ -74,11 +317,21 @@ class LongTermLearning:
         )
 
         strategy_map: dict[str, dict] = {}
+        variants: dict[str, set] = {}
+        skipped: dict[str, int] = {}
         for row in rows:
             intent = row["intent_summary"]
-            if intent not in strategy_map:
-                strategy_map[intent] = {"success": 0, "failure": 0}
-            strategy_map[intent][row["outcome"]] = row["cnt"]
+            ok, reason = admit_intent(intent)
+            if not ok:
+                skipped[reason] = skipped.get(reason, 0) + row["cnt"]
+                continue
+            key = normalize_intent_key(intent)
+            if key not in strategy_map:
+                strategy_map[key] = {"success": 0, "failure": 0}
+                variants[key] = set()
+            variants[key].add(intent)
+            counts = strategy_map[key]
+            counts[row["outcome"]] = counts.get(row["outcome"], 0) + row["cnt"]
 
         for intent, counts in strategy_map.items():
             total = counts["success"] + counts["failure"]
@@ -90,10 +343,16 @@ class LongTermLearning:
                     "success_rate": confidence,
                     "total": total,
                     "recommendation": "patch" if confidence > 0.7 else "stepwise",
+                    "variants": len(variants[intent]),
                 },
                 confidence,
                 total,
             )
+        return {
+            "considered": len(rows),
+            "admitted": len(strategy_map),
+            "skipped": skipped,
+        }
 
     async def _extract_file_combo_patterns(self):
         """提取：哪些文件经常一起修改"""
@@ -203,7 +462,12 @@ class LongTermLearning:
         )
 
     async def get_recommendations(self, intent_summary: str = "") -> list[dict]:
-        """获取学习到的推荐"""
+        """获取学习到的推荐。
+
+        入参intent与pattern_key同走normalize_intent_key归一（写/查同一
+        真源——"帮我查看当前目录"也能命中"查看当前目录"的模式）；寒暄/
+        模板/占位符类入参过不了admit_intent → 不配推荐，返回空。
+        """
         await self._ensure_table()
         if not self.db:
             return []
@@ -211,8 +475,11 @@ class LongTermLearning:
         conditions = "tenant_id = ? AND agent_id = ?"
         params: list = [self.tenant_id, self.agent_id]
         if intent_summary:
+            ok, _reason = admit_intent(intent_summary)
+            if not ok:
+                return []
             conditions += " AND pattern_key = ?"
-            params.append(intent_summary)
+            params.append(normalize_intent_key(intent_summary))
 
         rows = await self.db.fetch(
             f"""SELECT pattern_type, pattern_key, pattern_data, confidence, sample_count
