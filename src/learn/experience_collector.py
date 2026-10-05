@@ -37,6 +37,8 @@ import sqlite3
 import time
 from pathlib import Path
 
+from src.learn.long_term import is_system_turn_intent
+
 logger = logging.getLogger("opensoul.experience_collector")
 
 # 显式失败签名（生产数据+各runtime契约；判定逻辑见_message_failure，组合规则在那里）
@@ -73,6 +75,25 @@ def _message_failure(content: str) -> tuple[str, str]:
         idx = text.find("Traceback")
         return "failure", text[idx : idx + 200]
     return "success", ""
+
+
+def _user_turn_origin(row: sqlite3.Row, first_line: str) -> str:
+    """用户落库行的回合出身（产生侧标记优先，契约文本回退；普通行返回""）。
+
+    主信号=agent_messages.metadata.turn_origin（soulmate_agent._merge_turn_origin
+    由 wakeup_executor.set_turn_origin 窗口打标，jobs.source provenance同款
+    "从产生侧标注"）；回退=唤醒契约自述文本（turn_origin标记之前的存量行，
+    由 is_system_turn_intent 只认WAKEUP_PROMPT_MARKER契约，不做模糊猜测）。
+    """
+    raw_meta = row["metadata"] if "metadata" in row.keys() else None
+    if raw_meta:
+        try:
+            meta = json.loads(raw_meta)
+            if isinstance(meta, dict) and meta.get("turn_origin"):
+                return str(meta["turn_origin"])
+        except (ValueError, TypeError):
+            pass  # 坏JSON不猜，走契约文本回退
+    return "wakeup" if is_system_turn_intent(first_line) else ""
 
 
 # ── 错误分组键归一化（20:36轮遗留#3销账）────────────────────────────
@@ -279,16 +300,35 @@ class ExperienceCollector:
     def _collect_from_messages(self, conn: sqlite3.Connection) -> dict:
         """agent_messages → 经验：assistant回合按显式失败签名判定outcome
         （TradingAgents outcome回填——真实回复即真实反馈信号）。
-        intent_summary=同会话最近一条用户消息（回合的真实任务语境）。"""
-        stats: dict = {"scanned": 0, "written": 0, "failures": 0, "successes": 0, "deduped": 0}
+        intent_summary=同会话最近一条用户消息（回合的真实任务语境）；
+        系统自动回合（wakeup等，_user_turn_origin判定）例外：意图落结构化
+        provenance key "system_turn:{origin}"（非用户话术不冒充intent，
+        background_job:{name}同款约定），原文保全在metadata.intent_raw。"""
+        stats: dict = {
+            "scanned": 0,
+            "written": 0,
+            "failures": 0,
+            "successes": 0,
+            "deduped": 0,
+            "system_turns": 0,
+        }
         if not self._table_exists(conn, "agent_messages"):
             stats["note"] = "agent_messages table missing"
             return stats
-        rows = conn.execute(
-            "SELECT id, session_id, role, content, timestamp FROM agent_messages "
-            "ORDER BY session_id, id"
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                "SELECT id, session_id, role, content, timestamp, metadata "
+                "FROM agent_messages ORDER BY session_id, id"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # 老库无metadata列（schema_doctor迁移前）：turn_origin读不到，
+            # _user_turn_origin按行keys自动回退契约文本识别（fail-safe不中断）
+            rows = conn.execute(
+                "SELECT id, session_id, role, content, timestamp "
+                "FROM agent_messages ORDER BY session_id, id"
+            ).fetchall()
         last_user: dict[str, str] = {}
+        last_user_origin: dict[str, str] = {}
         for row in rows:
             session_id = row["session_id"] or ""
             role = row["role"] or ""
@@ -297,6 +337,7 @@ class ExperienceCollector:
                 first_line = content.splitlines()[0].strip() if content.splitlines() else ""
                 if first_line:
                     last_user[session_id] = first_line[:200]
+                    last_user_origin[session_id] = _user_turn_origin(row, first_line)
                 continue
             if role != "assistant":
                 continue
@@ -306,19 +347,29 @@ class ExperienceCollector:
                 stats["failures"] += 1
             else:
                 stats["successes"] += 1
+            origin = last_user_origin.get(session_id, "")
+            intent_raw = last_user.get(session_id, "unknown")
+            meta: dict = {
+                "source": "agent_message",
+                "message_id": row["id"],
+                "session_id": session_id,
+            }
+            if origin:
+                stats["system_turns"] += 1
+                meta["turn_origin"] = origin
+                meta["intent_raw"] = intent_raw  # 原文保全（mem0：稳定键≠丢原文）
+                intent = f"system_turn:{origin}"
+            else:
+                intent = intent_raw
             written = self._insert_exp(
                 conn,
                 action=f"chat_turn:{session_id}",
-                intent_summary=last_user.get(session_id, "unknown"),
+                intent_summary=intent,
                 outcome=outcome,
                 error=error,
                 created_at=row["timestamp"] or time.time(),
                 source_ref=f"msg:{row['id']}",
-                metadata={
-                    "source": "agent_message",
-                    "message_id": row["id"],
-                    "session_id": session_id,
-                },
+                metadata=meta,
             )
             if written:
                 stats["written"] += 1

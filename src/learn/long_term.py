@@ -158,6 +158,40 @@ _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _ILLEGAL_CHARS_RE = re.compile(r"[^\w/.:\-+@ ]", re.UNICODE)
 
 
+# ── 系统注入回合标注（非用户话术，不进策略模式）────────────────────────
+# 调研/治理背景（2026-10-05轮遗留#1销账）："schedulewakeup 到点唤醒 系统自动
+# 回合 非用户消息"×8 以 confidence=1.0 占据 learned_patterns.strategy——它是
+# hermes唤醒注解不是用户话术，给它推荐patch策略语义荒谬。
+# 产生侧标注（jobs.source provenance同款哲学"从产生侧标注，不靠字符串猜"）：
+# wakeup等系统自动回合由 acp-proxy SoulMateAgent._merge_turn_origin 落库时带
+# metadata.turn_origin（wakeup_executor.set_turn_origin窗口打标），ExperienceCollector
+# 据此把回合意图落成结构化 provenance key "system_turn:{origin}"
+# （background_job:{name}同款结构化key约定）。
+# 旧数据回退：turn_origin标记之前落库的存量行 intent_summary 是唤醒契约原文
+# （wakeup_executor.WAKEUP_PROMPT_MARKER 自述"系统自动回合，非用户消息"）——
+# 只认这份契约自述短语，不做模糊字符串猜测。
+_SYSTEM_TURN_KEY_PREFIX = "system_turn:"
+
+
+def is_system_turn_intent(raw: str) -> bool:
+    """是否系统注入回合的标注/结构化provenance key（非用户话术）。
+
+    两条确定性判据（都是显式契约，不是模糊猜测）：
+    1) 结构化provenance key "system_turn:{origin}"（collector对系统回合的落库约定）；
+    2) 唤醒契约自述文本（WAKEUP_PROMPT_MARKER及其归一key变体）：
+       "系统自动回合"+"非用户消息"同现，或 "schedulewakeup"+"到点唤醒"同现。
+    """
+    text = (raw or "").strip()
+    if not text:
+        return False
+    if text.casefold().startswith(_SYSTEM_TURN_KEY_PREFIX):
+        return True
+    low = text.casefold()
+    if "schedulewakeup" in low and "到点唤醒" in text:
+        return True
+    return "系统自动回合" in text and "非用户消息" in text
+
+
 def normalize_intent_key(raw: str) -> str:
     """原样话术 → 可泛化的意图key（写/查同一真源）。
 
@@ -192,14 +226,17 @@ def normalize_intent_key(raw: str) -> str:
 def admit_intent(raw: str) -> tuple[bool, str]:
     """准入判定（LobeChat gatekeeper范式）→ (是否准入, 原因码)。
 
-    原因码：ok / empty / template / placeholder / phatic / too_short。
-    判定顺序：模板/占位在原文上判（归一会剥掉'#'等证据），寒暄/长度在归一key上判。
+    原因码：ok / empty / template / placeholder / phatic / too_short / system_turn。
+    判定顺序：模板/占位在原文上判（归一会剥掉'#'等证据），系统注入标注在原文
+    上判（契约自述短语不被归一改变），寒暄/长度在归一key上判。
     寒暄双路判：去标点原文（"谢谢！"→"谢谢"）+ 归一key（"你好啊"→"你好"）
     ——语气词/标点剥净后为空的寒暄不能退化成"empty"，原因码要指认真因。
     """
     text = (raw or "").strip()
     if not text:
         return False, "empty"
+    if is_system_turn_intent(text):
+        return False, "system_turn"
     low = text.casefold()
     if (
         _TEMPLATE_RE.match(text)
