@@ -10,7 +10,8 @@
 - mem0 §1.1：失败必须可见——熔断/budget耗尽终态携带原因，不静默吞
 - cortex/llm_retry.py：2s×2^n capped+half-jitter 同款退避惯例（系统一致性）
 
-单元测试无网络（SQLite tmp_path隔离）；live测试经conftest client打:8090。
+单元测试无网络（SQLite tmp_path隔离）；API面用例走conftest will_client隔离
+（真实router+tmp数据面，2026-10-06收编轮）；live只读冒烟经conftest client打:8090。
 """
 
 import asyncio
@@ -582,45 +583,51 @@ class TestBackoffAcrossRestart:
         assert info["next_retry_at"] == 0
 
 
-# ── ⑥ live API（:8090真实服务，conftest client）────────────────
+# ── ⑥ API面（隔离：conftest will_client）+ live只读冒烟 ──────────
+# 2026-10-06收编轮：原live写用例 test_requeue_endpoint_wired_e2e 迁到隔离面
+# （live提交的作业行source='real'落生产job_queue.db→假experiences，多轮挂账
+# "test_job_retry_backoff等live测试写生产库"销账）。只读观测键用例留守live。
 
 
-@pytest.mark.live
-class TestLiveRequeueAPI:
-    """对live opensoul服务验证requeue端点+stats新观测键（重启服务后运行）。"""
+class TestRequeueAPI:
+    """requeue端点语义（隔离面）：真实router+tmp数据面，零生产写入。"""
 
-    def test_requeue_endpoint_wired_e2e(self, client):
+    def test_requeue_endpoint_flow(self, will_client):
         # not_found → 404
-        r = client.post("/api/will/jobs/job_nonexistent_xyz/requeue")
+        r = will_client.post("/api/will/jobs/job_nonexistent_xyz/requeue")
         assert r.status_code == 404
         # 未注册handler作业→failed→requeue→200 grant一次→再次failed（no handler）
-        r = client.post(
-            "/api/will/jobs/submit", json={"name": "no.such.handler.live", "params": {}}
+        r = will_client.post(
+            "/api/will/jobs/submit", json={"name": "no.such.handler", "params": {}}
         )
         assert r.status_code == 200
         jid = r.json()["job_id"]
         info = None
         deadline = time.time() + 10
         while time.time() < deadline:
-            info = client.get(f"/api/will/jobs/{jid}").json()
+            info = will_client.get(f"/api/will/jobs/{jid}").json()
             if info["status"] in ("failed", "completed", "timeout"):
                 break
             time.sleep(0.2)
         assert info is not None and info["status"] == "failed", f"job未失败: {info}"
         assert "No handler for job type" in info["error"]
-        rq = client.post(f"/api/will/jobs/{jid}/requeue")
+        rq = will_client.post(f"/api/will/jobs/{jid}/requeue")
         assert rq.status_code == 200
         assert rq.json()["requeued"] is True
         deadline = time.time() + 10
         while time.time() < deadline:
-            info = client.get(f"/api/will/jobs/{jid}").json()
+            info = will_client.get(f"/api/will/jobs/{jid}").json()
             if info["status"] in ("failed", "completed", "timeout"):
                 break
             time.sleep(0.2)
         assert info["status"] == "failed", "no handler作业requeue后应再次显式失败"
         assert "No handler for job type" in info["error"]
-        # 清理live测试噪声（purge端点既有能力）
-        client.post("/api/will/jobs/purge?name_pattern=no.such.handler.live")
+        # 原live版此处purge生产噪声——隔离面作业行落tmp库随fixture销毁，无需清
+
+
+@pytest.mark.live
+class TestLiveRequeueAPI:
+    """对live opensoul服务验证观测键接线（只读，零生产写入；重启服务后运行）。"""
 
     def test_health_exposes_breaker_and_retry_stats(self, client):
         """新观测键接线：/jobs/health响应携带breakers+retry_scheduled"""

@@ -264,23 +264,18 @@ class TestIdempotency:
         assert row is not None
 
 
-# ── ⑤ live API（:8090真实服务，conftest client） ─────────────
+# ── ⑤ API面（隔离：conftest will_client，真实router+tmp数据面） ────
+# 2026-10-06收编轮：原TestLiveJobQueueAPI的写用例全部迁到隔离面——live测试
+# 提交的作业行source默认'real'落生产job_queue.db，被experience_collector采集
+# 为假experiences（每次全量跑+5行，多轮挂账"live测试写生产库"）。只读冒烟
+# 留守live（见下）=router挂载+handler注册接线守卫，零生产写入。
 
 
-@pytest.mark.live
-class TestLiveJobQueueAPI:
-    """对live opensoul服务验证端到端接线（重启服务后运行）。"""
+class TestJobQueueAPI:
+    """jobs API语义（隔离面）：真实router+真实handler代码，数据面tmp。"""
 
-    def test_health_lists_registered_handlers(self, client):
-        r = client.get("/api/will/jobs/health")
-        assert r.status_code == 200
-        data = r.json()
-        assert data["component"] == "JobQueue"
-        for name in ("heredity.evaluate_triggers", "hippo.dream"):
-            assert name in data["handlers"], f"handler {name} 未注册=未接线"
-
-    def test_submit_evaluate_triggers_job_completes(self, client):
-        r = client.post(
+    def test_submit_evaluate_triggers_job_completes(self, will_client):
+        r = will_client.post(
             "/api/will/jobs/submit",
             json={"name": "heredity.evaluate_triggers", "params": {"idle_seconds": 0}},
         )
@@ -293,7 +288,7 @@ class TestLiveJobQueueAPI:
         deadline = time.time() + 15
         info = None
         while time.time() < deadline:
-            gr = client.get(f"/api/will/jobs/{job_id}")
+            gr = will_client.get(f"/api/will/jobs/{job_id}")
             assert gr.status_code == 200
             info = gr.json()
             if info["status"] in ("completed", "failed", "timeout"):
@@ -306,8 +301,8 @@ class TestLiveJobQueueAPI:
             "result"
         ]
 
-    def test_dream_background_producer(self, client):
-        r = client.post("/api/hippo/ltm/dream", json={"messages": [], "background": True})
+    def test_dream_background_producer(self, will_client):
+        r = will_client.post("/api/hippo/ltm/dream", json={"messages": [], "background": True})
         assert r.status_code == 200
         body = r.json()
         assert body["queued"] is True
@@ -317,7 +312,7 @@ class TestLiveJobQueueAPI:
         deadline = time.time() + 15
         info = None
         while time.time() < deadline:
-            gr = client.get(f"/api/will/jobs/{job_id}")
+            gr = will_client.get(f"/api/will/jobs/{job_id}")
             assert gr.status_code == 200
             info = gr.json()
             if info["status"] in ("completed", "failed", "timeout"):
@@ -328,17 +323,17 @@ class TestLiveJobQueueAPI:
         assert info["result"]["error"] == "No messages to distill"
         assert info["result"]["dream_id"].startswith("dream_")
 
-    def test_dream_sync_path_unchanged(self, client):
+    def test_dream_sync_path_unchanged(self, will_client):
         """background=False保持既有同步行为（增量改动不破坏原路径）"""
-        r = client.post("/api/hippo/ltm/dream", json={"messages": []})
+        r = will_client.post("/api/hippo/ltm/dream", json={"messages": []})
         assert r.status_code == 200
         body = r.json()
         assert "queued" not in body
         assert body["dream_id"].startswith("dream_")
 
-    def test_idempotency_live(self, client):
+    def test_idempotency_key_dedupes(self, will_client):
         key = f"itest-{int(time.time())}"
-        r1 = client.post(
+        r1 = will_client.post(
             "/api/will/jobs/submit",
             json={
                 "name": "heredity.evaluate_triggers",
@@ -348,7 +343,7 @@ class TestLiveJobQueueAPI:
             },
         )
         jid1 = r1.json()["job_id"]
-        r2 = client.post(
+        r2 = will_client.post(
             "/api/will/jobs/submit",
             json={
                 "name": "heredity.evaluate_triggers",
@@ -364,15 +359,38 @@ class TestLiveJobQueueAPI:
         if body2.get("deduped"):
             assert body2["job_id"] == jid1
 
-    def test_jobs_list_shows_history(self, client):
-        r = client.get("/api/will/jobs?limit=20")
+    def test_jobs_list_shows_history(self, will_client):
+        r = will_client.post(
+            "/api/will/jobs/submit",
+            json={"name": "heredity.evaluate_triggers", "params": {"idle_seconds": 0}},
+        )
+        assert r.status_code == 200
+        r = will_client.get("/api/will/jobs?limit=20")
         assert r.status_code == 200
         jobs = r.json()["jobs"]
         assert isinstance(jobs, list)
-        # 前面的live用例已产生作业
+        # 隔离面自含：刚提交的作业必须出现在历史里（不再依赖前序live用例的残留）
         assert len(jobs) >= 1
         names = {j["name"] for j in jobs}
         assert "heredity.evaluate_triggers" in names or "hippo.dream" in names
+
+
+# ── ⑤b live只读冒烟（:8090真实服务，conftest client）─────────────
+# 只读=零生产写入；守的是"写用例收编后仍在live面验证接线"的底线：
+# router挂载在运行服务里 + handler在运行进程注册（main.py启动接线）。
+
+
+@pytest.mark.live
+class TestLiveJobQueueAPI:
+    """对live opensoul服务验证接线（只读；重启服务后运行）。"""
+
+    def test_health_lists_registered_handlers(self, client):
+        r = client.get("/api/will/jobs/health")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["component"] == "JobQueue"
+        for name in ("heredity.evaluate_triggers", "hippo.dream"):
+            assert name in data["handlers"], f"handler {name} 未注册=未接线"
 
 
 # ════════════════════════════════════════════════════════════════
@@ -384,31 +402,30 @@ class TestLiveJobQueueAPI:
 # +采集侧跳过+产生侧自清。名字不参与判定（test_job_outcomes同款钉）。
 
 
-@pytest.fixture()
-def will_client(tmp_path, monkeypatch):
-    """will jobs API隔离测试面：真实router + tmp独立job库——绝不写生产
-    job_queue.db，也不依赖live :8090（gene_client同款路线）。
+# will_client fixture 已上移 tests/conftest.py（2026-10-06收编轮）——本轮把
+# test_job_retry_backoff.py 的live写用例也收编到同一隔离面，单一真源放conftest；
+# 原fixture文档（延迟import防单例副作用、purge?source=test旧部署footgun）随迁。
 
-    src.api.will延迟import：模块import有单例构造副作用
-    （_register_job_handlers(_get_job_queue())）——先换tmp单例再import，
-    副作用落tmp库，生产库零触碰。live purge?source=test在旧部署上会退化成
-    零过滤purge（=DELETE全表footgun），故API面测试必须走隔离面。
-    """
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
 
-    import src.will.job_queue as jq_mod
-    from src.will.job_queue import JobQueue
+class TestWillClientIsolation:
+    """隔离面护栏：防脱线回归——收编后的用例必须活在tmp数据面上。"""
 
-    jq = JobQueue(db_path=str(tmp_path / "jobs.db"), max_workers=1)
-    monkeypatch.setattr(jq_mod, "_job_queue", jq)
+    def test_data_plane_is_tmp_queue(self, will_client, tmp_path):
+        # 作业行落在tmp jobs.db（fixture经app.state暴露路径），绝不落生产job_queue.db
+        assert will_client.app.state.will_client_job_db.startswith(str(tmp_path))
+        import src.will.job_queue as jq_mod
 
-    import src.api.will as will_api  # noqa: E402 —— 必须在单例替换后import
+        jq = jq_mod._job_queue
+        assert jq is not None and jq._db_path == will_client.app.state.will_client_job_db
 
-    app = FastAPI()
-    app.include_router(will_api.router, prefix="/api/will")
-    with TestClient(app) as c:
-        yield c
+    def test_real_handlers_registered_on_fresh_tmp_queue(self, will_client):
+        # fixture硬化钉：同进程第N次构造的tmp队列也必须带全量handler
+        # （GET路径不触发submit端点的幂等兜底注册——这里钉的是fixture内显式注册）
+        r = will_client.get("/api/will/jobs/health")
+        assert r.status_code == 200
+        handlers = r.json()["handlers"]
+        for name in ("heredity.evaluate_triggers", "hippo.dream"):
+            assert name in handlers, f"handler {name} 未注册=隔离面fixture脱线"
 
 
 _LEGACY_JOB_SCHEMA = """
