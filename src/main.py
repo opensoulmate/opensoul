@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -102,6 +103,49 @@ from src.vital.collector import MetricsCollector
 from src.vital.health import HealthChecker
 
 logger = logging.getLogger(__name__)
+
+
+def configure_app_logging() -> None:
+    """给根logger挂handler，让app级INFO+日志到达journal。
+
+    背景（2026-10-06 19:05轮journal实测）：uvicorn只配置自己的loggers
+    （propagate=no），src模块的 logging.getLogger(__name__)（144处）传播到
+    无handler的root——logging.lastResort只输出WARNING+且是裸消息
+    （无级别/无模块名），INFO被整体丢弃："Auto-bootstrap result"等运行证据
+    用户在journal里从未见过。挂上handler后：INFO+全量进journal且带
+    级别/模块名，lastResort的裸消息问题一并根治。
+
+    幂等：已有root handler时不重复挂，只确保级别放行INFO。第三方噪声
+    logger压到WARNING（httpx每请求一条INFO会淹没journal——内网健康探针
+    每分钟20+请求）。
+    """
+    root = logging.getLogger()
+    if not root.handlers:
+        handler = logging.StreamHandler(stream=sys.stdout)
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        root.addHandler(handler)
+    if root.level > logging.INFO:
+        root.setLevel(logging.INFO)
+    for noisy in (
+        "httpx",
+        "httpcore",
+        "urllib3",
+        "asyncio",
+        "charset_normalizer",
+        "sqlalchemy",
+        "multipart",
+        "watchfiles",
+        "openai",
+        "anthropic",
+    ):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+# 运行时（uvicorn src.main:app）模块导入即配置；pytest下跳过避免测试输出
+# 被INFO日志污染——测试直接调用 configure_app_logging() 验证行为
+# （tests/test_app_logging_config.py），pytest在sys.modules里故可靠。
+if "pytest" not in sys.modules:
+    configure_app_logging()
 
 
 async def _intelligence_auto_collect():
