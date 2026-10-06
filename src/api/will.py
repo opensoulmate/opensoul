@@ -821,14 +821,15 @@ async def wakeup_folded(
 
 
 @router.get("/wakeup/overview")
-async def wakeup_overview():
+async def wakeup_overview(include_test: bool = Query(default=False)):
     """全部唤醒循环状态聚合（monitoring面板数据源：不指定key一屏看全）。
 
     每个 (agent_id, session_id) 键给 status() 同语义摘要（active/streak/倒计时/
-    fire执行侧状态），前端Wakeup面板按此渲染，逐key展开再查/wakeup/folded。"""
+    fire执行侧状态），前端Wakeup面板按此渲染，逐key展开再查/wakeup/folded。
+    include_test 默认False：source='test' 测试循环不进面板（真实唤醒循环一屏可见）。"""
     from src.will.wakeup import get_wakeup_scheduler
 
-    return get_wakeup_scheduler().overview()
+    return get_wakeup_scheduler().overview(include_test=include_test)
 
 
 # ── 执行侧闭环（claude-code runtime"到点重新唤醒agent"）──
@@ -879,3 +880,17 @@ async def wakeup_fire_result(req: WakeupFireResultRequest):
         return get_wakeup_scheduler().ack_fire(req.event_id, ok=req.ok, error=req.error)
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+@router.post("/wakeup/purge")
+async def wakeup_purge(source: str = ""):
+    """清理唤醒事件 — source='test'：provenance精确打击（只清标记行，不按名字猜）。
+
+    live测试收编约定：测试schedule声明source='test'，跑完自清本表
+    （jobs/purge同款；零过滤拒绝——无source=DELETE全表，误清footgun）。"""
+    from src.will.wakeup import get_wakeup_scheduler
+
+    try:
+        return get_wakeup_scheduler().purge(source=source)
+    except ValueError as e:
+        raise HTTPException(400, str(e))

@@ -81,11 +81,13 @@ def will_client(tmp_path, monkeypatch):
     source默认'real'落生产 job_queue.db → experience_collector._collect_from_jobs
     把测试作业采集为假experiences（dev-reports多轮挂账"live测试写生产库"）。
     本fixture把 will 与 hippo 两个真实router挂进进程内app（挂载镜像
-    src/main.py 的 /api/will、/api/hippo 前缀），三层数据面换tmp实例——
+    src/main.py 的 /api/will、/api/hippo 前缀），四层数据面换tmp实例——
     测试面=真实router/handler代码，数据面=隔离：
     - job_queue：tmp jobs.db（monkeypatch模块单例_job_queue）
     - heredity.evolution_engine：tmp evolution.db（真实handler评估写入落tmp）
     - hippo._lt_store/_dream_distiller：tmp LTM库（dream蒸馏写入落tmp）
+    - will.wakeup：tmp wakeup.db（monkeypatch模块单例_scheduler——live测试
+      收编轮新增：schedule/purge/overview数据面绝不落生产wakeup.db）
 
     handler注册硬化：api/will.py模块import时的_register_job_handlers只在
     首次import执行一次——pytest同进程第二次构造本fixture时模块已缓存，新tmp
@@ -122,6 +124,12 @@ def will_client(tmp_path, monkeypatch):
     monkeypatch.setattr(hippo_api, "_lt_store", tmp_lt_store)
     monkeypatch.setattr(hippo_api, "_dream_distiller", DreamDistiller(ltm_store=tmp_lt_store))
 
+    import src.will.wakeup as wakeup_mod
+    from src.will.wakeup import WakeupScheduler
+
+    tmp_wakeup = WakeupScheduler(db_path=str(tmp_path / "wakeup.db"))
+    monkeypatch.setattr(wakeup_mod, "_scheduler", tmp_wakeup)
+
     register_default_handlers(jq)  # 幂等硬化：不依赖api/will.py的import时机
 
     import src.api.will as will_api
@@ -130,5 +138,6 @@ def will_client(tmp_path, monkeypatch):
     app.include_router(will_api.router, prefix="/api/will")
     app.include_router(hippo_api.router, prefix="/api/hippo")
     app.state.will_client_job_db = jq._db_path  # 暴露tmp库路径供隔离护栏断言
+    app.state.will_client_wakeup_db = tmp_wakeup._db_path  # 同上（wakeup数据面）
     with TestClient(app) as c:
         yield c

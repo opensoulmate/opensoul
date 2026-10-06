@@ -160,9 +160,14 @@ class WakeupScheduler:
         """到点判定谓词（"到点了还没人来叫醒我吗"一眼可见）。
 
         status().fire.due_now / overview().due_count / due_wakeups() 三处同一真源——
-        任何一处改动即全改，杜绝判定漂移。"""
+        任何一处改动即全改，杜绝判定漂移。
+
+        source='test' 事件永不due（测试行不允许唤醒真实agent——live测试收编轮：
+        测试schedule写进生产wakeup.db后会被executor当真唤醒点火，62行实锤）；
+        判定收在单一谓词=三处消费面（due列表/面板due_count/status due_now）同步免疫。"""
         return (
             (not ev["stopped"])
+            and ev["source"] != "test"
             and ev["next_wakeup_at"] is not None
             and ev["next_wakeup_at"] <= now
             and not ev["fired"]
@@ -429,7 +434,7 @@ class WakeupScheduler:
 
     # ── 查询：overview（monitoring面板：全部唤醒循环一屏可见） ──
 
-    def overview(self) -> dict:
+    def overview(self, include_test: bool = False) -> dict:
         """全部 (agent_id, session_id) 唤醒循环的状态聚合——monitoring面板数据源。
 
         每个键经 _status_payload 与 status() 同一语义（判定逻辑单一真源，不复制）；
@@ -440,7 +445,11 @@ class WakeupScheduler:
         查询数固定2条（旧实现逐key调status()=5N+1查询+N+1次取锁开连接，键多时
         面板从秒开变秒卡）：①每key最新行（id自增≡ts序，MAX(id) per key 即最新——
         due_wakeups同一不变量）；②GROUP BY per key聚合计数（谓词与status()的
-        4个COUNT逐字同义）。"""
+        4个COUNT逐字同义）。
+
+        include_test=False（默认）：source='test' 的唤醒循环不进面板——monitoring
+        面板只呈现真实唤醒循环（live测试收编轮：190/196行测试产物曾把"我都不知道
+        他们在干嘛"面板刷成129个假循环）。include_test=True 供测试/排查显式查看。"""
         now = time.time()
         with self._lock, self._conn() as conn:
             rows = conn.execute(
@@ -462,6 +471,8 @@ class WakeupScheduler:
         loops = []
         for r in rows:
             ev = self._row_to_event(r)
+            if not include_test and ev["source"] == "test":
+                continue
             c = counts[(ev["agent_id"], ev["session_id"])]
             loops.append(
                 self._status_payload(
@@ -573,6 +584,26 @@ class WakeupScheduler:
             "fired": ev["fired"],
             "exhausted": ev["exhausted"],
         }
+
+    # ── 清理：purge（jobs/purge同款provenance精确打击） ──
+
+    def purge(self, source: str) -> dict:
+        """按 source 清理唤醒事件（只清schema级标记行，不按名字猜——
+        jobs.source provenance轮同款哲学："清理责任在产生侧，只认标记"）。
+
+        live测试收编约定：探针/测试 schedule 声明 source='test'，跑完调
+        POST /wakeup/purge?source=test 自清；source='test' 行同时被
+        _is_due_now 永久排除（清理失败也不会点火真实唤醒）。
+
+        ValueError：source 为空——零过滤=DELETE全表，误清footgun，拒绝
+        （api/will.py jobs/purge "零过滤拒绝"同款守卫）。"""
+        text = (source or "").strip()
+        if not text:
+            raise ValueError("purge requires source（零过滤=DELETE全表；显式指定source如'test'）")
+        with self._lock, self._conn() as conn:
+            cur = conn.execute("DELETE FROM wakeup_events WHERE source=?", (text,))
+            deleted = int(cur.rowcount or 0)
+        return {"source": text, "purged": deleted}
 
 
 # ── 单例（get_job_queue 同款惯例） ──────────────────────────

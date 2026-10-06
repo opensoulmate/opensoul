@@ -249,13 +249,27 @@ class TestOverviewBatched:
 
 @pytest.mark.live
 class TestWakeupOverviewLive:
+    @pytest.fixture(autouse=True)
+    def _purge_test_rows(self, client):
+        """live测试收编约定：产生侧声明source='test'，跑完自清生产wakeup.db。"""
+        yield
+        r = client.post("/api/will/wakeup/purge", params={"source": "test"})
+        assert r.status_code == 200, r.text
+
     def test_overview_endpoint_returns_aggregate(self, client):
         sid = f"live-wakeup-overview-{int(time.time())}"
         client.post(
             "/api/will/wakeup/schedule",
-            json={"agent_id": "live-ov", "session_id": sid, "reason": "overview探针", "noop": True},
+            json={
+                "agent_id": "live-ov",
+                "session_id": sid,
+                "reason": "overview探针",
+                "noop": True,
+                "source": "test",
+            },
         )
-        resp = client.get("/api/will/wakeup/overview")
+        # include_test=true：测试行显式可见面——验证loop payload语义
+        resp = client.get("/api/will/wakeup/overview", params={"include_test": "true"})
         assert resp.status_code == 200
         data = resp.json()
         assert "loops" in data and "total_keys" in data and "due_count" in data
@@ -264,3 +278,13 @@ class TestWakeupOverviewLive:
         assert len(mine) == 1
         assert mine[0]["active"] is True and mine[0]["current_streak"] == 1
         assert mine[0]["countdown_s"] is not None
+
+        # 默认面（monitoring面板）排除test循环——测试产物不进"我都不知道他们在干嘛"面板
+        resp2 = client.get("/api/will/wakeup/overview")
+        assert resp2.status_code == 200
+        mine2 = [
+            s
+            for s in resp2.json()["loops"]
+            if s["agent_id"] == "live-ov" and s["session_id"] == sid
+        ]
+        assert mine2 == []

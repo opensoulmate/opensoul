@@ -229,6 +229,14 @@ class TestPersistence:
 
 @pytest.mark.live
 class TestWakeupApiLive:
+    @pytest.fixture(autouse=True)
+    def _purge_test_rows(self, client):
+        """live测试收编约定：产生侧声明source='test'，跑完自清生产wakeup.db
+        （POST /wakeup/purge provenance精确打击——jobs家族同款，绝不留行）。"""
+        yield
+        r = client.post("/api/will/wakeup/purge", params={"source": "test"})
+        assert r.status_code == 200, r.text
+
     def test_schedule_and_folded_roundtrip(self, client):
         sid = f"live-wakeup-{int(time.time())}"
         # noop streak 3 连
@@ -241,6 +249,7 @@ class TestWakeupApiLive:
                     "reason": f"live noop {i}",
                     "noop": True,
                     "delay_seconds": 300,
+                    "source": "test",
                 },
             )
             assert r.status_code == 200, r.text
@@ -268,6 +277,7 @@ class TestWakeupApiLive:
                 "reason": "clamp check",
                 "noop": False,
                 "delay_seconds": 5,
+                "source": "test",
             },
         )
         assert r.status_code == 200
@@ -277,7 +287,7 @@ class TestWakeupApiLive:
     def test_empty_reason_rejected_live(self, client):
         r = client.post(
             "/api/will/wakeup/schedule",
-            json={"agent_id": "live", "reason": "", "noop": True},
+            json={"agent_id": "live", "reason": "", "noop": True, "source": "test"},
         )
         assert r.status_code == 400
 
@@ -291,6 +301,7 @@ class TestWakeupApiLive:
                 "reason": "done",
                 "noop": False,
                 "stop": True,
+                "source": "test",
             },
         )
         assert r.status_code == 200
