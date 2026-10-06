@@ -595,6 +595,16 @@ class TestDedupeAndStats:
         assert stats["status"] == "skipped"
         assert "sqlite" in stats["reason"]
 
+    def test_disabled_source_no_production_fallback(self, tmp_path):
+        """空串=显式禁用钉（_resolve_source_path三级解析）——历史陷阱修复：
+        空串曾fallback到生产job_queue.db（test_session_provenance._collect老注释）。"""
+        c = ExperienceCollector(db_path=str(tmp_path / "main.db"), job_db_path="", eval_db_path="")
+        assert c.job_db_path == ""
+        assert c.eval_db_path == ""
+        stats = c.collect()
+        assert stats["sources"]["jobs"]["note"] == "source disabled"
+        assert stats["sources"]["eval_experiments"]["note"] == "source disabled"
+
     def test_unique_index_blocks_ref_collision(self, tmp_path):
         """source_ref UNIQUE索引是去重的backstop（并发写入防线）。"""
         c = _collector(tmp_path)

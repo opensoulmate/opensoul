@@ -175,6 +175,30 @@ def _default_opensoul_db() -> str:
     return str(Path(path).resolve())
 
 
+def _resolve_source_path(explicit: str | None, setting_name: str, builtin_default: str) -> str:
+    """采集源路径三级解析（heredity测试隔离轮遗留#1销账：彻底可控、零生产接触）。
+
+    ① 显式构造参数（含 ""=显式禁用——修复""fallback生产路径的陷阱，见
+       test_session_provenance._collect历史注释"空串会fallback到生产job_queue.db"）；
+    ② settings注入（src/config.py experience_job_db_path/experience_eval_db_path）：
+       brain/evolve与learn.collect_experiences两个调用点无HTTP传参入口，测试/
+       多实例部署经配置换源——与collector默认db_path跟随settings.database_url
+       同款"配置即数据面"，heredity_client隔离面第四层；
+    ③ 内置默认生产路径（生产部署零配置不变）。
+    """
+    if explicit is not None:
+        return explicit
+    try:
+        from src.config import settings
+
+        val = getattr(settings, setting_name, None)
+    except Exception:  # 配置不可用时fail-safe走内置默认（生产行为不变）
+        val = None
+    if val is not None:
+        return val
+    return builtin_default
+
+
 class ExperienceCollector:
     """真实执行产物 → experiences表的采集器（同步sqlite3，调用方见：
     api/brain.py /evolve 每次分析前采集；will/job_handlers.py learn.collect_experiences
@@ -184,15 +208,23 @@ class ExperienceCollector:
     def __init__(
         self,
         db_path: str = "",
-        job_db_path: str = "",
-        eval_db_path: str = "",
+        job_db_path: str | None = None,
+        eval_db_path: str | None = None,
         tenant_id: str = "default",
         agent_id: str = "default",
     ):
+        # 采集源三级解析（_resolve_source_path）：None=显式参数缺省→settings注入
+        # →内置默认生产路径；""=显式禁用（零接触，不fallback生产）。
         self.db_path = db_path or _default_opensoul_db()
-        self.job_db_path = job_db_path or str(Path.home() / "opensoul" / "data" / "job_queue.db")
-        self.eval_db_path = eval_db_path or str(
-            Path.home() / ".hermes" / "opensoul" / "benchmark" / "eval_loop.db"
+        self.job_db_path = _resolve_source_path(
+            job_db_path,
+            "experience_job_db_path",
+            str(Path.home() / "opensoul" / "data" / "job_queue.db"),
+        )
+        self.eval_db_path = _resolve_source_path(
+            eval_db_path,
+            "experience_eval_db_path",
+            str(Path.home() / ".hermes" / "opensoul" / "benchmark" / "eval_loop.db"),
         )
         self.tenant_id = tenant_id
         self.agent_id = agent_id
@@ -424,7 +456,10 @@ class ExperienceCollector:
             "skipped_test": 0,
         }
         path = self.job_db_path
-        if not path or not Path(path).exists():
+        if not path:
+            stats["note"] = "source disabled"  # ""=显式禁用，零接触可观测
+            return stats
+        if not Path(path).exists():
             stats["note"] = "job_queue.db missing"
             return stats
         conn = sqlite3.connect(path)
@@ -496,7 +531,10 @@ class ExperienceCollector:
         （无原文时用确定性eval_case_failed:{dataset}:{case}分组键）。"""
         stats: dict = {"scanned": 0, "written": 0, "failures": 0, "successes": 0, "deduped": 0}
         path = self.eval_db_path
-        if not path or not Path(path).exists():
+        if not path:
+            stats["note"] = "source disabled"  # ""=显式禁用，零接触可观测
+            return stats
+        if not Path(path).exists():
             stats["note"] = "eval_loop.db missing"
             return stats
         conn = sqlite3.connect(path)

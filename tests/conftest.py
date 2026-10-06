@@ -236,8 +236,10 @@ def heredity_client(tmp_path, monkeypatch):
     默认db_path与SQLitePool同源解析settings.database_url，自动跟随）
     - db_pool：src.database.postgres.db_pool换tmp SQLitePool（lifespan startup
       connect——SelfEvolution真实SQL适配层全程不变）
-    采集源只读豁免：ExperienceCollector的job_queue.db/eval_loop.db只开SELECT读
-    真实数据源，experiences写入面全落tmp（产生侧零生产写入）。
+    - 采集源（第四层，heredity隔离轮遗留#1销账）：settings.experience_job_db_path/
+    experience_eval_db_path换""（显式禁用）——ExperienceCollector._resolve_source_path
+    三级解析，brain/evolve运行时经settings跟随，测试面零生产接触（此前
+    job_queue.db/eval_loop.db只读豁免仍接触生产）。
     app.state.heredity_client_evolution_db / heredity_client_opensoul_db 暴露tmp
     库路径供隔离护栏断言。
     """
@@ -252,6 +254,11 @@ def heredity_client(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "database_url", f"sqlite:///{tmp_db}")
     tmp_pool = SQLitePool()
     monkeypatch.setattr(pg_mod, "db_pool", tmp_pool)
+    # 第四层数据面（heredity隔离轮遗留#1销账）：采集源也换掉——""=显式禁用
+    # （experience_collector._resolve_source_path），brain/evolve运行时经settings
+    # 跟随，测试面零生产接触（此前job_queue.db/eval_loop.db只读豁免仍接触生产）。
+    monkeypatch.setattr(settings, "experience_job_db_path", "")
+    monkeypatch.setattr(settings, "experience_eval_db_path", "")
 
     import src.api.heredity as heredity_api
     from src.heredity.evolution_loop import EvolutionEngine

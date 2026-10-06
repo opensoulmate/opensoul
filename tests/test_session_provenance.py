@@ -95,7 +95,8 @@ def _mk_msg_db(tmp_path, transcripts):
 
 
 def _collect(path):
-    # job/eval数据源指向不存在的路径（空串会fallback到生产job_queue.db！）
+    # job/eval数据源指向不存在的路径（隔离采集面；空串现=显式禁用，见
+    # experience_collector._resolve_source_path三级解析）
     c = ExperienceCollector(
         db_path=str(path),
         job_db_path=str(Path(path).parent / "no_such_jobs.db"),

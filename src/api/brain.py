@@ -353,6 +353,9 @@ async def evolve(tenant_id: str = "default", agent_id: str = "default"):
     # （agent_messages/jobs/eval实验）→ experiences，再分析——进化永远基于
     # 最新真实数据。采集异常不阻断分析（表可能已有历史数据可分析），
     # 错误显式进experience_collection.error（mem0 §1.1失败必须可见）。
+    # 采集源三级解析（experience_collector._resolve_source_path）：本端点无HTTP
+    # 传参入口，job_queue.db/eval_loop.db经settings.experience_*_db_path注入换源
+    # （heredity_client隔离面第四层），生产默认路径零配置不变。
     collection: dict = {}
     try:
         collection = ExperienceCollector(tenant_id=tenant_id, agent_id=agent_id).collect()

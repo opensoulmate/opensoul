@@ -198,6 +198,88 @@ class TestHeredityDataPlaneIsolation:
         assert pg_mod.db_pool is not None
         # db_pool确为tmp实例：其连接的database_url已被换tmp（生产单例同名不同实例）
         assert pg_mod.db_pool.__class__.__name__ == "SQLitePool"
+        # 第四层：采集源确为禁用（""=显式禁用，不fallback生产路径）
+        assert settings.experience_job_db_path == ""
+        assert settings.experience_eval_db_path == ""
+
+
+class TestCollectorSourceInjection:
+    """采集源三级解析钉（heredity隔离轮遗留#1销账）：显式参数 > settings注入 >
+    内置默认；空串=显式禁用（修复空串fallback生产job_queue.db的陷阱）。"""
+
+    def test_resolution_chain(self, tmp_path, monkeypatch):
+        from src.config import settings
+        from src.learn.experience_collector import ExperienceCollector
+
+        builtin_job = str(Path.home() / "opensoul" / "data" / "job_queue.db")
+        builtin_eval = str(Path.home() / ".hermes" / "opensoul" / "benchmark" / "eval_loop.db")
+        # ③ 内置默认（无参+无配置）
+        monkeypatch.setattr(settings, "experience_job_db_path", None)
+        monkeypatch.setattr(settings, "experience_eval_db_path", None)
+        c = ExperienceCollector()
+        assert c.job_db_path == builtin_job
+        assert c.eval_db_path == builtin_eval
+        # ② settings注入
+        monkeypatch.setattr(settings, "experience_job_db_path", str(tmp_path / "j.db"))
+        monkeypatch.setattr(settings, "experience_eval_db_path", str(tmp_path / "e.db"))
+        c = ExperienceCollector()
+        assert c.job_db_path == str(tmp_path / "j.db")
+        assert c.eval_db_path == str(tmp_path / "e.db")
+        # ① 显式参数覆盖settings
+        c = ExperienceCollector(job_db_path="explicit_j.db", eval_db_path="explicit_e.db")
+        assert c.job_db_path == "explicit_j.db"
+        assert c.eval_db_path == "explicit_e.db"
+        # 空串=显式禁用（显式参数层与settings层都成立）
+        assert ExperienceCollector(job_db_path="", eval_db_path="").job_db_path == ""
+        monkeypatch.setattr(settings, "experience_job_db_path", "")
+        monkeypatch.setattr(settings, "experience_eval_db_path", "")
+        assert ExperienceCollector().job_db_path == ""
+        assert ExperienceCollector().eval_db_path == ""
+
+    def test_heredity_client_sources_disabled(self, heredity_client):
+        """隔离面默认钉：evolve运行时采集源为disabled（零生产接触可观测）。"""
+        resp = heredity_client.post(_BRAIN_EVOLVE)
+        assert resp.status_code == 200
+        coll = resp.json()["experience_collection"]
+        assert coll["sources"]["jobs"]["note"] == "source disabled"
+        assert coll["sources"]["eval_experiments"]["note"] == "source disabled"
+
+    def test_brain_evolve_collects_from_injected_source(
+        self, heredity_client, tmp_path, monkeypatch
+    ):
+        """运行时接线钉：settings注入的采集源真实喂给brain/evolve管线——种子tmp
+        job_queue.db → evolve采集 → 经验落tmp主库。若三级解析没接线（brain端点
+        仍走硬编码生产源），written断言红灯（生产源里没有jw1种子行）。"""
+        import time as _time
+
+        from src.config import settings
+
+        seed = tmp_path / "seed_jobs.db"
+        conn = sqlite3.connect(seed)
+        conn.execute(
+            "CREATE TABLE jobs (id TEXT PRIMARY KEY, name TEXT, status TEXT,"
+            " error TEXT, created_at REAL, source TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO jobs VALUES ('jw1','wired_job','failed','wired source failure',?,'real')",
+            (_time.time(),),
+        )
+        conn.commit()
+        conn.close()
+        monkeypatch.setattr(settings, "experience_job_db_path", str(seed))
+        monkeypatch.setattr(settings, "experience_eval_db_path", "")
+
+        resp = heredity_client.post(_BRAIN_EVOLVE)
+        assert resp.status_code == 200
+        coll = resp.json()["experience_collection"]
+        assert coll["sources"]["jobs"]["written"] >= 1, "注入源没被采集——采集源注入没接线"
+        assert coll["sources"]["eval_experiments"]["note"] == "source disabled"
+        tmp_main = heredity_client.app.state.heredity_client_opensoul_db
+        with sqlite3.connect(tmp_main) as c2:
+            n = c2.execute(
+                "SELECT COUNT(*) FROM experiences WHERE source_ref='job:jw1'"
+            ).fetchone()[0]
+        assert n == 1, "注入源采集结果没落tmp主库——数据面断线"
 
 
 class TestStaticGuards:

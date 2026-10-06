@@ -5,6 +5,13 @@ class Settings(BaseSettings):
     # Database (sqlite:///path for dev, postgresql+asyncpg://... for prod)
     database_url: str = "sqlite:///data/opensoul.db"
 
+    # 经验采集源注入（ExperienceCollector数据面，_resolve_source_path三级解析）：
+    # None=内置默认生产路径（生产部署零配置不变）；""=显式禁用该源（零接触）；
+    # 路径=显式指定。brain/evolve与learn.collect_experiences无HTTP传参入口时，
+    # 测试/多实例部署经此换源（与database_url同款"配置即数据面"）。
+    experience_job_db_path: str | None = None
+    experience_eval_db_path: str | None = None
+
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "opensoul_knowledge"
