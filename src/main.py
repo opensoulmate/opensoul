@@ -153,6 +153,44 @@ async def _intelligence_auto_collect():
         await asyncio.sleep(120)  # Collect every 2 minutes
 
 
+async def _evolution_retention_loop():
+    """Background task: 进化提案stale pending周期清扫（agno stale回收的运行时接线）。
+
+    为什么需要（"写了≠接线了"缺口）：EvolutionEngine.store.retire_stale_pending
+    （0b5e0372进化预算自愈三件套）此前只挂在 declare_intent 声明路径惰性清扫——
+    声明一停清扫就停。生产实证：2026-10-04 23:48批量立案后SelfEvolution因数据面
+    干净不再声明，5条假模式pending（test_job 910次等测试噪声）超龄48h TTL无人
+    清扫，长期滞留pending面板——"没有进化啊"的度量前提=面板只显示真实待审提案。
+
+    频率：启动后20s首扫（开机即清账）+每3600s一扫（TTL=48h，小时级精度足够）。
+    清扫经 src.api.heredity.sweep_stale_proposals（失败不抛出，绝不反噬主进程）；
+    退役是账本可见终态（REJECTED actor=retention），非静默丢弃。
+    """
+    import time as _time
+
+    from src.api.heredity import sweep_stale_proposals
+
+    await asyncio.sleep(20)  # 等器官就绪后首扫（开机即清账）
+    while True:
+        start = _time.time()
+        try:
+            result = sweep_stale_proposals()
+            retired = result.get("retired") or []
+            # 每次清扫都自报（noop也报——claude-code noop自报范式）：
+            # journal里能看到"清扫在跑"，空转也是运行证据（用户极度重视可观测性）
+            logger.info(
+                "[evolution-retention] sweep done: retired=%d in %.0fms%s",
+                len(retired),
+                (_time.time() - start) * 1000,
+                f" {retired}" if retired else "",
+            )
+            if result.get("error"):
+                logger.warning("[evolution-retention] sweep error: %s", result["error"])
+        except Exception:
+            logger.warning("[evolution-retention] sweep crashed", exc_info=True)
+        await asyncio.sleep(3600)  # 每小时清扫一次
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -308,11 +346,15 @@ async def lifespan(app: FastAPI):
 
     dream_task = asyncio.create_task(dream_producer_loop())
 
+    # 进化提案stale pending周期清扫（48h TTL契约运行时接线，见_evolution_retention_loop）
+    retention_task = asyncio.create_task(_evolution_retention_loop())
+
     yield
 
     # Shutdown
     bootstrap_task.cancel()
     dream_task.cancel()
+    retention_task.cancel()
     intel_task.cancel()
     metrics_task.cancel()
     try:

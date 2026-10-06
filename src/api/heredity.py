@@ -1,5 +1,7 @@
 """OpenHeredity API — 遗传链：版本演化中心、插件版本管理、平滑升级、知识库结构迁移。"""
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -7,7 +9,20 @@ from src.heredity.evolution_loop import EvolutionEngine
 from src.heredity.migration import MigrationEngine
 from src.heredity.version_registry import VersionRegistry
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# ── retention运行时自报状态（可观测性：stats面板能看到"清扫在跑"）──
+# claude-code noop自报范式：周期任务空转也必须自报——journal里app级INFO被
+# 无handler的root logger丢弃（只有WARNING+可见），所以清扫心跳走stats面板
+# （/api/heredity/evolution/stats.retention），用户不用翻日志就知道retention活着。
+_retention_state: dict = {
+    "sweeps": 0,
+    "last_sweep_at": 0.0,
+    "last_sweep_retired": 0,
+    "last_sweep_error": "",
+}
 
 # ── Singletons ─────────────────────────────────────────────
 registry = VersionRegistry()
@@ -495,5 +510,43 @@ async def get_evolution_ledger(
 
 @router.get("/evolution/stats")
 async def evolution_stats():
-    """进化管线统计（提案状态分布/账本事件/熔断状态）。"""
-    return evolution_engine.get_stats()
+    """进化管线统计（提案状态分布/账本事件/熔断状态 + retention清扫心跳）。"""
+    return {**evolution_engine.get_stats(), "retention": dict(_retention_state)}
+
+
+# ── stale pending周期清扫入口（运行时接线，main.py _evolution_retention_loop调用） ──
+
+
+def sweep_stale_proposals() -> dict:
+    """agno stale回收的运行时周期入口：超龄pending转rejected+账本REJECTED(actor=retention)。
+
+    为什么需要（"写了≠接线了"缺口）：retire_stale_pending（0b5e0372进化预算自愈
+    三件套）只挂在 declare_intent 声明路径做惰性清扫——声明一停，清扫就停。
+    生产实证：2026-10-04 23:48批量立案后 SelfEvolution 因数据面干净不再产生新
+    发现（也就不再声明），5条假模式pending（test_job 910次等测试噪声+9月已修复
+    bug）超龄48h TTL无人清扫，长期滞留pending面板（"没有进化啊"的度量前提=
+    面板只显示真实待审提案）。本入口被 main.py 周期任务每小时调用，TTL契约
+    （PENDING_TTL_S=48h）与声明流量彻底解耦。
+
+    只操作引擎全局单例（heredity_client隔离面 monkeypatch evolution_engine 即换
+    数据面，测试零生产接触）；清扫失败不抛出（retention是后台维护，绝不反噬调用方，
+    失败显式进返回值error——mem0 §1.1失败必须可见）。
+
+    每次清扫更新 _retention_state（stats面板heartbeat，见文件头注释）。
+    """
+    import time as _time
+
+    started = _time.time()
+    try:
+        retired = evolution_engine.store.retire_stale_pending(evolution_engine.pending_ttl_s)
+    except Exception as e:  # 清扫失败可见但不影响服务
+        logger.warning("[evolution-retention] sweep failed: %s", e)
+        _retention_state["sweeps"] += 1
+        _retention_state["last_sweep_at"] = started
+        _retention_state["last_sweep_error"] = str(e)
+        return {"retired": [], "error": str(e)}
+    _retention_state["sweeps"] += 1
+    _retention_state["last_sweep_at"] = started
+    _retention_state["last_sweep_retired"] = len(retired)
+    _retention_state["last_sweep_error"] = ""
+    return {"retired": retired}

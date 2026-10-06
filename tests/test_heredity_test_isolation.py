@@ -337,3 +337,158 @@ class TestProductionHygiene:
         assert leaked == [], (
             f"生产evolution_triggers残留测试指纹记录: {leaked[:5]}（共{len(leaked)}行）"
         )
+
+
+class TestEvolutionRetentionRuntimeWiring:
+    """stale pending周期清扫运行时接线钉（2026-10-06 retention轮）。
+
+    背景：retire_stale_pending（0b5e0372进化预算自愈三件套）只挂在declare_intent
+    声明路径惰性清扫——声明一停清扫就停。生产实证：5条假模式pending（test_job
+    910次等）超龄48h TTL无人清扫长期滞留面板。本轮把清扫接线到main.py周期任务
+    （启动20s首扫+每小时一扫），本类=行为钉+接线钉+隔离钉。
+    """
+
+    def test_sweep_retires_only_stale_pending_with_ledger(self, heredity_client):
+        """行为钉：sweep_stale_proposals退役超龄pending（rejected+账本REJECTED
+        actor=retention），新鲜pending不误杀，且零生产写入（隔离不变量）。"""
+        import time as _time
+
+        import src.api.heredity as heredity_api
+        from src.heredity.evolution_loop import (
+            LEDGER_REJECTED,
+            PENDING_TTL_S,
+            STATUS_PENDING,
+            STATUS_REJECTED,
+            EvolutionProposal,
+        )
+
+        before = _prod_evo_counts()
+        engine = heredity_api.evolution_engine  # heredity_client已换tmp数据面
+
+        # 新鲜pending（声明路径正常产物）
+        fresh = engine.declare_intent(
+            kind="policy_adjustment",
+            title="retention fresh probe",
+            rationale="retention probe",
+            confidence=0.5,
+            evidence_refs=["iso:retention-probe"],
+            proposer="api_test_agent",
+        )
+        assert fresh["status"] == STATUS_PENDING
+
+        # 超龄pending（模拟"声明停摆后滞留"的生产形态：created_at早于TTL）
+        stale_id = "evo_retention_stale_probe"
+        engine.store.insert_proposal(
+            EvolutionProposal(
+                proposal_id=stale_id,
+                kind="policy_adjustment",
+                title="retention stale probe",
+                rationale="retention probe",
+                confidence=0.5,
+                evidence_refs=["iso:retention-probe"],
+                proposer="api_test_agent",
+                status=STATUS_PENDING,
+                created_at=_time.time() - PENDING_TTL_S - 60,
+            )
+        )
+
+        result = heredity_api.sweep_stale_proposals()
+        assert "error" not in result or not result["error"], result
+        assert stale_id in result["retired"], "超龄pending没被清扫——retention没接线"
+        assert fresh["proposal_id"] not in result["retired"], "新鲜pending被误杀"
+
+        stale_row = engine.store.get_proposal(stale_id)
+        assert stale_row is not None
+        assert stale_row.status == STATUS_REJECTED
+        assert stale_row.reject_reason == "stale_pending_expired"
+        fresh_row = engine.store.get_proposal(fresh["proposal_id"])
+        assert fresh_row is not None
+        assert fresh_row.status == STATUS_PENDING
+
+        ledger = engine.store.get_ledger(proposal_id=stale_id)
+        assert any(r["event"] == LEDGER_REJECTED and r["actor"] == "retention" for r in ledger), (
+            "退役没写REJECTED账本（actor=retention）——静默丢弃违反mem0 §1.1"
+        )
+
+        assert _prod_evo_counts() == before, "sweep写穿了生产evolution.db——数据面断线"
+
+        # 可观测心跳钉：sweep状态进stats面板（retention块），面板能看到"清扫在跑"
+        stats_resp = heredity_client.get("/api/heredity/evolution/stats")
+        assert stats_resp.status_code == 200
+        retention = stats_resp.json().get("retention") or {}
+        assert retention.get("sweeps", 0) >= 1, "retention心跳没进stats面板"
+        assert retention.get("last_sweep_at", 0) > 0
+        assert retention.get("last_sweep_retired", -1) >= 1  # 本轮清了stale probe
+        assert retention.get("last_sweep_error", "x") == ""
+
+    def test_sweep_resilient_to_engine_failure(self, monkeypatch):
+        """失败可见钉：sweep失败不抛出，error进返回值+心跳状态（后台维护绝不反噬调用方）。"""
+        import src.api.heredity as heredity_api
+
+        class _BoomStore:
+            def retire_stale_pending(self, ttl_s, now=None):
+                raise RuntimeError("boom")
+
+        class _BoomEngine:
+            store = _BoomStore()
+            pending_ttl_s = 1.0
+
+        monkeypatch.setattr(heredity_api, "evolution_engine", _BoomEngine())
+        result = heredity_api.sweep_stale_proposals()
+        assert result["retired"] == []
+        assert "boom" in result["error"], f"失败没可见: {result}"
+        assert "boom" in heredity_api._retention_state["last_sweep_error"], "心跳没记失败"
+
+    def test_main_lifespan_wires_retention_loop(self):
+        """接线钉（写了≠接线了）：main.py必须同时具备①_evolution_retention_loop
+        定义②lifespan里create_task真实调用点③调用sweep_stale_proposals非死代码。"""
+        src = (REPO_ROOT / "src" / "main.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+
+        fn_defs = {
+            n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        assert "_evolution_retention_loop" in fn_defs, "main.py缺_evolution_retention_loop定义"
+
+        wired = False
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "create_task"
+            ):
+                for arg in node.args:
+                    if (
+                        isinstance(arg, ast.Call)
+                        and isinstance(arg.func, ast.Name)
+                        and arg.func.id == "_evolution_retention_loop"
+                    ):
+                        wired = True
+        assert wired, "lifespan里没有create_task(_evolution_retention_loop())——没接线"
+
+        loop_node = next(
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, ast.AsyncFunctionDef) and n.name == "_evolution_retention_loop"
+        )
+        loop_src = ast.get_source_segment(src, loop_node) or ""
+        assert "sweep_stale_proposals" in loop_src, "retention循环没调用sweep入口——死代码"
+
+    def test_sweep_entry_defined_in_heredity_api(self):
+        """接线钉：sweep_stale_proposals在heredity API层存在且走全局单例
+        （隔离面monkeypatch evolution_engine即换数据面的契约）。"""
+        src = (REPO_ROOT / "src" / "api" / "heredity.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        fn = next(
+            (
+                n
+                for n in ast.walk(tree)
+                if isinstance(n, ast.FunctionDef) and n.name == "sweep_stale_proposals"
+            ),
+            None,
+        )
+        assert fn is not None, "heredity.py缺sweep_stale_proposals"
+        attrs = {c.attr for c in ast.walk(fn) if isinstance(c, ast.Attribute)}
+        assert "retire_stale_pending" in attrs, "sweep没调用retire_stale_pending"
+        names = {c.id for c in ast.walk(fn) if isinstance(c, ast.Name)}
+        assert "evolution_engine" in names, "sweep没走全局evolution_engine单例"
