@@ -3,6 +3,7 @@
 import json
 import logging
 import sqlite3
+import statistics
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -127,10 +128,116 @@ def init_db():
         );
     """)
     conn.commit()
+
+    # 执行过程事件表（Paperclip式任务执行可视化：逐行落库，供ws_group尾随广播+事后回放）
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS task_execution_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            agent_id TEXT DEFAULT '',
+            event_type TEXT NOT NULL,
+            content TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_tee_task ON task_execution_events(task_id, id);
+        CREATE INDEX IF NOT EXISTS idx_tee_group ON task_execution_events(group_id, id);
+    """)
+    conn.commit()
     conn.close()
 
 
 init_db()
+
+
+def _emit_exec_event(group_id: str, task_id: str, agent_id: str, event_type: str, content: str):
+    """写入一条执行过程事件（独立短连接，立即提交，供ws_group尾随广播+回放）"""
+    try:
+        c = get_db()
+        c.execute(
+            "INSERT INTO task_execution_events (group_id, task_id, agent_id, event_type, content, created_at) VALUES (?,?,?,?,?,?)",
+            (group_id, task_id, agent_id, event_type, content[:2000], datetime.now().isoformat()),
+        )
+        c.commit()
+        c.close()
+    except Exception as e:
+        logger.warning(f"emit_exec_event failed: {e}")
+
+
+# ── ETA预估 & 卡死检测（只提醒不杀任务，不设硬超时） ──────
+_HEAVY_GOAL_VERBS = ("开发", "实现", "分析", "测试", "研究")
+_DEFAULT_ETA_RANGE = (20, 90)  # 无历史数据时的默认预估区间（秒）
+_STALLED_AFTER_SECONDS = 600  # 执行中任务10分钟零事件视为疑似卡死
+
+
+def _parse_ts(value) -> datetime | None:
+    """解析ISO时间戳字符串，失败返回None"""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except (ValueError, TypeError):
+        return None
+
+
+def _finished_duration_history(conn, agent_id: str, limit: int = 20) -> list[float]:
+    """历史基准数据：finished事件对应任务的实际耗时（秒），按agent_id分组取最近limit条。
+    优先 started→finished 事件时间差，缺失时回退 tasks.updated_at-created_at 近似。
+    指定agent无历史时回退到全局历史。"""
+    rows = conn.execute(
+        """SELECT e.agent_id, e.created_at AS finished_at,
+                  (SELECT MIN(s.created_at) FROM task_execution_events s
+                     WHERE s.task_id = e.task_id AND s.event_type = 'started') AS started_at,
+                  t.created_at AS task_created_at, t.updated_at AS task_updated_at
+             FROM task_execution_events e
+             LEFT JOIN ai_group_tasks t ON t.id = e.task_id
+            WHERE e.event_type = 'finished'
+            ORDER BY e.id DESC LIMIT 400"""
+    ).fetchall()
+    per_agent: dict[str, list[float]] = {}
+    global_hist: list[float] = []
+    for r in rows:
+        start = _parse_ts(r["started_at"]) or _parse_ts(r["task_created_at"])
+        end = _parse_ts(r["finished_at"]) or _parse_ts(r["task_updated_at"])
+        if not start or not end:
+            continue
+        secs = (end - start).total_seconds()
+        if not (0 < secs <= 7200):  # 过滤非正数/异常离群值
+            continue
+        aid = (r["agent_id"] or "").strip()
+        bucket = per_agent.setdefault(aid, [])
+        if len(bucket) < limit:
+            bucket.append(secs)
+        if len(global_hist) < limit:
+            global_hist.append(secs)
+    if agent_id and per_agent.get(agent_id):
+        return per_agent[agent_id]
+    return global_hist
+
+
+def _estimate_eta_seconds(task_row, events_hist) -> tuple[int, int]:
+    """任务ETA预估（纯函数，不做I/O）：历史基准(events_hist为该agent最近finished耗时秒数列表)
+    × 特征修正系数。仅用于展示提醒，不设硬超时、不杀任务。
+    修正规则：goal>60字或含开发/实现/分析/测试/研究等动词 ×2.5；子任务数>2 ×1.3。
+    无历史时默认 (20, 90) 秒。返回 (low, high)。"""
+    d = dict(task_row)
+    goal = d.get("goal") or ""
+    subs = d.get("subtasks")
+    subtask_count = (
+        len(subs) if isinstance(subs, (list, tuple)) else int(d.get("subtask_count") or 0)
+    )
+    mult = 1.0
+    if len(goal) > 60 or any(v in goal for v in _HEAVY_GOAL_VERBS):
+        mult *= 2.5
+    if subtask_count > 2:
+        mult *= 1.3
+    if events_hist:
+        mean = statistics.mean(events_hist)
+        median = statistics.median(events_hist)
+        base_low, base_high = min(mean, median), max(mean, median) * 1.2
+    else:
+        base_low, base_high = _DEFAULT_ETA_RANGE
+    return (max(1, round(base_low * mult)), max(2, round(base_high * mult)))
 
 
 # ── Pydantic Models ──────────────────────────────────────
@@ -461,6 +568,35 @@ def list_tasks(group_id: str):
                 (group_id,),
             ).fetchall()
         )
+        # 一次性取每任务最后事件时间 + 按agent分组的历史耗时（ETA/卡死检测用）
+        last_events = {
+            r["task_id"]: r["last_at"]
+            for r in conn.execute(
+                "SELECT task_id, MAX(created_at) AS last_at FROM task_execution_events WHERE group_id=? GROUP BY task_id",
+                (group_id,),
+            ).fetchall()
+        }
+        hist_cache: dict[str, list[float]] = {}
+
+        def _hist_for(agent_id: str) -> list[float]:
+            key = agent_id or ""
+            if key not in hist_cache:
+                hist_cache[key] = _finished_duration_history(conn, key)
+            return hist_cache[key]
+
+        def _annotate(t: dict):
+            low, high = _estimate_eta_seconds(t, _hist_for(t.get("assigned_agent_id") or ""))
+            t["estimated_low_s"] = low
+            t["estimated_high_s"] = high
+            t["last_event_at"] = last_events.get(t["id"])
+            # 卡死检测：执行中且>600秒零事件 → stalled=true（只提醒，不杀任务）
+            stalled = False
+            if t.get("status") == "executing":
+                last = _parse_ts(t["last_event_at"]) or _parse_ts(t.get("updated_at"))
+                if last and (datetime.now() - last).total_seconds() > _STALLED_AFTER_SECONDS:
+                    stalled = True
+            t["stalled"] = stalled
+
         for t in tasks:
             t["subtasks"] = rows_to_list(
                 conn.execute(
@@ -468,8 +604,12 @@ def list_tasks(group_id: str):
                     (t["id"],),
                 ).fetchall()
             )
+            for st in t["subtasks"]:
+                st["subtask_count"] = 0
+                _annotate(st)
             t["constraints"] = json.loads(t.get("constraints", "[]"))
             t["completion_criteria"] = json.loads(t.get("completion_criteria", "[]"))
+            _annotate(t)
         return tasks
     finally:
         conn.close()
@@ -492,7 +632,11 @@ def assign_task(group_id: str, task_id: str, req: AssignTaskRequest):
 
 class ExecuteTaskRequest(BaseModel):
     agent_id: str
-    goal: str
+    goal: str = ""  # 为空时用任务行自身的goal（子任务单独执行/重试场景）
+
+
+class RetryTaskRequest(BaseModel):
+    agent_id: str = ""
 
 
 def _resolve_agent_binary(agent_id: str, model: str = "") -> str:
@@ -581,7 +725,28 @@ async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
         # 解析真实binary名并执行
         real_binary = _resolve_agent_binary(req.agent_id, agent_model)
         logger.info(f"Agent resolve: {req.agent_id} (model={agent_model}) -> {real_binary}")
-        response_text, source, success = await run_agent_proxy(real_binary, req.goal)
+        run_goal = req.goal or (task["goal"] if "goal" in task.keys() else "")
+        _emit_exec_event(
+            group_id,
+            task_id,
+            req.agent_id,
+            "started",
+            f"agent={req.agent_id} binary={real_binary} goal={run_goal[:120]}",
+        )
+
+        async def _on_exec_event(etype: str, line: str):
+            _emit_exec_event(group_id, task_id, req.agent_id, etype, line)
+
+        response_text, source, success = await run_agent_proxy(
+            real_binary, run_goal, on_event=_on_exec_event
+        )
+        _emit_exec_event(
+            group_id,
+            task_id,
+            req.agent_id,
+            "finished" if success else "failed",
+            f"success={success} len={len(response_text)}",
+        )
 
         # 保存结果
         result_now = datetime.now().isoformat()
@@ -638,6 +803,13 @@ async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
         # 外层未提交持有写锁时内层必死锁'sqlite3.OperationalError: database is locked'）
         conn.commit()
         update_agent_capability(group_id, req.agent_id, capability, auto_score)
+        _emit_exec_event(
+            group_id,
+            task_id,
+            req.agent_id,
+            "scored",
+            f"score={auto_score} reason={auto_reason} capability={capability}",
+        )
 
         conn.commit()
 
@@ -652,6 +824,64 @@ async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
             "reason": auto_reason,
             "capability": capability,
         }
+    finally:
+        conn.close()
+
+
+@router.post("/{group_id}/tasks/{task_id}/retry")
+async def retry_task(group_id: str, task_id: str, req: RetryTaskRequest):
+    """Paperclip式单任务/单子任务重试：重置该行状态后独立重跑（不影响兄弟子任务）"""
+    conn = get_db()
+    try:
+        task = conn.execute(
+            "SELECT * FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
+        ).fetchone()
+        if not task:
+            raise HTTPException(404, "任务不存在")
+        now = datetime.now().isoformat()
+        conn.execute(
+            "UPDATE ai_group_tasks SET status='pending', result='', iteration=0, updated_at=? WHERE id=?",
+            (now, task_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    agent_id = req.agent_id or (task["assigned_agent_id"] or "")
+    _emit_exec_event(
+        group_id, task_id, agent_id, "retry", f"手动重试 by={agent_id or 'unassigned'}"
+    )
+    exec_req = ExecuteTaskRequest(agent_id=agent_id, goal="")
+    return await execute_task(group_id, task_id, exec_req)
+
+
+@router.get("/{group_id}/tasks/{task_id}/events")
+def get_task_events(group_id: str, task_id: str, after_id: int = 0):
+    """执行过程事件回放（after_id增量拉取，供时间线面板回看）"""
+    conn = get_db()
+    try:
+        rows = rows_to_list(
+            conn.execute(
+                "SELECT * FROM task_execution_events WHERE task_id=? AND id>? ORDER BY id LIMIT 500",
+                (task_id, after_id),
+            ).fetchall()
+        )
+        # computed: 首个started事件 → finished/failed（未结束则到当前）的耗时秒数
+        started = conn.execute(
+            "SELECT created_at FROM task_execution_events WHERE task_id=? AND event_type='started' ORDER BY id LIMIT 1",
+            (task_id,),
+        ).fetchone()
+        ended = conn.execute(
+            "SELECT created_at FROM task_execution_events WHERE task_id=? AND event_type IN ('finished','failed') ORDER BY id LIMIT 1",
+            (task_id,),
+        ).fetchone()
+        elapsed_seconds = None
+        start_ts = _parse_ts(started["created_at"]) if started else None
+        if start_ts:
+            end_ts = _parse_ts(ended["created_at"]) if ended else None
+            if end_ts is None:
+                end_ts = datetime.now()
+            elapsed_seconds = round((end_ts - start_ts).total_seconds(), 1)
+        return {"events": rows, "elapsed_seconds": elapsed_seconds}
     finally:
         conn.close()
 
