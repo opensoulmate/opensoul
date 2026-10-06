@@ -1,10 +1,17 @@
-"""Integration tests for User API — registration, login, profile."""
+"""Integration tests for User API — registration, login, profile.
+
+2026-10-06 live测试普查轮：写/认证用例迁 conftest user_client 隔离面（真实
+router + tmp users库），不再走live :8090注册写生产 users 表（此前每次全量跑
++3行testuser_/logintest_/metest_测试账号，无删除端点永不自清）。
+仅 TestUserHealth 留守live（只读冒烟：运行进程router挂载守卫，零生产写入）。
+"""
 
 import uuid
 
 
 class TestUserHealth:
     def test_health(self, client):
+        """live只读冒烟（:8090）：user router在运行进程的挂载守卫，零写入。"""
         resp = client.get("/api/user/health")
         assert resp.status_code == 200
         data = resp.json()
@@ -13,13 +20,13 @@ class TestUserHealth:
 
 
 class TestUserRegister:
-    def test_register_and_login(self, client):
-        """Register a new user, then login."""
+    def test_register_and_login(self, user_client):
+        """Register a new user, then login.（隔离面：数据面确定性，注册必然200）"""
         username = f"testuser_{uuid.uuid4().hex[:8]}"
         email = f"{username}@test.com"
 
         # Register
-        resp = client.post(
+        resp = user_client.post(
             "/api/user/register",
             json={
                 "username": username,
@@ -27,20 +34,18 @@ class TestUserRegister:
                 "password": "testpass123",
             },
         )
-        # Could be 200 or 400 if user already exists
-        assert resp.status_code in (200, 400)
-        if resp.status_code == 200:
-            data = resp.json()
-            assert data["username"] == username
-            assert data["email"] == email
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["username"] == username
+        assert data["email"] == email
 
-    def test_login_valid_credentials(self, client):
+    def test_login_valid_credentials(self, user_client):
         """Login with valid credentials returns a token."""
         username = f"logintest_{uuid.uuid4().hex[:8]}"
         email = f"{username}@test.com"
 
         # Register first
-        client.post(
+        user_client.post(
             "/api/user/register",
             json={
                 "username": username,
@@ -50,7 +55,7 @@ class TestUserRegister:
         )
 
         # Login
-        resp = client.post(
+        resp = user_client.post(
             "/api/user/login",
             data={
                 "username": username,
@@ -62,9 +67,9 @@ class TestUserRegister:
         assert "access_token" in data
         assert data["token_type"] == "bearer"
 
-    def test_login_invalid_credentials(self, client):
+    def test_login_invalid_credentials(self, user_client):
         """Login with wrong password returns 401."""
-        resp = client.post(
+        resp = user_client.post(
             "/api/user/login",
             data={
                 "username": "nonexistent_user",
@@ -73,18 +78,18 @@ class TestUserRegister:
         )
         assert resp.status_code == 401
 
-    def test_me_without_token_returns_401(self, client):
+    def test_me_without_token_returns_401(self, user_client):
         """GET /me without auth returns 401."""
-        resp = client.get("/api/user/me")
+        resp = user_client.get("/api/user/me")
         assert resp.status_code == 401
 
-    def test_me_with_valid_token(self, client):
+    def test_me_with_valid_token(self, user_client):
         """GET /me with valid token returns user info."""
         username = f"metest_{uuid.uuid4().hex[:8]}"
         email = f"{username}@test.com"
 
         # Register
-        client.post(
+        user_client.post(
             "/api/user/register",
             json={
                 "username": username,
@@ -94,7 +99,7 @@ class TestUserRegister:
         )
 
         # Login
-        login_resp = client.post(
+        login_resp = user_client.post(
             "/api/user/login",
             data={
                 "username": username,
@@ -107,7 +112,7 @@ class TestUserRegister:
         token = login_resp.json()["access_token"]
 
         # Get profile
-        resp = client.get(
+        resp = user_client.get(
             "/api/user/me",
             headers={
                 "Authorization": f"Bearer {token}",

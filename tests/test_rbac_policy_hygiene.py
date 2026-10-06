@@ -138,16 +138,41 @@ class TestLiveRegisterGitIsolation:
 
         服务重启进新代码后此钉=运行时策略已迁出git的部署证明；若服务还是旧代码，
         注册会弄脏config/rbac_policy.csv→红灯=该重启了。
+
+        2026-10-06普查轮：本钉是全tests/唯一保留的live注册写用例（部署证明需要
+        真实服务面），自带自清——注册产生的users行在finally删除（test_mcp_grants
+        "自带teardown零残留"同款），净写入恒为0。
         """
         before = GIT_SEED.read_bytes()
         username = f"testuser_{uuid.uuid4().hex[:8]}"
-        resp = client.post(
-            "/api/user/register",
-            json={
-                "username": username,
-                "email": f"{username}@test.com",
-                "password": "testpass123",
-            },
-        )
-        assert resp.status_code in (200, 400), resp.text
-        assert GIT_SEED.read_bytes() == before, "live注册弄脏了git跟踪的种子模板"
+        try:
+            resp = client.post(
+                "/api/user/register",
+                json={
+                    "username": username,
+                    "email": f"{username}@test.com",
+                    "password": "testpass123",
+                },
+            )
+            assert resp.status_code in (200, 400), resp.text
+            assert GIT_SEED.read_bytes() == before, "live注册弄脏了git跟踪的种子模板"
+        finally:
+            _purge_test_user_row(username)
+
+
+def _purge_test_user_row(username: str) -> None:
+    """live pin自清：删除本钉在生产users表创建的账号（严格模式断言后删）。
+
+    只删本钉自建的测试命名行（permission._is_test_user单一真源判定），
+    非测试命名拒绝删除（不误杀）；启用FK级联顺带走test账号的knowledge子行。
+    """
+    import sqlite3
+
+    from src.config import settings
+
+    assert permission._is_test_user(username), f"拒绝清除非测试命名用户: {username}"
+    db_path = settings.database_url.replace("sqlite:///", "").replace("sqlite://", "")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("DELETE FROM users WHERE username = ?", (username,))
+        conn.commit()

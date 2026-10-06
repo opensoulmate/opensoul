@@ -1,6 +1,7 @@
 """Shared test fixtures for OpenSoul integration tests."""
 
 import copy
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -141,3 +142,73 @@ def will_client(tmp_path, monkeypatch):
     app.state.will_client_wakeup_db = tmp_wakeup._db_path  # 同上（wakeup数据面）
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def user_client(tmp_path, monkeypatch):
+    """user API隔离测试面：真实router + tmp独立users库，绝不写生产 data/opensoul.db。
+
+    背景（2026-10-06 live测试普查轮）：tests/test_user.py走live :8090注册→
+    生产users表积173/179行testuser_/logintest_/metest_测试账号（每次全量跑
+    +3行，无删除端点永不自清——03:27轮遗留#1残余"测试注册写生产users表"）。
+    本fixture把user真实router挂进进程内app（镜像src/main.py:539的 /api/user
+    前缀），数据面两层换tmp（gene_client/will_client同款路线——测试面=真实
+    router/auth代码，数据面=隔离）：
+    - users表：tmp users.db（settings.database_url换tmp + auth.db_pool换新
+      SQLitePool实例，startup时connect——真实SQL适配层/bcrypt/JWT全程不变）
+    - RBAC策略：env OPENSOUL_RBAC_POLICY_PATH→tmp策略文件 + enforcer单例复位
+      （register的add_role副作用落tmp，不碰~/.hermes/opensoul/rbac_policy.csv）
+
+    schema保真：users表DDL运行时从生产库sqlite_master只读镜像（永不与生产
+    漂移）；生产库缺失时退回内联DDL（与生产同款列集）。
+    app.state.user_client_db 暴露tmp库路径供隔离护栏断言。
+    """
+    import sqlite3 as _sqlite3
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.services.auth as auth_mod
+    import src.services.permission as permission
+    from src.config import settings
+    from src.database.postgres import SQLitePool
+
+    prod_db = settings.database_url.replace("sqlite:///", "").replace("sqlite://", "")
+    try:
+        with _sqlite3.connect(prod_db) as _c:
+            ddl = _c.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+            ).fetchone()[0]
+    except Exception:
+        ddl = (
+            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, "
+            "email TEXT DEFAULT '', password_hash TEXT NOT NULL, "
+            "role TEXT DEFAULT 'user', is_active INTEGER DEFAULT 1, "
+            "created_at TEXT DEFAULT (datetime('now')), "
+            "updated_at TEXT DEFAULT (datetime('now')))"
+        )
+    tmp_db = tmp_path / "users.db"
+    with _sqlite3.connect(tmp_db) as _c:
+        _c.execute(ddl)
+        _c.commit()
+
+    monkeypatch.setattr(settings, "database_url", f"sqlite:///{tmp_db}")
+    tmp_pool = SQLitePool()
+    monkeypatch.setattr(auth_mod, "db_pool", tmp_pool)
+    monkeypatch.setenv(permission._RUNTIME_POLICY_ENV, str(tmp_path / "rbac_policy.csv"))
+    monkeypatch.setattr(permission, "_enforcer", None)
+
+    import src.api.user as user_api
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        await tmp_pool.connect()  # tmp库startup时连接（真实SQLitePool数据面）
+        yield
+        await tmp_pool.disconnect()
+
+    app = FastAPI(lifespan=_lifespan)
+    app.include_router(user_api.router, prefix="/api/user")
+    app.state.user_client_db = str(tmp_db)  # 暴露tmp库路径供隔离护栏断言
+    with TestClient(app) as c:
+        yield c
+    monkeypatch.setattr(permission, "_enforcer", None)
