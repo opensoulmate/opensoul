@@ -75,8 +75,12 @@ def _get_llm_config() -> dict:
     return cfg
 
 
-async def run_agent_proxy(agent_id: str, text: str) -> tuple[str, str, bool]:
-    """Run a message through any installed agent with system LLM config injected."""
+async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str, str, bool]:
+    """Run a message through any installed agent with system LLM config injected.
+
+    on_event: 可选回调 on_event(event_type, line)，逐行推送执行过程事件
+    （event_type: output=stdout行 / stderr=stderr行），实现执行过程可视化。
+    """
     _refresh_agent_list()
 
     agent_info = _available_agents.get(agent_id)
@@ -108,10 +112,35 @@ async def run_agent_proxy(agent_id: str, text: str) -> tuple[str, str, bool]:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await proc.communicate()
-        response = stdout.decode("utf-8", errors="replace").strip()
+
+        # 流式逐行读取输出（替代原communicate()一次拿完，执行过程不可见问题的根因）
+        collected: dict[str, list[str]] = {"out": [], "err": []}
+
+        async def _pump(stream, bucket: list[str], etype: str):
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+                s = line.decode("utf-8", errors="replace").rstrip()
+                if not s:
+                    continue
+                bucket.append(s)
+                if on_event is not None:
+                    try:
+                        r = on_event(etype, s)
+                        if asyncio.iscoroutine(r):
+                            await r
+                    except Exception:
+                        pass  # 事件回调失败不影响执行本身
+
+        await asyncio.gather(
+            _pump(proc.stdout, collected["out"], "output"),
+            _pump(proc.stderr, collected["err"], "stderr"),
+            proc.wait(),
+        )
+        response = "\n".join(collected["out"]).strip()
         if not response and proc.returncode != 0:
-            response = stderr.decode("utf-8", errors="replace").strip()
+            response = "\n".join(collected["err"]).strip()
         return response or "（无响应）", agent_id, proc.returncode == 0
     except Exception as e:
         logger.error(f"Agent proxy error: {e}")
