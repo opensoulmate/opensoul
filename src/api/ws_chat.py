@@ -75,11 +75,25 @@ def _get_llm_config() -> dict:
     return cfg
 
 
+# 细粒度事件识别：hermes CLI的stderr里工具活动行（'⏺ Running tool...'等）→ tool_call事件
+_TOOL_EVENT_MARKERS = ("tool_call", "tool", "running", "executing", "⏺", "●")
+
+
+def _classify_stream_event(etype: str, line: str) -> str:
+    """stderr行细分：含工具活动标记(tool/Running/Executing/⏺/●等) → 'tool_call'，
+    其余stderr保持'stderr'；stdout行（含markdown标题/▁▁▁分隔线）原样透传'output'。"""
+    if etype != "stderr":
+        return etype
+    low = line.lower()
+    return "tool_call" if any(m in low for m in _TOOL_EVENT_MARKERS) else etype
+
+
 async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str, str, bool]:
     """Run a message through any installed agent with system LLM config injected.
 
     on_event: 可选回调 on_event(event_type, line)，逐行推送执行过程事件
-    （event_type: output=stdout行 / stderr=stderr行），实现执行过程可视化。
+    （event_type: output=stdout行 / stderr=stderr行 / tool_call=stderr里的工具活动行），
+    实现执行过程可视化。
     """
     _refresh_agent_list()
 
@@ -127,7 +141,7 @@ async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str,
                 bucket.append(s)
                 if on_event is not None:
                     try:
-                        r = on_event(etype, s)
+                        r = on_event(_classify_stream_event(etype, s), s)
                         if asyncio.iscoroutine(r):
                             await r
                     except Exception:

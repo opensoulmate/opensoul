@@ -1,5 +1,6 @@
 """AI群管理API — 基于Graph层四角色模型(advisor/executor/verifier/human)"""
 
+import asyncio
 import json
 import logging
 import sqlite3
@@ -9,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.api.ws_chat import run_agent_proxy
@@ -695,9 +697,47 @@ def _resolve_agent_binary(agent_id: str, model: str = "") -> str:
     return agent_id  # 最后回退
 
 
+# 任务执行并发保护（异步202模式）：同task_id同时只允许一个执行
+_RUNNING_TASKS: set = set()
+
+
+async def _run_task_background(group_id: str, task_id: str, req: "ExecuteTaskRequest"):
+    """后台执行包装：异常兜底转failed事件，finally释放并发锁"""
+    try:
+        await _execute_task_impl(group_id, task_id, req)
+    except Exception as e:
+        logger.error(f"task {task_id} execution error: {e}")
+        _emit_exec_event(
+            group_id, task_id, req.agent_id, "failed", f"执行异常: {type(e).__name__}: {e}"
+        )
+    finally:
+        _RUNNING_TASKS.discard(task_id)
+
+
 @router.post("/{group_id}/tasks/{task_id}/execute")
 async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
-    """真正执行Agent任务 — 调用run_agent_proxy获取实际结果"""
+    """执行任务（异步）：立即返回202，执行进度靠task_execution_events+WS广播task_progress"""
+    conn = get_db()
+    try:
+        task = conn.execute(
+            "SELECT id FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
+        ).fetchone()
+        if not task:
+            raise HTTPException(404, "任务不存在")
+    finally:
+        conn.close()
+    if task_id in _RUNNING_TASKS:
+        raise HTTPException(409, "task already executing")
+    _RUNNING_TASKS.add(task_id)
+    asyncio.create_task(_run_task_background(group_id, task_id, req))
+    return JSONResponse(
+        {"status": "executing", "task_id": task_id, "message": "已开始执行，进度见事件流"},
+        status_code=202,
+    )
+
+
+async def _execute_task_impl(group_id: str, task_id: str, req: ExecuteTaskRequest) -> dict:
+    """真正执行Agent任务 — 调用run_agent_proxy获取实际结果（由_run_task_background后台调用）"""
     conn = get_db()
     try:
         task = conn.execute(
@@ -726,6 +766,9 @@ async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
         real_binary = _resolve_agent_binary(req.agent_id, agent_model)
         logger.info(f"Agent resolve: {req.agent_id} (model={agent_model}) -> {real_binary}")
         run_goal = req.goal or (task["goal"] if "goal" in task.keys() else "")
+        # phase事件：子任务goal的前缀（如"规划"/"执行"）即阶段名
+        phase_name = run_goal.split("：", 1)[0][:12] if "：" in run_goal else "执行"
+        _emit_exec_event(group_id, task_id, req.agent_id, "phase", f"阶段: {phase_name}")
         _emit_exec_event(
             group_id,
             task_id,
@@ -737,15 +780,29 @@ async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
         async def _on_exec_event(etype: str, line: str):
             _emit_exec_event(group_id, task_id, req.agent_id, etype, line)
 
-        response_text, source, success = await run_agent_proxy(
-            real_binary, run_goal, on_event=_on_exec_event
-        )
+        # 失败自动重试1次（自动重试上限1，手动retry不受影响）
+        attempt = 0
+        while True:
+            response_text, source, success = await run_agent_proxy(
+                real_binary, run_goal, on_event=_on_exec_event
+            )
+            if success or attempt >= 1:
+                break
+            attempt += 1
+            conn.execute(
+                "UPDATE ai_group_tasks SET iteration=?, updated_at=? WHERE id=?",
+                (attempt, datetime.now().isoformat(), task_id),
+            )
+            conn.commit()
+            _emit_exec_event(
+                group_id, task_id, req.agent_id, "retry", f"auto-retry #{attempt}（上次失败）"
+            )
         _emit_exec_event(
             group_id,
             task_id,
             req.agent_id,
             "finished" if success else "failed",
-            f"success={success} len={len(response_text)}",
+            f"success={success} len={len(response_text)} attempts={attempt + 1}",
         )
 
         # 保存结果
@@ -850,8 +907,15 @@ async def retry_task(group_id: str, task_id: str, req: RetryTaskRequest):
     _emit_exec_event(
         group_id, task_id, agent_id, "retry", f"手动重试 by={agent_id or 'unassigned'}"
     )
+    if task_id in _RUNNING_TASKS:
+        raise HTTPException(409, "task already executing")
+    _RUNNING_TASKS.add(task_id)
     exec_req = ExecuteTaskRequest(agent_id=agent_id, goal="")
-    return await execute_task(group_id, task_id, exec_req)
+    asyncio.create_task(_run_task_background(group_id, task_id, exec_req))
+    return JSONResponse(
+        {"status": "executing", "task_id": task_id, "message": "已开始重试，进度见事件流"},
+        status_code=202,
+    )
 
 
 @router.get("/{group_id}/tasks/{task_id}/events")
