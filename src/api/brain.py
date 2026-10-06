@@ -340,7 +340,6 @@ async def evolve(tenant_id: str = "default", agent_id: str = "default"):
     （LobeChat范式：声明≠执行，reviewer审批人≠发起人）。
     """
     from src.database.postgres import db_pool
-    from src.heredity.evolution_loop import EvolutionEngine
     from src.heredity.self_evolution import SelfEvolution
     from src.learn.experience_collector import ExperienceCollector
 
@@ -368,7 +367,13 @@ async def evolve(tenant_id: str = "default", agent_id: str = "default"):
     except Exception as e:  # 分析失败不阻断管线观测
         analysis_error = str(e)
 
-    engine = EvolutionEngine()
+    # 单例接线（2026-10-06 heredity测试隔离轮）：此前每次调用都 EvolutionEngine()
+    # 新建引擎——生产里与 /api/heredity/evolution/* 双引擎并存（同一DB文件但状态视图
+    # 分裂），测试里换不掉数据面（heredity_api.evolution_engine换tmp对本端点无效
+    # →TestEvolutionAPI经本端点把提案写穿生产evolution.db）。改为共享heredity单例：
+    # 单一管线（will/job_handlers.py:34同款late import），测试可换数据面。
+    from src.api.heredity import evolution_engine as engine
+
     declared = []
     for evo in evolutions:
         kind = KIND_MAP.get(evo.get("type", ""), "policy_adjustment")

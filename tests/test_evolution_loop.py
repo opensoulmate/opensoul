@@ -449,14 +449,20 @@ class TestStats:
         assert got.evidence_refs == ["trajectory:sess_abc"]
 
 
-# ── ⑦ API层（live server :8090） ─────────────────────────────
+# ── ⑦ API层（heredity_client隔离面；live :8090仅存一条只读冒烟） ──────
 
 
 class TestEvolutionAPI:
-    """对live opensoul服务验证端到端接线（conftest client → localhost:8090）。"""
+    """进化API端到端接线验证（conftest heredity_client隔离面：真实router+tmp数据面）。
 
-    def _declare_via_api(self, client, title):
-        return client.post(
+    2026-10-06收编：此前全部走live :8090，每次全量跑把测试提案/审批/触发器写穿
+    生产evolution.db（86条api指纹假提案含43条approved+136条假触发器）。写面全迁
+    heredity_client；test_health_includes_evolution_stats留守live只读GET冒烟
+    （部署证明：真实服务面router挂载不受影响，零写入）。
+    """
+
+    def _declare_via_api(self, hc, title):
+        return hc.post(
             "/api/heredity/evolution/intents",
             json={
                 "kind": "policy_adjustment",
@@ -469,6 +475,7 @@ class TestEvolutionAPI:
         )
 
     def test_health_includes_evolution_stats(self, client):
+        """live只读冒烟（唯一live用例）：GET health零写入，验证真实服务面挂载。"""
         resp = client.get("/api/heredity/health")
         assert resp.status_code == 200
         data = resp.json()
@@ -476,18 +483,18 @@ class TestEvolutionAPI:
         assert "proposals" in data["evolution"]
         assert "breaker" in data["evolution"]
 
-    def test_declare_review_flow_via_api(self, client):
+    def test_declare_review_flow_via_api(self, heredity_client):
         import uuid as _uuid
 
         title = f"api flow test {_uuid.uuid4().hex[:8]}"
-        resp = self._declare_via_api(client, title)
+        resp = self._declare_via_api(heredity_client, title)
         assert resp.status_code == 200
         proposal = resp.json()
         pid = proposal["proposal_id"]
         assert proposal["status"] == "pending"
 
         # 同proposer审批 → 400（审批人≠发起人）
-        resp = client.post(
+        resp = heredity_client.post(
             f"/api/heredity/evolution/proposals/{pid}/review",
             json={"decision": "approve", "reviewer": "api_test_agent"},
         )
@@ -495,7 +502,7 @@ class TestEvolutionAPI:
         assert "reviewer_is_proposer" in resp.json()["detail"]
 
         # 不同审批人 → 通过
-        resp = client.post(
+        resp = heredity_client.post(
             f"/api/heredity/evolution/proposals/{pid}/review",
             json={"decision": "approve", "reviewer": "human_reviewer"},
         )
@@ -503,17 +510,17 @@ class TestEvolutionAPI:
         assert resp.json()["status"] == "approved"
 
         # 提案详情带审计轨迹
-        resp = client.get(f"/api/heredity/evolution/proposals/{pid}")
+        resp = heredity_client.get(f"/api/heredity/evolution/proposals/{pid}")
         assert resp.status_code == 200
         history = resp.json()["history"]
         assert [e["event"] for e in history] == ["DECLARED", "APPROVED"]
 
-    def test_apply_and_rollback_via_api(self, client, tmp_path):
+    def test_apply_and_rollback_via_api(self, heredity_client, tmp_path):
         import uuid as _uuid
 
         target = tmp_path / f"api_target_{_uuid.uuid4().hex[:6]}.md"
         target.write_text("param = old_value\n", encoding="utf-8")
-        resp = client.post(
+        resp = heredity_client.post(
             "/api/heredity/evolution/intents",
             json={
                 "kind": "policy_adjustment",
@@ -531,13 +538,13 @@ class TestEvolutionAPI:
         assert resp.status_code == 200
         pid = resp.json()["proposal_id"]
 
-        resp = client.post(
+        resp = heredity_client.post(
             f"/api/heredity/evolution/proposals/{pid}/review",
             json={"decision": "approve", "reviewer": "human_reviewer"},
         )
         assert resp.status_code == 200
 
-        resp = client.post(
+        resp = heredity_client.post(
             f"/api/heredity/evolution/proposals/{pid}/apply",
             json={"actor": "human_reviewer"},
         )
@@ -545,7 +552,7 @@ class TestEvolutionAPI:
         assert resp.json()["status"] == "applied"
         assert target.read_text(encoding="utf-8") == "param = new_value\n"
 
-        resp = client.post(
+        resp = heredity_client.post(
             f"/api/heredity/evolution/proposals/{pid}/rollback",
             json={"actor": "human_reviewer", "reason": "api test rollback"},
         )
@@ -553,8 +560,8 @@ class TestEvolutionAPI:
         assert resp.json()["status"] == "rolled_back"
         assert target.read_text(encoding="utf-8") == "param = old_value\n"
 
-    def test_evidence_required_via_api(self, client):
-        resp = client.post(
+    def test_evidence_required_via_api(self, heredity_client):
+        resp = heredity_client.post(
             "/api/heredity/evolution/intents",
             json={"kind": "skill_new", "title": "no evidence proposal"},
         )
@@ -563,15 +570,15 @@ class TestEvolutionAPI:
         assert data["status"] == "rejected"
         assert data["reject_reason"] == "evidence_required"
 
-    def test_invalid_kind_returns_400(self, client):
-        resp = client.post(
+    def test_invalid_kind_returns_400(self, heredity_client):
+        resp = heredity_client.post(
             "/api/heredity/evolution/intents",
             json={"kind": "bad_kind", "title": "x", "evidence_refs": ["e"]},
         )
         assert resp.status_code == 400
 
-    def test_triggers_endpoint_breaker(self, client):
-        resp = client.post(
+    def test_triggers_endpoint_breaker(self, heredity_client):
+        resp = heredity_client.post(
             "/api/heredity/evolution/triggers/evaluate",
             json={"recent_errors": ["api_storm_err"] * 3},
         )
@@ -579,35 +586,76 @@ class TestEvolutionAPI:
         data = resp.json()
         assert data["breaker_open"] is True
         # 熔断打开后同样错误不再刷触发记录
-        resp2 = client.post(
+        resp2 = heredity_client.post(
             "/api/heredity/evolution/triggers/evaluate",
             json={"recent_errors": ["api_storm_err"] * 3},
         )
         assert resp2.json()["suppressed"] is True
         # 换错误类型 → 熔断解除路径
-        resp3 = client.post(
+        resp3 = heredity_client.post(
             "/api/heredity/evolution/triggers/evaluate",
             json={"recent_errors": ["different_err"]},
         )
         assert resp3.json()["fired"] == ["error_pattern"]
         assert resp3.json()["breaker_open"] is False
 
-    def test_brain_evolve_feeds_pipeline(self, client):
-        """写了≠接线了：/api/brain/evolve 必须返回进化管线结果。"""
-        resp = client.post("/api/brain/evolve")
+    def test_brain_evolve_feeds_pipeline(self, heredity_client):
+        """写了≠接线了：/api/brain/evolve 必须把真实发现喂进进化管线（共享单例）。
+
+        种子3条同根因失败经验→SelfEvolution.failure_avoidance发现→经brain/evolve
+        声明进heredity共享单例（src/api/brain.py late import），提案落tmp管线。
+        非只验key存在：断言发现确实变成声明提案且status=pending。
+        """
+        import sqlite3 as _sqlite3
+        import time as _time
+
+        from src.learn.experience_collector import ExperienceCollector
+
+        tmp_db = heredity_client.app.state.heredity_client_opensoul_db
+        with _sqlite3.connect(tmp_db) as conn:
+            ExperienceCollector(db_path=tmp_db).ensure_schema(conn)
+            for i in range(3):
+                conn.execute(
+                    "INSERT INTO experiences (tenant_id, agent_id, action,"
+                    " intent_summary, outcome, error, relevance_score, created_at,"
+                    " metadata, source_ref) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        "default",
+                        "default",
+                        "seeded action",
+                        "seeded intent",
+                        "failure",
+                        "seeded isolation failure: boom",
+                        1.0,
+                        _time.time(),
+                        "{}",
+                        f"seed:iso:{i}",
+                    ),
+                )
+            conn.commit()
+
+        resp = heredity_client.post("/api/brain/evolve")
         assert resp.status_code == 200
         data = resp.json()
         assert "declared_proposals" in data
         assert "pipeline" in data
         assert "proposals" in data["pipeline"]
+        # 真实行为钉：种子失败模式必须变成声明提案
+        assert len(data["declared_proposals"]) >= 1, data
+        assert data["declared_proposals"][0]["status"] == "pending"
+        # 接线钉：提案落tmp进化库（共享单例可换数据面），不是死响应
+        evodb = heredity_client.app.state.heredity_client_evolution_db
+        with _sqlite3.connect(evodb) as conn:
+            n = conn.execute("SELECT COUNT(*) FROM evolution_proposals").fetchone()[0]
+        assert n >= 1
 
-    def test_ledger_endpoint(self, client):
-        resp = client.get("/api/heredity/evolution/ledger?limit=10")
+    def test_ledger_endpoint(self, heredity_client):
+        resp = heredity_client.get("/api/heredity/evolution/ledger?limit=10")
         assert resp.status_code == 200
         assert "ledger" in resp.json()
 
-    def test_evolution_stats_endpoint(self, client):
-        resp = client.get("/api/heredity/evolution/stats")
+    def test_evolution_stats_endpoint(self, heredity_client):
+        resp = heredity_client.get("/api/heredity/evolution/stats")
         assert resp.status_code == 200
         data = resp.json()
         assert "proposals" in data

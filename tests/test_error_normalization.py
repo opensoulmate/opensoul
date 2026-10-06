@@ -468,9 +468,13 @@ class TestBrainFeedbackLive:
         assert data["feedback"] == []
         assert data["evolution_facing"]["feedback_count"] == 0
 
-    def test_evolve_endpoint_still_healthy(self, client):
-        """回归：/api/brain/evolve不因本轮改动破坏（响应契约字段齐全）。"""
-        resp = client.post("/api/brain/evolve")
+    def test_evolve_endpoint_still_healthy(self, heredity_client):
+        """回归：/api/brain/evolve不因本轮改动破坏（响应契约字段齐全）。
+
+        2026-10-06收编：迁heredity_client隔离面——此前live POST每次写穿生产
+        evolution.db/experiences/evolution_log（TestEvolutionAPI同族污染源）。
+        """
+        resp = heredity_client.post("/api/brain/evolve")
         assert resp.status_code == 200
         data = resp.json()
         assert "evolutions" in data

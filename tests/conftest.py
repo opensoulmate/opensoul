@@ -212,3 +212,65 @@ def user_client(tmp_path, monkeypatch):
     with TestClient(app) as c:
         yield c
     monkeypatch.setattr(permission, "_enforcer", None)
+
+
+@pytest.fixture()
+def heredity_client(tmp_path, monkeypatch):
+    """heredity/brain 进化API隔离测试面：真实router + tmp独立进化数据面，绝不写
+    生产 ~/.hermes/opensoul/evolution/evolution.db 与 data/opensoul.db 的
+    experiences/evolution_log（gene_client/will_client/user_client同款路线；
+    2026-10-06 heredity测试隔离轮收编TestEvolutionAPI）。
+
+    背景：TestEvolutionAPI走live :8090，每次全量跑写生产evolution.db——86条api
+    指纹假提案（43条api_test_agent竟被approved污染审批语义）+43条'no evidence
+    proposal'+136条假触发器记录（api_storm_err/different_err）+breaker残留（测试
+    曾把生产熔断器打开）。/api/brain/evolve更甚：每调用EvolutionEngine()新建引擎
+    直写生产（本轮src侧已改共享heredity单例，见src/api/brain.py evolve）。
+    本fixture把heredity与brain两个真实router挂进进程内app（镜像src/main.py:570
+    的 /api/heredity、/api/brain 前缀），数据面三层换tmp——测试面=真实router/
+    engine/collector代码，数据面=隔离：
+    - evolution.db：heredity_api.evolution_engine换tmp EvolutionEngine（brain/evolve
+      共享该单例——src/api/brain.py late import，will/job_handlers.py:34同款）
+    - opensoul主库：settings.database_url换tmp（SelfEvolution.experiences读取/
+    evolution_log写入 + ExperienceCollector.experiences写入全部落tmp；collector
+    默认db_path与SQLitePool同源解析settings.database_url，自动跟随）
+    - db_pool：src.database.postgres.db_pool换tmp SQLitePool（lifespan startup
+      connect——SelfEvolution真实SQL适配层全程不变）
+    采集源只读豁免：ExperienceCollector的job_queue.db/eval_loop.db只开SELECT读
+    真实数据源，experiences写入面全落tmp（产生侧零生产写入）。
+    app.state.heredity_client_evolution_db / heredity_client_opensoul_db 暴露tmp
+    库路径供隔离护栏断言。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.database.postgres as pg_mod
+    from src.config import settings
+    from src.database.postgres import SQLitePool
+
+    tmp_db = tmp_path / "opensoul.db"
+    monkeypatch.setattr(settings, "database_url", f"sqlite:///{tmp_db}")
+    tmp_pool = SQLitePool()
+    monkeypatch.setattr(pg_mod, "db_pool", tmp_pool)
+
+    import src.api.heredity as heredity_api
+    from src.heredity.evolution_loop import EvolutionEngine
+
+    tmp_engine = EvolutionEngine(db_path=str(tmp_path / "evolution.db"))
+    monkeypatch.setattr(heredity_api, "evolution_engine", tmp_engine)
+
+    import src.api.brain as brain_api
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        await tmp_pool.connect()  # tmp库startup时连接（真实SQLitePool数据面）
+        yield
+        await tmp_pool.disconnect()
+
+    app = FastAPI(lifespan=_lifespan)
+    app.include_router(heredity_api.router, prefix="/api/heredity")
+    app.include_router(brain_api.router, prefix="/api/brain")
+    app.state.heredity_client_evolution_db = tmp_engine.store.db_path
+    app.state.heredity_client_opensoul_db = str(tmp_db)
+    with TestClient(app) as c:
+        yield c
