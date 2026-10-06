@@ -281,3 +281,57 @@ def heredity_client(tmp_path, monkeypatch):
     app.state.heredity_client_opensoul_db = str(tmp_db)
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def capture_client(tmp_path, monkeypatch):
+    """capture API隔离测试面：真实router + tmp独立captures库（开局=生产旧版
+    漂移schema），绝不写生产 data/opensoul.db（user_client/heredity_client同款路线）。
+
+    背景（2026-10-06 capture复活轮）：生产data/opensoul.db的captures是旧版漂移
+    schema(id TEXT PRIMARY KEY/type/metadata/created_at TEXT)，引用capture_type的
+    查询恒报"no such column"。tests/test_capture.py走live :8090的写用例
+    （POST /api/capture/page）此前因此恒500从没写进去过；capture.py schema自愈
+    修复后，live写用例会开始往生产captures表写测试行（修复本身制造新的测试污染
+    源）——本fixture把真实capture router挂进进程内app（镜像src/main.py的
+    /api/capture 前缀），数据面换tmp：
+    - captures表：tmp capture.db **以生产旧版漂移schema原样开局**——每个用例
+      天然演练_migrate_legacy_captures自愈路径（测试面=真实router/迁移代码，
+      数据面=隔离）；lifespan startup连接tmp SQLitePool（真实SQL适配层全程不变）
+    app.state.capture_client_db 暴露tmp库路径供隔离护栏断言/测试内直接改seed。
+    """
+    import sqlite3 as _sqlite3
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.capture as capture_api
+    from src.config import settings
+    from src.database.postgres import SQLitePool
+
+    tmp_db = tmp_path / "capture.db"
+    # 生产旧版漂移schema原样复刻（2026-10-06 sqlite3 data/opensoul.db
+    # ".schema captures"实测DDL）——开局即漂移，自愈路径每个用例必经
+    with _sqlite3.connect(tmp_db) as _c:
+        _c.execute(
+            "CREATE TABLE captures (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, "
+            "type TEXT DEFAULT '', content TEXT DEFAULT '', metadata TEXT DEFAULT '{}', "
+            "created_at TEXT DEFAULT (datetime('now')))"
+        )
+        _c.commit()
+
+    monkeypatch.setattr(settings, "database_url", f"sqlite:///{tmp_db}")
+    tmp_pool = SQLitePool()
+    monkeypatch.setattr(capture_api, "db_pool", tmp_pool)
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        await tmp_pool.connect()  # tmp库startup时连接（真实SQLitePool数据面）
+        yield
+        await tmp_pool.disconnect()
+
+    app = FastAPI(lifespan=_lifespan)
+    app.include_router(capture_api.router, prefix="/api/capture")
+    app.state.capture_client_db = str(tmp_db)  # 暴露tmp库路径供隔离护栏断言
+    with TestClient(app) as c:
+        yield c

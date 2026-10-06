@@ -10,6 +10,7 @@ import logging
 import time
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.database.postgres import db_pool
@@ -48,10 +49,10 @@ class CaptureResponse(BaseModel):
 
 # ─── Storage helpers ──────────────────────────────────────────────
 
-
-async def _ensure_table():
-    await db_pool.execute(
-        """CREATE TABLE IF NOT EXISTS captures (
+# 新schema权威DDL。旧版漂移表(id TEXT PRIMARY KEY/type/metadata)与本DDL
+# 不兼容（id是TEXT主键无自增、缺capture_type等7列），ALTER补列救不了→
+# 漂移时整表重建+旧行按列映射迁移。
+_CAPTURES_DDL = """CREATE TABLE IF NOT EXISTS captures (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             capture_type  TEXT    NOT NULL,
             title         TEXT    NOT NULL DEFAULT '',
@@ -64,7 +65,124 @@ async def _ensure_table():
             created_at    REAL    NOT NULL,
             user_id       TEXT    NOT NULL DEFAULT 'browser-extension'
         )"""
+
+# 漂移重建时的中间备份表名（崩溃残留由 _ensure_table 续跑清场）
+_LEGACY_BACKUP_TABLE = "captures_legacy_backup"
+
+# 新系缺列逐列补齐（与 src/database/postgres.py _SCHEMA_FIXES 同范式）
+_COLUMN_FIXES = [
+    ("title", "ALTER TABLE captures ADD COLUMN title TEXT NOT NULL DEFAULT ''"),
+    ("url", "ALTER TABLE captures ADD COLUMN url TEXT NOT NULL DEFAULT ''"),
+    ("description", "ALTER TABLE captures ADD COLUMN description TEXT NOT NULL DEFAULT ''"),
+    ("keywords", "ALTER TABLE captures ADD COLUMN keywords TEXT NOT NULL DEFAULT '[]'"),
+    ("content", "ALTER TABLE captures ADD COLUMN content TEXT NOT NULL DEFAULT ''"),
+    ("content_hash", "ALTER TABLE captures ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''"),
+    ("status", "ALTER TABLE captures ADD COLUMN status TEXT NOT NULL DEFAULT 'captured'"),
+    ("created_at", "ALTER TABLE captures ADD COLUMN created_at REAL NOT NULL DEFAULT 0"),
+    (
+        "user_id",
+        "ALTER TABLE captures ADD COLUMN user_id TEXT NOT NULL DEFAULT 'browser-extension'",
+    ),
+]
+
+
+async def _table_columns(table: str) -> list[str]:
+    """PRAGMA table_info探测列集（_ensure_schema同款探测方式，幂等）。"""
+    rows = await db_pool.fetch(f"PRAGMA table_info({table})")
+    return [r["name"] for r in rows]
+
+
+def _migration_select_sql(old: set[str]) -> str:
+    """旧漂移表→新schema的行映射SQL（只映射旧表实际存在的列，不丢数据）。
+
+    type→capture_type（空值标'legacy'）、metadata→description原文保留、
+    TEXT时间→epoch秒（新列REAL，typeof守卫：已是数值原样保留）。
+    id不迁移（新表自增重排）。
+    """
+
+    def col(name: str, fallback: str = "''") -> str:
+        return name if name in old else fallback
+
+    exprs = [
+        "COALESCE(NULLIF({}, ''), 'legacy')".format(col("type")),
+        col("title"),
+        col("url"),
+        col("description", col("metadata")),
+        "'[]'",
+        col("content"),
+        col("content_hash"),
+        "'migrated'",
+        (
+            "CASE WHEN typeof(created_at) IN ('integer','real') THEN created_at "
+            "ELSE COALESCE(strftime('%s', created_at), strftime('%s','now')) END"
+            if "created_at" in old
+            else "strftime('%s','now')"
+        ),
+        col("user_id", "'browser-extension'"),
+    ]
+    return ", ".join(exprs)
+
+
+async def _migrate_legacy_captures(old: list[str]) -> None:
+    """旧漂移表整表重建：备份→建新表→行映射回收→清备份（数据不丢）。"""
+    n_rows = 0
+    await db_pool.execute(f"DROP TABLE IF EXISTS {_LEGACY_BACKUP_TABLE}")
+    await db_pool.execute(f"ALTER TABLE captures RENAME TO {_LEGACY_BACKUP_TABLE}")
+    await db_pool.execute(_CAPTURES_DDL)
+    sel = _migration_select_sql(set(old))
+    result = await db_pool.execute(
+        "INSERT INTO captures (capture_type, title, url, description, keywords, content, "
+        f"content_hash, status, created_at, user_id) SELECT {sel} FROM {_LEGACY_BACKUP_TABLE}"
     )
+    try:
+        n_rows = int(str(result).rsplit(" ", 1)[-1])
+    except (ValueError, IndexError):
+        n_rows = -1
+    await db_pool.execute(f"DROP TABLE {_LEGACY_BACKUP_TABLE}")
+    # 失败/状态必须可见：迁移是不可逆结构操作，journal留痕（INFO已可达journal）
+    logger.info(
+        "captures schema migrated from legacy drift (old columns=%s, rows preserved=%s)",
+        old,
+        n_rows,
+    )
+
+
+async def _ensure_table():
+    """幂等schema guard + 漂移自愈。
+
+    2026-10-06实证：生产data/opensoul.db的captures是旧版漂移schema
+    (id TEXT PRIMARY KEY/type/metadata/created_at TEXT)，CREATE TABLE IF
+    NOT EXISTS对已存在的旧表是no-op→每个引用capture_type的查询都报
+    "no such column: capture_type"，而健康检查把异常吞成status:"ok"
+    +note:"table not yet initialized"——浏览器扩展采集写入/列表过滤/统计
+    整体不可用且对外谎报健康（"写了≠接线了"的健康面形态）。
+
+    模式沿用src/database/postgres.py SQLitePool._ensure_schema的
+    "PRAGMA table_info探测→缺失才补，幂等可重复执行"；旧表id是TEXT主键
+    与新schema自增不兼容，ALTER补列救不了→整表重建（_migrate_legacy_captures，
+    旧行按列映射迁移不丢数据）；新系缺列走_COLUMN_FIXES逐列ALTER。
+    """
+    await db_pool.execute(_CAPTURES_DDL)
+    cols = await _table_columns("captures")
+    if cols and "capture_type" not in cols:
+        await _migrate_legacy_captures(cols)
+    elif cols:
+        for column, ddl in _COLUMN_FIXES:
+            if column not in cols:
+                await db_pool.execute(ddl)
+    # 崩溃续跑：重建中途断电/重启残留备份表→把行补回收再清场
+    # （仅当新表为空才补，避免二次复制重复行）
+    backup_cols = await _table_columns(_LEGACY_BACKUP_TABLE)
+    if backup_cols:
+        n = await db_pool.fetchval("SELECT COUNT(*) FROM captures") or 0
+        if n == 0:
+            sel = _migration_select_sql(set(backup_cols))
+            await db_pool.execute(
+                "INSERT INTO captures (capture_type, title, url, description, keywords, content, "
+                f"content_hash, status, created_at, user_id) SELECT {sel} FROM {_LEGACY_BACKUP_TABLE}"
+            )
+        await db_pool.execute(f"DROP TABLE IF EXISTS {_LEGACY_BACKUP_TABLE}")
+        logger.warning("captures migration leftover backup recovered (old columns=%s)", backup_cols)
 
 
 def _row_to_dict(row) -> dict:
@@ -103,22 +221,31 @@ async def capture_health():
             "selection_captures": (selections[0]["cnt"] if selections else 0) if selections else 0,
         }
     except Exception as e:
+        # 失败必须可见（mem0 §1.1/AIHawk"显式标记"）：此前吞异常返回
+        # status:"ok"+note:"table not yet initialized"——schema漂移期间
+        # 对外谎报健康，dashboard /api/health/all 也把它当ok。
+        # 检查失败=真实不健康→503，让health_all/前端如实显示error。
         logger.warning("Capture health check failed: %s", e)
-        return {
-            "status": "ok",
-            "component": "OpenCapture",
-            "total_captures": 0,
-            "page_captures": 0,
-            "selection_captures": 0,
-            "note": "table not yet initialized",
-        }
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "degraded",
+                "component": "OpenCapture",
+                "total_captures": 0,
+                "page_captures": 0,
+                "selection_captures": 0,
+                "error": str(e),
+            },
+        )
 
 
 @router.get("/stats")
 async def capture_stats():
     """Get capture statistics."""
-    await _ensure_table()
     try:
+        # _ensure_table纳入try：schema守卫失败也走"失败可见"（503+error），
+        # 与capture_health同契约（此前守卫在try外，异常直接炸成未处理500）
+        await _ensure_table()
         total = await db_pool.fetchval("SELECT COUNT(*) FROM captures") or 0
         pages = (
             await db_pool.fetchval("SELECT COUNT(*) FROM captures WHERE capture_type = 'page'") or 0
@@ -129,7 +256,12 @@ async def capture_stats():
         )
         recent = (
             await db_pool.fetchval(
-                "SELECT COUNT(*) FROM captures WHERE created_at > EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours')"
+                # 修复PG方言残留：EXTRACT(EPOCH FROM NOW() - INTERVAL ...)是
+                # PostgreSQL语法，SQLite必炸→此前整个/stats被except吞成全0
+                # （total/pages/selections算完也一起丢）。改参数绑定epoch截止
+                # 时间，方言无关（适配器$1→?照常转换）。
+                "SELECT COUNT(*) FROM captures WHERE created_at > $1",
+                time.time() - 86400,
             )
             or 0
         )
@@ -141,15 +273,21 @@ async def capture_stats():
             "selection_captures": selections,
             "recent_24h": recent,
         }
-    except Exception:
-        return {
-            "status": "ok",
-            "component": "OpenCapture",
-            "total_captures": 0,
-            "page_captures": 0,
-            "selection_captures": 0,
-            "recent_24h": 0,
-        }
+    except Exception as e:
+        # 失败必须可见：此前吞异常返回全0+status:"ok"（统计长期静默失真）
+        logger.warning("Capture stats failed: %s", e)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "degraded",
+                "component": "OpenCapture",
+                "total_captures": 0,
+                "page_captures": 0,
+                "selection_captures": 0,
+                "recent_24h": 0,
+                "error": str(e),
+            },
+        )
 
 
 @router.post("/page", response_model=CaptureResponse)
