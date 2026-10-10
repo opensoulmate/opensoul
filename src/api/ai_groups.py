@@ -511,7 +511,7 @@ def get_group(group_id: str):
 
 
 @router.post("/{group_id}/tasks")
-def submit_task(group_id: str, req: SubmitTaskRequest):
+async def submit_task(group_id: str, req: SubmitTaskRequest):
     conn = get_db()
     try:
         group = conn.execute("SELECT id FROM ai_groups WHERE id=?", (group_id,)).fetchone()
@@ -555,6 +555,8 @@ def submit_task(group_id: str, req: SubmitTaskRequest):
             )
 
         conn.commit()
+        # 自动链式执行：规划→执行→验证→审查（每步结果回群聊）
+        asyncio.create_task(_run_task_chain(group_id, task_id))
         return {"task_id": task_id, "subtasks_count": len(subtasks), "status": "planning"}
     finally:
         conn.close()
@@ -736,7 +738,184 @@ async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
     )
 
 
-async def _execute_task_impl(group_id: str, task_id: str, req: ExecuteTaskRequest) -> dict:
+SOULMATE_WS = "ws://127.0.0.1:8092/ws/acp"
+GROUP_MSG_PUSH = "http://127.0.0.1:8092/internal/group-message"
+
+
+async def _notify_group_chat(
+    group_id: str, agent_id: str, agent_name: str, content: str, task_id: str = ""
+):
+    """把 Agent 执行结果发进群聊消息流。
+    落点=discussion_messages（OpenSoul与acp-proxy ws_group._persist_message共享的聊天存储，
+    ws_group.py: _OPENSOUL_DB=data/ai_groups.db），实时可见性走_emit_exec_event→
+    ws_group尾随task_execution_events广播。写入失败只记日志，不影响任务本体。"""
+    try:
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, round_num, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (
+                    str(uuid.uuid4())[:8],
+                    group_id,
+                    task_id or f"ws_{group_id}",
+                    agent_id or "soulmate",
+                    agent_name or agent_id or "SoulMate",
+                    "agent_reply",
+                    content,
+                    json.dumps({"source": "task_chain"}, ensure_ascii=False),
+                    1,
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        # 实时可见：ws_group尾随task_execution_events，把新事件广播到群组WS房间
+        _emit_exec_event(group_id, task_id, agent_id or "soulmate", "agent_reply", content[:2000])
+        logger.info(f"群聊回帖已落库: group={group_id} task={task_id}")
+    except Exception as e:
+        logger.warning(f"群聊回帖失败(不影响任务): {e}")
+
+
+async def _run_soulmate_turn(goal: str, timeout: float = 600.0) -> tuple[str, bool]:
+    """走 SoulMate 自己的 agent（acp-proxy :8092 /ws/acp JSON-RPC）跑一轮，返回(回复文本, 是否成功)。
+    红线：SoulMate 是独立 agent，绝不经 hermes CLI。
+    线协议对齐 live :8092/ws/acp 实测（2026-10-10探测取证）：
+      initialize(protocolVersion=1) → session/new 取 result.sessionId（om-开头）
+      → session/prompt(sessionId,messageId,prompt=[{type:text,text:...}])
+      流式通知 method=session/update：params.update.content.text 逐块
+      （params.update.sessionUpdate=agent_message_chunk），id=3 result.stopReason 收尾。"""
+    import websockets
+
+    from src.services.auth import create_access_token
+
+    token = create_access_token(uuid.uuid4())
+    url = f"{SOULMATE_WS}?token={token}"
+    chunks: list[str] = []
+    try:
+        async with websockets.connect(url, max_size=8 * 1024 * 1024, open_timeout=15) as ws:
+            loop = asyncio.get_event_loop()
+            deadline = loop.time() + timeout
+            await ws.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {"protocolVersion": 1},
+                    }
+                )
+            )
+            await ws.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "session/new",
+                        "params": {"_meta": {"source": "ai-group-task-chain"}},
+                    }
+                )
+            )
+            # 等 initialize(id=1)/session/new(id=2) 响应，从 id=2 取 sessionId
+            session_id = ""
+            pending = {1, 2}
+            while pending and loop.time() < deadline:
+                try:
+                    raw = await asyncio.wait_for(
+                        ws.recv(), timeout=max(1.0, deadline - loop.time())
+                    )
+                except TimeoutError:
+                    break
+                try:
+                    frame = json.loads(raw)
+                except Exception:
+                    continue
+                if frame.get("error"):
+                    logger.error(f"SoulMate回合握手失败: {frame['error']}")
+                    return "", False
+                fid = frame.get("id")
+                if fid in pending:
+                    pending.discard(fid)
+                    if fid == 2:
+                        session_id = str((frame.get("result") or {}).get("sessionId") or "")
+            if not session_id:
+                logger.error("SoulMate回合失败: session/new未返回sessionId")
+                return "", False
+            await ws.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 3,
+                        "method": "session/prompt",
+                        "params": {
+                            "sessionId": session_id,
+                            "messageId": str(uuid.uuid4()),
+                            "prompt": [{"type": "text", "text": goal}],
+                        },
+                    }
+                )
+            )
+            while loop.time() < deadline:
+                try:
+                    raw = await asyncio.wait_for(
+                        ws.recv(), timeout=max(1.0, deadline - loop.time())
+                    )
+                except TimeoutError:
+                    break
+                try:
+                    frame = json.loads(raw)
+                except Exception:
+                    continue
+                if frame.get("error") and frame.get("id") == 3:
+                    logger.error(f"SoulMate回合prompt失败: {frame['error']}")
+                    return "", False
+                if frame.get("id") == 3:
+                    # 最终响应（stopReason等），文本已由session/update流式攒齐
+                    break
+                if frame.get("method") == "session/update":
+                    upd = (frame.get("params") or {}).get("update") or {}
+                    c = upd.get("content")
+                    if isinstance(c, dict) and isinstance(c.get("text"), str):
+                        chunks.append(c["text"])
+                    elif isinstance(c, str):
+                        chunks.append(c)
+                    if upd.get("last"):
+                        break
+    except Exception as e:
+        logger.error(f"SoulMate回合失败: {e}")
+        return "", False
+    text = "".join(chunks).strip()
+    return text, bool(text)
+
+
+async def _run_task_chain(group_id: str, parent_task_id: str):
+    """子任务链自动执行：按创建顺序（规划→执行→验证→审查）逐个跑，结果回群聊。"""
+    conn = get_db()
+    try:
+        subs = conn.execute(
+            "SELECT id, goal, assigned_agent_id FROM ai_group_tasks WHERE parent_task_id=? ORDER BY created_at, rowid",
+            (parent_task_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    for st in subs:
+        try:
+            req = ExecuteTaskRequest(
+                agent_id=st["assigned_agent_id"] or "soulmate", goal=st["goal"]
+            )
+            await _execute_task_impl(group_id, st["id"], req)
+        except Exception as e:
+            logger.error(f"任务链子任务 {st['id']} 失败: {e}")
+            _emit_exec_event(
+                group_id,
+                st["id"],
+                st["assigned_agent_id"] or "soulmate",
+                "failed",
+                f"链式执行失败: {e}",
+            )
+
+
+async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskRequest") -> dict:
     """真正执行Agent任务 — 调用run_agent_proxy获取实际结果（由_run_task_background后台调用）"""
     conn = get_db()
     try:
@@ -783,9 +962,14 @@ async def _execute_task_impl(group_id: str, task_id: str, req: ExecuteTaskReques
         # 失败自动重试1次（自动重试上限1，手动retry不受影响）
         attempt = 0
         while True:
-            response_text, source, success = await run_agent_proxy(
-                real_binary, run_goal, on_event=_on_exec_event
-            )
+            if (req.agent_id or "").lower() == "soulmate":
+                # 红线：SoulMate 走自己的 agent（acp-proxy），不经 hermes CLI
+                response_text, success = await _run_soulmate_turn(run_goal)
+                source = "soulmate-agent"
+            else:
+                response_text, source, success = await run_agent_proxy(
+                    real_binary, run_goal, on_event=_on_exec_event
+                )
             if success or attempt >= 1:
                 break
             attempt += 1
@@ -869,6 +1053,12 @@ async def _execute_task_impl(group_id: str, task_id: str, req: ExecuteTaskReques
         )
 
         conn.commit()
+
+        # 执行结果回群聊（用户可见的 Agent 回复）
+        _agent_name = (
+            agent_row["name"] if agent_row and "name" in agent_row.keys() else req.agent_id
+        )
+        await _notify_group_chat(group_id, req.agent_id, _agent_name, response_text, task_id)
 
         return {
             "status": "scored",
