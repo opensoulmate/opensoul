@@ -70,6 +70,7 @@ def init_db():
             quality_score REAL DEFAULT 0,
             iteration INTEGER DEFAULT 0,
             max_iterations INTEGER DEFAULT 2,
+            source_task_id TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY (group_id) REFERENCES ai_groups(id)
@@ -85,6 +86,12 @@ def init_db():
     # 为已有表添加 capabilities 列（如果不存在）
     try:
         conn.execute("ALTER TABLE ai_group_agents ADD COLUMN capabilities TEXT DEFAULT '[]'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+    # B2 为已有表添加 source_task_id 列（复盘讨论回链源任务；ALTER幂等）
+    try:
+        conn.execute("ALTER TABLE ai_group_tasks ADD COLUMN source_task_id TEXT DEFAULT ''")
         conn.commit()
     except sqlite3.OperationalError:
         pass  # 列已存在
@@ -260,6 +267,7 @@ class SubmitTaskRequest(BaseModel):
     goal: str
     constraints: list[str] = []
     completion_criteria: list[str] = []
+    discuss_after: bool = False  # B2：任务链跑完自动发起复盘讨论
 
 
 class AssignTaskRequest(BaseModel):
@@ -291,6 +299,12 @@ class StartDiscussionRequest(BaseModel):
     goal: str
     constraints: list[str] = []
     completion_criteria: list[str] = []
+
+
+class DiscussAfterRequest(BaseModel):
+    """B2：任务执行完发起复盘讨论（goal为空则自动生成复盘主题）"""
+
+    goal: str = ""
 
 
 class DiscussionResponseRequest(BaseModel):
@@ -556,7 +570,8 @@ async def submit_task(group_id: str, req: SubmitTaskRequest):
 
         conn.commit()
         # 自动链式执行：规划→执行→验证→审查（每步结果回群聊）
-        asyncio.create_task(_run_task_chain(group_id, task_id))
+        # B2联动：discuss_after=True时链跑完自动发起复盘讨论
+        asyncio.create_task(_run_task_chain(group_id, task_id, discuss_after=req.discuss_after))
         return {"task_id": task_id, "subtasks_count": len(subtasks), "status": "planning"}
     finally:
         conn.close()
@@ -1035,8 +1050,104 @@ async def _run_soulmate_turn(goal: str, timeout: float = 600.0) -> tuple[str, bo
     return text, bool(text)
 
 
-async def _run_task_chain(group_id: str, parent_task_id: str):
-    """子任务链自动执行：按创建顺序（规划→执行→验证→审查）逐个跑，结果回群聊。"""
+# ── B2 任务链↔讨论联动：任务执行完可发起讨论（start_discussion与任务链联动） ──
+def _start_post_task_discussion(group_id: str, source_task_id: str, goal: str = "") -> dict:
+    """任务执行完发起复盘讨论：讨论任务挂source_task_id回链源任务，系统消息带
+    子任务结果摘要，start_discussion的respond/decide/messages端点原样可用。
+    幂等：源任务已有进行中的复盘讨论则返回既有讨论（existing=True），禁重复发起。
+    只接受已终结源任务（scored/failed/completed/skipped），没跑完不许开复盘。"""
+    conn = get_db()
+    try:
+        src = conn.execute(
+            "SELECT * FROM ai_group_tasks WHERE id=? AND group_id=?", (source_task_id, group_id)
+        ).fetchone()
+        if not src:
+            raise HTTPException(404, "任务不存在")
+        if src["status"] not in _TASK_TERMINAL_STATUSES:
+            raise HTTPException(409, "任务尚未执行完，不能发起复盘讨论")
+        dup = conn.execute(
+            "SELECT id FROM ai_group_tasks WHERE source_task_id=? AND status='discussing' ORDER BY created_at DESC LIMIT 1",
+            (source_task_id,),
+        ).fetchone()
+        if dup:
+            return {
+                "discussion_task_id": dup["id"],
+                "status": "discussing",
+                "source_task_id": source_task_id,
+                "existing": True,
+            }
+        # 结果摘要：子任务逐行goal→status(score)，禁截断（投标审查同款铁律）
+        subs = conn.execute(
+            "SELECT goal, status, quality_score FROM ai_group_tasks WHERE parent_task_id=? ORDER BY created_at, rowid",
+            (source_task_id,),
+        ).fetchall()
+        sub_lines = [
+            f"· {s['goal']} → {s['status']}（{float(s['quality_score'] or 0)}分）" for s in subs
+        ]
+        summary = (
+            f"源任务[{source_task_id}]「{src['goal']}」已执行完毕："
+            f"状态={src['status']}，均分={float(src['quality_score'] or 0)}。"
+        )
+        summary += f"子任务结果：{'；'.join(sub_lines)}" if sub_lines else "无子任务。"
+        now = datetime.now().isoformat()
+        discussion_id = str(uuid.uuid4())[:8]
+        discussion_goal = goal or f"复盘讨论：{src['goal']}"
+        conn.execute(
+            "INSERT INTO ai_group_tasks (id, group_id, goal, constraints, completion_criteria, status, source_task_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                discussion_id,
+                group_id,
+                discussion_goal,
+                "[]",
+                json.dumps(["讨论结论落库", "决定是否分配后续子任务"], ensure_ascii=False),
+                "discussing",
+                source_task_id,
+                now,
+                now,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, round_num, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                str(uuid.uuid4())[:8],
+                group_id,
+                discussion_id,
+                "system",
+                "系统",
+                "comment",
+                f"{summary}\n请各Agent讨论执行结果，并用decide决定后续子任务。",
+                json.dumps(
+                    {"source": "post_task_discussion", "source_task_id": source_task_id},
+                    ensure_ascii=False,
+                ),
+                1,
+                now,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    # 可观测：源任务事件流留痕（独立短连接，_emit_exec_event自带try不吃链路）
+    _emit_exec_event(
+        group_id,
+        source_task_id,
+        "system",
+        "discussion-started",
+        f"复盘讨论已发起: {discussion_id}（{discussion_goal}）",
+    )
+    return {
+        "discussion_task_id": discussion_id,
+        "status": "discussing",
+        "source_task_id": source_task_id,
+        "goal": discussion_goal,
+        "summary": summary,
+        "existing": False,
+    }
+
+
+async def _run_task_chain(group_id: str, parent_task_id: str, discuss_after: bool = False):
+    """子任务链自动执行：按创建顺序（规划→执行→验证→审查）逐个跑，结果回群聊。
+    B2联动：discuss_after=True时链跑完自动发起复盘讨论（讨论失败不影响任务链结果）。"""
     conn = get_db()
     try:
         subs = conn.execute(
@@ -1075,6 +1186,15 @@ async def _run_task_chain(group_id: str, parent_task_id: str):
             "chain-finished",
             f"任务链执行完毕，父任务收口为{final_status}",
         )
+    # B2联动：链跑完自动发起复盘讨论（讨论自身故障不吃任务链结果，只留痕可见）
+    if discuss_after:
+        try:
+            _start_post_task_discussion(group_id, parent_task_id)
+        except Exception as e:
+            logger.warning(f"链跑完发起复盘讨论失败(不影响任务链): {e}")
+            _emit_exec_event(
+                group_id, parent_task_id, "system", "discussion-error", f"复盘讨论发起失败: {e}"
+            )
 
 
 async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskRequest") -> dict:
@@ -1612,6 +1732,14 @@ def start_discussion(group_id: str, req: StartDiscussionRequest):
         return {"task_id": task_id, "status": "discussing", "round": 1}
     finally:
         conn.close()
+
+
+@router.post("/{group_id}/tasks/{task_id}/discuss-after")
+def discuss_after_task(group_id: str, task_id: str, req: DiscussAfterRequest | None = None):
+    """B2 任务执行完可发起讨论：为已终结任务创建复盘讨论（讨论任务挂source_task_id
+    回链源任务、系统消息带子任务结果摘要），respond/decide/messages等既有讨论端点
+    原样可用。幂等：已有进行中的复盘讨论则返回既有讨论（existing=True）。"""
+    return _start_post_task_discussion(group_id, task_id, req.goal if req else "")
 
 
 @router.post("/{group_id}/discuss/{task_id}/respond")
