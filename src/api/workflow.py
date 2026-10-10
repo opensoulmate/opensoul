@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from src.api._errors import stats_error
 from src.database.postgres import db_pool
 from src.middleware.auth import get_current_user
 
@@ -34,14 +35,9 @@ async def workflow_stats():
             "active_tasks": active,
             "by_type": {r["task_type"]: r["cnt"] for r in (by_type or [])},
         }
-    except Exception:
-        return {
-            "status": "ok",
-            "component": "OpenWorkflow",
-            "total_tasks": 0,
-            "active_tasks": 0,
-            "by_type": {},
-        }
+    except Exception as exc:
+        # C2统一错误响应：失败说失败、说原因，禁谎报ok（假0冒充"没数据"）
+        return stats_error("OpenWorkflow", exc, total_tasks=0, active_tasks=0, by_type={})
 
 
 # ── Models ─────────────────────────────────────────────────────────────

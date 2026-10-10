@@ -1,9 +1,11 @@
+import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from src.api._errors import stats_error
 from src.database.postgres import db_pool
 from src.middleware.auth import get_current_user, require_agent, require_role
 from src.models.knowledge import KnowledgeCreate
@@ -33,8 +35,9 @@ async def agent_stats():
             "total_agents": total,
             "by_type": {r["agent_type"]: r["cnt"] for r in (by_type or [])},
         }
-    except Exception:
-        return {"status": "ok", "component": "AgentSystem", "total_agents": 0, "by_type": {}}
+    except Exception as exc:
+        # C2统一错误响应：查询失败说失败、说原因，禁谎报ok（假0冒充"没数据"）
+        return stats_error("AgentSystem", exc, total_agents=0, by_type={})
 
 
 # ── Request / Response models ──────────────────────────────────────────
@@ -80,12 +83,14 @@ async def register_agent(
     row = await db_pool.fetchrow(
         "INSERT INTO agents (id, name, agent_type, capabilities, metadata, token, status) "
         "VALUES ($1, $2, $3, $4, $5, $6, 'active') "
-        "RETURNING id, name, token, created_at as registered_at",
-        agent_id,
+        # C2：回包键名对齐AgentRegisterResponse（agent_id/registered_at），
+        # 列表/字典必须json.dumps（SQLite绑定层不支持list/dict，铁律）
+        "RETURNING id AS agent_id, name, token, created_at AS registered_at",
+        str(agent_id),
         req.name,
         req.agent_type,
-        req.capabilities,
-        req.metadata,
+        json.dumps(req.capabilities, ensure_ascii=False),
+        json.dumps(req.metadata, ensure_ascii=False),
         token,
     )
     if not row:
@@ -120,12 +125,26 @@ async def agent_report(
 ):
     """Agent reports Soma-collected data — stored and queued for processing."""
     await db_pool.execute(
+        # C2：dict必须json.dumps、UUID手动str()（SQLite绑定层不支持list/dict，铁律）
         "INSERT INTO agent_reports (agent_id, report_type, data) VALUES ($1, $2, $3)",
-        req.agent_id,
+        str(req.agent_id),
         req.report_type,
-        req.data,
+        json.dumps(req.data, ensure_ascii=False),
     )
-    return {"status": "received", "agent_id": req.agent_id}
+    return {"status": "received", "agent_id": str(req.agent_id)}
+
+
+def _parse_ts(value) -> datetime | None:
+    """last_heartbeat 列在 SQLite 是 TEXT（datetime('now')格式），解析失败返回 None。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 @router.get("/nodes")
@@ -149,13 +168,10 @@ async def list_agent_nodes(
     result = []
     for r in rows:
         d = dict(r)
-        hb = d.get("last_heartbeat")
-        if hb and (now - hb).total_seconds() < 120:
-            d["online"] = True
-        else:
-            d["online"] = (
-                d["status"] == "active" and hb is not None and (now - hb).total_seconds() < 120
-            )
+        # C2根因修复：last_heartbeat是TEXT直接做datetime算术会TypeError（有心跳行必炸），
+        # 解析失败视为不在线，禁500。
+        hb = _parse_ts(d.get("last_heartbeat"))
+        d["online"] = hb is not None and (now - hb).total_seconds() < 120
         result.append(d)
     return result
 

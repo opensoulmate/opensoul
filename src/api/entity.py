@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 
+from src.api._errors import stats_error
 from src.database.postgres import db_pool
 from src.models.entity import EntityCreate, EntityResponse, EntityUpdate
 from src.services import entity as entity_service
@@ -20,17 +21,20 @@ async def entity_stats():
     """Get entity system statistics."""
     try:
         total = await db_pool.fetchval("SELECT COUNT(*) FROM entities") or 0
+        # C2根因修复：entities正典列是type（migrations/001+services/entity.py:7），
+        # 原SQL误写entity_type在SQLite必炸，被假ok吞掉。读出时映射回API契约entity_type。
         by_type = await db_pool.fetch(
-            "SELECT entity_type, COUNT(*) as cnt FROM entities GROUP BY entity_type ORDER BY cnt DESC LIMIT 10"
+            "SELECT type, COUNT(*) as cnt FROM entities GROUP BY type ORDER BY cnt DESC LIMIT 10"
         )
         return {
             "status": "ok",
             "component": "EntitySystem",
             "total_entities": total,
-            "by_type": {r["entity_type"]: r["cnt"] for r in (by_type or [])},
+            "by_type": {r["type"]: r["cnt"] for r in (by_type or [])},
         }
-    except Exception:
-        return {"status": "ok", "component": "EntitySystem", "total_entities": 0, "by_type": {}}
+    except Exception as exc:
+        # C2统一错误响应：失败说失败、说原因，禁谎报ok（假0冒充"没数据"）
+        return stats_error("EntitySystem", exc, total_entities=0, by_type={})
 
 
 def _resolve_user_id(user_id: str) -> UUID:

@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
+from src.api._errors import stats_error
 from src.database.postgres import db_pool
 from src.models.entity import GraphData, RelationCreate, RelationResponse
 from src.services.entity import get_entity_with_relations, list_entities
@@ -23,23 +24,19 @@ async def graph_stats():
         entities = await db_pool.fetchval("SELECT COUNT(*) FROM entities") or 0
         relations = await db_pool.fetchval("SELECT COUNT(*) FROM relations") or 0
         by_type = await db_pool.fetch(
-            "SELECT entity_type, COUNT(*) as cnt FROM entities GROUP BY entity_type ORDER BY cnt DESC LIMIT 10"
+            # C2根因修复：entities正典列是type，原SQL误写entity_type必炸（同entity.py）
+            "SELECT type, COUNT(*) as cnt FROM entities GROUP BY type ORDER BY cnt DESC LIMIT 10"
         )
         return {
             "status": "ok",
             "component": "OpenGraph",
             "total_entities": entities,
             "total_relations": relations,
-            "by_type": {r["entity_type"]: r["cnt"] for r in (by_type or [])},
+            "by_type": {r["type"]: r["cnt"] for r in (by_type or [])},
         }
-    except Exception:
-        return {
-            "status": "ok",
-            "component": "OpenGraph",
-            "total_entities": 0,
-            "total_relations": 0,
-            "by_type": {},
-        }
+    except Exception as exc:
+        # C2统一错误响应：失败说失败、说原因，禁谎报ok（假0冒充"没数据"）
+        return stats_error("OpenGraph", exc, total_entities=0, total_relations=0, by_type={})
 
 
 def _resolve_user_id(user_id: str) -> UUID:

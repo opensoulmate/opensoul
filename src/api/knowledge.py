@@ -1,8 +1,10 @@
 import os
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
+from src.api._errors import stats_error
 from src.database.postgres import db_pool
 from src.models.knowledge import KnowledgeCreate, KnowledgeResponse, KnowledgeUpdate
 from src.services import knowledge as knowledge_service
@@ -21,10 +23,12 @@ async def knowledge_stats():
     """Get knowledge base statistics."""
     try:
         total = await db_pool.fetchval("SELECT COUNT(*) FROM knowledge") or 0
+        # C2根因修复：原EXTRACT(EPOCH FROM NOW()-INTERVAL '24 hours')是PG语法，
+        # SQLite必炸被假ok吞掉（live实测306条谎报0）。created_at是
+        # datetime('now')文本（YYYY-MM-DD HH:MM:SS），按同一格式比较。
+        cutoff = (datetime.now(UTC) - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         recent = (
-            await db_pool.fetchval(
-                "SELECT COUNT(*) FROM knowledge WHERE created_at > EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours')"
-            )
+            await db_pool.fetchval("SELECT COUNT(*) FROM knowledge WHERE created_at > $1", cutoff)
             or 0
         )
         by_user = await db_pool.fetch(
@@ -37,14 +41,9 @@ async def knowledge_stats():
             "recent_24h": recent,
             "top_users": [{"user_id": r["user_id"], "count": r["cnt"]} for r in (by_user or [])],
         }
-    except Exception:
-        return {
-            "status": "ok",
-            "component": "OpenKnowledge",
-            "total_entries": 0,
-            "recent_24h": 0,
-            "top_users": [],
-        }
+    except Exception as exc:
+        # C2统一错误响应：失败说失败、说原因，禁谎报ok（假0冒充"没数据"）
+        return stats_error("OpenKnowledge", exc, total_entries=0, recent_24h=0, top_users=[])
 
 
 # Supported file types for upload

@@ -124,7 +124,13 @@ class _SQLiteConnection:
         async with self._conn.execute(sql, params) as cursor:
             rows = await cursor.fetchall()
             columns = [desc[0] for desc in cursor.description] if cursor.description else []
-            return [_SQLiteRecord(dict(zip(columns, row))) for row in rows]
+            result = [_SQLiteRecord(dict(zip(columns, row))) for row in rows]
+        # C2实测发现：INSERT/UPDATE/DELETE...RETURNING走fetch/fetchrow路径
+        # （api/agent.py /register等），原实现只读不commit——写入留在未提交事务里，
+        # 同连接可见但重启即丢。写语句在fetch路径同样必须提交。
+        if sql.lstrip().split(None, 1)[0].upper() in ("INSERT", "UPDATE", "DELETE"):
+            await self._conn.commit()
+        return result
 
     async def fetchrow(self, query: str, *args) -> _SQLiteRecord | None:
         rows = await self.fetch(query, *args)
@@ -223,6 +229,15 @@ class SQLitePool:
                 "agents",
                 "last_heartbeat",
                 "ALTER TABLE agents ADD COLUMN last_heartbeat TEXT DEFAULT NULL",
+            ),
+            # C2（2026-10-11）：agent_reports 生产表只有 content 列（logo_url形状遗留），
+            # 而 api/agent.py /report 与 migrations/001,002 都写 data 列——
+            # "no column named data" 写路径必炸。按 C1 纪律登记缺列自愈，
+            # content 存量列不动（防丢已有数据）。
+            (
+                "agent_reports",
+                "data",
+                "ALTER TABLE agent_reports ADD COLUMN data TEXT DEFAULT '{}'",
             ),
             # 审计另发现两张"同名不同形"表冲突（trajectory_events：store.py形状
             # vs api/trajectory_api.py形状；agent_messages：消息树形状 vs

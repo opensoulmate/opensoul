@@ -914,7 +914,8 @@ async def list_all_tags():
         return {"tags": [{"name": r["tag_name"], "count": r["count"]} for r in rows]}
     except Exception as e:
         logger.error("list_all_tags error: %s", e)
-        return {"tags": []}
+        # C2统一错误响应：失败带error字段，禁空列表冒充"没标签"
+        return {"tags": [], "error": str(e)}
     finally:
         db.close()
 

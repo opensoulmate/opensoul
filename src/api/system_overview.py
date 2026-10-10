@@ -212,8 +212,9 @@ async def _get_plugin_stats() -> dict:
             "total_plugins": len(loaded_plugins),
             "active_plugins": sum(1 for p in loaded_plugins if p.get("has_backend")),
         }
-    except Exception:
-        return {"total_plugins": 0, "active_plugins": 0}
+    except Exception as exc:
+        # C2统一错误响应：失败带error字段，禁静默0冒充"没插件"
+        return {"total_plugins": 0, "active_plugins": 0, "error": str(exc)}
 
 
 async def _get_gland_usage() -> dict:
@@ -228,8 +229,9 @@ async def _get_gland_usage() -> dict:
             "call_count": summary.get("call_count", 0),
             "by_model": summary.get("by_model", {}),
         }
-    except Exception:
-        return {"total_tokens": 0, "call_count": 0}
+    except Exception as exc:
+        # C2统一错误响应：失败带error字段，禁静默0冒充"没调用"
+        return {"total_tokens": 0, "call_count": 0, "error": str(exc)}
 
 
 # ── Endpoints ─────────────────────────────────────────────────

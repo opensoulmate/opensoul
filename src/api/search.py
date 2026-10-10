@@ -18,6 +18,7 @@ async def search_health():
 @router.get("/stats")
 async def search_stats():
     """Get search system statistics."""
+    from src.api._errors import stats_error
     from src.database.postgres import db_pool
     from src.services.meili_indexer import get_index_stats
 
@@ -30,14 +31,15 @@ async def search_stats():
             "modes": ["semantic", "fulltext", "hybrid"],
             "meilisearch": get_index_stats(),
         }
-    except Exception:
-        return {
-            "status": "ok",
-            "component": "SearchSystem",
-            "searchable_entries": 0,
-            "modes": ["semantic", "fulltext", "hybrid"],
-            "meilisearch": get_index_stats(),
-        }
+    except Exception as exc:
+        # C2统一错误响应：失败说失败、说原因，禁谎报ok（假0冒充"没数据"）
+        return stats_error(
+            "SearchSystem",
+            exc,
+            searchable_entries=0,
+            modes=["semantic", "fulltext", "hybrid"],
+            meilisearch=get_index_stats(),
+        )
 
 
 class SearchRequest(BaseModel):
