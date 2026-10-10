@@ -220,9 +220,9 @@ export default function VisionPage() {
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setPreviewUrl(null); setPreviewMeta(null); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-card text-foreground shadow-sm'
+                  ? 'bg-primary/10 text-primary font-medium'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -351,7 +351,7 @@ export default function VisionPage() {
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
             >
               {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
               {generating ? '生成中...' : '生成图表'}
@@ -383,7 +383,7 @@ export default function VisionPage() {
           </div>
           {previewMeta?.output_file && (
             <div className="px-4 pb-3">
-              <span className="text-[10px] px-2 py-0.5 rounded bg-green-500/10 text-green-500">
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500">
                 已保存: {previewMeta.output_file}
               </span>
             </div>
@@ -417,7 +417,7 @@ export default function VisionPage() {
                 </div>
                 <button
                   onClick={() => handleDeleteOutput(f.filename)}
-                  className="text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 shrink-0"
+                  className="text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 shrink-0"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -432,7 +432,7 @@ export default function VisionPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500 flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded"><X className="w-3 h-3" /></button>
+          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded-md"><X className="w-3 h-3" /></button>
         </div>
       )}
     </div>

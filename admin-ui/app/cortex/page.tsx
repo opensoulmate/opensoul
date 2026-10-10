@@ -204,7 +204,7 @@ export default function CortexPage() {
           <div className="flex flex-wrap gap-2">
             {Object.entries(stats.modules).map(([name, status]) => (
               <span key={name} className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded ${
-                status === 'available' ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'
+                status === 'available' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
               }`}>
                 {status === 'available' ? <CheckCircle className="w-2.5 h-2.5" /> : <AlertCircle className="w-2.5 h-2.5" />}
                 {name}
@@ -266,7 +266,7 @@ export default function CortexPage() {
                 <button
                   onClick={handlePlan}
                   disabled={!planGoal.trim() || planning}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {planning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />}
                   {planning ? '规划中...' : '分解'}
@@ -315,7 +315,7 @@ export default function CortexPage() {
                 <button
                   onClick={handleAgent}
                   disabled={!agentTopic.trim() || agentRunning}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded-md hover:bg-purple-500/20 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded-lg hover:bg-violet-500/20 disabled:opacity-50"
                 >
                   {agentRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
                   {agentRunning ? '运行中...' : '启动'}
@@ -356,7 +356,7 @@ export default function CortexPage() {
               <button
                 onClick={handleThink}
                 disabled={!thinkQuestion.trim() || thinking}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-md hover:bg-amber-500/20 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 disabled:opacity-50"
               >
                 {thinking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
                 {thinking ? '推理中...' : '开始推理'}

@@ -68,13 +68,13 @@ function parsePatternContent(content: string): { problem: string; solution: stri
 
 function ConfidenceBadge({ level }: { level?: string }) {
   const config: Record<string, { color: string; label: string }> = {
-    high: { color: 'bg-green-500/10 text-green-500 border-green-500/30', label: '高置信' },
+    high: { color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30', label: '高置信' },
     medium: { color: 'bg-amber-500/10 text-amber-500 border-amber-500/30', label: '中置信' },
     low: { color: 'bg-red-500/10 text-red-500 border-red-500/30', label: '低置信' },
   };
   const c = config[level || ''] || { color: 'bg-muted text-muted-foreground border-border', label: level || '未知' };
   return (
-    <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${c.color}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${c.color}`}>
       {c.label}
     </span>
   );
@@ -313,7 +313,7 @@ export default function PatternsPage() {
         </select>
         <button
           onClick={() => fetchPatterns()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
@@ -339,14 +339,14 @@ export default function PatternsPage() {
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30"
+              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
             >
               上一页
             </button>
             <button
               onClick={() => setPage(page + 1)}
               disabled={patterns.length < pageSize}
-              className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30"
+              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
             >
               下一页
             </button>
@@ -367,7 +367,7 @@ export default function PatternsPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

@@ -155,7 +155,7 @@ export default function GitPage() {
         <button
           onClick={fetchStatus}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           刷新
@@ -202,7 +202,7 @@ export default function GitPage() {
 
             {/* Change counts */}
             <div className="grid grid-cols-3 gap-3">
-              <div className={`rounded-lg border p-3 text-center ${status.staged > 0 ? 'border-green-500/30 bg-green-500/5' : 'border-border bg-muted/30'}`}>
+              <div className={`rounded-lg border p-3 text-center ${status.staged > 0 ? 'border-emerald-500/30 bg-green-500/5' : 'border-border bg-muted/30'}`}>
                 <div className={`text-xl font-bold ${status.staged > 0 ? 'text-green-500' : 'text-muted-foreground'}`}>{status.staged}</div>
                 <div className="text-[10px] text-muted-foreground">已暂存</div>
               </div>
@@ -251,7 +251,7 @@ export default function GitPage() {
             <button
               onClick={handleCommit}
               disabled={committing || !commitMsg.trim()}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
             >
               {committing ? <Loader2 className="w-3 h-3 animate-spin" /> : <GitCommit className="w-3 h-3" />}
               提交
@@ -259,7 +259,7 @@ export default function GitPage() {
           </div>
 
           {commitResult && (
-            <div className={`p-3 rounded-lg text-xs ${commitResult.success ? 'bg-green-500/10 text-green-500 border border-green-500/30' : 'bg-red-500/10 text-red-500 border border-red-500/30'}`}>
+            <div className={`p-3 rounded-lg text-xs ${commitResult.success ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30' : 'bg-red-500/10 text-red-500 border border-red-500/30'}`}>
               {commitResult.success ? (
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4" />
@@ -281,7 +281,7 @@ export default function GitPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

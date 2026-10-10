@@ -271,7 +271,7 @@ export default function GlandPage() {
               </span>
               <button
                 onClick={() => { setBudgetLimit(String(usage.budget_limit)); setShowBudget(true); }}
-                className="text-[10px] px-2 py-0.5 bg-muted border border-border rounded hover:bg-muted/80"
+                className="text-[10px] px-2 py-0.5 border border-border rounded-lg hover:bg-muted transition-colors"
               >修改</button>
             </div>
           </div>
@@ -296,7 +296,7 @@ export default function GlandPage() {
           </div>
           <button
             onClick={() => { setBudgetLimit(''); setShowBudget(true); }}
-            className="text-xs px-3 py-1 bg-muted border border-border rounded hover:bg-muted/80"
+            className="text-xs lg:text-sm px-3 py-1 border border-border rounded-lg hover:bg-muted transition-colors"
           >设置预算</button>
         </div>
       )}
@@ -306,26 +306,26 @@ export default function GlandPage() {
         <button
           onClick={() => handleTestProvider()}
           disabled={testing !== null}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
         >
           {testing === 'auto' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wifi className="w-3.5 h-3.5" />}
           测试连接
         </button>
         <button
           onClick={() => fetchData()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
         <button
           onClick={() => setShowAddProvider(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90"
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />添加Provider
         </button>
         <button
           onClick={() => setShowAddKey(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <Key className="w-3.5 h-3.5" />添加密钥
         </button>
@@ -334,7 +334,7 @@ export default function GlandPage() {
       {/* ── Test Result ── */}
       {testResult && (
         <div className={`flex items-center gap-2 p-3 rounded-lg border ${
-          testResult.ok ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'
+          testResult.ok ? 'border-emerald-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'
         }`}>
           {testResult.ok ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-red-500" />}
           <span className={`text-xs ${testResult.ok ? 'text-green-500' : 'text-red-500'}`}>
@@ -370,16 +370,16 @@ export default function GlandPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{p.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                        p.enabled ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        p.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
                       }`}>
                         {p.enabled ? '可用' : '不可用'}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
                         优先级: {p.priority}
                       </span>
                       {p.consecutive_failures > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">
                           {p.consecutive_failures} 次失败
                         </span>
                       )}
@@ -401,14 +401,14 @@ export default function GlandPage() {
                     <button
                       onClick={() => handleTestProvider(p.name)}
                       disabled={testing !== null}
-                      className="text-[10px] px-2 py-1 bg-muted border border-border rounded hover:bg-muted/80 disabled:opacity-50"
+                      className="text-[10px] px-2 py-1 border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
                       title="测试连接"
                     >
                       {testing === p.name ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />}
                     </button>
                     <button
                       onClick={() => handleRemoveProvider(p.name)}
-                      className="text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20"
+                      className="text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
                       title="移除"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -445,8 +445,8 @@ export default function GlandPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{k.provider || 'unknown'}</span>
                       {k.active !== undefined && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                          k.active ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          k.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
                         }`}>
                           {k.active ? '活跃' : '闲置'}
                         </span>
@@ -527,7 +527,7 @@ export default function GlandPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500 flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded"><X className="w-3 h-3" /></button>
+          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded-md"><X className="w-3 h-3" /></button>
         </div>
       )}
 
@@ -537,7 +537,7 @@ export default function GlandPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加Provider</h2>
-              <button onClick={() => setShowAddProvider(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowAddProvider(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -570,9 +570,9 @@ export default function GlandPage() {
                   type="number" value={newProvider.priority} onChange={e => setNewProvider(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAddProvider(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowAddProvider(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button onClick={handleAddProvider} disabled={!newProvider.name || !newProvider.base_url || addingProvider}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                   {addingProvider ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   添加
                 </button>
@@ -588,7 +588,7 @@ export default function GlandPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加API密钥</h2>
-              <button onClick={() => setShowAddKey(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowAddKey(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -606,9 +606,9 @@ export default function GlandPage() {
                   placeholder="sk-..." />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAddKey(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowAddKey(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button onClick={handleAddKey} disabled={!newKey.provider || !newKey.api_key || addingKey}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                   {addingKey ? <Loader2 className="w-3 h-3 animate-spin" /> : <Key className="w-3 h-3" />}
                   添加
                 </button>
@@ -624,7 +624,7 @@ export default function GlandPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">设置Token预算</h2>
-              <button onClick={() => setShowBudget(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowBudget(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -634,9 +634,9 @@ export default function GlandPage() {
                   placeholder="0" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowBudget(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowBudget(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button onClick={handleSetBudget} disabled={settingBudget}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                   {settingBudget ? <Loader2 className="w-3 h-3 animate-spin" /> : <DollarSign className="w-3 h-3" />}
                   保存
                 </button>

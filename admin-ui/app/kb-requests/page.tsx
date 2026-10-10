@@ -67,7 +67,7 @@ function StatusBadge({ status }: { status: string }) {
   const c = config[status] || config.pending;
   const Icon = c.icon;
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${c.bg} ${c.text}`}>
       <Icon className="w-2.5 h-2.5" />{c.label}
     </span>
   );
@@ -114,7 +114,7 @@ function RequestCard({
               {type === 'create' ? (request as KnowledgeRequest).kb_name : (request as SharingRequest).kb_name}
             </span>
             <StatusBadge status={request.status} />
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
               {type === 'create' ? '创建申请' : '共享申请'}
             </span>
           </div>
@@ -209,7 +209,7 @@ function RequestCard({
                 <button
                   onClick={() => onReview(request.id, 'approved', reviewNote)}
                   disabled={reviewing}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-500/10 text-green-600 border border-green-500/20 rounded-md hover:bg-green-500/20 disabled:opacity-50"
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 border border-green-500/20 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
                 >
                   {reviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
                   通过
@@ -217,7 +217,7 @@ function RequestCard({
                 <button
                   onClick={() => onReview(request.id, 'rejected', reviewNote)}
                   disabled={reviewing}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20 disabled:opacity-50"
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20 disabled:opacity-50"
                 >
                   {reviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
                   拒绝
@@ -379,24 +379,24 @@ export default function KbRequestsPage() {
         <div className="flex items-center border border-border rounded-md overflow-hidden">
           <button
             onClick={() => setTab('create')}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs ${
+            className={`flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${
               tab === 'create' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
-            }`}
+            } font-medium transition-colors`}
           >
             <FileText className="w-3 h-3" />创建 ({allCreate.length})
           </button>
           <button
             onClick={() => setTab('sharing')}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs ${
+            className={`flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${
               tab === 'sharing' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
-            }`}
+            } font-medium transition-colors`}
           >
             <Share2 className="w-3 h-3" />共享 ({allSharing.length})
           </button>
         </div>
         <button
           onClick={fetchRequests}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>

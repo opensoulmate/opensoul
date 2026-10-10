@@ -117,8 +117,8 @@ export default function FeedbackPage() {
   const typeColor = (t: string) => {
     switch (t) {
       case 'knowledge': return 'bg-blue-500/10 text-blue-500';
-      case 'pattern': return 'bg-green-500/10 text-green-600';
-      case 'decision': return 'bg-purple-500/10 text-purple-500';
+      case 'pattern': return 'bg-emerald-500/10 text-emerald-500';
+      case 'decision': return 'bg-violet-500/10 text-violet-500';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -175,10 +175,10 @@ export default function FeedbackPage() {
           <option value="pattern">模式</option>
           <option value="decision">决策</option>
         </select>
-        <button onClick={() => { setExtractResult(null); setExtractText(''); setShowExtract(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-border rounded-md hover:bg-purple-500/20">
+        <button onClick={() => { setExtractResult(null); setExtractText(''); setShowExtract(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20">
           <Sparkles className="w-3.5 h-3.5" />知识提取
         </button>
-        <button onClick={() => { fetchEntries(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => { fetchEntries(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -206,12 +206,12 @@ export default function FeedbackPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-medium">{e.title}</h3>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${typeColor(e.feedback_type)}`}>{typeLabel(e.feedback_type)}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${typeColor(e.feedback_type)}`}>{typeLabel(e.feedback_type)}</span>
                   <span className={`text-[10px] ${confidenceColor(e.confidence)}`}>● {e.confidence}</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{e.content}</p>
                 <div className="flex items-center gap-2 mt-2">
-                  {e.tags.slice(0, 5).map(t => <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted">{t}</span>)}
+                  {e.tags.slice(0, 5).map(t => <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">{t}</span>)}
                   <span className="text-[10px] text-muted-foreground ml-auto">{e.source} · {e.created_at ? new Date(e.created_at).toLocaleDateString() : '—'}</span>
                 </div>
               </div>
@@ -285,7 +285,7 @@ export default function FeedbackPage() {
                 <label className="text-xs text-muted-foreground mb-1 block">来源</label>
                 <input className="w-full px-3 py-1.5 text-sm bg-muted border border-border rounded-md" value={extractSource} onChange={e => setExtractSource(e.target.value)} placeholder="hermes" />
               </div>
-              <button onClick={handleExtract} disabled={extractLoading || !extractText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-border rounded-md hover:bg-purple-500/20 disabled:opacity-50">
+              <button onClick={handleExtract} disabled={extractLoading || !extractText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20 disabled:opacity-50">
                 {extractLoading ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 {extractLoading ? '提取中...' : '开始提取'}
               </button>

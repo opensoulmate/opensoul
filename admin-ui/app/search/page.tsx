@@ -130,7 +130,7 @@ export default function SearchPage() {
               autoFocus
             />
           </div>
-          <button onClick={handleSearch} disabled={searching} className="px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50">
+          <button onClick={handleSearch} disabled={searching} className="px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
             {searching ? '搜索中...' : '搜索'}
           </button>
         </div>
@@ -148,7 +148,7 @@ export default function SearchPage() {
               <button
                 key={m.key}
                 onClick={() => setMode(m.key)}
-                className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                className={`px-2.5 py-1 text-xs lg:text-sm rounded-lg border transition-colors ${
                   mode === m.key
                     ? 'bg-primary/10 text-primary border-primary/20'
                     : 'bg-muted text-muted-foreground border-border hover:text-foreground'
@@ -163,7 +163,7 @@ export default function SearchPage() {
             <div className="relative">
               <button
                 onClick={() => setShowSourceFilter(!showSourceFilter)}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg bg-muted border border-border hover:bg-muted/80"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs lg:text-sm rounded-lg border border-border hover:bg-muted transition-colors"
               >
                 <Filter className="w-3 h-3" />
                 来源
@@ -173,7 +173,7 @@ export default function SearchPage() {
                 <div className="absolute top-full left-0 mt-1 z-10 w-48 rounded-lg border border-border bg-card shadow-lg p-2 space-y-1">
                   <button
                     onClick={() => toggleSource('all')}
-                    className={`w-full text-left px-2 py-1.5 text-xs rounded ${selectedSources.has('all') ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+                    className={`w-full text-left px-2 py-1.5 text-xs lg:text-sm rounded-lg ${selectedSources.has('all') ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
                   >
                     全部来源
                   </button>
@@ -181,7 +181,7 @@ export default function SearchPage() {
                     <button
                       key={s.key}
                       onClick={() => toggleSource(s.key)}
-                      className={`w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs rounded ${selectedSources.has(s.key) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+                      className={`w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs lg:text-sm rounded-lg ${selectedSources.has(s.key) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
                     >
                       <span className={s.color}>{s.icon}</span>
                       {s.label}
@@ -228,7 +228,7 @@ export default function SearchPage() {
                             {/* Extra metadata */}
                             <div className="flex flex-wrap gap-2 mt-1.5">
                               {Object.entries(item).filter(([k]) => !['source','icon','title','snippet'].includes(k) && item[k] != null).map(([k, v]) => (
-                                <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{k}: {String(v).slice(0, 20)}</span>
+                                <span key={k} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{k}: {String(v).slice(0, 20)}</span>
                               ))}
                             </div>
                           </div>

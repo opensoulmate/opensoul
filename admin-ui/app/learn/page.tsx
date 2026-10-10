@@ -285,10 +285,10 @@ export default function LearnPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-green-500/10 text-green-600';
+      case 'completed': return 'bg-emerald-500/10 text-emerald-500';
       case 'in_progress': return 'bg-blue-500/10 text-blue-500';
       case 'archived': return 'bg-muted text-muted-foreground';
-      default: return 'bg-orange-500/10 text-orange-500';
+      default: return 'bg-amber-500/10 text-amber-500';
     }
   };
 
@@ -313,14 +313,14 @@ export default function LearnPage() {
   if (showQuiz && quizChapter) {
     return (
       <div className="space-y-4">
-        <button onClick={() => setShowQuiz(false)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <button onClick={() => setShowQuiz(false)} className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-3 h-3" />返回课程
         </button>
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2 mb-4">
             <HelpCircle className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-medium">测验 — {quizChapter.title}</h2>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{quizChapter.quiz.length} 题</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{quizChapter.quiz.length} 题</span>
           </div>
           {quizChapter.quiz.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -341,10 +341,10 @@ export default function LearnPage() {
                         <button
                           key={oi}
                           onClick={() => !quizSubmitted && setQuizAnswers(prev => ({ ...prev, [qi]: oi }))}
-                          className={`w-full text-left flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
+                          className={`w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs lg:text-sm transition-colors ${
                             showResult
                               ? isCorrect
-                                ? 'bg-green-500/10 border border-green-500/30 text-green-700'
+                                ? 'bg-green-500/10 border border-emerald-500/30 text-green-700'
                                 : selected
                                   ? 'bg-red-500/10 border border-red-500/30 text-red-600'
                                   : 'bg-muted/30 border border-transparent'
@@ -375,7 +375,7 @@ export default function LearnPage() {
                   <button
                     onClick={() => setQuizSubmitted(true)}
                     disabled={Object.keys(quizAnswers).length < quizChapter.quiz.length}
-                    className="flex items-center gap-1 px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                   >
                     <Award className="w-3 h-3" />提交答案
                   </button>
@@ -386,7 +386,7 @@ export default function LearnPage() {
                     </span>
                     <button
                       onClick={() => { setQuizAnswers({}); setQuizSubmitted(false); }}
-                      className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+                      className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
                     >
                       重新答题
                     </button>
@@ -405,7 +405,7 @@ export default function LearnPage() {
     const chapters = selectedCourse.chapters || [];
     return (
       <div className="space-y-4">
-        <button onClick={() => setSelectedCourse(null)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <button onClick={() => setSelectedCourse(null)} className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-3 h-3" />返回课程列表
         </button>
 
@@ -416,11 +416,11 @@ export default function LearnPage() {
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5 text-primary" />
                 <h2 className="text-base font-medium">{selectedCourse.title}</h2>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${getStatusColor(selectedCourse.status)}`}>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(selectedCourse.status)}`}>
                   {getStatusLabel(selectedCourse.status)}
                 </span>
                 {selectedCourse.generated_by === 'ai' && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500">AI生成</span>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">AI生成</span>
                 )}
               </div>
               {selectedCourse.description && <p className="text-xs text-muted-foreground mt-1">{selectedCourse.description}</p>}
@@ -431,7 +431,7 @@ export default function LearnPage() {
               </div>
               {selectedCourse.tags.length > 0 && (
                 <div className="flex items-center gap-1 mt-2">
-                  {selectedCourse.tags.map(t => <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/5 text-primary/70">{t}</span>)}
+                  {selectedCourse.tags.map(t => <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/5 text-primary/70">{t}</span>)}
                 </div>
               )}
             </div>
@@ -446,7 +446,7 @@ export default function LearnPage() {
                 <option value="completed">已完成</option>
                 <option value="archived">已归档</option>
               </select>
-              <button onClick={() => handleDeleteCourse(selectedCourse.id)} className="p-1.5 rounded hover:bg-red-500/10" title="删除课程">
+              <button onClick={() => handleDeleteCourse(selectedCourse.id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除课程">
                 <Trash2 className="w-3.5 h-3.5 text-red-500" />
               </button>
             </div>
@@ -467,8 +467,8 @@ export default function LearnPage() {
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-medium">章节列表</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{chapters.length}</span>
-          <button onClick={() => setShowAddChapter(true)} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 ml-auto">
+          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{chapters.length}</span>
+          <button onClick={() => setShowAddChapter(true)} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 ml-auto font-medium transition-colors">
             <Plus className="w-3 h-3" />添加章节
           </button>
         </div>
@@ -504,14 +504,14 @@ export default function LearnPage() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {ch.quiz.length > 0 && (
-                      <button onClick={(e) => { e.stopPropagation(); openQuiz(ch); }} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" title="测验">
+                      <button onClick={(e) => { e.stopPropagation(); openQuiz(ch); }} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20" title="测验">
                         <HelpCircle className="w-3 h-3" />{ch.quiz.length}题
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setEditChapter(ch); setEditChapterForm({ title: ch.title, content: ch.content, order: String(ch.order) }); setShowEditChapter(true); }} className="p-1 rounded hover:bg-muted" title="编辑">
+                    <button onClick={(e) => { e.stopPropagation(); setEditChapter(ch); setEditChapterForm({ title: ch.title, content: ch.content, order: String(ch.order) }); setShowEditChapter(true); }} className="p-1 rounded-md hover:bg-muted" title="编辑">
                       <Edit3 className="w-3 h-3 text-muted-foreground" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteChapter(ch.id); }} className="p-1 rounded hover:bg-red-500/10" title="删除">
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteChapter(ch.id); }} className="p-1 rounded-md hover:bg-red-500/10" title="删除">
                       <Trash2 className="w-3 h-3 text-red-500" />
                     </button>
                     {expandedChapter === ch.id ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
@@ -537,7 +537,7 @@ export default function LearnPage() {
             <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h2 className="text-sm font-medium">添加章节</h2>
-                <button onClick={() => setShowAddChapter(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                <button onClick={() => setShowAddChapter(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="p-4 space-y-3">
                 <div>
@@ -549,8 +549,8 @@ export default function LearnPage() {
                   <textarea className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md h-40 resize-none font-mono" value={chapterForm.content} onChange={(e) => setChapterForm(f => ({ ...f, content: e.target.value }))} placeholder="章节内容..." />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <button onClick={() => setShowAddChapter(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                  <button onClick={handleAddChapter} disabled={!chapterForm.title.trim() || addingChapter} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                  <button onClick={() => setShowAddChapter(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                  <button onClick={handleAddChapter} disabled={!chapterForm.title.trim() || addingChapter} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                     {addingChapter ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}添加
                   </button>
                 </div>
@@ -565,7 +565,7 @@ export default function LearnPage() {
             <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h2 className="text-sm font-medium">编辑章节</h2>
-                <button onClick={() => setShowEditChapter(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                <button onClick={() => setShowEditChapter(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="p-4 space-y-3">
                 <div>
@@ -581,8 +581,8 @@ export default function LearnPage() {
                   <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md w-24" type="number" value={editChapterForm.order} onChange={(e) => setEditChapterForm(f => ({ ...f, order: e.target.value }))} />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <button onClick={() => setShowEditChapter(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                  <button onClick={handleUpdateChapter} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+                  <button onClick={() => setShowEditChapter(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                  <button onClick={handleUpdateChapter} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
                     <Save className="w-3 h-3" />保存
                   </button>
                 </div>
@@ -639,13 +639,13 @@ export default function LearnPage() {
           <option value="completed">已完成</option>
           <option value="archived">已归档</option>
         </select>
-        <button onClick={() => { fetchCourses(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => { fetchCourses(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={() => setShowGenerate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-md hover:bg-purple-500/20">
+        <button onClick={() => setShowGenerate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-purple-500/20 rounded-lg hover:bg-violet-500/20">
           <Sparkles className="w-3.5 h-3.5" />AI生成
         </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />新建课程
         </button>
       </div>
@@ -683,18 +683,18 @@ export default function LearnPage() {
                   </div>
                   {course.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{course.description}</p>}
                   <div className="flex items-center gap-2 mt-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${getStatusColor(course.status)}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(course.status)}`}>
                       {getStatusLabel(course.status)}
                     </span>
                     {course.generated_by === 'ai' && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500">AI</span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">AI</span>
                     )}
                     {course.domain && <span className="text-[10px] text-muted-foreground">{course.domain}</span>}
                   </div>
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDeleteCourse(course.id); }}
-                  className="p-1 rounded hover:bg-red-500/10"
+                  className="p-1 rounded-md hover:bg-red-500/10"
                   title="删除"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
@@ -727,7 +727,7 @@ export default function LearnPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">新建课程</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -753,8 +753,8 @@ export default function LearnPage() {
                 <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md" value={createForm.domain} onChange={(e) => setCreateForm(f => ({ ...f, domain: e.target.value }))} placeholder="计算机科学" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                <button onClick={handleCreate} disabled={!createForm.title.trim() || creating} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                <button onClick={handleCreate} disabled={!createForm.title.trim() || creating} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}创建
                 </button>
               </div>
@@ -772,7 +772,7 @@ export default function LearnPage() {
                 <Sparkles className="w-4 h-4 text-purple-500" />
                 <h2 className="text-sm font-medium">AI 生成课程</h2>
               </div>
-              <button onClick={() => setShowGenerate(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowGenerate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -795,8 +795,8 @@ export default function LearnPage() {
               </div>
               <p className="text-[10px] text-muted-foreground">AI 将自动生成课程大纲、章节内容和测验题目。</p>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowGenerate(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                <button onClick={handleGenerate} disabled={!generateForm.topic.trim() || generating} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-500 text-white rounded-md hover:opacity-90 disabled:opacity-50">
+                <button onClick={() => setShowGenerate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                <button onClick={handleGenerate} disabled={!generateForm.topic.trim() || generating} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-purple-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50">
                   {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}{generating ? '生成中...' : '开始生成'}
                 </button>
               </div>

@@ -74,13 +74,13 @@ function formatRelative(ts: string) {
 
 function ConfidenceBadge({ level }: { level: string }) {
   const config: Record<string, { color: string; label: string }> = {
-    high: { color: 'bg-green-500/10 text-green-500 border-green-500/30', label: '高置信' },
+    high: { color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30', label: '高置信' },
     medium: { color: 'bg-amber-500/10 text-amber-500 border-amber-500/30', label: '中置信' },
     low: { color: 'bg-red-500/10 text-red-500 border-red-500/30', label: '低置信' },
   };
   const c = config[level] || { color: 'bg-muted text-muted-foreground border-border', label: level };
   return (
-    <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${c.color}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${c.color}`}>
       {c.label}
     </span>
   );
@@ -89,13 +89,13 @@ function ConfidenceBadge({ level }: { level: string }) {
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { color: string; label: string }> = {
     pending: { color: 'bg-amber-500/10 text-amber-500 border-amber-500/30', label: '待审批' },
-    approved: { color: 'bg-green-500/10 text-green-500 border-green-500/30', label: '已批准' },
+    approved: { color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30', label: '已批准' },
     rejected: { color: 'bg-red-500/10 text-red-500 border-red-500/30', label: '已拒绝' },
     applied: { color: 'bg-blue-500/10 text-blue-500 border-blue-500/30', label: '已应用' },
   };
   const c = config[status] || { color: 'bg-muted text-muted-foreground border-border', label: status };
   return (
-    <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${c.color}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${c.color}`}>
       {c.label}
     </span>
   );
@@ -139,7 +139,7 @@ function VersionHistoryPanel({ skillName, versions }: { skillName: string; versi
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono font-medium">v{v.version}</span>
               {i === 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500 border border-green-500/30">
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
                   最新
                 </span>
               )}
@@ -244,21 +244,21 @@ function SkillCard({
             <span className="text-sm font-medium">{skill.name}</span>
             {skill.installed && <CheckCircle className="w-3.5 h-3.5 text-green-500" />}
             {skill.version && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono">
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">
                 v{skill.version}
               </span>
             )}
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
               {skill.source}
             </span>
             {skill.category && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
                 {skill.category}
               </span>
             )}
             {gating && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                gating.score >= 8 ? 'bg-green-500/10 text-green-500' :
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium font-mono ${
+                gating.score >= 8 ? 'bg-emerald-500/10 text-emerald-500' :
                 gating.score >= 6 ? 'bg-amber-500/10 text-amber-500' :
                 'bg-red-500/10 text-red-500'
               }`}>
@@ -266,7 +266,7 @@ function SkillCard({
               </span>
             )}
             {skillProposals.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500">
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">
                 {skillProposals.length} 提案
               </span>
             )}
@@ -292,7 +292,7 @@ function SkillCard({
           <div className="flex items-center gap-1 mb-3 border-b border-border">
             <button
               onClick={() => setActiveTab('versions')}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'versions' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -303,7 +303,7 @@ function SkillCard({
             </button>
             <button
               onClick={() => setActiveTab('gating')}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'gating' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -311,13 +311,13 @@ function SkillCard({
             </button>
             <button
               onClick={() => setActiveTab('proposals')}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'proposals' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <Lightbulb className="w-3.5 h-3.5" />进化提案
               {skillProposals.length > 0 && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-purple-500/10 text-purple-500">{skillProposals.length}</span>
+                <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/10 text-violet-500">{skillProposals.length}</span>
               )}
             </button>
           </div>
@@ -360,14 +360,14 @@ function SkillCard({
             {skill.installed && (
               <button
                 onClick={() => onUninstall(skill.name)}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-colors"
               >
                 <Trash2 className="w-3 h-3" />卸载
               </button>
               )}
               <button
                 onClick={() => onRollback(skill.name)}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] bg-amber-500/10 text-amber-500 rounded-md hover:bg-amber-500/20 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20 transition-colors"
               >
                 <RotateCcw className="w-3 h-3" />回滚
               </button>
@@ -635,8 +635,8 @@ export default function SkillsPage() {
             const colorMap: Record<string, string> = {
               blue: 'border-blue-500/30 bg-blue-500/10 text-blue-500',
               amber: 'border-amber-500/30 bg-amber-500/10 text-amber-500',
-              purple: 'border-purple-500/30 bg-purple-500/10 text-purple-500',
-              green: 'border-green-500/30 bg-green-500/10 text-green-500',
+              purple: 'border-violet-500/30 bg-violet-500/10 text-violet-500',
+              green: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500',
             };
             return (
               <div key={stage.label} className="flex items-center gap-2">
@@ -654,7 +654,7 @@ export default function SkillsPage() {
 
       {/* ── Pending Proposals Banner ── */}
       {pendingProposals > 0 && (
-        <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3 flex items-center gap-2">
+        <div className="rounded-lg border border-violet-500/30 bg-purple-500/5 p-3 flex items-center gap-2">
           <Lightbulb className="w-4 h-4 text-purple-500 shrink-0" />
           <div>
             <span className="text-xs font-medium text-purple-500">Skill层 · 进化提案待审批</span>
@@ -696,18 +696,18 @@ export default function SkillsPage() {
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <button onClick={() => fetchData()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => fetchData()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
         <button
           onClick={handleMigrate}
           disabled={migrating}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500/10 text-orange-600 border border-orange-500/20 rounded-md hover:bg-orange-500/20 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-orange-500/10 text-orange-600 border border-orange-500/20 rounded-lg hover:bg-amber-500/20 disabled:opacity-50"
         >
           {migrating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderInput className="w-3.5 h-3.5" />}
           全部迁移
         </button>
-        <button onClick={() => { setShowInstall(true); setInstallResult(null); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => { setShowInstall(true); setInstallResult(null); }} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Download className="w-3.5 h-3.5" />安装技能
         </button>
       </div>
@@ -769,7 +769,7 @@ export default function SkillsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">安装技能</h2>
-              <button onClick={() => setShowInstall(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowInstall(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -789,11 +789,11 @@ export default function SkillsPage() {
                 </div>
               )}
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowInstall(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowInstall(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button
                   onClick={handleInstall}
                   disabled={!installName.trim() || installing}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {installing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                   {installing ? '安装中...' : '安装'}

@@ -216,7 +216,7 @@ export default function HealerPage() {
         <button
           onClick={handleDiagnoseAll}
           disabled={!!actionLoading}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded-md hover:bg-blue-500/20 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50"
         >
           {actionLoading === 'diagnose' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Stethoscope className="w-3.5 h-3.5" />}
           全量诊断
@@ -224,7 +224,7 @@ export default function HealerPage() {
         <button
           onClick={handleHealAll}
           disabled={!!actionLoading}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs bg-green-500/10 text-green-600 border border-green-500/20 rounded-md hover:bg-green-500/20 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 border border-green-500/20 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
         >
           {actionLoading === 'heal' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Heart className="w-3.5 h-3.5" />}
           诊断+修复
@@ -232,7 +232,7 @@ export default function HealerPage() {
         <button
           onClick={handleFullCycle}
           disabled={!!actionLoading}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs bg-primary/10 text-primary border border-primary/20 rounded-md hover:bg-primary/20 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-primary/10 text-primary border border-primary/20 rounded-lg hover:bg-primary/20 disabled:opacity-50"
         >
           {actionLoading === 'cycle' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
           完整周期 (诊断→修复→通知→审计)
@@ -240,11 +240,11 @@ export default function HealerPage() {
         <div className="flex-1" />
         <button
           onClick={() => setShowHistory(!showHistory)}
-          className={`flex items-center gap-1.5 px-3 py-2 text-xs rounded-md border transition-colors ${showHistory ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted border-border text-muted-foreground hover:bg-muted/80'}`}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg border transition-colors ${showHistory ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted border-border text-muted-foreground hover:bg-muted'}`}
         >
           <History className="w-3.5 h-3.5" />历史记录
         </button>
-        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -300,7 +300,7 @@ export default function HealerPage() {
                         <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                       )}
                       <span className="text-xs font-medium truncate">{organ.organ}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-[10px] text-muted-foreground font-mono">{organ.response_time_ms}ms</span>
@@ -308,7 +308,7 @@ export default function HealerPage() {
                         <button
                           onClick={(e) => { e.stopPropagation(); handleHealOne(organ.organ); }}
                           disabled={!!actionLoading}
-                          className="p-1 rounded hover:bg-green-500/10"
+                          className="p-1 rounded-md hover:bg-emerald-500/10"
                           title="修复"
                         >
                           {actionLoading === `heal-${organ.organ}` ? (
@@ -321,7 +321,7 @@ export default function HealerPage() {
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDiagnoseOne(organ.organ); }}
                         disabled={!!actionLoading}
-                        className="p-1 rounded hover:bg-blue-500/10"
+                        className="p-1 rounded-md hover:bg-blue-500/10"
                         title="重新诊断"
                       >
                         {actionLoading === `diagnose-${organ.organ}` ? (
@@ -394,7 +394,7 @@ export default function HealerPage() {
                       <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                     )}
                     <span className="font-medium w-20 shrink-0">{item.organ}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</span>
                     <span className="text-muted-foreground truncate flex-1">{item.root_cause || item.symptoms?.join(', ') || '-'}</span>
                     {item.action_taken && item.action_taken !== 'none' && (
                       <span className={`text-[10px] ${item.action_success ? 'text-green-600' : 'text-red-600'}`}>{item.action_taken}</span>

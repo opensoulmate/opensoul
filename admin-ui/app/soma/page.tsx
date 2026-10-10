@@ -185,7 +185,7 @@ function OverviewCards({ data }: { data: ScanResult }) {
         <div className="space-y-1">
           {data.services.filter(s => s.state === 'LISTEN').sort((a, b) => a.local_port - b.local_port).slice(0, 12).map((s, i) => (
             <div key={i} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-muted/30">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.protocol === 'tcp' ? 'bg-blue-500/10 text-blue-500' : 'bg-purple-500/10 text-purple-500'}`}>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.protocol === 'tcp' ? 'bg-blue-500/10 text-blue-500' : 'bg-violet-500/10 text-violet-500'}`}>
                 {s.protocol.toUpperCase()}
               </span>
               <span className="text-xs font-mono">{s.local_address}:{s.local_port}</span>
@@ -258,7 +258,7 @@ function ProcessesTab({ processes }: { processes: ProcessInfo[] }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">{p.executable || p.command.split(' ')[0]}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{p.user}</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{p.user}</span>
               </div>
               <p className="text-[10px] text-muted-foreground truncate mt-0.5">{p.command}</p>
             </div>
@@ -400,17 +400,17 @@ function ServicesTab({ services }: { services: ServiceInfo[] }) {
       <div className="space-y-1">
         {filtered.map((s, i) => (
           <div key={`${s.local_address}-${s.local_port}-${i}`} className="flex items-center gap-3 py-2 px-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium font-medium ${
               s.protocol === 'tcp' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/30' :
-              'bg-purple-500/10 text-purple-500 border border-purple-500/30'
+              'bg-violet-500/10 text-violet-500 border border-violet-500/30'
             }`}>
               {s.protocol.toUpperCase()}
             </span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-mono">{s.local_address}:{s.local_port}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                  s.state === 'LISTEN' ? 'bg-green-500/10 text-green-500' :
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  s.state === 'LISTEN' ? 'bg-emerald-500/10 text-emerald-500' :
                   s.state === 'ESTAB' ? 'bg-blue-500/10 text-blue-500' :
                   'bg-muted text-muted-foreground'
                 }`}>
@@ -468,7 +468,7 @@ function AdaptersTab({ adapters }: { adapters: string[] }) {
                 <div className="text-[10px] text-muted-foreground font-mono">{name}</div>
               </div>
               <div className="ml-auto">
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/30">
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
                   已注册
                 </span>
               </div>
@@ -539,7 +539,7 @@ export default function SomaPage() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm rounded-lg transition-colors ${
                   tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -558,7 +558,7 @@ export default function SomaPage() {
           <button
             onClick={handleRescan}
             disabled={scanning}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
           >
             {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             {scanning ? '扫描中...' : '重新扫描'}
@@ -571,7 +571,7 @@ export default function SomaPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

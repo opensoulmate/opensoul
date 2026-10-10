@@ -169,10 +169,10 @@ export default function CronPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={() => fetchJobs()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => fetchJobs()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />创建任务
         </button>
       </div>
@@ -194,7 +194,7 @@ export default function CronPage() {
               <div className="min-w-0 flex-1 cursor-pointer" onClick={() => { setSelectedJob(job); setShowDetail(true); }}>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-medium truncate">{job.name || job.id}</h3>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${job.status === 'active' ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${job.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                     {job.status === 'active' ? '运行中' : '已暂停'}
                   </span>
                 </div>
@@ -210,22 +210,22 @@ export default function CronPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => handleShowHistory(job)} className="p-1.5 rounded hover:bg-muted" title="历史">
+                <button onClick={() => handleShowHistory(job)} className="p-1.5 rounded-md hover:bg-muted" title="历史">
                   <History className="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
-                <button onClick={() => handleRun(job.id)} className="p-1.5 rounded hover:bg-blue-500/10" title="立即执行">
+                <button onClick={() => handleRun(job.id)} className="p-1.5 rounded-md hover:bg-blue-500/10" title="立即执行">
                   <Play className="w-3.5 h-3.5 text-blue-500" />
                 </button>
                 {job.status === 'active' ? (
-                  <button onClick={() => handlePause(job.id)} className="p-1.5 rounded hover:bg-orange-500/10" title="暂停">
+                  <button onClick={() => handlePause(job.id)} className="p-1.5 rounded-md hover:bg-amber-500/10" title="暂停">
                     <Pause className="w-3.5 h-3.5 text-orange-500" />
                   </button>
                 ) : (
-                  <button onClick={() => handleResume(job.id)} className="p-1.5 rounded hover:bg-green-500/10" title="恢复">
+                  <button onClick={() => handleResume(job.id)} className="p-1.5 rounded-md hover:bg-emerald-500/10" title="恢复">
                     <Play className="w-3.5 h-3.5 text-green-500" />
                   </button>
                 )}
-                <button onClick={() => handleDelete(job.id)} className="p-1.5 rounded hover:bg-red-500/10" title="删除">
+                <button onClick={() => handleDelete(job.id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除">
                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
                 </button>
               </div>
@@ -246,7 +246,7 @@ export default function CronPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">创建定时任务</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -326,11 +326,11 @@ export default function CronPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button
                   onClick={handleCreate}
                   disabled={!createForm.schedule || creating}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   {creating ? '创建中...' : '创建'}
@@ -347,7 +347,7 @@ export default function CronPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">{selectedJob.name || selectedJob.id}</h2>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
@@ -365,19 +365,19 @@ export default function CronPage() {
                 </div>
               )}
               <div className="flex items-center gap-2 pt-2 border-t border-border">
-                <button onClick={() => handleRun(selectedJob.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-500/10 text-blue-500 rounded-md hover:bg-blue-500/20">
+                <button onClick={() => handleRun(selectedJob.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20">
                   <Play className="w-3 h-3" />立即执行
                 </button>
                 {selectedJob.status === 'active' ? (
-                  <button onClick={() => { handlePause(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-orange-500/10 text-orange-500 rounded-md hover:bg-orange-500/20">
+                  <button onClick={() => { handlePause(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
                     <Pause className="w-3 h-3" />暂停
                   </button>
                 ) : (
-                  <button onClick={() => { handleResume(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-500/10 text-green-500 rounded-md hover:bg-green-500/20">
+                  <button onClick={() => { handleResume(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
                     <Play className="w-3 h-3" />恢复
                   </button>
                 )}
-                <button onClick={() => { handleDelete(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20 ml-auto">
+                <button onClick={() => { handleDelete(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto">
                   <Trash2 className="w-3 h-3" />删除
                 </button>
               </div>
@@ -392,7 +392,7 @@ export default function CronPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h2 className="text-sm font-medium">执行历史 — {historyJob.name || historyJob.id}</h2>
-              <button onClick={() => setShowHistory(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowHistory(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-auto p-4 min-h-0">
               {historyLoading ? (
@@ -402,7 +402,7 @@ export default function CronPage() {
                   {historyRuns.map((run, i) => (
                     <div key={i} className="p-2 rounded border border-border bg-muted/30">
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${run.status === 'success' ? 'bg-green-500/10 text-green-600' : run.status === 'failed' ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${run.status === 'success' ? 'bg-emerald-500/10 text-emerald-500' : run.status === 'failed' ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'}`}>
                           {run.status}
                         </span>
                       </div>

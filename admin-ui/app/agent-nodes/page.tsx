@@ -49,8 +49,8 @@ type Tab = 'nodes' | 'memory' | 'register';
 const TYPE_COLORS: Record<string, string> = {
   generic: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
   hermes: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  mimo: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  codex: 'bg-green-500/10 text-green-500 border-green-500/20',
+  mimo: 'bg-violet-500/10 text-violet-500 border-purple-500/20',
+  codex: 'bg-emerald-500/10 text-emerald-500 border-green-500/20',
   copilot: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   openclaw: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
   soma: 'bg-pink-500/10 text-pink-500 border-pink-500/20',
@@ -285,7 +285,7 @@ export default function AgentNodesPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -298,7 +298,7 @@ export default function AgentNodesPage() {
         <div className="flex-1" />
         <button
           onClick={fetchData}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 mb-1"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted mb-1 transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
@@ -330,7 +330,7 @@ export default function AgentNodesPage() {
             </select>
             <button
               onClick={() => { setShowReport(true); }}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-md hover:bg-blue-500/20"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20"
             >
               <Send className="w-3 h-3" />提交报告
             </button>
@@ -358,14 +358,14 @@ export default function AgentNodesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">{node.name}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${TYPE_COLORS[node.agent_type] || TYPE_COLORS.generic}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${TYPE_COLORS[node.agent_type] || TYPE_COLORS.generic}`}>
                           {node.agent_type}
                         </span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${node.online ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${node.online ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                           {node.online ? '在线' : '离线'}
                         </span>
                         {node.status !== 'active' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">{node.status}</span>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">{node.status}</span>
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
@@ -397,7 +397,7 @@ export default function AgentNodesPage() {
                           <span className="text-xs text-muted-foreground">能力列表:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {node.capabilities.map((cap) => (
-                              <span key={cap} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{cap}</span>
+                              <span key={cap} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{cap}</span>
                             ))}
                           </div>
                         </div>
@@ -405,13 +405,13 @@ export default function AgentNodesPage() {
                       <div className="flex items-center gap-2 pt-1">
                         <button
                           onClick={() => { setReportForm({ ...reportForm, agent_id: node.id }); setShowReport(true); }}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20"
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20"
                         >
                           <Send className="w-3 h-3" />提交报告
                         </button>
                         <button
                           onClick={() => handleDelete(node.id, node.name)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded hover:bg-red-500/20"
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
                         >
                           <Trash2 className="w-3 h-3" />删除节点
                         </button>
@@ -430,7 +430,7 @@ export default function AgentNodesPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {Object.entries(stats.by_type).map(([type, count]) => (
                   <div key={type} className="flex items-center justify-between rounded border border-border p-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${TYPE_COLORS[type] || TYPE_COLORS.generic}`}>{type}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${TYPE_COLORS[type] || TYPE_COLORS.generic}`}>{type}</span>
                     <span className="text-sm font-bold">{count}</span>
                   </div>
                 ))}
@@ -480,7 +480,7 @@ export default function AgentNodesPage() {
               <button
                 onClick={handleRemember}
                 disabled={remembering || !rememberTitle || !rememberContent}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-md hover:bg-purple-500/20 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-purple-500/20 rounded-lg hover:bg-violet-500/20 disabled:opacity-50"
               >
                 {remembering ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
                 {remembering ? '存储中...' : '存储记忆'}
@@ -506,7 +506,7 @@ export default function AgentNodesPage() {
                 <button
                   onClick={handleRecall}
                   disabled={recalling || !recallQuery}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {recalling ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
                   检索
@@ -523,7 +523,7 @@ export default function AgentNodesPage() {
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium">{item.title || item.id || `结果 ${i + 1}`}</span>
                         {item.score !== undefined && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
                             {(item.score * 100).toFixed(1)}%
                           </span>
                         )}
@@ -548,7 +548,7 @@ export default function AgentNodesPage() {
             <div className="flex items-center gap-2 mb-4">
               <Plus className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-medium">注册新节点</h3>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600">需要管理员权限</span>
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-600">需要管理员权限</span>
             </div>
             <div className="space-y-3">
               <div>
@@ -597,7 +597,7 @@ export default function AgentNodesPage() {
               <button
                 onClick={handleRegister}
                 disabled={registering || !registerForm.name}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
               >
                 {registering ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
                 {registering ? '注册中...' : '注册节点'}
@@ -631,7 +631,7 @@ export default function AgentNodesPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">提交Agent报告</h2>
-              <button onClick={() => setShowReport(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowReport(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -667,11 +667,11 @@ export default function AgentNodesPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowReport(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowReport(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button
                   onClick={handleReport}
                   disabled={reporting || !reportForm.agent_id}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {reporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                   提交

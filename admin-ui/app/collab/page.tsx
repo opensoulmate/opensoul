@@ -65,8 +65,8 @@ function AgentCard({ agent }: { agent: AgentStatus }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{agent.name}</span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-            isOnline ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            isOnline ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
           }`}>
             {isOnline ? '在线' : agent.status}
           </span>
@@ -74,10 +74,10 @@ function AgentCard({ agent }: { agent: AgentStatus }) {
         {agent.role && <p className="text-[10px] text-muted-foreground truncate">{agent.role}</p>}
         <div className="flex items-center gap-2 mt-1">
           {agent.model && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono">{agent.model}</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">{agent.model}</span>
           )}
           {agent.capabilities.map(cap => (
-            <span key={cap} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{cap}</span>
+            <span key={cap} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{cap}</span>
           ))}
         </div>
       </div>
@@ -136,7 +136,7 @@ function RegisterDialog({ onClose, onRegistered }: { onClose: () => void; onRegi
       <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-medium">注册Agent</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -177,9 +177,9 @@ function RegisterDialog({ onClose, onRegistered }: { onClose: () => void; onRegi
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">关闭</button>
+            <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">关闭</button>
             <button onClick={handleRegister} disabled={!form.agent_id.trim() || !form.name.trim() || saving}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}注册
             </button>
           </div>
@@ -226,7 +226,7 @@ function MessageDialog({ agents, onClose }: { agents: AgentStatus[]; onClose: ()
       <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-medium">发送消息</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -259,9 +259,9 @@ function MessageDialog({ agents, onClose }: { agents: AgentStatus[]; onClose: ()
           </div>
           {result && <div className="text-xs p-2 rounded bg-muted">{result}</div>}
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">关闭</button>
+            <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">关闭</button>
             <button onClick={handleSend} disabled={!fromAgent || !toAgent || sending}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}发送
             </button>
           </div>
@@ -337,14 +337,14 @@ export default function CollabPage() {
           <input className="w-full pl-8 pr-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
             placeholder="搜索Agent名称、ID、能力..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button onClick={() => setShowRegister(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => setShowRegister(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />注册Agent
         </button>
         <button onClick={() => setShowMessage(true)} disabled={onlineCount < 2}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30">
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">
           <Send className="w-3.5 h-3.5" />发送消息
         </button>
-        <button onClick={fetchAgents} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchAgents} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>

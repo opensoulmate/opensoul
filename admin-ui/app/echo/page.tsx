@@ -132,7 +132,7 @@ function ChannelCard({ channel, health, onConfigure, onToggle }: {
         <button
           onClick={onToggle}
           className={`p-1.5 rounded-md transition-colors ${
-            channel.enabled ? 'text-green-500 hover:bg-green-500/10' : 'text-muted-foreground hover:bg-muted'
+            channel.enabled ? 'text-green-500 hover:bg-emerald-500/10' : 'text-muted-foreground hover:bg-muted'
           }`}
           title={channel.enabled ? '禁用' : '启用'}
         >
@@ -141,10 +141,10 @@ function ChannelCard({ channel, health, onConfigure, onToggle }: {
       </div>
 
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-3">
-        <span className={`px-1.5 py-0.5 rounded ${channel.has_endpoint ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+        <span className={`px-1.5 py-0.5 rounded ${channel.has_endpoint ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
           {channel.has_endpoint ? '✓ 端点' : '✗ 无端点'}
         </span>
-        <span className={`px-1.5 py-0.5 rounded ${channel.has_token ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+        <span className={`px-1.5 py-0.5 rounded ${channel.has_token ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
           {channel.has_token ? '✓ Token' : '✗ 无Token'}
         </span>
         {health && (
@@ -160,7 +160,7 @@ function ChannelCard({ channel, health, onConfigure, onToggle }: {
 
       <button
         onClick={onConfigure}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 transition-colors"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
       >
         <Settings className="w-3 h-3" />配置
       </button>
@@ -190,10 +190,10 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">{template.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
               {template.category}
             </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
               {CHANNEL_LABELS[template.channel] || template.channel}
             </span>
           </div>
@@ -226,7 +226,7 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
             <div className="flex flex-wrap gap-1">
               <span className="text-[10px] text-muted-foreground mr-1">变量:</span>
               {template.variables.map((v) => (
-                <span key={v} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-mono">
+                <span key={v} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 font-mono">
                   {`{{${v}}}`}
                 </span>
               ))}
@@ -236,19 +236,19 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
           <div className="flex items-center gap-2">
             <button
               onClick={onSend}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+              className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
             >
               <Send className="w-3 h-3" />发送
             </button>
             <button
               onClick={onEdit}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
             >
               <Edit3 className="w-3 h-3" />编辑
             </button>
             <button
               onClick={onDelete}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/30 rounded-md hover:bg-red-500/20"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20"
             >
               <Trash2 className="w-3 h-3" />删除
             </button>
@@ -293,7 +293,7 @@ function ConfigureDialog({ channel, onClose, onSave }: {
         <div className="flex items-center gap-2 mb-4">
           <Settings className="w-4 h-4" />
           <span className="text-sm font-medium">配置 {CHANNEL_LABELS[channel] || channel}</span>
-          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
         </div>
 
         <div className="space-y-3">
@@ -323,11 +323,11 @@ function ConfigureDialog({ channel, onClose, onSave }: {
         </div>
 
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
+          <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
           >
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             保存
@@ -374,7 +374,7 @@ function SendDialog({ defaultChannel, onClose }: {
         <div className="flex items-center gap-2 mb-4">
           <Send className="w-4 h-4" />
           <span className="text-sm font-medium">发送消息</span>
-          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
         </div>
 
         <div className="space-y-3">
@@ -420,17 +420,17 @@ function SendDialog({ defaultChannel, onClose }: {
         </div>
 
         {result && (
-          <div className={`mt-3 p-2 rounded text-xs ${result.success ? 'bg-green-500/10 text-green-500 border border-green-500/30' : 'bg-red-500/10 text-red-500 border border-red-500/30'}`}>
+          <div className={`mt-3 p-2 rounded text-xs ${result.success ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30' : 'bg-red-500/10 text-red-500 border border-red-500/30'}`}>
             {result.success ? `发送成功 (${result.msg_id})` : `发送失败: ${result.error}`}
           </div>
         )}
 
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">关闭</button>
+          <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">关闭</button>
           <button
             onClick={handleSend}
             disabled={sending || !title.trim() || !content.trim()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
           >
             {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
             发送
@@ -560,7 +560,7 @@ export default function EchoPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-md transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium rounded-t-md transition-colors ${
               tab === t.key ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
             }`}
           >
@@ -570,13 +570,13 @@ export default function EchoPage() {
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => { setSendChannel(undefined); setShowSend(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
           >
             <Send className="w-3 h-3" />发送消息
           </button>
           <button
             onClick={() => fetchAll()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />刷新
           </button>
@@ -741,7 +741,7 @@ export default function EchoPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

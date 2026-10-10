@@ -89,7 +89,7 @@ function formatTokens(n: number) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  running: 'bg-green-500/10 text-green-500 border-green-500/30',
+  running: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
   completed: 'bg-blue-500/10 text-blue-500 border-blue-500/30',
   failed: 'bg-red-500/10 text-red-500 border-red-500/30',
   forked: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
@@ -113,7 +113,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_COLORS[status] || 'bg-muted text-muted-foreground border-border';
-  return <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${cls}`}>{status}</span>;
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${cls}`}>{status}</span>;
 }
 
 function EventTypeBadge({ type }: { type: string }) {
@@ -121,7 +121,7 @@ function EventTypeBadge({ type }: { type: string }) {
   const label = EVENT_TYPE_LABELS[type] || type;
   return (
     <span
-      className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border"
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border"
       style={{ backgroundColor: color + '1a', color, borderColor: color + '4d' }}
     >
       {label}
@@ -344,7 +344,7 @@ function SearchView() {
           <button
             onClick={doSearch}
             disabled={searching}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
           >
             {searching ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
             搜索
@@ -444,7 +444,7 @@ function SessionEvents({ sessionId, onClose }: { sessionId: string; onClose: () 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setReplayStep(replayStep < 0 ? 0 : replayStep + 1 >= events.length ? -1 : replayStep + 1)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
             >
               <Play className="w-3 h-3" />
               {replayStep < 0 ? '回放' : replayStep + 1 >= events.length ? '停止' : `步骤 ${replayStep + 1}/${events.length}`}
@@ -452,7 +452,7 @@ function SessionEvents({ sessionId, onClose }: { sessionId: string; onClose: () 
             {replayStep >= 0 && events[replayStep] && (
               <button
                 onClick={doFork}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-md hover:bg-amber-500/20"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-lg hover:bg-amber-500/20"
               >
                 <GitFork className="w-3 h-3" />从此处分支
               </button>
@@ -648,7 +648,7 @@ export default function TrajectoryPage() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
                 tab === t.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -688,13 +688,13 @@ export default function TrajectoryPage() {
             </select>
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+              className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />新建会话
             </button>
             <button
               onClick={fetchSessions}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </button>
@@ -727,7 +727,7 @@ export default function TrajectoryPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium font-mono truncate">{s.session_id}</span>
                         {s.status && <StatusBadge status={s.status} />}
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex items-center gap-1">
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground flex items-center gap-1">
                           <Lock className="w-2.5 h-2.5" />不可变
                         </span>
                       </div>
@@ -775,12 +775,12 @@ export default function TrajectoryPage() {
                 <button
                   onClick={() => setPage(Math.max(0, page - 1))}
                   disabled={page === 0}
-                  className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30"
+                  className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
                 >上一页</button>
                 <button
                   onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                   disabled={page >= totalPages - 1}
-                  className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30"
+                  className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
                 >下一页</button>
               </div>
             </div>
@@ -826,11 +826,11 @@ export default function TrajectoryPage() {
             <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={() => setShowCreate(false)}
-                className="px-4 py-2 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+                className="px-4 py-2 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
               >取消</button>
               <button
                 onClick={doCreate}
-                className="px-4 py-2 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                className="px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
               >创建</button>
             </div>
           </div>
@@ -847,7 +847,7 @@ export default function TrajectoryPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

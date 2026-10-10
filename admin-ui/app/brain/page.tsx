@@ -378,7 +378,7 @@ export default function BrainPage() {
                 <button
                   key={type}
                   onClick={() => setFilterType(filterType === type ? 'all' : type)}
-                  className={`text-xs px-2 py-1 rounded-full border transition-colors ${filterType === type ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                  className={`text-xs lg:text-sm px-2 py-1 rounded-full border transition-colors ${filterType === type ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
                 >
                   {cfg.label}
                 </button>
@@ -411,7 +411,7 @@ export default function BrainPage() {
               </button>
             )}
           </div>
-          <button onClick={fetchData} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-md border border-border hover:bg-muted/50">
+          <button onClick={fetchData} className="flex items-center gap-1.5 text-xs lg:text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg border border-border hover:bg-muted/50">
             <RefreshCw className="w-3.5 h-3.5" />刷新
           </button>
         </div>
@@ -437,15 +437,15 @@ export default function BrainPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium truncate">{entry.title}</span>
-                        {entry.pinned && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">置顶</span>}
-                        {entry.starred && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">收藏</span>}
+                        {entry.pinned && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">置顶</span>}
+                        {entry.starred && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400">收藏</span>}
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2">{entry.content.slice(0, 120)}</p>
                       <div className="flex items-center gap-2 mt-1.5">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
                         {entry.source && <span className="text-[10px] text-muted-foreground">{entry.source}</span>}
                         {(entry.tags || []).slice(0, 3).map((t) => (
-                          <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{t}</span>
+                          <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{t}</span>
                         ))}
                         <span className="text-[10px] text-muted-foreground ml-auto">{new Date(entry.created_at).toLocaleDateString('zh-CN')}</span>
                       </div>

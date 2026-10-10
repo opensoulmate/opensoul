@@ -323,10 +323,10 @@ export default function VitalPage() {
         <div className="flex items-center gap-2">
           <Heart className="w-5 h-5 text-red-500" />
           <h2 className="text-sm font-medium">生命体征</h2>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">OpenVital</span>
+          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">OpenVital</span>
           {stats && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-              stats.health.status === 'ok' ? 'bg-green-500/10 text-green-600' : 'bg-orange-500/10 text-orange-600'
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              stats.health.status === 'ok' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-600'
             }`}>
               {stats.health.status === 'ok' ? '健康' : '降级'}
             </span>
@@ -349,7 +349,7 @@ export default function VitalPage() {
             <option value={360}>6小时</option>
             <option value={720}>12小时</option>
           </select>
-          <button onClick={fetchData} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-50">
+          <button onClick={fetchData} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}刷新
           </button>
         </div>
@@ -476,7 +476,7 @@ export default function VitalPage() {
           <Bell className="w-4 h-4 text-amber-500" />
           <span className="text-sm font-medium">告警</span>
           {activeAlerts.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">{activeAlerts.length} 活跃</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">{activeAlerts.length} 活跃</span>
           )}
           <label className="flex items-center gap-1 text-[10px] text-muted-foreground ml-auto cursor-pointer">
             <input type="checkbox" checked={showResolvedAlerts} onChange={(e) => setShowResolvedAlerts(e.target.checked)} className="rounded" />
@@ -498,12 +498,12 @@ export default function VitalPage() {
                 onClick={() => setExpandedAlert(expandedAlert === i ? null : i)}
               >
                 <div className="flex items-center gap-2">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${severityColor(alert.severity)}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${severityColor(alert.severity)}`}>
                     {alert.severity}
                   </span>
                   <span className="text-xs font-medium">{alert.rule}</span>
                   {alert.resolved && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600">已解决</span>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">已解决</span>
                   )}
                   <span className="text-[10px] text-muted-foreground ml-auto">{formatTime(alert.ts)}</span>
                   {expandedAlert === i ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
@@ -598,13 +598,13 @@ export default function VitalPage() {
             <table className="w-full text-[10px]">
               <thead>
                 <tr className="text-muted-foreground border-b border-border">
-                  <th className="text-left py-1 px-1">时间</th>
-                  <th className="text-right py-1 px-1">CPU%</th>
-                  <th className="text-right py-1 px-1">内存%</th>
-                  <th className="text-right py-1 px-1">磁盘%</th>
-                  <th className="text-right py-1 px-1">QPS</th>
-                  <th className="text-right py-1 px-1">P99ms</th>
-                  <th className="text-right py-1 px-1">错误率</th>
+                  <th className="text-left py-1 px-1 text-muted-foreground">时间</th>
+                  <th className="text-right py-1 px-1 text-muted-foreground">CPU%</th>
+                  <th className="text-right py-1 px-1 text-muted-foreground">内存%</th>
+                  <th className="text-right py-1 px-1 text-muted-foreground">磁盘%</th>
+                  <th className="text-right py-1 px-1 text-muted-foreground">QPS</th>
+                  <th className="text-right py-1 px-1 text-muted-foreground">P99ms</th>
+                  <th className="text-right py-1 px-1 text-muted-foreground">错误率</th>
                 </tr>
               </thead>
               <tbody>

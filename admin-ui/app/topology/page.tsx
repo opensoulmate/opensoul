@@ -114,7 +114,7 @@ export default function TopologyPage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
         </div>
       )}
 
@@ -147,15 +147,15 @@ export default function TopologyPage() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
-          <button onClick={() => setViewMode('graph')} className={`px-3 py-1.5 text-xs rounded-md border ${viewMode === 'graph' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
+          <button onClick={() => setViewMode('graph')} className={`px-3 py-1.5 text-xs lg:text-sm rounded-lg border ${viewMode === 'graph' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
             <Network className="w-3.5 h-3.5 inline mr-1" />拓扑图
           </button>
-          <button onClick={() => setViewMode('clusters')} className={`px-3 py-1.5 text-xs rounded-md border ${viewMode === 'clusters' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
+          <button onClick={() => setViewMode('clusters')} className={`px-3 py-1.5 text-xs lg:text-sm rounded-lg border ${viewMode === 'clusters' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
             <Layers className="w-3.5 h-3.5 inline mr-1" />集群视图
           </button>
         </div>
         <div className="flex-1" />
-        <button onClick={fetchGraph} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchGraph} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -214,7 +214,7 @@ export default function TopologyPage() {
             <div key={cat} className={`rounded-lg border bg-card p-4 ${CATEGORY_COLORS[cat] || 'border-border'}`}>
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-medium">{CATEGORY_LABELS[cat] || cat}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{nodes.length} 个组件</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{nodes.length} 个组件</span>
               </div>
               <div className="space-y-1.5">
                 {nodes.map((n) => {
@@ -245,7 +245,7 @@ export default function TopologyPage() {
                 <span className="text-xl">{selectedNode.emoji}</span>
                 <h2 className="text-sm font-semibold">{selectedNode.name}</h2>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowDetail(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -286,7 +286,7 @@ export default function TopologyPage() {
                       <span className="text-xs text-muted-foreground">被依赖 ({dependencies.depended_by.length})</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {dependencies.depended_by.map((dep) => (
-                          <span key={dep} className="text-xs px-2 py-0.5 rounded bg-purple-500/10 text-purple-500">{dep}</span>
+                          <span key={dep} className="text-xs px-2 py-0.5 rounded bg-violet-500/10 text-violet-500">{dep}</span>
                         ))}
                       </div>
                     </div>

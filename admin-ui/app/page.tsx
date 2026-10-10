@@ -239,7 +239,7 @@ function OrganHealthGrid({ organs }: { organs: OrganHealth }) {
       {sorted.length > 24 && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="mt-2 text-xs text-primary hover:underline"
+          className="mt-2 text-xs lg:text-sm text-primary hover:underline"
         >
           {expanded ? '收起' : `展开全部 ${sorted.length} 个`}
         </button>
@@ -445,7 +445,7 @@ export default function DashboardPage() {
         <div className="text-center space-y-3">
           <AlertTriangle className="w-8 h-8 text-red-400 mx-auto" />
           <div className="text-sm text-red-400">{error}</div>
-          <button onClick={fetchData} className="text-xs text-primary hover:underline">重试</button>
+          <button onClick={fetchData} className="text-xs lg:text-sm text-primary hover:underline">重试</button>
         </div>
       </div>
     );
@@ -475,7 +475,7 @@ export default function DashboardPage() {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-muted/50 hover:bg-muted transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs lg:text-sm bg-muted/50 hover:bg-muted transition-colors"
           >
             <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
             刷新

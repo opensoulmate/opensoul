@@ -71,8 +71,8 @@ function formatRelative(ts: string) {
 
 function topicColor(topic: string) {
   if (topic.startsWith('soma.')) return 'bg-blue-500/10 text-blue-500 border-blue-500/30';
-  if (topic.startsWith('organ.')) return 'bg-green-500/10 text-green-500 border-green-500/30';
-  if (topic.startsWith('system.')) return 'bg-purple-500/10 text-purple-500 border-purple-500/30';
+  if (topic.startsWith('organ.')) return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30';
+  if (topic.startsWith('system.')) return 'bg-violet-500/10 text-violet-500 border-violet-500/30';
   if (topic.startsWith('nerve.')) return 'bg-amber-500/10 text-amber-500 border-amber-500/30';
   return 'bg-muted text-muted-foreground border-border';
 }
@@ -257,9 +257,9 @@ export default function NervePage() {
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button onClick={() => setTab('events')} className={`px-3 py-1.5 text-xs ${tab === 'events' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>事件</button>
-          <button onClick={() => setTab('subscriptions')} className={`px-3 py-1.5 text-xs ${tab === 'subscriptions' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>订阅 ({subscriptions.length})</button>
-          <button onClick={() => setTab('nodes')} className={`px-3 py-1.5 text-xs ${tab === 'nodes' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>节点 ({nodes.length})</button>
+          <button onClick={() => setTab('events')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'events' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>事件</button>
+          <button onClick={() => setTab('subscriptions')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'subscriptions' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>订阅 ({subscriptions.length})</button>
+          <button onClick={() => setTab('nodes')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'nodes' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>节点 ({nodes.length})</button>
         </div>
         {tab === 'events' && (
           <div className="relative flex-1 min-w-[200px]">
@@ -272,21 +272,21 @@ export default function NervePage() {
             />
           </div>
         )}
-        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
         {tab === 'events' && (
-          <button onClick={() => setShowPublish(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+          <button onClick={() => setShowPublish(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
             <Send className="w-3.5 h-3.5" />发布事件
           </button>
         )}
         {tab === 'subscriptions' && (
-          <button onClick={() => setShowSubscribe(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+          <button onClick={() => setShowSubscribe(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
             <Plus className="w-3.5 h-3.5" />添加订阅
           </button>
         )}
         {tab === 'nodes' && (
-          <button onClick={() => setShowRegisterNode(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+          <button onClick={() => setShowRegisterNode(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
             <Plus className="w-3.5 h-3.5" />注册节点
           </button>
         )}
@@ -310,7 +310,7 @@ export default function NervePage() {
               >
                 <div className="flex items-center gap-3 p-2.5">
                   <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${topicColor(evt.topic)}`}>{evt.topic}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${topicColor(evt.topic)}`}>{evt.topic}</span>
                   {evt.source && <span className="text-[10px] text-muted-foreground font-mono">{evt.source}</span>}
                   <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{formatRelative(evt.timestamp)}</span>
                   {expandedEvent === evt.id ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
@@ -353,7 +353,7 @@ export default function NervePage() {
                     <div className="flex items-center gap-2">
                       <Radio className="w-3.5 h-3.5 text-purple-500 shrink-0" />
                       <span className="text-xs font-medium font-mono">{sub.id}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${topicColor(sub.topic_pattern)}`}>{sub.topic_pattern}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${topicColor(sub.topic_pattern)}`}>{sub.topic_pattern}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground ml-5">
                       <span>投递: {sub.delivery_count} 次</span>
@@ -362,7 +362,7 @@ export default function NervePage() {
                       <span>注册: {formatTime(sub.created_at)}</span>
                     </div>
                   </div>
-                  <button onClick={() => handleUnsubscribe(sub.id)} className="p-1.5 rounded hover:bg-red-500/10" title="取消订阅">
+                  <button onClick={() => handleUnsubscribe(sub.id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="取消订阅">
                     <Unplug className="w-3.5 h-3.5 text-red-500" />
                   </button>
                 </div>
@@ -394,8 +394,8 @@ export default function NervePage() {
                         <WifiOff className="w-3.5 h-3.5 text-red-500 shrink-0" />
                       )}
                       <span className="text-xs font-medium font-mono">{node.node_id}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{node.node_type}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${node.status === 'online' ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{node.node_type}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${node.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
                         {node.status}
                       </span>
                     </div>
@@ -406,10 +406,10 @@ export default function NervePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => handleHeartbeat(node.node_id)} className="p-1.5 rounded hover:bg-blue-500/10" title="发送心跳">
+                    <button onClick={() => handleHeartbeat(node.node_id)} className="p-1.5 rounded-md hover:bg-blue-500/10" title="发送心跳">
                       <Activity className="w-3.5 h-3.5 text-blue-500" />
                     </button>
-                    <button onClick={() => handleRemoveNode(node.node_id)} className="p-1.5 rounded hover:bg-red-500/10" title="移除">
+                    <button onClick={() => handleRemoveNode(node.node_id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="移除">
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
                     </button>
                   </div>
@@ -426,7 +426,7 @@ export default function NervePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">发布事件</h2>
-              <button onClick={() => setShowPublish(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowPublish(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -442,8 +442,8 @@ export default function NervePage() {
                 <textarea className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono h-24 resize-none" value={publishForm.data} onChange={(e) => setPublishForm(f => ({ ...f, data: e.target.value }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowPublish(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                <button onClick={handlePublish} disabled={!publishForm.topic || publishing} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                <button onClick={() => setShowPublish(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                <button onClick={handlePublish} disabled={!publishForm.topic || publishing} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                   {publishing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}发布
                 </button>
               </div>
@@ -458,7 +458,7 @@ export default function NervePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加订阅</h2>
-              <button onClick={() => setShowSubscribe(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowSubscribe(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -474,8 +474,8 @@ export default function NervePage() {
                 <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono" value={subscribeForm.callback_url} onChange={(e) => setSubscribeForm(f => ({ ...f, callback_url: e.target.value }))} placeholder="http://..." />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowSubscribe(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                <button onClick={handleSubscribe} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+                <button onClick={() => setShowSubscribe(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                <button onClick={handleSubscribe} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
                   <Plus className="w-3 h-3" />订阅
                 </button>
               </div>
@@ -490,7 +490,7 @@ export default function NervePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">注册节点</h2>
-              <button onClick={() => setShowRegisterNode(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowRegisterNode(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -512,8 +512,8 @@ export default function NervePage() {
                 <textarea className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono h-16 resize-none" value={nodeForm.metadata} onChange={(e) => setNodeForm(f => ({ ...f, metadata: e.target.value }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowRegisterNode(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                <button onClick={handleRegisterNode} disabled={!nodeForm.node_id} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                <button onClick={() => setShowRegisterNode(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                <button onClick={handleRegisterNode} disabled={!nodeForm.node_id} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                   <Server className="w-3 h-3" />注册
                 </button>
               </div>

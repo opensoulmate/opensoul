@@ -178,7 +178,7 @@ export default function TimelinePage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
         </div>
       )}
 
@@ -229,16 +229,16 @@ export default function TimelinePage() {
           <option value="">全部类型</option>
           {types.map((t) => <option key={t.type} value={t.type}>{t.type} ({t.count})</option>)}
         </select>
-        <button onClick={() => { fetchEvents(); fetchMeta(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => { fetchEvents(); fetchMeta(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={handleSync} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80" title="从事件流同步">
+        <button onClick={handleSync} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors" title="从事件流同步">
           <Layers className="w-3.5 h-3.5" />同步
         </button>
-        <button onClick={() => setShowRecord(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
+        <button onClick={() => setShowRecord(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />记录事件
         </button>
-        <button onClick={() => setShowClear(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 bg-muted border border-border rounded-md hover:bg-red-500/10">
+        <button onClick={() => setShowClear(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm text-red-500 bg-muted border border-border rounded-lg hover:bg-red-500/10">
           <Trash2 className="w-3.5 h-3.5" />清理
         </button>
       </div>
@@ -271,7 +271,7 @@ export default function TimelinePage() {
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-base">{event.emoji || '📌'}</span>
                   <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{event.organ}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{event.type}</span>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{event.type}</span>
                   <span className="text-[10px] text-muted-foreground ml-auto">{relativeTime(event.timestamp)}</span>
                 </div>
                 <p className="text-sm">{event.summary}</p>
@@ -285,7 +285,7 @@ export default function TimelinePage() {
               {/* Delete button */}
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 rounded text-red-500 transition-opacity"
+                className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 rounded-md text-red-500 transition-opacity"
                 title="删除"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -300,10 +300,10 @@ export default function TimelinePage() {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>显示 {offset + 1}-{Math.min(offset + limit, totalCount)} / {totalCount}</span>
           <div className="flex items-center gap-1">
-            <button onClick={() => setOffset(Math.max(0, offset - limit))} disabled={offset === 0} className="p-1.5 hover:bg-muted rounded disabled:opacity-30">
+            <button onClick={() => setOffset(Math.max(0, offset - limit))} disabled={offset === 0} className="p-1.5 hover:bg-muted rounded-md disabled:opacity-30">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button onClick={() => setOffset(offset + limit)} disabled={!hasMore} className="p-1.5 hover:bg-muted rounded disabled:opacity-30">
+            <button onClick={() => setOffset(offset + limit)} disabled={!hasMore} className="p-1.5 hover:bg-muted rounded-md disabled:opacity-30">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -316,7 +316,7 @@ export default function TimelinePage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">记录事件</h2>
-              <button onClick={() => setShowRecord(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowRecord(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-[60px_1fr] gap-3">
@@ -352,8 +352,8 @@ export default function TimelinePage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowRecord(false)} className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-              <button onClick={handleRecord} disabled={recording || !recordForm.summary.trim() || !recordForm.organ.trim()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50">
+              <button onClick={() => setShowRecord(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+              <button onClick={handleRecord} disabled={recording || !recordForm.summary.trim() || !recordForm.organ.trim()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 {recording && <Loader2 className="w-3 h-3 animate-spin" />}记录
               </button>
             </div>
@@ -367,14 +367,14 @@ export default function TimelinePage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">事件详情</h2>
-              <button onClick={() => setShowDetail(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowDetail(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">{selectedEvent.emoji || '📌'}</span>
                 <div>
                   <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{selectedEvent.organ}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary ml-2">{selectedEvent.type}</span>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary ml-2">{selectedEvent.type}</span>
                 </div>
               </div>
               <div>
@@ -395,7 +395,7 @@ export default function TimelinePage() {
               )}
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => { handleDeleteEvent(selectedEvent.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 bg-muted border border-border rounded-md hover:bg-red-500/10">
+              <button onClick={() => { handleDeleteEvent(selectedEvent.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm text-red-500 bg-muted border border-border rounded-lg hover:bg-red-500/10">
                 <Trash2 className="w-3 h-3" />删除
               </button>
             </div>
@@ -409,7 +409,7 @@ export default function TimelinePage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">清理事件</h2>
-              <button onClick={() => setShowClear(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowClear(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <p className="text-sm text-muted-foreground">清理超过指定天数的旧事件。</p>
@@ -420,8 +420,8 @@ export default function TimelinePage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowClear(false)} className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-              <button onClick={handleClear} className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-red-500 text-white rounded-md hover:bg-red-600">
+              <button onClick={() => setShowClear(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+              <button onClick={handleClear} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-red-500 text-white rounded-lg hover:bg-red-600">
                 <Trash2 className="w-3 h-3" />确认清理
               </button>
             </div>

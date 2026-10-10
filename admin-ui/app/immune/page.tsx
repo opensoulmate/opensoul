@@ -258,7 +258,7 @@ export default function ImmunePage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors whitespace-nowrap ${tab === t.key ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors whitespace-nowrap ${tab === t.key ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <t.icon className="w-3.5 h-3.5" />{t.label}
           </button>
@@ -276,7 +276,7 @@ export default function ImmunePage() {
               placeholder="输入要扫描的文本内容（PII检测、敏感数据检测等）..."
             />
             <div className="flex items-center gap-2 mt-3">
-              <button onClick={handleModerate} disabled={moderateLoading || !moderateText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 text-primary border border-border rounded-md hover:bg-primary/20 disabled:opacity-50">
+              <button onClick={handleModerate} disabled={moderateLoading || !moderateText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20 disabled:opacity-50">
                 {moderateLoading ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
                 {moderateLoading ? '扫描中...' : '开始扫描'}
               </button>
@@ -289,7 +289,7 @@ export default function ImmunePage() {
                   ) : (
                     <><AlertTriangle className="w-5 h-5 text-red-500" /><span className="text-sm font-medium text-red-500">发现风险</span></>
                   )}
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${riskColor(moderateResult.risk_level)}`}>{moderateResult.risk_level}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${riskColor(moderateResult.risk_level)}`}>{moderateResult.risk_level}</span>
                 </div>
                 {moderateResult.findings?.length > 0 && (
                   <div className="space-y-1.5">
@@ -318,13 +318,13 @@ export default function ImmunePage() {
       {tab === 'ip' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button onClick={() => { setIpAction('blacklist'); setShowAddIp(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-border rounded-md hover:bg-red-500/20">
+            <button onClick={() => { setIpAction('blacklist'); setShowAddIp(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-border rounded-lg hover:bg-red-500/20">
               <Ban className="w-3.5 h-3.5" />加入黑名单
             </button>
-            <button onClick={() => { setIpAction('whitelist'); setShowAddIp(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-500/10 text-green-600 border border-border rounded-md hover:bg-green-500/20">
+            <button onClick={() => { setIpAction('whitelist'); setShowAddIp(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 border border-border rounded-lg hover:bg-emerald-500/20">
               <CheckCircle className="w-3.5 h-3.5" />加入白名单
             </button>
-            <button onClick={fetchIpLists} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+            <button onClick={fetchIpLists} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </button>
           </div>
@@ -381,7 +381,7 @@ export default function ImmunePage() {
       {tab === 'intrusion' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button onClick={fetchThreats} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+            <button onClick={fetchThreats} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </button>
           </div>
@@ -403,28 +403,28 @@ export default function ImmunePage() {
 
           {/* Threats */}
           <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs lg:text-sm min-w-[500px]">
               <thead>
-                <tr className="bg-muted/50 text-xs text-muted-foreground">
-                  <th className="text-left px-4 py-2 font-medium">IP</th>
-                  <th className="text-left px-4 py-2 font-medium">攻击类型</th>
-                  <th className="text-center px-4 py-2 font-medium">威胁等级</th>
-                  <th className="text-left px-4 py-2 font-medium">详情</th>
-                  <th className="text-left px-4 py-2 font-medium w-32">时间</th>
-                  <th className="text-right px-4 py-2 font-medium w-20">操作</th>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">IP</th>
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">攻击类型</th>
+                  <th className="text-center px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">威胁等级</th>
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">详情</th>
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium w-32 text-muted-foreground">时间</th>
+                  <th className="text-right px-2 lg:px-4 py-2.5 font-medium w-20 text-muted-foreground">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {threats.map((t, i) => (
-                  <tr key={t.id || i} className="border-t border-border hover:bg-muted/30">
-                    <td className="px-4 py-2 font-mono text-xs">{t.source_ip}</td>
-                    <td className="px-4 py-2">{t.attack_type}</td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${riskColor(t.threat_level)}`}>{t.threat_level}</span>
+                  <tr key={t.id || i} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <td className="px-2 lg:px-4 py-2.5 font-mono text-xs">{t.source_ip}</td>
+                    <td className="px-2 lg:px-4 py-2.5">{t.attack_type}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-center">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${riskColor(t.threat_level)}`}>{t.threat_level}</span>
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground truncate max-w-[200px]">{t.detail}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">{t.timestamp ? new Date(t.timestamp).toLocaleString() : '—'}</td>
-                    <td className="px-4 py-2 text-right">
+                    <td className="px-2 lg:px-4 py-2.5 text-xs text-muted-foreground truncate max-w-[200px]">{t.detail}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-xs text-muted-foreground">{t.timestamp ? new Date(t.timestamp).toLocaleString() : '—'}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-right">
                       <button onClick={() => handleBlockIp(t.source_ip)} className="p-1 text-muted-foreground hover:text-red-500" title="封锁IP">
                         <Ban className="w-3.5 h-3.5" />
                       </button>
@@ -432,7 +432,7 @@ export default function ImmunePage() {
                   </tr>
                 ))}
                 {threats.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">暂无威胁记录</td></tr>
+                  <tr><td colSpan={6} className="px-2 lg:px-4 py-8 text-center text-muted-foreground">暂无威胁记录</td></tr>
                 )}
               </tbody>
             </table>
@@ -458,36 +458,36 @@ export default function ImmunePage() {
               <option value="medium">中</option>
               <option value="low">低</option>
             </select>
-            <button onClick={fetchAuditLog} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+            <button onClick={fetchAuditLog} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </button>
           </div>
 
           <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs lg:text-sm min-w-[500px]">
               <thead>
-                <tr className="bg-muted/50 text-xs text-muted-foreground">
-                  <th className="text-left px-4 py-2 font-medium">操作</th>
-                  <th className="text-left px-4 py-2 font-medium">IP</th>
-                  <th className="text-center px-4 py-2 font-medium">风险</th>
-                  <th className="text-left px-4 py-2 font-medium">详情</th>
-                  <th className="text-left px-4 py-2 font-medium w-32">时间</th>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">操作</th>
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">IP</th>
+                  <th className="text-center px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">风险</th>
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">详情</th>
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium w-32 text-muted-foreground">时间</th>
                 </tr>
               </thead>
               <tbody>
                 {auditLog.map((entry, i) => (
-                  <tr key={i} className="border-t border-border hover:bg-muted/30">
-                    <td className="px-4 py-2 text-xs font-medium">{entry.action}</td>
-                    <td className="px-4 py-2 text-xs font-mono">{entry.client_ip || '—'}</td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${riskColor(entry.risk_level)}`}>{entry.risk_level}</span>
+                  <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <td className="px-2 lg:px-4 py-2.5 text-xs font-medium">{entry.action}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-xs font-mono">{entry.client_ip || '—'}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-center">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${riskColor(entry.risk_level)}`}>{entry.risk_level}</span>
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground truncate max-w-[300px]">{entry.detail || '—'}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">{entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '—'}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-xs text-muted-foreground truncate max-w-[300px]">{entry.detail || '—'}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-xs text-muted-foreground">{entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '—'}</td>
                   </tr>
                 ))}
                 {auditLog.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">暂无审计记录</td></tr>
+                  <tr><td colSpan={5} className="px-2 lg:px-4 py-8 text-center text-muted-foreground">暂无审计记录</td></tr>
                 )}
               </tbody>
             </table>
@@ -499,10 +499,10 @@ export default function ImmunePage() {
       {tab === 'rate' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button onClick={fetchRateStats} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+            <button onClick={fetchRateStats} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </button>
-            <button onClick={handleResetRateLimit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500/10 text-orange-500 border border-border rounded-md hover:bg-orange-500/20">
+            <button onClick={handleResetRateLimit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 border border-border rounded-lg hover:bg-amber-500/20">
               <Zap className="w-3.5 h-3.5" />重置计数
             </button>
           </div>
@@ -564,8 +564,8 @@ export default function ImmunePage() {
               )}
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowAddIp(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md">取消</button>
-              <button onClick={handleAddIp} disabled={!ipForm.ip.trim()} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md disabled:opacity-50 ${ipAction === 'blacklist' ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
+              <button onClick={() => setShowAddIp(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
+              <button onClick={handleAddIp} disabled={!ipForm.ip.trim()} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm rounded-lg disabled:opacity-50 ${ipAction === 'blacklist' ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
                 {ipAction === 'blacklist' ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                 确认
               </button>

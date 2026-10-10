@@ -80,7 +80,7 @@ function TagDialog({ tag, onClose, onSave }: {
         <div className="flex items-center gap-2 mb-4">
           <Tag className="w-4 h-4" />
           <span className="text-sm font-medium">{tag ? '编辑标签' : '新建标签'}</span>
-          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
         </div>
 
         <div className="space-y-3">
@@ -110,7 +110,7 @@ function TagDialog({ tag, onClose, onSave }: {
             <div className="mt-2 flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground">预览:</span>
               <span
-                className="text-xs px-2 py-0.5 rounded-full text-white font-medium"
+                className="rounded-full px-2 py-0.5 text-xs font-medium text-white font-medium"
                 style={{ backgroundColor: color }}
               >
                 {name || '标签名'}
@@ -120,11 +120,11 @@ function TagDialog({ tag, onClose, onSave }: {
         </div>
 
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
+          <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
           <button
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
           >
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             {tag ? '保存' : '创建'}
@@ -231,13 +231,13 @@ export default function TagsPage() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
         >
           <Plus className="w-3 h-3" />新建标签
         </button>
         <button
           onClick={fetchTags}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
@@ -272,14 +272,14 @@ export default function TagsPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setEditingTag(tag)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
               >
                 <Edit3 className="w-3 h-3" />编辑
               </button>
               <button
                 onClick={() => handleDelete(tag.id)}
                 disabled={deleting === tag.id}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/30 rounded-md hover:bg-red-500/20 disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20 disabled:opacity-50"
               >
                 {deleting === tag.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
               </button>
@@ -316,7 +316,7 @@ export default function TagsPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

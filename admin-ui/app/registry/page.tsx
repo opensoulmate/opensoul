@@ -49,7 +49,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
 };
 
 const PHASE_COLORS: Record<string, string> = {
-  '一期': 'bg-green-500/10 text-green-600',
+  '一期': 'bg-emerald-500/10 text-emerald-500',
   '二期': 'bg-blue-500/10 text-blue-600',
   '三期': 'bg-orange-500/10 text-orange-600',
   '四期': 'bg-purple-500/10 text-purple-600',
@@ -172,7 +172,7 @@ export default function RegistryPage() {
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`px-3 py-1.5 text-xs transition-colors ${view === v ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80 text-muted-foreground'}`}
+              className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm transition-colors ${view === v ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80 text-muted-foreground'} font-medium`}
             >
               {v === 'grid' ? '列表' : v === 'graph' ? '依赖图' : '能力'}
             </button>
@@ -204,11 +204,11 @@ export default function RegistryPage() {
           <option value="">全部阶段</option>
           {phases.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
-        <button onClick={handleHealthCheck} disabled={checkingHealth} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-50">
+        <button onClick={handleHealthCheck} disabled={checkingHealth} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
           {checkingHealth ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
           健康检查
         </button>
-        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -248,8 +248,8 @@ export default function RegistryPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-1 mt-0.5">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${catColor.bg} ${catColor.text}`}>{comp.category}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${PHASE_COLORS[comp.phase] || 'bg-muted text-muted-foreground'}`}>{comp.phase}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${catColor.bg} ${catColor.text}`}>{comp.category}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${PHASE_COLORS[comp.phase] || 'bg-muted text-muted-foreground'}`}>{comp.phase}</span>
                       </div>
                     </div>
                   </div>
@@ -268,7 +268,7 @@ export default function RegistryPage() {
                       <span className="text-[10px] font-medium text-muted-foreground">能力</span>
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         {comp.capabilities?.map((cap) => (
-                          <span key={cap} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{cap}</span>
+                          <span key={cap} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{cap}</span>
                         ))}
                       </div>
                     </div>
@@ -277,7 +277,7 @@ export default function RegistryPage() {
                         <span className="text-[10px] font-medium text-muted-foreground">依赖</span>
                         <div className="flex flex-wrap gap-1 mt-0.5">
                           {comp.dependencies.map((dep) => (
-                            <span key={dep} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600">{dep}</span>
+                            <span key={dep} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-orange-500/10 text-orange-600">{dep}</span>
                           ))}
                         </div>
                       </div>
@@ -287,7 +287,7 @@ export default function RegistryPage() {
                         <span className="text-[10px] font-medium text-muted-foreground">被依赖</span>
                         <div className="flex flex-wrap gap-1 mt-0.5">
                           {comp.dependents.map((dep) => (
-                            <span key={dep} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600">{dep}</span>
+                            <span key={dep} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-600">{dep}</span>
                           ))}
                         </div>
                       </div>
@@ -404,7 +404,7 @@ export default function RegistryPage() {
                   {comps.map((compId) => {
                     const comp = components.find((c) => c.id === compId);
                     return (
-                      <span key={compId} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                      <span key={compId} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
                         {comp?.emoji} {comp?.name || compId}
                       </span>
                     );

@@ -101,7 +101,7 @@ function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] || { icon: Clock, color: 'text-muted-foreground', label: status };
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-current/20 ${cfg.color}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border border-current/20 ${cfg.color}`}>
       <Icon className={`w-3 h-3 ${status === 'executing' ? 'animate-spin' : ''}`} />
       {cfg.label}
     </span>
@@ -153,7 +153,7 @@ function ComponentCard({ comp, expanded, onToggle, detail, loadingDetail }: {
                   <div className="text-xs font-medium text-muted-foreground mb-2">版本历史</div>
                   <div className="flex flex-wrap gap-1.5">
                     {detail.versions.map((v, i) => (
-                      <span key={v.version} className={`text-[10px] px-2 py-0.5 rounded-full border ${i === 0 ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'}`}>
+                      <span key={v.version} className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${i === 0 ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'}`}>
                         v{v.version} <StatusBadge status={v.status} />
                       </span>
                     ))}
@@ -235,14 +235,14 @@ function MigrationCard({ m, onExecute, onRollback, executing }: {
         <div className="flex items-center gap-2">
           <span className="text-xs font-mono text-muted-foreground">{m.migration_id.slice(0, 8)}</span>
           <StatusBadge status={m.status} />
-          {m.dry_run && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">试运行</span>}
+          {m.dry_run && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">试运行</span>}
         </div>
         <div className="flex items-center gap-1">
           {(m.status === 'pending' || m.status === 'failed') && (
             <button
               onClick={onExecute}
               disabled={executing}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-green-500/10 text-green-600 rounded hover:bg-green-500/20 disabled:opacity-50"
+              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
             >
               {executing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
               执行
@@ -252,7 +252,7 @@ function MigrationCard({ m, onExecute, onRollback, executing }: {
             <button
               onClick={onRollback}
               disabled={executing}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-amber-500/10 text-amber-600 rounded hover:bg-amber-500/20 disabled:opacity-50"
+              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-amber-500/10 text-amber-600 rounded-lg hover:bg-amber-500/20 disabled:opacity-50"
             >
               <RotateCcw className="w-3 h-3" />回滚
             </button>
@@ -296,7 +296,7 @@ function DependencyGraphView({ graph }: { graph: DepGraph }) {
             {deps.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2 pl-5">
                 {deps.map(([dep, ver]) => (
-                  <span key={dep} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                  <span key={dep} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">
                     <ArrowUpRight className="w-2.5 h-2.5" />
                     {dep} {ver}
                   </span>
@@ -321,7 +321,7 @@ function SchemaDiffView({ diff, onClose }: { diff: SchemaDiff; onClose: () => vo
             <Diff className="w-4 h-4" />
             Schema Diff: {diff.component_id} v{diff.from_version} → v{diff.to_version}
           </h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4 space-y-3">
           {diff.added.length > 0 && (
@@ -523,10 +523,10 @@ export default function HeredityPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={() => setShowNewMigration(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => setShowNewMigration(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <GitBranch className="w-3.5 h-3.5" />新建迁移
         </button>
       </div>
@@ -546,7 +546,7 @@ export default function HeredityPage() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             <Icon className="w-3.5 h-3.5" />{label}
           </button>
@@ -624,7 +624,7 @@ export default function HeredityPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium">{entry.component_id}</span>
                     <span className="text-[10px] text-muted-foreground font-mono">v{entry.version}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{entry.action}</span>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{entry.action}</span>
                   </div>
                   {entry.details && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{entry.details}</p>}
                 </div>
@@ -644,7 +644,7 @@ export default function HeredityPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">新建迁移</h2>
-              <button onClick={() => setShowNewMigration(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowNewMigration(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -690,11 +690,11 @@ export default function HeredityPage() {
                 试运行（不实际执行）
               </label>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowNewMigration(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowNewMigration(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button
                   onClick={createMigration}
                   disabled={!newMigration.component_id || !newMigration.from_version || !newMigration.to_version || creatingMigration}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {creatingMigration ? <Loader2 className="w-3 h-3 animate-spin" /> : <GitBranch className="w-3 h-3" />}
                   创建

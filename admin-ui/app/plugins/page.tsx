@@ -173,10 +173,10 @@ export default function PluginsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={() => fetchPlugins()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => fetchPlugins()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={() => setShowInstall(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => setShowInstall(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />安装插件
         </button>
       </div>
@@ -206,11 +206,11 @@ export default function PluginsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{plugin.name}</h3>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">v{plugin.version}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${plugin.status === 'enabled' ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">v{plugin.version}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${plugin.status === 'enabled' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                       {plugin.status === 'enabled' ? '已启用' : '已禁用'}
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/5 text-primary/70">{plugin.type}</span>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/5 text-primary/70">{plugin.type}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{plugin.description || '暂无描述'}</p>
                   <div className="text-[10px] text-muted-foreground mt-1">安装时间: {plugin.installed_at}</div>
@@ -219,7 +219,7 @@ export default function PluginsPage() {
               <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleToggle(plugin)}
-                  className={`p-1.5 rounded ${plugin.status === 'enabled' ? 'hover:bg-green-500/10' : 'hover:bg-muted'}`}
+                  className={`p-1.5 rounded-md ${plugin.status === 'enabled' ? 'hover:bg-emerald-500/10' : 'hover:bg-muted'}`}
                   title={plugin.status === 'enabled' ? '禁用' : '启用'}
                 >
                   {plugin.status === 'enabled' ? (
@@ -230,7 +230,7 @@ export default function PluginsPage() {
                 </button>
                 <button
                   onClick={() => handleUninstall(plugin)}
-                  className="p-1.5 rounded hover:bg-red-500/10"
+                  className="p-1.5 rounded-md hover:bg-red-500/10"
                   title="卸载"
                 >
                   <Trash2 className="w-4 h-4 text-red-500" />
@@ -253,7 +253,7 @@ export default function PluginsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">安装插件</h2>
-              <button onClick={() => setShowInstall(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowInstall(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -308,11 +308,11 @@ export default function PluginsPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowInstall(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowInstall(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button
                   onClick={handleInstall}
                   disabled={!installForm.name || installing}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {installing ? '安装中...' : '安装'}
                 </button>
@@ -330,9 +330,9 @@ export default function PluginsPage() {
               <div className="flex items-center gap-2">
                 <Puzzle className="w-5 h-5 text-primary" />
                 <h2 className="text-sm font-medium">{selectedPlugin.name}</h2>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">v{selectedPlugin.version}</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">v{selectedPlugin.version}</span>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3 min-h-0">
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -359,7 +359,7 @@ export default function PluginsPage() {
             <div className="flex items-center gap-2 p-4 border-t border-border shrink-0">
               <button
                 onClick={() => handleToggle(selectedPlugin)}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-md ${selectedPlugin.status === 'enabled' ? 'bg-orange-500/10 text-orange-600 hover:bg-orange-500/20' : 'bg-green-500/10 text-green-600 hover:bg-green-500/20'}`}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm rounded-lg ${selectedPlugin.status === 'enabled' ? 'bg-orange-500/10 text-orange-600 hover:bg-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'}`}
               >
                 {selectedPlugin.status === 'enabled' ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
                 {selectedPlugin.status === 'enabled' ? '禁用' : '启用'}
@@ -367,13 +367,13 @@ export default function PluginsPage() {
               <button
                 onClick={handleSaveConfig}
                 disabled={saving}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
               >
                 <Settings className="w-3 h-3" />{saving ? '保存中...' : '保存配置'}
               </button>
               <button
                 onClick={() => handleUninstall(selectedPlugin)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20 ml-auto"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto"
               >
                 <Trash2 className="w-3 h-3" />卸载
               </button>

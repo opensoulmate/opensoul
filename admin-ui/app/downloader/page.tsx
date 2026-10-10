@@ -59,12 +59,12 @@ type Tab = 'tasks' | 'plugins' | 'cache' | 'config';
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-600',
   connecting: 'bg-blue-500/10 text-blue-600 animate-pulse',
-  downloading: 'bg-green-500/10 text-green-600',
+  downloading: 'bg-emerald-500/10 text-emerald-500',
   paused: 'bg-orange-500/10 text-orange-600',
   done: 'bg-green-500/10 text-green-700',
   error: 'bg-red-500/10 text-red-500',
   cancelled: 'bg-gray-500/10 text-gray-500',
-  installed: 'bg-green-500/10 text-green-600',
+  installed: 'bg-emerald-500/10 text-emerald-500',
   available: 'bg-blue-500/10 text-blue-600',
   unavailable: 'bg-gray-500/10 text-gray-500',
 };
@@ -371,7 +371,7 @@ export default function DownloaderPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -380,20 +380,20 @@ export default function DownloaderPage() {
             <t.icon className="w-3.5 h-3.5" />
             {t.label}
             {t.key === 'tasks' && activeTasks.length > 0 && (
-              <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-green-500/10 text-green-600">{activeTasks.length}</span>
+              <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500">{activeTasks.length}</span>
             )}
           </button>
         ))}
         <div className="flex-1" />
         <button
           onClick={() => setShowNewDownload(true)}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 mb-1"
+          className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 mb-1 font-medium transition-colors"
         >
           <ArrowDownToLine className="w-3 h-3" />新建下载
         </button>
         <button
           onClick={fetchAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 mb-1"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted mb-1 transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
@@ -414,14 +414,14 @@ export default function DownloaderPage() {
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground'}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground'}`}>
                         {task.status}
                       </span>
                       {task.plugin && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{task.plugin}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{task.plugin}</span>
                       )}
                       {task.segments > 1 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{task.segments}线程</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{task.segments}线程</span>
                       )}
                     </div>
                     <p className="text-xs font-mono truncate text-muted-foreground">{task.url}</p>
@@ -466,17 +466,17 @@ export default function DownloaderPage() {
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0">
                     {task.status === 'downloading' && (
-                      <button onClick={() => handlePause(task.id)} className="p-1.5 rounded hover:bg-orange-500/10" title="暂停">
+                      <button onClick={() => handlePause(task.id)} className="p-1.5 rounded-md hover:bg-amber-500/10" title="暂停">
                         <Pause className="w-4 h-4 text-orange-500" />
                       </button>
                     )}
                     {task.status === 'paused' && (
-                      <button onClick={() => handleResume(task.id)} className="p-1.5 rounded hover:bg-green-500/10" title="继续">
+                      <button onClick={() => handleResume(task.id)} className="p-1.5 rounded-md hover:bg-emerald-500/10" title="继续">
                         <Play className="w-4 h-4 text-green-500" />
                       </button>
                     )}
                     {!['done', 'cancelled'].includes(task.status) && (
-                      <button onClick={() => handleCancel(task.id)} className="p-1.5 rounded hover:bg-red-500/10" title="取消">
+                      <button onClick={() => handleCancel(task.id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="取消">
                         <Trash2 className="w-4 h-4 text-red-500" />
                       </button>
                     )}
@@ -495,7 +495,7 @@ export default function DownloaderPage() {
             <p className="text-xs text-muted-foreground">{plugins.length} 个插件 · {installedPlugins.length} 已安装</p>
             <button
               onClick={handleUpdateAll}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-md hover:bg-blue-500/20"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20"
             >
               <RefreshCw className="w-3 h-3" />全部更新
             </button>
@@ -516,19 +516,19 @@ export default function DownloaderPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-medium">{plugin.name}</h3>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLORS[plugin.status] || 'bg-muted text-muted-foreground'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[plugin.status] || 'bg-muted text-muted-foreground'}`}>
                           {plugin.status}
                         </span>
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-1">{plugin.description}</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">v{plugin.version}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">v{plugin.version}</span>
                         <span className="text-[10px] text-muted-foreground">优先级: {plugin.priority}</span>
                         {plugin.supports_resume && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600">续传</span>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">续传</span>
                         )}
                         {plugin.supports_p2p && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600">P2P</span>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-purple-500/10 text-purple-600">P2P</span>
                         )}
                       </div>
                     </div>
@@ -536,7 +536,7 @@ export default function DownloaderPage() {
                       {plugin.status !== 'installed' && (
                         <button
                           onClick={() => handleInstallPlugin(plugin.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded hover:opacity-90"
+                          className="flex items-center gap-2 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
                         >
                           <Download className="w-3 h-3" />安装
                         </button>
@@ -544,7 +544,7 @@ export default function DownloaderPage() {
                       {plugin.status === 'installed' && (
                         <button
                           onClick={() => handleUpdatePlugin(plugin.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20"
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20"
                         >
                           <RefreshCw className="w-3 h-3" />更新
                         </button>
@@ -566,7 +566,7 @@ export default function DownloaderPage() {
             <button
               onClick={handleClearCache}
               disabled={cacheFiles.length === 0}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20 disabled:opacity-50"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20 disabled:opacity-50"
             >
               <Trash2 className="w-3 h-3" />清空缓存
             </button>
@@ -590,7 +590,7 @@ export default function DownloaderPage() {
                   </div>
                   <button
                     onClick={() => handleDeleteCacheFile(file.name)}
-                    className="p-1.5 rounded hover:bg-red-500/10 shrink-0"
+                    className="p-1.5 rounded-md hover:bg-red-500/10 shrink-0"
                     title="删除"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-red-500" />
@@ -650,7 +650,7 @@ export default function DownloaderPage() {
               <button
                 onClick={handleSetConfig}
                 disabled={!editConfig.key}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
               >
                 <Zap className="w-3 h-3" />设置
               </button>
@@ -665,7 +665,7 @@ export default function DownloaderPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">新建下载</h2>
-              <button onClick={() => setShowNewDownload(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowNewDownload(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -687,11 +687,11 @@ export default function DownloaderPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowNewDownload(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowNewDownload(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button
                   onClick={handleStartDownload}
                   disabled={downloading || !newUrl}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {downloading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                   开始下载

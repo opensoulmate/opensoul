@@ -405,13 +405,13 @@ export default function MonitoringPage() {
             </select>
           )}
         </div>
-        <button onClick={fetchData} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-50">
+        <button onClick={fetchData} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}刷新
         </button>
-        <button onClick={fetchConfigDiff} disabled={configLoading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-50">
+        <button onClick={fetchConfigDiff} disabled={configLoading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
           {configLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Settings className="w-3.5 h-3.5" />}配置差异
         </button>
-        <button onClick={fetchMetrics} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchMetrics} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <BarChart3 className="w-3.5 h-3.5" />Prometheus
         </button>
         {stats && (
@@ -485,7 +485,7 @@ export default function MonitoringPage() {
                 <StatusBadge status={selectedOrgan.status} />
                 <h2 className="text-sm font-medium">{selectedOrgan.label}</h2>
               </div>
-              <button onClick={() => setSelectedOrgan(null)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setSelectedOrgan(null)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 overflow-y-auto space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
@@ -535,7 +535,7 @@ export default function MonitoringPage() {
                 <h2 className="text-sm font-medium">配置差异</h2>
                 <span className="text-[10px] text-muted-foreground">{configDiff.changes.length} 项自定义</span>
               </div>
-              <button onClick={() => setShowConfigDiff(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowConfigDiff(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 overflow-y-auto">
               {configDiff.changes.length === 0 ? (
@@ -575,7 +575,7 @@ export default function MonitoringPage() {
                 <h2 className="text-sm font-medium">Prometheus Metrics</h2>
                 <span className="text-[10px] text-muted-foreground font-mono">/api/metrics</span>
               </div>
-              <button onClick={() => setShowMetrics(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowMetrics(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 overflow-y-auto">
               <pre className="text-[10px] font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">

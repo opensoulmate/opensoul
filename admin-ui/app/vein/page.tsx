@@ -210,9 +210,9 @@ export default function VeinPage() {
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button onClick={() => setTab('files')} className={`px-3 py-1.5 text-xs ${tab === 'files' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>文件</button>
-          <button onClick={() => setTab('cache')} className={`px-3 py-1.5 text-xs ${tab === 'cache' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>缓存</button>
-          <button onClick={() => setTab('uploads')} className={`px-3 py-1.5 text-xs ${tab === 'uploads' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>上传</button>
+          <button onClick={() => setTab('files')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'files' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>文件</button>
+          <button onClick={() => setTab('cache')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'cache' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>缓存</button>
+          <button onClick={() => setTab('uploads')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'uploads' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>上传</button>
         </div>
         {tab === 'files' && (
           <>
@@ -228,7 +228,7 @@ export default function VeinPage() {
             )}
           </>
         )}
-        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -249,9 +249,9 @@ export default function VeinPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium truncate">{file.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{file.mime_type}</span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{file.mime_type}</span>
                       {file.version_count > 1 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500">v{file.version_count}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500">v{file.version_count}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
@@ -268,7 +268,7 @@ export default function VeinPage() {
                     </div>
                   )}
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.file_id); }} className="p-1 rounded hover:bg-red-500/10" title="删除">
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.file_id); }} className="p-1 rounded-md hover:bg-red-500/10" title="删除">
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
                     </button>
                   </div>
@@ -315,10 +315,10 @@ export default function VeinPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={handleCacheCleanup} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-md hover:bg-amber-500/20">
+              <button onClick={handleCacheCleanup} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/20">
                 <Zap className="w-3 h-3" />清理过期
               </button>
-              <button onClick={handleCacheClear} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20">
+              <button onClick={handleCacheClear} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20">
                 <Trash2 className="w-3 h-3" />清空缓存
               </button>
             </div>
@@ -342,7 +342,7 @@ export default function VeinPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium">{u.filename}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${u.status === 'completed' ? 'bg-green-500/10 text-green-600' : u.status === 'uploading' ? 'bg-blue-500/10 text-blue-500' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${u.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : u.status === 'uploading' ? 'bg-blue-500/10 text-blue-500' : 'bg-muted text-muted-foreground'}`}>
                         {u.status}
                       </span>
                     </div>

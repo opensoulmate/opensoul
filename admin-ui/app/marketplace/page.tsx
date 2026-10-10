@@ -43,12 +43,12 @@ const SOURCE_TYPES = [
 ];
 
 const TYPE_COLORS: Record<string, string> = {
-  hermes: 'bg-purple-500/10 text-purple-500',
+  hermes: 'bg-violet-500/10 text-violet-500',
   openclaw: 'bg-blue-500/10 text-blue-500',
   github: 'bg-gray-500/10 text-gray-400',
   tencent: 'bg-cyan-500/10 text-cyan-500',
-  aliyun: 'bg-orange-500/10 text-orange-500',
-  builtin: 'bg-green-500/10 text-green-500',
+  aliyun: 'bg-amber-500/10 text-amber-500',
+  builtin: 'bg-emerald-500/10 text-emerald-500',
   custom: 'bg-yellow-500/10 text-yellow-500',
 };
 
@@ -243,13 +243,13 @@ export default function MarketplacePage() {
       <div className="flex items-center gap-1 p-0.5 bg-muted rounded-lg w-fit">
         <button
           onClick={() => setTab('skills')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${tab === 'skills' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors ${tab === 'skills' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
         >
           <Zap className="w-3.5 h-3.5" />技能数据源
         </button>
         <button
           onClick={() => setTab('agents')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${tab === 'agents' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors ${tab === 'agents' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
         >
           <Package className="w-3.5 h-3.5" />Agent数据源
         </button>
@@ -268,13 +268,13 @@ export default function MarketplacePage() {
         </div>
         <button
           onClick={() => { fetchSources(); fetchStats(); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
         <button
           onClick={() => { resetForm(); setShowCreate(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90"
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />添加数据源
         </button>
@@ -324,7 +324,7 @@ export default function MarketplacePage() {
                 </a>
               )}
             </div>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded w-fit ${TYPE_COLORS[src.type] || TYPE_COLORS.custom}`}>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium w-fit ${TYPE_COLORS[src.type] || TYPE_COLORS.custom}`}>
               {src.type}
             </span>
             <span className="text-[10px] text-muted-foreground">{formatTime(src.last_sync)}</span>
@@ -347,17 +347,17 @@ export default function MarketplacePage() {
                 <button
                   onClick={() => handleSync(src)}
                   disabled={syncing.has(src.id)}
-                  className="p-1.5 rounded hover:bg-muted disabled:opacity-50"
+                  className="p-1.5 rounded-md hover:bg-muted disabled:opacity-50"
                   title="同步"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${syncing.has(src.id) ? 'animate-spin' : ''}`} />
                 </button>
               )}
-              <button onClick={() => openEdit(src)} className="p-1.5 rounded hover:bg-muted" title="编辑">
+              <button onClick={() => openEdit(src)} className="p-1.5 rounded-md hover:bg-muted" title="编辑">
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
               {!src.builtin && (
-                <button onClick={() => handleDelete(src)} className="p-1.5 rounded hover:bg-red-500/10" title="删除">
+                <button onClick={() => handleDelete(src)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除">
                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
                 </button>
               )}
@@ -383,7 +383,7 @@ export default function MarketplacePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-base font-medium">{editSource ? '编辑数据源' : '添加数据源'}</h2>
-              <button onClick={() => resetForm()} className="p-1 rounded hover:bg-muted">
+              <button onClick={() => resetForm()} className="p-1 rounded-md hover:bg-muted">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -455,13 +455,13 @@ export default function MarketplacePage() {
                 <button
                   onClick={handleSave}
                   disabled={!formName.trim()}
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   <Save className="w-3.5 h-3.5" />{editSource ? '保存' : '创建'}
                 </button>
                 <button
                   onClick={() => resetForm()}
-                  className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+                  className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
                 >
                   取消
                 </button>

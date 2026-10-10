@@ -268,7 +268,7 @@ export default function LogsPage() {
         </select>
         <button
           onClick={() => setUseSse(!useSse)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md transition-colors ${useSse ? 'bg-green-500/10 text-green-600 border-green-500/20' : 'bg-muted border-border hover:bg-muted/80'}`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border rounded-lg transition-colors ${useSse ? 'bg-emerald-500/10 text-emerald-500 border-green-500/20' : 'bg-muted border-border hover:bg-muted'}`}
         >
           {useSse ? (
             sseConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />
@@ -283,10 +283,10 @@ export default function LogsPage() {
             轮询(5s)
           </label>
         )}
-        <button onClick={handleRefreshStream} disabled={refreshing} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-50">
+        <button onClick={handleRefreshStream} disabled={refreshing} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
           {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}刷新流
         </button>
-        <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <Download className="w-3.5 h-3.5" />导出CSV
         </button>
       </div>
@@ -313,8 +313,8 @@ export default function LogsPage() {
                 <span className="text-lg shrink-0">{log.emoji || '📋'}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${getTypeBg(log.type)} ${getTypeColor(log.type)}`}>{log.type}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{log.organ}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium font-mono ${getTypeBg(log.type)} ${getTypeColor(log.type)}`}>{log.type}</span>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{log.organ}</span>
                     <span className="text-[10px] text-muted-foreground" title={formatTime(log.timestamp)}>{formatRelative(log.timestamp)}</span>
                   </div>
                   <p className="text-xs mt-0.5 break-words">{log.summary}</p>

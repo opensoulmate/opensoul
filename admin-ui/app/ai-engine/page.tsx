@@ -206,7 +206,7 @@ export default function AIEnginePage() {
                 <div className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border min-w-[140px] ${active ? `${layer.bg} ${layer.border}` : 'bg-muted/30 border-border opacity-50'}`}>
                   <div className={`${active ? layer.color : 'text-muted-foreground'}`}>{layer.icon}</div>
                   <div className="text-xs font-medium">{layer.label}</div>
-                  <div className={`text-[10px] px-1.5 py-0.5 rounded-full ${active ? 'bg-green-400/20 text-green-400' : 'bg-muted text-muted-foreground'}`}>
+                  <div className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${active ? 'bg-green-400/20 text-green-400' : 'bg-muted text-muted-foreground'}`}>
                     {active ? '活跃' : '未激活'}
                   </div>
                 </div>
@@ -280,7 +280,7 @@ export default function AIEnginePage() {
               placeholder="输入任务描述，如：帮我写一个系统架构方案"
               className="flex-1 px-3 py-2 text-sm rounded-lg bg-muted border border-border focus:outline-none focus:border-primary"
             />
-            <button onClick={handleAnalyze} disabled={analyzing} className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50">
+            <button onClick={handleAnalyze} disabled={analyzing} className="px-2 lg:px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {analyzing ? '分析中...' : '分析'}
             </button>
           </div>
@@ -401,7 +401,7 @@ export default function AIEnginePage() {
                   <div className="flex-1" />
                   <div className="flex flex-wrap gap-1">
                     {r.guardrails.map((g, j) => (
-                      <span key={j} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{g}</span>
+                      <span key={j} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{g}</span>
                     ))}
                   </div>
                 </div>
@@ -461,7 +461,7 @@ export default function AIEnginePage() {
                 placeholder="输入目标，如：编写系统架构方案"
                 className="flex-1 px-3 py-2 text-sm rounded-lg bg-muted border border-border focus:outline-none focus:border-primary"
               />
-              <button onClick={handleDecompose} disabled={decomposing} className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50">
+              <button onClick={handleDecompose} disabled={decomposing} className="px-2 lg:px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 {decomposing ? '分解中...' : '分解'}
               </button>
             </div>

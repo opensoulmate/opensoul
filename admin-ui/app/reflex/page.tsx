@@ -308,13 +308,13 @@ export default function ReflexPage() {
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
-        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-md hover:bg-amber-500/20">
+        <button onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/20">
           <Clock className="w-3.5 h-3.5" />清理过期
         </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />添加缓存
         </button>
       </div>
@@ -334,7 +334,7 @@ export default function ReflexPage() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             <Icon className="w-3.5 h-3.5" />{label}
           </button>
@@ -383,8 +383,8 @@ export default function ReflexPage() {
                       </div>
                     </div>
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditingId(null)} className="px-2 py-1 text-[10px] border border-border rounded hover:bg-muted">取消</button>
-                      <button onClick={saveEdit} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded hover:opacity-90">
+                      <button onClick={() => setEditingId(null)} className="px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted">取消</button>
+                      <button onClick={saveEdit} className="flex items-center gap-2 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
                         <Save className="w-3 h-3" />保存
                       </button>
                     </div>
@@ -401,12 +401,12 @@ export default function ReflexPage() {
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{entry.response}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-2">
                           {entry.category && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{entry.category}</span>
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{entry.category}</span>
                           )}
                           {entry.tags.map((t) => (
-                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">#{t}</span>
+                            <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">#{t}</span>
                           ))}
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${importanceColor(entry.importance)}`}>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${importanceColor(entry.importance)}`}>
                             重要性: {importanceLabel(entry.importance)}
                           </span>
                           <span className="text-[10px] text-muted-foreground">命中 {entry.hit_count} 次</span>
@@ -417,10 +417,10 @@ export default function ReflexPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => startEdit(entry)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="编辑">
+                        <button onClick={() => startEdit(entry)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground" title="编辑">
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => handleDelete(entry.entry_id)} className="p-1.5 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500" title="删除">
+                        <button onClick={() => handleDelete(entry.entry_id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-500" title="删除">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -452,7 +452,7 @@ export default function ReflexPage() {
               <button
                 onClick={handleLookup}
                 disabled={!lookupQuery.trim() || looking}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
               >
                 {looking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
                 查询
@@ -461,7 +461,7 @@ export default function ReflexPage() {
           </div>
 
           {lookupResult && (
-            <div className={`rounded-lg border p-4 ${lookupResult.hit ? 'border-green-500/30 bg-green-500/5' : 'border-border bg-card'}`}>
+            <div className={`rounded-lg border p-4 ${lookupResult.hit ? 'border-emerald-500/30 bg-green-500/5' : 'border-border bg-card'}`}>
               <div className="flex items-center gap-2 mb-2">
                 {lookupResult.hit ? (
                   <>
@@ -487,9 +487,9 @@ export default function ReflexPage() {
                     <div className="text-xs text-muted-foreground whitespace-pre-wrap">{lookupResult.response}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {lookupResult.category && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{lookupResult.category}</span>}
+                    {lookupResult.category && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{lookupResult.category}</span>}
                     {lookupResult.importance !== undefined && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${importanceColor(lookupResult.importance)}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${importanceColor(lookupResult.importance)}`}>
                         重要性: {importanceLabel(lookupResult.importance)}
                       </span>
                     )}
@@ -511,13 +511,13 @@ export default function ReflexPage() {
                 缓存配置
               </div>
               {!editingConfig ? (
-                <button onClick={() => setEditingConfig(true)} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted border border-border rounded hover:bg-muted/80">
+                <button onClick={() => setEditingConfig(true)} className="flex items-center gap-1 px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted transition-colors">
                   <Edit3 className="w-3 h-3" />编辑
                 </button>
               ) : (
                 <div className="flex gap-1">
-                  <button onClick={() => setEditingConfig(false)} className="px-2 py-1 text-[10px] border border-border rounded hover:bg-muted">取消</button>
-                  <button onClick={saveConfig} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded hover:opacity-90">
+                  <button onClick={() => setEditingConfig(false)} className="px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted">取消</button>
+                  <button onClick={saveConfig} className="flex items-center gap-2 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
                     <Save className="w-3 h-3" />保存
                   </button>
                 </div>
@@ -562,7 +562,7 @@ export default function ReflexPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加缓存条目</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -605,11 +605,11 @@ export default function ReflexPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button
                   onClick={handleCreate}
                   disabled={!newEntry.query.trim() || !newEntry.response.trim() || creating}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   添加

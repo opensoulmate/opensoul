@@ -283,22 +283,22 @@ export default function NotificationsPage() {
           <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} className="rounded" />
           仅未读
         </label>
-        <button onClick={fetchNotifications} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchNotifications} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={handleMarkAllRead} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={handleMarkAllRead} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <CheckCheck className="w-3.5 h-3.5" />全部已读
         </button>
-        <button onClick={() => setShowForwardRules(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => setShowForwardRules(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <Settings className="w-3.5 h-3.5" />转发规则
         </button>
-        <button onClick={() => setShowStats(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => setShowStats(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <BarChart3 className="w-3.5 h-3.5" />统计
         </button>
-        <button onClick={handleTest} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={handleTest} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <Beaker className="w-3.5 h-3.5" />测试
         </button>
-        <button onClick={handleClearAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20">
+        <button onClick={handleClearAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20">
           <Trash2 className="w-3.5 h-3.5" />清空
         </button>
       </div>
@@ -330,7 +330,7 @@ export default function NotificationsPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-xs font-medium truncate">{notif.emoji} {notif.title}</h3>
                     {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${config.bg} ${config.color}`}>{config.label}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${config.bg} ${config.color}`}>{config.label}</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{notif.body}</p>
                   <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
@@ -343,7 +343,7 @@ export default function NotificationsPage() {
                   {!notif.read && (
                     <button
                       onClick={() => handleMarkRead(notif.id)}
-                      className="p-1 rounded hover:bg-muted"
+                      className="p-1 rounded-md hover:bg-muted"
                       title="标为已读"
                     >
                       <CheckCheck className="w-3 h-3 text-muted-foreground" />
@@ -351,14 +351,14 @@ export default function NotificationsPage() {
                   )}
                   <button
                     onClick={() => { setForwardNotif(notif); setForwardChannel(''); }}
-                    className="p-1 rounded hover:bg-muted"
+                    className="p-1 rounded-md hover:bg-muted"
                     title="转发到Echo"
                   >
                     <Send className="w-3 h-3 text-muted-foreground" />
                   </button>
                   <button
                     onClick={() => handleDismiss(notif.id)}
-                    className="p-1 rounded hover:bg-muted"
+                    className="p-1 rounded-md hover:bg-muted"
                     title="关闭"
                   >
                     <X className="w-3 h-3 text-muted-foreground" />
@@ -389,7 +389,7 @@ export default function NotificationsPage() {
                 })()}
                 <h2 className="text-sm font-medium">{selectedNotif.emoji} {selectedNotif.title}</h2>
               </div>
-              <button onClick={() => setSelectedNotif(null)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setSelectedNotif(null)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 overflow-y-auto space-y-3 text-xs">
               <div className="p-3 rounded bg-muted/50">
@@ -441,7 +441,7 @@ export default function NotificationsPage() {
                 <Settings className="w-4 h-4 text-primary" />
                 <h2 className="text-sm font-medium">Echo 转发规则</h2>
               </div>
-              <button onClick={() => setShowForwardRules(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowForwardRules(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 overflow-y-auto space-y-3">
               <div className="flex items-center justify-between p-3 rounded bg-muted/30">
@@ -465,11 +465,11 @@ export default function NotificationsPage() {
                     const config = LEVEL_CONFIG[level] || LEVEL_CONFIG.info;
                     return (
                       <div key={level} className="flex items-center gap-2 p-2 rounded border border-border">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${config.bg} ${config.color}`}>{config.label}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${config.bg} ${config.color}`}>{config.label}</span>
                         <span className="text-[10px] text-muted-foreground">→</span>
                         <div className="flex gap-1 flex-wrap">
                           {channels.map((ch) => (
-                            <span key={ch} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono">{ch}</span>
+                            <span key={ch} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">{ch}</span>
                           ))}
                         </div>
                       </div>
@@ -478,7 +478,7 @@ export default function NotificationsPage() {
                 </div>
               )}
               <div className="flex gap-2 pt-2">
-                <button onClick={handleTestForward} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+                <button onClick={handleTestForward} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
                   <Beaker className="w-3 h-3" />发送测试转发
                 </button>
               </div>
@@ -496,7 +496,7 @@ export default function NotificationsPage() {
                 <BarChart3 className="w-4 h-4 text-primary" />
                 <h2 className="text-sm font-medium">通知统计</h2>
               </div>
-              <button onClick={() => setShowStats(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowStats(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 overflow-y-auto space-y-4">
               <div>
@@ -507,7 +507,7 @@ export default function NotificationsPage() {
                     const pct = stats.total > 0 ? (count / stats.total) * 100 : 0;
                     return (
                       <div key={level} className="flex items-center gap-2">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${config.bg} ${config.color} w-12 text-center`}>{config.label}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${config.bg} ${config.color} w-12 text-center`}>{config.label}</span>
                         <div className="flex-1 bg-muted rounded-full h-2">
                           <div className={`h-2 rounded-full ${config.color.replace('text-', 'bg-')}`} style={{ width: `${pct}%` }} />
                         </div>
@@ -545,7 +545,7 @@ export default function NotificationsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">转发到 Echo 通道</h2>
-              <button onClick={() => setForwardNotif(null)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setForwardNotif(null)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div className="text-xs text-muted-foreground">
@@ -567,11 +567,11 @@ export default function NotificationsPage() {
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setForwardNotif(null)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
+                <button onClick={() => setForwardNotif(null)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
                 <button
                   onClick={handleForward}
                   disabled={!forwardChannel || forwarding}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {forwarding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                   {forwarding ? '转发中...' : '转发'}

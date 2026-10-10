@@ -126,7 +126,7 @@ export default function IntelligencePage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
         </div>
       )}
 
@@ -166,16 +166,16 @@ export default function IntelligencePage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1 border-b border-border">
           {([['overview', '总览'], ['insights', '洞察'], ['components', '组件'], ['recommendations', '建议']] as const).map(([key, label]) => (
-            <button key={key} onClick={() => setTab(key as any)} className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+            <button key={key} onClick={() => setTab(key as any)} className={`px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
               {label}
             </button>
           ))}
         </div>
         <div className="flex-1" />
-        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={handleCollect} disabled={collecting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50">
+        <button onClick={handleCollect} disabled={collecting} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
           {collecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart3 className="w-3.5 h-3.5" />}
           {collecting ? '采集中...' : '采集指标'}
         </button>
@@ -253,8 +253,8 @@ export default function IntelligencePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium">{insight.title}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{TYPE_LABELS[insight.insight_type] || insight.insight_type}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${sc.bg} ${sc.color}`}>{insight.severity}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{TYPE_LABELS[insight.insight_type] || insight.insight_type}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sc.bg} ${sc.color}`}>{insight.severity}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{insight.description}</p>
                       {insight.recommendation && (
@@ -321,8 +321,8 @@ export default function IntelligencePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium">{rec.title}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{rec.component}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${rec.priority === 'high' ? 'bg-red-500/10 text-red-500' : rec.priority === 'medium' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'}`}>{rec.priority}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{rec.component}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${rec.priority === 'high' ? 'bg-red-500/10 text-red-500' : rec.priority === 'medium' ? 'bg-amber-500/10 text-amber-500' : 'bg-blue-500/10 text-blue-500'}`}>{rec.priority}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{rec.description}</p>
                       {rec.action && (

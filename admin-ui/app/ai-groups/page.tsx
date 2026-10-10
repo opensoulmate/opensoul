@@ -62,7 +62,7 @@ interface DiscussionMessage {
 
 const ROLES = [
   { value: 'advisor', label: '顾问', color: 'bg-blue-500/10 text-blue-600' },
-  { value: 'executor', label: '执行者', color: 'bg-green-500/10 text-green-600' },
+  { value: 'executor', label: '执行者', color: 'bg-emerald-500/10 text-emerald-500' },
   { value: 'verifier', label: '验证者', color: 'bg-orange-500/10 text-orange-600' },
   { value: 'human', label: '人工', color: 'bg-purple-500/10 text-purple-600' },
 ];
@@ -75,7 +75,7 @@ const TASK_STATUSES: Record<string, { label: string; color: string; icon: typeof
   executing: { label: '执行中', color: 'bg-primary/10 text-primary', icon: Play },
   reviewing: { label: '评审中', color: 'bg-orange-500/10 text-orange-600', icon: Eye },
   scored: { label: '已评分', color: 'bg-teal-500/10 text-teal-600', icon: Star },
-  completed: { label: '已完成', color: 'bg-green-500/10 text-green-600', icon: CheckCircle },
+  completed: { label: '已完成', color: 'bg-emerald-500/10 text-emerald-500', icon: CheckCircle },
   failed: { label: '失败', color: 'bg-red-500/10 text-red-500', icon: AlertCircle },
 };
 
@@ -271,7 +271,7 @@ export default function AIGroupsPage() {
     const StsIcon = sts.icon;
     return (
       <div className="space-y-4">
-        <button onClick={() => setSelectedTask(null)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <button onClick={() => setSelectedTask(null)} className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-3.5 h-3.5" />返回群组详情
         </button>
         <div className="rounded-lg border border-border bg-card p-4">
@@ -279,7 +279,7 @@ export default function AIGroupsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-medium">{selectedTask.goal}</h2>
-                <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${sts.color}`}>
+                <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${sts.color}`}>
                   <StsIcon className="w-3 h-3" />{sts.label}
                 </span>
               </div>
@@ -290,24 +290,24 @@ export default function AIGroupsPage() {
             <div className="flex items-center gap-1.5">
               {selectedTask.status === 'pending' && selectedTask.assigned_agent_id && (
                 <button onClick={() => handleExecuteTask(selectedTask.id, selectedTask.assigned_agent_id!, selectedTask.goal)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
                   <Play className="w-3.5 h-3.5" />执行
                 </button>
               )}
               {(selectedTask.status === 'reviewing' || selectedTask.status === 'scored') && (
                 <>
                   <button onClick={() => { handleVerifyTask(selectedTask.id, true); setSelectedTask(null); }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-500/10 text-green-600 rounded-md hover:bg-green-500/20">
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
                     <CheckCircle className="w-3.5 h-3.5" />通过
                   </button>
                   <button onClick={() => { handleVerifyTask(selectedTask.id, false); setSelectedTask(null); }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20">
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
                     <X className="w-3.5 h-3.5" />驳回
                   </button>
                 </>
               )}
               <button onClick={() => fetchDiscussion(selectedTask.id)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
                 <MessageSquare className="w-3.5 h-3.5" />讨论
               </button>
             </div>
@@ -342,7 +342,7 @@ export default function AIGroupsPage() {
                         分数: {st.quality_score || '-'}
                       </div>
                     </div>
-                    <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${sInfo.color}`}>
+                    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${sInfo.color}`}>
                       <SIcon className="w-3 h-3" />{sInfo.label}
                     </span>
                   </div>
@@ -358,7 +358,7 @@ export default function AIGroupsPage() {
             <div className="bg-card rounded-lg border border-border w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
                 <h3 className="text-sm font-medium">讨论记录</h3>
-                <button onClick={() => setShowDiscussion(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                <button onClick={() => setShowDiscussion(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-3">
                 {discussionMessages.length === 0 ? (
@@ -369,7 +369,7 @@ export default function AIGroupsPage() {
                       {msg.agent_id !== 'system' && (
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-medium">{msg.agent_name || msg.agent_id}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-background">{msg.intent}</span>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-background">{msg.intent}</span>
                           <span className="text-[10px] text-muted-foreground">R{msg.round_num}</span>
                         </div>
                       )}
@@ -389,7 +389,7 @@ export default function AIGroupsPage() {
   if (selectedGroup) {
     return (
       <div className="space-y-4">
-        <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-3.5 h-3.5" />返回列表
         </button>
 
@@ -404,11 +404,11 @@ export default function AIGroupsPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <button onClick={() => { setTaskForm({ goal: '', constraints: '', criteria: '' }); setShowSubmitTask(true); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
                 <Send className="w-3.5 h-3.5" />提交任务
               </button>
               <button onClick={() => handleDelete(selectedGroup.id)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20">
+                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
                 <Trash2 className="w-3.5 h-3.5" />删除
               </button>
             </div>
@@ -418,11 +418,11 @@ export default function AIGroupsPage() {
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border">
           <button onClick={() => setDetailTab('agents')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${detailTab === 'agents' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+            className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${detailTab === 'agents' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             <Users className="w-3.5 h-3.5 inline mr-1" />Agent ({selectedGroup.agents?.length || 0})
           </button>
           <button onClick={() => setDetailTab('tasks')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${detailTab === 'tasks' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+            className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${detailTab === 'tasks' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             <ListChecks className="w-3.5 h-3.5 inline mr-1" />任务 ({selectedGroup.tasks?.length || 0})
           </button>
         </div>
@@ -432,7 +432,7 @@ export default function AIGroupsPage() {
           <div className="space-y-2">
             <div className="flex justify-end">
               <button onClick={() => { setAddAgentForm({ agent_id: '', name: '', role: 'executor', model: '' }); setShowAddAgent(true); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
                 <UserPlus className="w-3.5 h-3.5" />添加Agent
               </button>
             </div>
@@ -446,10 +446,10 @@ export default function AIGroupsPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium">{agent.name}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${getRoleColor(agent.role)}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getRoleColor(agent.role)}`}>
                           {getRoleLabel(agent.role)}
                         </span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${agent.status === 'online' ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${agent.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                           {agent.status}
                         </span>
                       </div>
@@ -461,7 +461,7 @@ export default function AIGroupsPage() {
                     </div>
                   </div>
                   <button onClick={() => handleRemoveAgent(selectedGroup.id, agent.agent_id)}
-                    className="p-1.5 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500">
+                    className="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-500">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -493,7 +493,7 @@ export default function AIGroupsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-3">
-                    <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${tInfo.color}`}>
+                    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${tInfo.color}`}>
                       <TIcon className="w-3 h-3" />{tInfo.label}
                     </span>
                     <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -510,7 +510,7 @@ export default function AIGroupsPage() {
             <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h3 className="text-sm font-medium">添加Agent</h3>
-                <button onClick={() => setShowAddAgent(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                <button onClick={() => setShowAddAgent(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="p-4 space-y-3">
                 <div>
@@ -537,8 +537,8 @@ export default function AIGroupsPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 p-4 border-t border-border">
-                <button onClick={() => setShowAddAgent(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-                <button onClick={handleAddAgent} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">添加</button>
+                <button onClick={() => setShowAddAgent(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+                <button onClick={handleAddAgent} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">添加</button>
               </div>
             </div>
           </div>
@@ -550,7 +550,7 @@ export default function AIGroupsPage() {
             <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h3 className="text-sm font-medium">提交任务</h3>
-                <button onClick={() => setShowSubmitTask(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                <button onClick={() => setShowSubmitTask(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="p-4 space-y-3">
                 <div>
@@ -570,8 +570,8 @@ export default function AIGroupsPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 p-4 border-t border-border">
-                <button onClick={() => setShowSubmitTask(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-                <button onClick={handleSubmitTask} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">提交</button>
+                <button onClick={() => setShowSubmitTask(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+                <button onClick={handleSubmitTask} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">提交</button>
               </div>
             </div>
           </div>
@@ -620,11 +620,11 @@ export default function AIGroupsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={fetchGroups} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchGroups} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
         <button onClick={() => { setNewName(''); setNewDesc(''); setShowCreate(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />新建群组
         </button>
       </div>
@@ -642,7 +642,7 @@ export default function AIGroupsPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium">{group.name}</h3>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${group.status === 'active' ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${group.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                     {group.status}
                   </span>
                 </div>
@@ -661,7 +661,7 @@ export default function AIGroupsPage() {
             {group.agents && group.agents.length > 0 && (
               <div className="flex items-center gap-1 mt-2">
                 {group.agents.slice(0, 5).map((a) => (
-                  <span key={a.id} className={`text-[10px] px-1.5 py-0.5 rounded-full ${getRoleColor(a.role)}`}>
+                  <span key={a.id} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getRoleColor(a.role)}`}>
                     {getRoleLabel(a.role)}
                   </span>
                 ))}
@@ -685,7 +685,7 @@ export default function AIGroupsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h3 className="text-sm font-medium">新建AI群组</h3>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3">
               <div>
@@ -719,7 +719,7 @@ export default function AIGroupsPage() {
                         {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                       </select>
                       <button onClick={() => setNewAgents((a) => a.filter((_, i) => i !== idx))}
-                        className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500">
+                        className="p-1 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-500">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -728,9 +728,9 @@ export default function AIGroupsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border shrink-0">
-              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
+              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
               <button onClick={handleCreate} disabled={!newName.trim()}
-                className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">创建</button>
+                className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">创建</button>
             </div>
           </div>
         </div>

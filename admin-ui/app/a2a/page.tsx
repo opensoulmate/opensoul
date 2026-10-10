@@ -117,7 +117,7 @@ function AgentCardView({ card }: { card: AgentCard }) {
       >
         <Globe className="w-4 h-4 text-primary" />
         <span className="text-sm font-medium flex-1">Agent Card</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
           v{card.protocolVersion}
         </span>
         {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -152,7 +152,7 @@ function AgentCardView({ card }: { card: AgentCard }) {
                   key={cap.key}
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${
                     cap.value
-                      ? 'bg-green-500/10 text-green-600'
+                      ? 'bg-emerald-500/10 text-emerald-500'
                       : 'bg-muted text-muted-foreground'
                   }`}
                 >
@@ -229,7 +229,7 @@ function TaskDetail({ task, onCancel }: { task: Task; onCancel: (id: string) => 
         {task.status.state === 'working' && (
           <button
             onClick={(e) => { e.stopPropagation(); onCancel(task.id); }}
-            className="px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded hover:bg-red-500/20"
+            className="px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
           >
             取消
           </button>
@@ -365,7 +365,7 @@ function RPCPanel({ onResult }: { onResult: (log: RPCLog) => void }) {
                     setParamsText('{\n  "message": {\n    "role": "user",\n    "parts": [{"type": "text", "text": "你好"}]\n  }\n}');
                   }
                 }}
-                className={`px-2.5 py-1.5 text-[10px] rounded-md border transition-colors ${
+                className={`px-2.5 py-1.5 text-[10px] rounded-lg border transition-colors ${
                   method === m.value
                     ? 'bg-primary/10 border-primary/30 text-primary'
                     : 'border-border text-muted-foreground hover:bg-muted/50'
@@ -391,7 +391,7 @@ function RPCPanel({ onResult }: { onResult: (log: RPCLog) => void }) {
         <button
           onClick={handleSend}
           disabled={sending}
-          className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
         >
           {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
           {sending ? '发送中...' : '发送请求'}
@@ -411,7 +411,7 @@ function RPCLogPanel({ logs }: { logs: RPCLog[] }) {
       <div className="flex items-center gap-2 p-4 border-b border-border">
         <Activity className="w-4 h-4" />
         <span className="text-sm font-medium">RPC 日志</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{logs.length} 条</span>
+        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{logs.length} 条</span>
       </div>
       <div className="divide-y divide-border max-h-[400px] overflow-auto">
         {logs.slice().reverse().map((log) => (
@@ -598,7 +598,7 @@ export default function A2APage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -611,7 +611,7 @@ export default function A2APage() {
         <div className="flex-1" />
         <button
           onClick={fetchData}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 mb-1"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted mb-1 transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
@@ -639,7 +639,7 @@ export default function A2APage() {
                 <button
                   key={s}
                   onClick={() => setStateFilter(s)}
-                  className={`px-2 py-1 text-[10px] rounded-md border transition-colors ${
+                  className={`px-2 py-1 text-[10px] rounded-lg border transition-colors ${
                     stateFilter === s
                       ? 'bg-primary/10 border-primary/30 text-primary'
                       : 'border-border text-muted-foreground hover:bg-muted/50'

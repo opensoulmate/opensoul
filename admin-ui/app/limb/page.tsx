@@ -291,7 +291,7 @@ export default function LimbPage() {
             if (t === 'history') fetchHistory();
             if (t === 'tools') fetchWindows();
           }}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
               tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}>{label}</button>
         ))}
@@ -321,16 +321,16 @@ export default function LimbPage() {
               <option value="completed">已完成</option>
               <option value="failed">失败</option>
             </select>
-            <button onClick={fetchTasks} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+            <button onClick={fetchTasks} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </button>
-            <button onClick={() => setShowCreateTask(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+            <button onClick={() => setShowCreateTask(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
               <Plus className="w-3.5 h-3.5" />新建任务
             </button>
           </>
         )}
         {tab === 'templates' && (
-          <button onClick={() => setShowCreateTemplate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+          <button onClick={() => setShowCreateTemplate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
             <Plus className="w-3.5 h-3.5" />新建模板
           </button>
         )}
@@ -346,30 +346,30 @@ export default function LimbPage() {
               <div key={task.task_id} className="rounded-lg border border-border bg-card p-4 hover:bg-muted/30 transition-colors cursor-pointer"
                 onClick={() => setSelectedTask(task)}>
                 <div className="flex items-center gap-2">
-                  <span className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full ${st.color}`}>
+                  <span className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${st.color}`}>
                     <StIcon className={`w-2.5 h-2.5 ${task.status === 'running' ? 'animate-spin' : ''}`} />{st.label}
                   </span>
                   <span className="text-sm font-medium">{task.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">优先级 {task.priority}</span>
-                  {task.tags?.map(tag => <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500">{tag}</span>)}
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">优先级 {task.priority}</span>
+                  {task.tags?.map(tag => <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500">{tag}</span>)}
                   <span className="text-[10px] text-muted-foreground ml-auto">{task.actions?.length ?? 0} 步</span>
                   {task.created_at && <span className="text-[10px] text-muted-foreground">{new Date(task.created_at).toLocaleString('zh-CN')}</span>}
                 </div>
                 <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border" onClick={(e) => e.stopPropagation()}>
                   {(task.status === 'queued') && (
                     <button onClick={() => handleExecuteTask(task.task_id)} disabled={executing === task.task_id}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-green-500/10 text-green-600 rounded hover:bg-green-500/20 disabled:opacity-50">
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50">
                       {executing === task.task_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}执行
                     </button>
                   )}
                   {task.status === 'running' && (
                     <button onClick={() => handleCancelTask(task.task_id)}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-orange-500/10 text-orange-500 rounded hover:bg-orange-500/20">
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
                       <Square className="w-3 h-3" />取消
                     </button>
                   )}
                   <button onClick={() => handleDeleteTask(task.task_id, task.name)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded hover:bg-red-500/20">
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
                     <Trash2 className="w-3 h-3" />删除
                   </button>
                 </div>
@@ -394,7 +394,7 @@ export default function LimbPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{tmpl.name}</h3>
-                    {tmpl.is_builtin && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500">内置</span>}
+                    {tmpl.is_builtin && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">内置</span>}
                   </div>
                   {tmpl.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{tmpl.description}</p>}
                   <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
@@ -406,12 +406,12 @@ export default function LimbPage() {
               </div>
               <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border">
                 <button onClick={() => handleInstantiateTemplate(tmpl.template_id)}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary/10 text-primary rounded hover:bg-primary/20">
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary/10 text-primary rounded-lg hover:bg-primary/20">
                   <Copy className="w-3 h-3" />实例化
                 </button>
                 {!tmpl.is_builtin && (
                   <button onClick={() => handleDeleteTemplate(tmpl.template_id, tmpl.name)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded hover:bg-red-500/20">
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
                     <Trash2 className="w-3 h-3" />删除
                   </button>
                 )}
@@ -433,7 +433,7 @@ export default function LimbPage() {
             const st = STATUS_MAP[h.status] || STATUS_MAP.queued;
             return (
               <div key={`${h.task_id}-${i}`} className="rounded-lg border border-border bg-card p-3 flex items-center gap-3">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${st.color}`}>{st.label}</span>
                 <span className="text-xs font-medium flex-1">{h.name}</span>
                 {h.duration_ms !== undefined && <span className="text-[10px] text-muted-foreground">{h.duration_ms}ms</span>}
                 <span className="text-[10px] text-muted-foreground">{new Date(h.started_at).toLocaleString('zh-CN')}</span>
@@ -455,7 +455,7 @@ export default function LimbPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="text-xs font-semibold mb-3 flex items-center gap-2"><Camera className="w-3.5 h-3.5" />截图</h3>
             <button onClick={handleScreenshot}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 mb-3">
+              className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 mb-3 font-medium transition-colors">
               <Camera className="w-3.5 h-3.5" />截取屏幕
             </button>
             {screenshotResult && (
@@ -467,7 +467,7 @@ export default function LimbPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="text-xs font-semibold mb-3 flex items-center gap-2"><FileText className="w-3.5 h-3.5" />OCR文字识别</h3>
             <button onClick={handleOCR} disabled={ocrLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 mb-3">
+              className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 mb-3 font-medium transition-colors">
               {ocrLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}识别屏幕文字
             </button>
             {ocrResult && (
@@ -484,7 +484,7 @@ export default function LimbPage() {
               <input className="w-20 px-2 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none"
                 placeholder="Y" value={clickY} onChange={(e) => setClickY(e.target.value)} />
               <button onClick={handleClick}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
                 <Mouse className="w-3 h-3" />点击
               </button>
             </div>
@@ -497,7 +497,7 @@ export default function LimbPage() {
               <input className="flex-1 px-2 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none"
                 placeholder="输入文本..." value={typeText} onChange={(e) => setTypeText(e.target.value)} />
               <button onClick={handleType}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
                 <Keyboard className="w-3 h-3" />输入
               </button>
             </div>
@@ -508,7 +508,7 @@ export default function LimbPage() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold flex items-center gap-2"><Monitor className="w-3.5 h-3.5" />窗口列表</h3>
               <button onClick={fetchWindows}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted border border-border rounded-md hover:bg-muted/80">
+                className="flex items-center gap-1 px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted transition-colors">
                 <RefreshCw className="w-3 h-3" />刷新
               </button>
             </div>
@@ -533,7 +533,7 @@ export default function LimbPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">新建RPA任务</h2>
-              <button onClick={() => setShowCreateTask(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreateTask(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -560,9 +560,9 @@ export default function LimbPage() {
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowCreateTask(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
+              <button onClick={() => setShowCreateTask(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
               <button onClick={handleCreateTask} disabled={!taskForm.name}
-                className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">创建</button>
+                className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">创建</button>
             </div>
           </div>
         </div>
@@ -574,7 +574,7 @@ export default function LimbPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">新建模板</h2>
-              <button onClick={() => setShowCreateTemplate(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreateTemplate(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -599,9 +599,9 @@ export default function LimbPage() {
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowCreateTemplate(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
+              <button onClick={() => setShowCreateTemplate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
               <button onClick={handleCreateTemplate} disabled={!tmplForm.name}
-                className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">创建</button>
+                className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">创建</button>
             </div>
           </div>
         </div>
@@ -613,7 +613,7 @@ export default function LimbPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">任务详情</h2>
-              <button onClick={() => setSelectedTask(null)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setSelectedTask(null)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
@@ -635,7 +635,7 @@ export default function LimbPage() {
               )}
             </div>
             <div className="flex items-center justify-end p-4 border-t border-border">
-              <button onClick={() => setSelectedTask(null)} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">关闭</button>
+              <button onClick={() => setSelectedTask(null)} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">关闭</button>
             </div>
           </div>
         </div>

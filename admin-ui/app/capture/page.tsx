@@ -47,12 +47,12 @@ function formatRelative(ts: number) {
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { color: string; label: string }> = {
     captured: { color: 'bg-blue-500/10 text-blue-500 border-blue-500/30', label: '已捕获' },
-    promoted: { color: 'bg-green-500/10 text-green-500 border-green-500/30', label: '已提升' },
+    promoted: { color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30', label: '已提升' },
     duplicate: { color: 'bg-amber-500/10 text-amber-500 border-amber-500/30', label: '重复' },
   };
   const c = config[status] || { color: 'bg-muted text-muted-foreground border-border', label: status };
   return (
-    <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${c.color}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${c.color}`}>
       {c.label}
     </span>
   );
@@ -195,7 +195,7 @@ export default function CapturePage() {
           <option value="page">整页</option>
           <option value="selection">选区</option>
         </select>
-        <button onClick={() => fetchData()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => fetchData()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -221,8 +221,8 @@ export default function CapturePage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium truncate">{capture.title || '无标题'}</span>
                   <StatusBadge status={capture.status} />
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    capture.capture_type === 'page' ? 'bg-blue-500/10 text-blue-500' : 'bg-purple-500/10 text-purple-500'
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    capture.capture_type === 'page' ? 'bg-blue-500/10 text-blue-500' : 'bg-violet-500/10 text-violet-500'
                   }`}>
                     {capture.capture_type === 'page' ? '整页' : '选区'}
                   </span>
@@ -259,7 +259,7 @@ export default function CapturePage() {
                 {capture.keywords && capture.keywords.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {capture.keywords.map((kw, i) => (
-                      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{kw}</span>
+                      <span key={i} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{kw}</span>
                     ))}
                   </div>
                 )}
@@ -270,7 +270,7 @@ export default function CapturePage() {
                     <button
                       onClick={() => handlePromote(capture.id)}
                       disabled={promoting === capture.id}
-                      className="flex items-center gap-1 px-2.5 py-1 text-[10px] bg-green-500/10 text-green-600 rounded hover:bg-green-500/20 disabled:opacity-50"
+                      className="flex items-center gap-1 px-2.5 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
                     >
                       {promoting === capture.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowUpCircle className="w-3 h-3" />}
                       提升为知识
@@ -293,7 +293,7 @@ export default function CapturePage() {
                   )}
                   <button
                     onClick={() => handleDelete(capture.id)}
-                    className="flex items-center gap-1 px-2.5 py-1 text-[10px] bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 ml-auto"
+                    className="flex items-center gap-1 px-2.5 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto"
                   >
                     <Trash2 className="w-3 h-3" />删除
                   </button>
@@ -310,9 +310,9 @@ export default function CapturePage() {
           <span className="text-xs text-muted-foreground">第 {page + 1} / {totalPages} 页，共 {total} 条</span>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
-              className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30">上一页</button>
+              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">上一页</button>
             <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
-              className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30">下一页</button>
+              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">下一页</button>
           </div>
         </div>
       )}
@@ -330,7 +330,7 @@ export default function CapturePage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500 flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded"><X className="w-3 h-3" /></button>
+          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded-md"><X className="w-3 h-3" /></button>
         </div>
       )}
     </div>

@@ -162,7 +162,7 @@ export default function LlmPage() {
         <div className="flex items-center gap-2 mb-4">
           <Cpu className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-medium">LLM 配置</h2>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">主模型</span>
+          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">主模型</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
@@ -198,7 +198,7 @@ export default function LlmPage() {
           <button
             onClick={handleSaveConfig}
             disabled={saving}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
           >
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             {saving ? '保存中...' : '保存'}
@@ -206,7 +206,7 @@ export default function LlmPage() {
           <button
             onClick={handleTest}
             disabled={testing}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-md hover:bg-blue-500/20 disabled:opacity-50"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50"
           >
             {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
             {testing ? '测试中...' : '测试连接'}
@@ -229,9 +229,9 @@ export default function LlmPage() {
           <div className="flex items-center gap-2">
             <Server className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-medium">Provider 管理</h2>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{providers.length} 个</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{providers.length} 个</span>
           </div>
-          <button onClick={() => setShowAddProvider(true)} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+          <button onClick={() => setShowAddProvider(true)} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
             <Plus className="w-3 h-3" />添加Provider
           </button>
         </div>
@@ -248,26 +248,26 @@ export default function LlmPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="text-xs font-medium">{p.name}</h3>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${p.enabled ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${p.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                         {p.enabled ? '已启用' : '已禁用'}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">优先级: {p.priority}</span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">优先级: {p.priority}</span>
                       {p.consecutive_failures > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">失败: {p.consecutive_failures}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">失败: {p.consecutive_failures}</span>
                       )}
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-1 font-mono">{p.base_url}</div>
                     {Object.keys(p.models).length > 0 && (
                       <div className="flex items-center gap-2 mt-1">
                         {Object.entries(p.models).map(([task, model]) => (
-                          <span key={task} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          <span key={task} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
                             {task}: {model}
                           </span>
                         ))}
                       </div>
                     )}
                   </div>
-                  <button onClick={() => handleDeleteProvider(p.name)} className="p-1.5 rounded hover:bg-red-500/10" title="删除">
+                  <button onClick={() => handleDeleteProvider(p.name)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除">
                     <Trash2 className="w-3.5 h-3.5 text-red-500" />
                   </button>
                 </div>
@@ -283,7 +283,7 @@ export default function LlmPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加 Provider</h2>
-              <button onClick={() => setShowAddProvider(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowAddProvider(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -305,8 +305,8 @@ export default function LlmPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAddProvider(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                <button onClick={handleAddProvider} disabled={!newProvider.name || !newProvider.base_url} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                <button onClick={() => setShowAddProvider(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                <button onClick={handleAddProvider} disabled={!newProvider.name || !newProvider.base_url} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                   <Plus className="w-3 h-3" />添加
                 </button>
               </div>

@@ -64,11 +64,11 @@ interface Stats {
 // ── Helpers ─────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-500/10 text-green-500 border-green-500/30',
+  active: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
   paused: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
   draft: 'bg-muted text-muted-foreground border-border',
   running: 'bg-blue-500/10 text-blue-500 border-blue-500/30',
-  completed: 'bg-green-500/10 text-green-500 border-green-500/30',
+  completed: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
   failed: 'bg-red-500/10 text-red-500 border-red-500/30',
   cancelled: 'bg-muted text-muted-foreground border-border',
   pending: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
@@ -135,8 +135,8 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium truncate">{wf.name}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${statusClass}`}>{wf.status}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusClass}`}>{wf.status}</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
               {TRIGGER_LABELS[wf.trigger] || wf.trigger}
             </span>
           </div>
@@ -205,7 +205,7 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
               <div className="text-xs font-medium mb-1.5">变量</div>
               <div className="flex flex-wrap gap-1">
                 {Object.entries(wf.variables).map(([k, v]) => (
-                  <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono">
+                  <span key={k} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">
                     {k}={JSON.stringify(v).slice(0, 20)}
                   </span>
                 ))}
@@ -216,11 +216,11 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
           {/* Actions */}
           <div className="flex items-center gap-2 pt-2 border-t border-border">
             {wf.status === 'active' && (
-              <button onClick={onExecute} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-green-500/10 text-green-500 rounded hover:bg-green-500/20">
+              <button onClick={onExecute} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
                 <Play className="w-3 h-3" />执行
               </button>
             )}
-            <button onClick={onDelete} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded hover:bg-red-500/20">
+            <button onClick={onDelete} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
               <Trash2 className="w-3 h-3" />删除
             </button>
           </div>
@@ -252,7 +252,7 @@ function ExecutionCard({ exec }: { exec: Execution }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium truncate">{exec.workflow_name || exec.workflow_id.slice(0, 12)}</span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${statusClass}`}>{exec.status}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusClass}`}>{exec.status}</span>
         </div>
         {exec.error && <p className="text-[10px] text-red-500 truncate mt-0.5">{exec.error}</p>}
       </div>
@@ -294,7 +294,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
       <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-medium">创建工作流</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4 space-y-3">
           <div>
@@ -315,8 +315,8 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             </select>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-            <button onClick={handleCreate} disabled={!name.trim() || saving} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+            <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+            <button onClick={handleCreate} disabled={!name.trim() || saving} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
               创建
             </button>
@@ -423,7 +423,7 @@ export default function WillPage() {
             const Icon = t.icon;
             return (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm rounded-lg transition-colors ${
                   tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}>
                 <Icon className="w-3.5 h-3.5" />{t.label}
@@ -439,12 +439,12 @@ export default function WillPage() {
               <input className="w-full pl-8 pr-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
                 placeholder="搜索工作流..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+            <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
               <Plus className="w-3.5 h-3.5" />创建工作流
             </button>
           </>
         )}
-        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -502,7 +502,7 @@ export default function WillPage() {
               <div className="flex items-center gap-2 mb-2">
                 <Zap className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium">{action.label}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">{action.type}</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground font-mono">{action.type}</span>
               </div>
               <p className="text-xs text-muted-foreground mb-2">{action.description}</p>
               {action.config_schema && (

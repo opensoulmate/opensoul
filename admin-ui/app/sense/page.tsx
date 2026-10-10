@@ -45,8 +45,8 @@ function EngineCard({ name, icon: Icon, engine, color }: {
 }) {
   const colorMap: Record<string, { bg: string; text: string; border: string }> = {
     blue: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/30' },
-    green: { bg: 'bg-green-500/10', text: 'text-green-500', border: 'border-green-500/30' },
-    purple: { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-purple-500/30' },
+    green: { bg: 'bg-green-500/10', text: 'text-green-500', border: 'border-emerald-500/30' },
+    purple: { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-violet-500/30' },
   };
   const c = colorMap[color] || colorMap.blue;
 
@@ -321,7 +321,7 @@ export default function SensePage() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm rounded-lg transition-colors ${
                   tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -331,7 +331,7 @@ export default function SensePage() {
             );
           })}
         </div>
-        <button onClick={fetchData} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchData} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>

@@ -70,7 +70,7 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
     <div className="flex items-center gap-1 text-xs overflow-x-auto">
       <button
         onClick={() => onNavigate('~')}
-        className="shrink-0 p-1 hover:bg-muted rounded"
+        className="shrink-0 p-1 hover:bg-muted rounded-md"
         title="Home"
       >
         <Home className="w-3.5 h-3.5" />
@@ -228,7 +228,7 @@ export default function WorkspacePage() {
               const parent = currentPath.split('/').slice(0, -1).join('/') || '~';
               navigateTo(parent);
             }}
-            className="p-1.5 hover:bg-muted rounded shrink-0"
+            className="p-1.5 hover:bg-muted rounded-md shrink-0"
             title="上级目录"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -251,14 +251,14 @@ export default function WorkspacePage() {
           </label>
           <button
             onClick={() => fetchDir(currentPath)}
-            className="p-1.5 hover:bg-muted rounded shrink-0"
+            className="p-1.5 hover:bg-muted rounded-md shrink-0"
             title="刷新"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
             onClick={() => setShowTerminal(!showTerminal)}
-            className={`p-1.5 rounded shrink-0 ${showTerminal ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+            className={`p-1.5 rounded-md shrink-0 ${showTerminal ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
             title="终端"
           >
             <Terminal className="w-4 h-4" />
@@ -311,7 +311,7 @@ export default function WorkspacePage() {
             <span className="text-[10px] text-muted-foreground">{formatSize(viewingFile.size)}</span>
             <button
               onClick={() => setViewingFile(null)}
-              className="p-1 hover:bg-muted rounded"
+              className="p-1 hover:bg-muted rounded-md"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -338,13 +338,13 @@ export default function WorkspacePage() {
             <span className="text-[10px] text-muted-foreground font-mono">{currentPath}</span>
             <button
               onClick={() => { setCmdHistory([]); }}
-              className="ml-auto p-1 hover:bg-muted rounded text-[10px] text-muted-foreground"
+              className="ml-auto p-1 hover:bg-muted rounded-md text-[10px] text-muted-foreground"
             >
               清空
             </button>
             <button
               onClick={() => setShowTerminal(false)}
-              className="p-1 hover:bg-muted rounded"
+              className="p-1 hover:bg-muted rounded-md"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -385,7 +385,7 @@ export default function WorkspacePage() {
             <button
               onClick={handleExecute}
               disabled={cmdRunning || !cmdInput.trim()}
-              className="p-1.5 hover:bg-muted rounded disabled:opacity-30"
+              className="p-1.5 hover:bg-muted rounded-md disabled:opacity-30"
             >
               {cmdRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             </button>
@@ -398,7 +398,7 @@ export default function WorkspacePage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

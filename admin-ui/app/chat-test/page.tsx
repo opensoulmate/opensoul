@@ -89,7 +89,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           <div className="whitespace-pre-wrap break-words">{msg.content}</div>
           <button
             onClick={handleCopy}
-            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-black/10"
+            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-md hover:bg-black/10"
             title="复制"
           >
             {copied ? (
@@ -422,7 +422,7 @@ export default function ChatTestPage() {
           <button
             onClick={handleSend}
             disabled={!input.trim() || sending}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-primary/10 disabled:opacity-30"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-primary/10 disabled:opacity-30"
           >
             {sending ? (
               <Loader2 className="w-4 h-4 text-primary animate-spin" />

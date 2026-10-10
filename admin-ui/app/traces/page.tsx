@@ -73,16 +73,16 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
   tool_call: 'bg-blue-500/10 text-blue-500 border-blue-500/30',
-  message: 'bg-green-500/10 text-green-500 border-green-500/30',
-  thought: 'bg-purple-500/10 text-purple-500 border-purple-500/30',
+  message: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
+  thought: 'bg-violet-500/10 text-violet-500 border-violet-500/30',
   action: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
-  result: 'bg-green-500/10 text-green-500 border-green-500/30',
+  result: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
   error: 'bg-red-500/10 text-red-500 border-red-500/30',
   feedback: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/30',
   knowledge: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/30',
-  pattern: 'bg-orange-500/10 text-orange-500 border-orange-500/30',
+  pattern: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
   decision: 'bg-pink-500/10 text-pink-500 border-pink-500/30',
-  start: 'bg-green-500/10 text-green-500 border-green-500/30',
+  start: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
   end: 'bg-gray-500/10 text-gray-500 border-gray-500/30',
 };
 
@@ -90,7 +90,7 @@ function EventTypeBadge({ type }: { type: string }) {
   const colorClass = EVENT_TYPE_COLORS[type] || 'bg-muted text-muted-foreground border-border';
   const label = EVENT_TYPE_LABELS[type] || type;
   return (
-    <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${colorClass}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${colorClass}`}>
       {label}
     </span>
   );
@@ -122,7 +122,7 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium font-mono truncate">{session.session_id}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex items-center gap-1">
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground flex items-center gap-1">
               <Lock className="w-2.5 h-2.5" />不可变
             </span>
           </div>
@@ -331,7 +331,7 @@ export default function TracesPage() {
         </div>
         <button
           onClick={() => fetchSessions()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
@@ -361,14 +361,14 @@ export default function TracesPage() {
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30"
+              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
             >
               上一页
             </button>
             <button
               onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
               disabled={page >= totalPages - 1}
-              className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-30"
+              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
             >
               下一页
             </button>
@@ -389,7 +389,7 @@ export default function TracesPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

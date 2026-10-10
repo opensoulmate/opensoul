@@ -194,13 +194,13 @@ export default function McpPage() {
           />
         </div>
         <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button onClick={() => setTab('servers')} className={`px-3 py-1.5 text-xs ${tab === 'servers' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>服务器</button>
-          <button onClick={() => setTab('tools')} className={`px-3 py-1.5 text-xs ${tab === 'tools' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>工具 ({tools.length})</button>
+          <button onClick={() => setTab('servers')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'servers' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>服务器</button>
+          <button onClick={() => setTab('tools')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'tools' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>工具 ({tools.length})</button>
         </div>
-        <button onClick={() => { fetchServers(); fetchTools(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => { fetchServers(); fetchTools(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />添加服务器
         </button>
       </div>
@@ -224,14 +224,14 @@ export default function McpPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{srv.name}</h3>
                     {srv.connected ? (
-                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600">
+                      <span className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">
                         <CheckCircle className="w-2.5 h-2.5" />已连接
                       </span>
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">未连接</span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">未连接</span>
                     )}
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{srv.transport}</span>
-                    {!srv.enabled && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-500">已禁用</span>}
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{srv.transport}</span>
+                    {!srv.enabled && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500">已禁用</span>}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{srv.description || srv.url}</p>
                   <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
@@ -241,18 +241,18 @@ export default function McpPage() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                   {srv.connected ? (
-                    <button onClick={() => handleDisconnect(srv.id)} className="p-1.5 rounded hover:bg-orange-500/10" title="断开">
+                    <button onClick={() => handleDisconnect(srv.id)} className="p-1.5 rounded-md hover:bg-amber-500/10" title="断开">
                       <Unlink className="w-3.5 h-3.5 text-orange-500" />
                     </button>
                   ) : (
-                    <button onClick={() => handleConnect(srv.id)} className="p-1.5 rounded hover:bg-green-500/10" title="连接">
+                    <button onClick={() => handleConnect(srv.id)} className="p-1.5 rounded-md hover:bg-emerald-500/10" title="连接">
                       <Link className="w-3.5 h-3.5 text-green-500" />
                     </button>
                   )}
-                  <button onClick={() => handleToggleEnabled(srv)} className={`p-1.5 rounded ${srv.enabled ? 'hover:bg-orange-500/10' : 'hover:bg-green-500/10'}`} title={srv.enabled ? '禁用' : '启用'}>
+                  <button onClick={() => handleToggleEnabled(srv)} className={`p-1.5 rounded-md ${srv.enabled ? 'hover:bg-amber-500/10' : 'hover:bg-emerald-500/10'}`} title={srv.enabled ? '禁用' : '启用'}>
                     {srv.enabled ? <Settings className="w-3.5 h-3.5 text-orange-500" /> : <Settings className="w-3.5 h-3.5 text-green-500" />}
                   </button>
-                  <button onClick={() => handleDelete(srv.id)} className="p-1.5 rounded hover:bg-red-500/10" title="删除">
+                  <button onClick={() => handleDelete(srv.id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除">
                     <Trash2 className="w-3.5 h-3.5 text-red-500" />
                   </button>
                 </div>
@@ -280,7 +280,7 @@ export default function McpPage() {
                 <div className="min-w-0 flex-1">
                   <h4 className="text-xs font-medium truncate">{tool.name}</h4>
                   <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{tool.description || '暂无描述'}</p>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground mt-1 inline-block">{tool.server_name}</span>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground mt-1 inline-block">{tool.server_name}</span>
                 </div>
               </div>
             </div>
@@ -300,7 +300,7 @@ export default function McpPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加MCP服务器</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -330,8 +330,8 @@ export default function McpPage() {
                 <textarea className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono h-20 resize-none" value={createForm.config} onChange={(e) => setCreateForm((f) => ({ ...f, config: e.target.value }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">取消</button>
-                <button onClick={handleCreate} disabled={!createForm.name || !createForm.url || creating} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                <button onClick={handleCreate} disabled={!createForm.name || !createForm.url || creating} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   {creating ? '添加中...' : '添加'}
                 </button>
@@ -348,11 +348,11 @@ export default function McpPage() {
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-medium">{selectedServer.name}</h2>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${selectedServer.connected ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${selectedServer.connected ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                   {selectedServer.connected ? '已连接' : '未连接'}
                 </span>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3 min-h-0">
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -383,18 +383,18 @@ export default function McpPage() {
             </div>
             <div className="flex items-center gap-2 p-4 border-t border-border shrink-0">
               {selectedServer.connected ? (
-                <button onClick={() => handleDisconnect(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-orange-500/10 text-orange-500 rounded-md hover:bg-orange-500/20">
+                <button onClick={() => handleDisconnect(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
                   <Unlink className="w-3 h-3" />断开
                 </button>
               ) : (
-                <button onClick={() => handleConnect(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-500/10 text-green-500 rounded-md hover:bg-green-500/20">
+                <button onClick={() => handleConnect(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
                   <Link className="w-3 h-3" />连接
                 </button>
               )}
-              <button onClick={handleSaveConfig} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+              <button onClick={handleSaveConfig} disabled={saving} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 <Settings className="w-3 h-3" />{saving ? '保存中...' : '保存配置'}
               </button>
-              <button onClick={() => handleDelete(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20 ml-auto">
+              <button onClick={() => handleDelete(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto">
                 <Trash2 className="w-3 h-3" />删除
               </button>
             </div>

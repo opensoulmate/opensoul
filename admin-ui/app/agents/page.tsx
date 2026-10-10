@@ -211,7 +211,7 @@ export default function AgentsPage() {
         </select>
         <button
           onClick={() => fetchAgents()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
@@ -234,11 +234,11 @@ export default function AgentsPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{agent.name}</h3>
                     {agent.available ? (
-                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600">
+                      <span className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">
                         <CheckCircle className="w-2.5 h-2.5" />已安装
                       </span>
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">未安装</span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">未安装</span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{agent.description}</p>
@@ -269,13 +269,13 @@ export default function AgentsPage() {
                       <>
                         <button
                           onClick={() => handleUpdate(agent.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary/10 text-primary rounded hover:bg-primary/20"
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
                         >
                           <RefreshCw className="w-3 h-3" />更新
                         </button>
                         <button
                           onClick={() => handleUninstall(agent.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded hover:bg-red-500/20"
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
                         >
                           <Trash2 className="w-3 h-3" />卸载
                         </button>
@@ -283,7 +283,7 @@ export default function AgentsPage() {
                     ) : (
                       <button
                         onClick={() => handleInstall(agent.id)}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded hover:opacity-90"
+                        className="flex items-center gap-2 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
                       >
                         <Download className="w-3 h-3" />安装
                       </button>
@@ -312,7 +312,7 @@ export default function AgentsPage() {
                 <span className="text-2xl">{selectedAgent.icon}</span>
                 <h2 className="text-base font-medium">{selectedAgent.name}</h2>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded hover:bg-muted">
+              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -382,13 +382,13 @@ export default function AgentsPage() {
                   <>
                     <button
                       onClick={() => { handleUpdate(selectedAgent.id); }}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary/10 text-primary rounded-md hover:bg-primary/20"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />更新
                     </button>
                     <button
                       onClick={() => { handleUninstall(selectedAgent.id); setShowDetail(false); }}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
                     >
                       <Trash2 className="w-3.5 h-3.5" />卸载
                     </button>
@@ -396,7 +396,7 @@ export default function AgentsPage() {
                 ) : (
                   <button
                     onClick={() => { handleInstall(selectedAgent.id); }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90"
+                    className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
                   >
                     <Download className="w-3.5 h-3.5" />安装
                   </button>

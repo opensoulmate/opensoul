@@ -46,9 +46,9 @@ interface Stats {
 
 const CATEGORY_COLORS: Record<string, string> = {
   agent: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  knowledge_base: 'bg-green-500/10 text-green-500 border-green-500/20',
-  workflow: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  skill: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+  knowledge_base: 'bg-emerald-500/10 text-emerald-500 border-green-500/20',
+  workflow: 'bg-violet-500/10 text-violet-500 border-purple-500/20',
+  skill: 'bg-amber-500/10 text-amber-500 border-orange-500/20',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -285,16 +285,16 @@ export default function GenePage() {
             <option key={t.tag} value={t.tag}>{t.tag} ({t.count})</option>
           ))}
         </select>
-        <button onClick={() => fetchAll()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => fetchAll()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
-        <button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">
+        <button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
           <Plus className="w-3.5 h-3.5" />新建
         </button>
-        <button onClick={() => setShowImportDialog(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => setShowImportDialog(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <Upload className="w-3.5 h-3.5" />导入
         </button>
-        <button onClick={handleExportAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={handleExportAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <Download className="w-3.5 h-3.5" />导出全部
         </button>
       </div>
@@ -326,18 +326,18 @@ export default function GenePage() {
                 </div>
               </div>
               {tpl.builtin && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0">内置</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0">内置</span>
               )}
             </div>
             {tpl.description && (
               <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{tpl.description}</p>
             )}
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${CATEGORY_COLORS[tpl.category] || 'bg-muted text-muted-foreground border-border'}`}>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${CATEGORY_COLORS[tpl.category] || 'bg-muted text-muted-foreground border-border'}`}>
                 {CATEGORY_LABELS[tpl.category] || tpl.category}
               </span>
               {tpl.tags.slice(0, 3).map((tag) => (
-                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">#{tag}</span>
+                <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">#{tag}</span>
               ))}
               {tpl.tags.length > 3 && <span className="text-[10px] text-muted-foreground">+{tpl.tags.length - 3}</span>}
             </div>
@@ -349,21 +349,21 @@ export default function GenePage() {
             <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={(e) => { e.stopPropagation(); setSelectedTemplate(tpl); setCloneName(tpl.name + ' (副本)'); setCloneId(''); setShowCloneDialog(true); }}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded hover:bg-muted/80"
+                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded-lg hover:bg-muted"
                 title="克隆"
               >
                 <Copy className="w-3 h-3" />克隆
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setSelectedTemplate(tpl); setInstantiateVars({}); setInstantiateResult(null); setShowInstantiateDialog(true); }}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded hover:bg-muted/80"
+                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded-lg hover:bg-muted"
                 title="实例化"
               >
                 <Play className="w-3 h-3" />实例化
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleExport(tpl.template_id); }}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded hover:bg-muted/80"
+                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded-lg hover:bg-muted"
                 title="导出"
               >
                 <Download className="w-3 h-3" />
@@ -371,7 +371,7 @@ export default function GenePage() {
               {!tpl.builtin && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDelete(tpl.template_id); }}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 ml-auto"
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto"
                   title="删除"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -395,7 +395,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-lg bg-background border-l border-border overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between z-10">
               <h2 className="text-sm font-medium">模板详情</h2>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-4">
               <div>
@@ -441,7 +441,7 @@ export default function GenePage() {
                   <label className="text-[10px] text-muted-foreground uppercase tracking-wider">标签</label>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {selectedTemplate.tags.map((tag) => (
-                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">#{tag}</span>
+                      <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">#{tag}</span>
                     ))}
                   </div>
                 </div>
@@ -475,26 +475,26 @@ export default function GenePage() {
               <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
                 <button
                   onClick={() => { setInstantiateVars({}); setInstantiateResult(null); setShowInstantiateDialog(true); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90"
+                  className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
                 >
                   <Play className="w-3.5 h-3.5" />实例化
                 </button>
                 <button
                   onClick={() => { setCloneName(selectedTemplate.name + ' (副本)'); setCloneId(''); setShowCloneDialog(true); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
                 >
                   <Copy className="w-3.5 h-3.5" />克隆
                 </button>
                 <button
                   onClick={() => handleExport(selectedTemplate.template_id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />导出
                 </button>
                 {!selectedTemplate.builtin && (
                   <button
                     onClick={() => { handleDelete(selectedTemplate.template_id); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20"
                   >
                     <Trash2 className="w-3.5 h-3.5" />删除
                   </button>
@@ -512,7 +512,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-lg bg-background border border-border rounded-lg shadow-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between z-10">
               <h2 className="text-sm font-medium">新建模板</h2>
-              <button onClick={() => setShowCreateDialog(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreateDialog(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -557,8 +557,8 @@ export default function GenePage() {
                 <textarea className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none font-mono h-20 resize-none" value={newTemplate.variables} onChange={(e) => setNewTemplate(p => ({ ...p, variables: e.target.value }))} placeholder='[{"name": "var1", "type": "string", "description": "变量说明"}]' />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreateDialog(false)} className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-                <button onClick={handleCreate} disabled={!newTemplate.name} className="px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">创建</button>
+                <button onClick={() => setShowCreateDialog(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+                <button onClick={handleCreate} disabled={!newTemplate.name} className="px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">创建</button>
               </div>
             </div>
           </div>
@@ -572,7 +572,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-md bg-background border border-border rounded-lg shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-medium">克隆模板</h2>
-              <button onClick={() => setShowCloneDialog(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCloneDialog(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <p className="text-xs text-muted-foreground">源模板: <code className="font-mono">{selectedTemplate.template_id}</code></p>
@@ -585,8 +585,8 @@ export default function GenePage() {
                 <input className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none font-mono" value={cloneId} onChange={(e) => setCloneId(e.target.value)} placeholder="自动生成" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCloneDialog(false)} className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-                <button onClick={handleClone} className="px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">克隆</button>
+                <button onClick={() => setShowCloneDialog(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+                <button onClick={handleClone} className="px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">克隆</button>
               </div>
             </div>
           </div>
@@ -600,7 +600,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-lg bg-background border border-border rounded-lg shadow-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between z-10">
               <h2 className="text-sm font-medium">实例化模板</h2>
-              <button onClick={() => setShowInstantiateDialog(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowInstantiateDialog(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <p className="text-xs text-muted-foreground">模板: <code className="font-mono">{selectedTemplate.template_id}</code></p>
@@ -628,8 +628,8 @@ export default function GenePage() {
                 <p className="text-xs text-muted-foreground">此模板没有可配置变量。</p>
               )}
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowInstantiateDialog(false)} className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-                <button onClick={handleInstantiate} className="px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90">实例化</button>
+                <button onClick={() => setShowInstantiateDialog(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+                <button onClick={handleInstantiate} className="px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">实例化</button>
               </div>
               {instantiateResult && (
                 <div className="mt-3">
@@ -651,7 +651,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-lg bg-background border border-border rounded-lg shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-medium">导入模板</h2>
-              <button onClick={() => setShowImportDialog(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowImportDialog(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -668,8 +668,8 @@ export default function GenePage() {
                 覆盖已有模板
               </label>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowImportDialog(false)} className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-                <button onClick={handleImport} disabled={!importJson.trim()} className="px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">导入</button>
+                <button onClick={() => setShowImportDialog(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+                <button onClick={handleImport} disabled={!importJson.trim()} className="px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">导入</button>
               </div>
             </div>
           </div>

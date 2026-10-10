@@ -244,13 +244,13 @@ export default function MindPage() {
             value={search} onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={() => setShowEmotion(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-border rounded-md hover:bg-purple-500/20">
+        <button onClick={() => setShowEmotion(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20">
           <Sparkles className="w-3.5 h-3.5" />情绪分析
         </button>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 text-primary border border-border rounded-md hover:bg-primary/20">
+        <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
           <Plus className="w-3.5 h-3.5" />新建人格
         </button>
-        <button onClick={() => { fetchAll(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => { fetchAll(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -269,16 +269,16 @@ export default function MindPage() {
                 <div className="flex items-center gap-2">
                   <Brain className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                   <h3 className="text-sm font-medium">{p.name}</h3>
-                  {p.builtin && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500">内置</span>}
-                  {isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">激活</span>}
+                  {p.builtin && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500">内置</span>}
+                  {isActive && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">激活</span>}
                 </div>
                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                   {!p.builtin && (
                     <>
-                      <button onClick={() => openEdit(p.personality_id)} className="p-1 text-muted-foreground hover:text-foreground rounded">
+                      <button onClick={() => openEdit(p.personality_id)} className="p-1 text-muted-foreground hover:text-foreground rounded-md">
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => handleDelete(p.personality_id)} className="p-1 text-muted-foreground hover:text-red-500 rounded">
+                      <button onClick={() => handleDelete(p.personality_id)} className="p-1 text-muted-foreground hover:text-red-500 rounded-md">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </>
@@ -287,14 +287,14 @@ export default function MindPage() {
               </div>
               <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{p.description || '暂无描述'}</p>
               <div className="flex flex-wrap gap-1.5 mt-2">
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted">{p.tone}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted">{p.language_style}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted">emoji: {p.emoji_usage}</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">{p.tone}</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">{p.language_style}</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">emoji: {p.emoji_usage}</span>
               </div>
               {p.traits.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {p.traits.slice(0, 4).map(t => (
-                    <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/5 text-primary/70">{t}</span>
+                    <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/5 text-primary/70">{t}</span>
                   ))}
                   {p.traits.length > 4 && <span className="text-[10px] text-muted-foreground">+{p.traits.length - 4}</span>}
                 </div>
@@ -302,7 +302,7 @@ export default function MindPage() {
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
                 <span className="text-[10px] text-muted-foreground">使用 {p.usage_count} 次</span>
                 {!isActive && (
-                  <button onClick={() => handleSetActive(p.personality_id)} className="text-[10px] px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20">
+                  <button onClick={() => handleSetActive(p.personality_id)} className="text-[10px] px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20">
                     设为激活
                   </button>
                 )}
@@ -344,7 +344,7 @@ export default function MindPage() {
               <div className="flex items-center gap-2">
                 <Brain className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-medium">{selected.name}</h2>
-                {selected.builtin && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">内置</span>}
+                {selected.builtin && <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-blue-500/10 text-blue-500">内置</span>}
               </div>
               <button onClick={() => setShowDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
             </div>
@@ -368,9 +368,9 @@ export default function MindPage() {
               <div><span className="text-muted-foreground">人格ID: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selected.personality_id}</code></div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              {!selected.builtin && <button onClick={() => { setShowDetail(false); openEdit(selected.personality_id); }} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">编辑</button>}
+              {!selected.builtin && <button onClick={() => { setShowDetail(false); openEdit(selected.personality_id); }} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">编辑</button>}
               {selected.personality_id !== activeId && (
-                <button onClick={() => { handleSetActive(selected.personality_id); setShowDetail(false); }} className="px-3 py-1.5 text-xs bg-primary/10 text-primary border border-border rounded-md hover:bg-primary/20">设为激活</button>
+                <button onClick={() => { handleSetActive(selected.personality_id); setShowDetail(false); }} className="px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">设为激活</button>
               )}
             </div>
           </div>
@@ -430,8 +430,8 @@ export default function MindPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowDialog(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-              <button onClick={handleSave} disabled={saving || !form.name.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50">
+              <button onClick={() => setShowDialog(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+              <button onClick={handleSave} disabled={saving || !form.name.trim()} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 {saving ? '保存中...' : '保存'}
               </button>
@@ -457,7 +457,7 @@ export default function MindPage() {
                 value={emotionText} onChange={e => setEmotionText(e.target.value)}
                 placeholder="输入要分析的文本..."
               />
-              <button onClick={handleAnalyzeEmotion} disabled={emotionLoading || !emotionText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-border rounded-md hover:bg-purple-500/20 disabled:opacity-50">
+              <button onClick={handleAnalyzeEmotion} disabled={emotionLoading || !emotionText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20 disabled:opacity-50">
                 {emotionLoading ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 {emotionLoading ? '分析中...' : '开始分析'}
               </button>
@@ -492,7 +492,7 @@ export default function MindPage() {
                   )}
                   {emotionResult.keywords.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {emotionResult.keywords.map(k => <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500">{k}</span>)}
+                      {emotionResult.keywords.map(k => <span key={k} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">{k}</span>)}
                     </div>
                   )}
                   <div className="text-[10px] text-muted-foreground">耗时 {emotionResult.elapsed_ms}ms</div>

@@ -151,7 +151,7 @@ export default function BenchmarkPage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
         </div>
       )}
 
@@ -178,12 +178,12 @@ export default function BenchmarkPage() {
       {/* Tab Bar */}
       <div className="flex items-center gap-1 border-b border-border">
         {([['latest', '最新结果'], ['history', '历史记录'], ['run', '运行测试']] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key as any)} className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+          <button key={key} onClick={() => setTab(key as any)} className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             {label}
           </button>
         ))}
         <div className="flex-1" />
-        <button onClick={handleClearHistory} className="flex items-center gap-1 px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10 rounded-md mr-1">
+        <button onClick={handleClearHistory} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm text-red-500 hover:bg-red-500/10 rounded-lg mr-1">
           <Trash2 className="w-3 h-3" />清除历史
         </button>
       </div>
@@ -194,10 +194,10 @@ export default function BenchmarkPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="text-sm font-medium mb-3">选择测试目标</h3>
             <div className="flex flex-wrap gap-2 mb-4">
-              <button onClick={() => setSelectedOrgans(new Set(targets.map((t) => t.organ)))} className="text-xs px-2 py-1 bg-muted border border-border rounded hover:bg-muted/80">全选</button>
-              <button onClick={() => setSelectedOrgans(new Set())} className="text-xs px-2 py-1 bg-muted border border-border rounded hover:bg-muted/80">清空</button>
+              <button onClick={() => setSelectedOrgans(new Set(targets.map((t) => t.organ)))} className="text-xs lg:text-sm px-2 py-1 border border-border rounded-lg hover:bg-muted transition-colors">全选</button>
+              <button onClick={() => setSelectedOrgans(new Set())} className="text-xs lg:text-sm px-2 py-1 border border-border rounded-lg hover:bg-muted transition-colors">清空</button>
               {targets.map((t) => (
-                <button key={t.organ} onClick={() => toggleOrgan(t.organ)} className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${selectedOrgans.has(t.organ) ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground hover:text-foreground'}`}>
+                <button key={t.organ} onClick={() => toggleOrgan(t.organ)} className={`text-xs lg:text-sm px-2.5 py-1 rounded-lg border transition-colors ${selectedOrgans.has(t.organ) ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground hover:text-foreground'}`}>
                   {t.label || t.organ}
                 </button>
               ))}
@@ -212,7 +212,7 @@ export default function BenchmarkPage() {
                 <input type="number" min={1} max={50} className="w-full px-3 py-1.5 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50" value={concurrency} onChange={(e) => setConcurrency(Math.min(50, Math.max(1, +e.target.value || 5)))} />
               </div>
             </div>
-            <button onClick={handleRun} disabled={running} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50">
+            <button onClick={handleRun} disabled={running} className="flex items-center gap-1.5 px-2 lg:px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
               {running ? '运行中...' : '开始基准测试'}
             </button>
@@ -223,7 +223,7 @@ export default function BenchmarkPage() {
             <h3 className="text-sm font-medium mb-3">快速测试（单个目标，10次迭代）</h3>
             <div className="flex flex-wrap gap-2">
               {targets.map((t) => (
-                <button key={t.organ} onClick={() => handleQuick(t.organ)} disabled={running} className="flex items-center gap-1 text-xs px-3 py-1.5 bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-50">
+                <button key={t.organ} onClick={() => handleQuick(t.organ)} disabled={running} className="flex items-center gap-1 text-xs lg:text-sm px-3 py-1.5 border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
                   <Zap className="w-3 h-3" />{t.label || t.organ}
                 </button>
               ))}

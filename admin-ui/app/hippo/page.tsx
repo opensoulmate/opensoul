@@ -272,7 +272,7 @@ export default function HippoPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${tab === t.key ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors ${tab === t.key ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <t.icon className="w-3.5 h-3.5" />{t.label}
           </button>
@@ -291,57 +291,57 @@ export default function HippoPage() {
               <input type="checkbox" checked={includeArchived} onChange={e => setIncludeArchived(e.target.checked)} className="rounded" />
               包含已归档
             </label>
-            <button onClick={fetchMemories} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+            <button onClick={fetchMemories} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </button>
-            <button onClick={() => setShowCreateMem(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 text-primary border border-border rounded-md hover:bg-primary/20">
+            <button onClick={() => setShowCreateMem(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
               <Plus className="w-3.5 h-3.5" />新建记忆
             </button>
           </div>
 
           <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs lg:text-sm min-w-[500px]">
               <thead>
-                <tr className="bg-muted/50 text-xs text-muted-foreground">
-                  <th className="text-left px-4 py-2 font-medium">内容</th>
-                  <th className="text-left px-4 py-2 font-medium w-24">会话</th>
-                  <th className="text-center px-4 py-2 font-medium w-16">重要度</th>
-                  <th className="text-center px-4 py-2 font-medium w-16">留存率</th>
-                  <th className="text-center px-4 py-2 font-medium w-16">访问</th>
-                  <th className="text-left px-4 py-2 font-medium w-32">标签</th>
-                  <th className="text-center px-4 py-2 font-medium w-20">状态</th>
-                  <th className="text-right px-4 py-2 font-medium w-20">操作</th>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium text-muted-foreground">内容</th>
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium w-24 text-muted-foreground">会话</th>
+                  <th className="text-center px-2 lg:px-4 py-2.5 font-medium w-16 text-muted-foreground">重要度</th>
+                  <th className="text-center px-2 lg:px-4 py-2.5 font-medium w-16 text-muted-foreground">留存率</th>
+                  <th className="text-center px-2 lg:px-4 py-2.5 font-medium w-16 text-muted-foreground">访问</th>
+                  <th className="text-left px-2 lg:px-4 py-2.5 font-medium w-32 text-muted-foreground">标签</th>
+                  <th className="text-center px-2 lg:px-4 py-2.5 font-medium w-20 text-muted-foreground">状态</th>
+                  <th className="text-right px-2 lg:px-4 py-2.5 font-medium w-20 text-muted-foreground">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredMemories.map(m => (
-                  <tr key={m.memory_id} className="border-t border-border hover:bg-muted/30 cursor-pointer" onClick={() => { setSelectedMem(m); setShowMemDetail(true); }}>
-                    <td className="px-4 py-2 truncate max-w-[300px]">{m.content}</td>
-                    <td className="px-4 py-2 text-xs font-mono text-muted-foreground truncate">{m.session_id}</td>
-                    <td className="px-4 py-2 text-center">{m.importance.toFixed(2)}</td>
-                    <td className={`px-4 py-2 text-center font-medium ${retentionColor(m.retention)}`}>{(m.retention * 100).toFixed(0)}%</td>
-                    <td className="px-4 py-2 text-center text-muted-foreground">{m.access_count}</td>
-                    <td className="px-4 py-2">
+                  <tr key={m.memory_id} className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => { setSelectedMem(m); setShowMemDetail(true); }}>
+                    <td className="px-2 lg:px-4 py-2.5 truncate max-w-[300px]">{m.content}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-xs font-mono text-muted-foreground truncate">{m.session_id}</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-center">{m.importance.toFixed(2)}</td>
+                    <td className={`px-2 lg:px-4 py-2.5 text-center font-medium ${retentionColor(m.retention)}`}>{(m.retention * 100).toFixed(0)}%</td>
+                    <td className="px-2 lg:px-4 py-2.5 text-center text-muted-foreground">{m.access_count}</td>
+                    <td className="px-2 lg:px-4 py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {m.tags.slice(0, 3).map(t => <span key={t} className="text-[10px] px-1 py-0.5 rounded bg-muted">{t}</span>)}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-2 lg:px-4 py-2.5 text-center">
                       {m.archived ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-500">归档</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500">归档</span>
                       ) : (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600">活跃</span>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">活跃</span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => handleDeleteMemory(m.memory_id)} className="p-1 text-muted-foreground hover:text-red-500 rounded">
+                    <td className="px-2 lg:px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => handleDeleteMemory(m.memory_id)} className="p-1 text-muted-foreground hover:text-red-500 rounded-md">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   </tr>
                 ))}
                 {filteredMemories.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">暂无记忆数据</td></tr>
+                  <tr><td colSpan={8} className="px-2 lg:px-4 py-8 text-center text-muted-foreground">暂无记忆数据</td></tr>
                 )}
               </tbody>
             </table>
@@ -353,13 +353,13 @@ export default function HippoPage() {
       {tab === 'sessions' && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={fetchSessions} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+            <button onClick={fetchSessions} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </button>
-            <button onClick={() => setShowCreateSess(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 text-primary border border-border rounded-md hover:bg-primary/20">
+            <button onClick={() => setShowCreateSess(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
               <Plus className="w-3.5 h-3.5" />新建会话
             </button>
-            <button onClick={handleLifecycleCheck} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500/10 text-orange-500 border border-border rounded-md hover:bg-orange-500/20">
+            <button onClick={handleLifecycleCheck} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 border border-border rounded-lg hover:bg-amber-500/20">
               <Clock className="w-3.5 h-3.5" />生命周期检查
             </button>
           </div>
@@ -372,7 +372,7 @@ export default function HippoPage() {
                     <h3 className="text-sm font-medium">{s.title || s.session_id}</h3>
                     <p className="text-xs text-muted-foreground font-mono mt-0.5">{s.session_id}</p>
                   </div>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${s.status === 'active' ? 'bg-green-500/10 text-green-600' : s.status === 'archived' ? 'bg-orange-500/10 text-orange-500' : 'bg-muted text-muted-foreground'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : s.status === 'archived' ? 'bg-amber-500/10 text-amber-500' : 'bg-muted text-muted-foreground'}`}>
                     {s.status}
                   </span>
                 </div>
@@ -384,11 +384,11 @@ export default function HippoPage() {
                 </div>
                 <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border">
                   {s.status === 'active' && (
-                    <button onClick={() => handleArchiveSession(s.session_id)} className="text-[10px] px-2 py-1 bg-orange-500/10 text-orange-500 rounded hover:bg-orange-500/20">
+                    <button onClick={() => handleArchiveSession(s.session_id)} className="text-[10px] px-2 py-1 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
                       <Archive className="w-3 h-3 inline mr-0.5" />归档
                     </button>
                   )}
-                  <button onClick={() => handleDeleteSession(s.session_id)} className="text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20">
+                  <button onClick={() => handleDeleteSession(s.session_id)} className="text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
                     <Trash2 className="w-3 h-3 inline mr-0.5" />删除
                   </button>
                 </div>
@@ -420,10 +420,10 @@ export default function HippoPage() {
                 </div>
               )}
               <div className="flex gap-2 mt-4">
-                <button onClick={handleRunDecay} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500/10 text-orange-500 border border-border rounded-md hover:bg-orange-500/20">
+                <button onClick={handleRunDecay} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 border border-border rounded-lg hover:bg-amber-500/20">
                   <Play className="w-3.5 h-3.5" />运行衰减
                 </button>
-                <button onClick={() => setShowSimulate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-border rounded-md hover:bg-purple-500/20">
+                <button onClick={() => setShowSimulate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20">
                   <BarChart3 className="w-3.5 h-3.5" />模拟衰减
                 </button>
               </div>
@@ -543,8 +543,8 @@ export default function HippoPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowCreateMem(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md">取消</button>
-              <button onClick={handleCreateMemory} disabled={saving || !memForm.content.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md disabled:opacity-50">
+              <button onClick={() => setShowCreateMem(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
+              <button onClick={handleCreateMemory} disabled={saving || !memForm.content.trim()} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 font-medium transition-colors">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}保存
               </button>
             </div>
@@ -571,8 +571,8 @@ export default function HippoPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowCreateSess(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md">取消</button>
-              <button onClick={handleCreateSession} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md disabled:opacity-50">
+              <button onClick={() => setShowCreateSess(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
+              <button onClick={handleCreateSession} disabled={saving} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 font-medium transition-colors">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}保存
               </button>
             </div>
@@ -603,8 +603,8 @@ export default function HippoPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowSimulate(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md">取消</button>
-              <button onClick={handleSimulate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-border rounded-md hover:bg-purple-500/20">
+              <button onClick={() => setShowSimulate(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
+              <button onClick={handleSimulate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20">
                 <BarChart3 className="w-3.5 h-3.5" />模拟
               </button>
             </div>

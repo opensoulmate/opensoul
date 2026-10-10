@@ -217,13 +217,13 @@ export default function PulsePage() {
           <option value="paused">暂停</option>
           <option value="completed">完成</option>
         </select>
-        <button onClick={() => { setShowTicks(true); fetchTicks(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => { setShowTicks(true); fetchTicks(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <BarChart3 className="w-3.5 h-3.5" />触发历史
         </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 text-primary border border-border rounded-md hover:bg-primary/20">
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
           <Plus className="w-3.5 h-3.5" />新建信号
         </button>
-        <button onClick={() => { fetchSignals(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={() => { fetchSignals(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>
@@ -241,7 +241,7 @@ export default function PulsePage() {
                 {typeIcon(s.signal_type)}
                 <h3 className="text-sm font-medium">{s.name}</h3>
               </div>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusColor(s.status)}`}>{s.status}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColor(s.status)}`}>{s.status}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-muted-foreground">
               <div>类型: <span className="font-medium text-foreground">{s.signal_type}</span></div>
@@ -255,19 +255,19 @@ export default function PulsePage() {
             <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
               {s.status === 'active' ? (
                 <>
-                  <button onClick={() => handlePause(s.signal_id)} className="text-[10px] px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded hover:bg-yellow-500/20">
+                  <button onClick={() => handlePause(s.signal_id)} className="text-[10px] px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded-lg hover:bg-yellow-500/20">
                     <Pause className="w-3 h-3 inline mr-0.5" />暂停
                   </button>
-                  <button onClick={() => handleTick(s.signal_id)} className="text-[10px] px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20">
+                  <button onClick={() => handleTick(s.signal_id)} className="text-[10px] px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20">
                     <Zap className="w-3 h-3 inline mr-0.5" />手动触发
                   </button>
                 </>
               ) : s.status === 'paused' ? (
-                <button onClick={() => handleResume(s.signal_id)} className="text-[10px] px-2 py-1 bg-green-500/10 text-green-600 rounded hover:bg-green-500/20">
+                <button onClick={() => handleResume(s.signal_id)} className="text-[10px] px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
                   <Play className="w-3 h-3 inline mr-0.5" />恢复
                 </button>
               ) : null}
-              <button onClick={() => handleDelete(s.signal_id)} className="ml-auto text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20">
+              <button onClick={() => handleDelete(s.signal_id)} className="ml-auto text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
                 <Trash2 className="w-3 h-3 inline mr-0.5" />删除
               </button>
             </div>
@@ -341,8 +341,8 @@ export default function PulsePage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md">取消</button>
-              <button onClick={handleCreate} disabled={saving || !form.name.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md disabled:opacity-50">
+              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
+              <button onClick={handleCreate} disabled={saving || !form.name.trim()} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 font-medium transition-colors">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}创建
               </button>
             </div>

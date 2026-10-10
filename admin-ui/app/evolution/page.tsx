@@ -66,8 +66,8 @@ const STAGE_CONFIG = [
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string; fill: string }> = {
   blue: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/30', fill: 'bg-blue-500' },
   amber: { bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/30', fill: 'bg-amber-500' },
-  purple: { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-purple-500/30', fill: 'bg-purple-500' },
-  green: { bg: 'bg-green-500/10', text: 'text-green-500', border: 'border-green-500/30', fill: 'bg-green-500' },
+  purple: { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-violet-500/30', fill: 'bg-purple-500' },
+  green: { bg: 'bg-green-500/10', text: 'text-green-500', border: 'border-emerald-500/30', fill: 'bg-green-500' },
 };
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -204,7 +204,7 @@ function IterationRow({ cycle, expanded, onToggle }: {
         className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/30 transition-colors"
       >
         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-          cycle.overallStatus === 'completed' ? 'bg-green-500/10 text-green-500' :
+          cycle.overallStatus === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
           cycle.overallStatus === 'running' ? 'bg-primary/10 text-primary' :
           'bg-muted text-muted-foreground'
         }`}>
@@ -215,7 +215,7 @@ function IterationRow({ cycle, expanded, onToggle }: {
             <span className="text-sm font-medium">迭代 #{cycle.iteration}</span>
             <StatusDot status={cycle.overallStatus} />
             {cycle.rootCause && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 truncate max-w-[200px]">
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 truncate max-w-[200px]">
                 根因: {cycle.rootCause}
               </span>
             )}
@@ -563,7 +563,7 @@ export default function EvolutionPage() {
                 <div className="flex items-center gap-2">
                   <StatusDot status={insight.severity === 'critical' ? 'error' : insight.severity === 'high' ? 'running' : 'completed'} />
                   <span className="text-xs font-medium">{insight.title || insight.insight_type || '洞察'}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-auto">
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground ml-auto">
                     {insight.component || insight.severity || ''}
                   </span>
                 </div>
@@ -599,7 +599,7 @@ export default function EvolutionPage() {
         </select>
         <button
           onClick={() => fetchData()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
@@ -630,7 +630,7 @@ export default function EvolutionPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

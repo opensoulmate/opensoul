@@ -250,10 +250,10 @@ export default function EventsPage() {
         </div>
         <button
           onClick={toggleLive}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border rounded-lg transition-colors ${
             liveMode
-              ? 'bg-green-500/10 text-green-500 border-green-500/30 hover:bg-green-500/20'
-              : 'bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-muted/80'
+              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/20'
+              : 'bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
           {liveMode ? <Pause className="w-3.5 h-3.5" /> : <Radio className="w-3.5 h-3.5" />}
@@ -261,7 +261,7 @@ export default function EventsPage() {
         </button>
         <button
           onClick={handleRefresh}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>

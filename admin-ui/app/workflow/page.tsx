@@ -180,7 +180,7 @@ export default function WorkflowPage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
         </div>
       )}
 
@@ -227,13 +227,13 @@ export default function WorkflowPage() {
         </select>
         <button
           onClick={() => { fetchTasks(); fetchStats(); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />新建任务
         </button>
@@ -280,21 +280,21 @@ export default function WorkflowPage() {
                 <span className="text-xs text-muted-foreground">{formatDate(task.created_at)}</span>
                 <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                   {(task.status === 'idle' || task.status === 'active') && (
-                    <button onClick={() => handleRun(task.id)} className="p-1 hover:bg-green-500/10 rounded text-green-500" title="运行">
+                    <button onClick={() => handleRun(task.id)} className="p-1 hover:bg-emerald-500/10 rounded-md text-green-500" title="运行">
                       <Play className="w-3.5 h-3.5" />
                     </button>
                   )}
                   {(task.status === 'running' || task.status === 'idle') && (
-                    <button onClick={() => handlePause(task.id)} className="p-1 hover:bg-orange-500/10 rounded text-orange-500" title="暂停">
+                    <button onClick={() => handlePause(task.id)} className="p-1 hover:bg-amber-500/10 rounded-md text-orange-500" title="暂停">
                       <Pause className="w-3.5 h-3.5" />
                     </button>
                   )}
                   {task.status === 'paused' && (
-                    <button onClick={() => handleResume(task.id)} className="p-1 hover:bg-blue-500/10 rounded text-blue-500" title="恢复">
+                    <button onClick={() => handleResume(task.id)} className="p-1 hover:bg-blue-500/10 rounded-md text-blue-500" title="恢复">
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <button onClick={() => handleDelete(task)} className="p-1 hover:bg-red-500/10 rounded text-red-500" title="删除">
+                  <button onClick={() => handleDelete(task)} className="p-1 hover:bg-red-500/10 rounded-md text-red-500" title="删除">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -310,7 +310,7 @@ export default function WorkflowPage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">新建工作流任务</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreate(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -339,8 +339,8 @@ export default function WorkflowPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-              <button onClick={handleCreate} disabled={creating || !createForm.name.trim()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50">
+              <button onClick={() => setShowCreate(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+              <button onClick={handleCreate} disabled={creating || !createForm.name.trim()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 {creating && <Loader2 className="w-3 h-3 animate-spin" />}创建
               </button>
             </div>
@@ -354,7 +354,7 @@ export default function WorkflowPage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">任务详情</h2>
-              <button onClick={() => setShowDetail(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowDetail(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -387,23 +387,23 @@ export default function WorkflowPage() {
             </div>
             <div className="flex justify-between p-4 border-t border-border">
               <div className="flex gap-2">
-                <button onClick={() => { setShowDetail(false); openEdit(selectedTask); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+                <button onClick={() => { setShowDetail(false); openEdit(selectedTask); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
                   <Settings className="w-3 h-3" />编辑
                 </button>
               </div>
               <div className="flex gap-2">
                 {(selectedTask.status === 'idle' || selectedTask.status === 'active') && (
-                  <button onClick={() => { handleRun(selectedTask.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-500 text-white rounded-md hover:bg-green-600">
+                  <button onClick={() => { handleRun(selectedTask.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-green-500 text-white rounded-lg hover:bg-green-600">
                     <Play className="w-3 h-3" />运行
                   </button>
                 )}
                 {(selectedTask.status === 'running' || selectedTask.status === 'idle') && (
-                  <button onClick={() => { handlePause(selectedTask.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500 text-white rounded-md hover:bg-orange-600">
+                  <button onClick={() => { handlePause(selectedTask.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600">
                     <Pause className="w-3 h-3" />暂停
                   </button>
                 )}
                 {selectedTask.status === 'paused' && (
-                  <button onClick={() => { handleResume(selectedTask.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                  <button onClick={() => { handleResume(selectedTask.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">
                     <RotateCcw className="w-3 h-3" />恢复
                   </button>
                 )}
@@ -419,7 +419,7 @@ export default function WorkflowPage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">编辑任务</h2>
-              <button onClick={() => setShowEdit(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowEdit(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -448,8 +448,8 @@ export default function WorkflowPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowEdit(false)} className="px-4 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">取消</button>
-              <button onClick={() => { setShowEdit(false); /* TODO: PUT endpoint not available yet */ }} disabled={editing} className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50">
+              <button onClick={() => setShowEdit(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+              <button onClick={() => { setShowEdit(false); /* TODO: PUT endpoint not available yet */ }} disabled={editing} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 {editing && <Loader2 className="w-3 h-3 animate-spin" />}保存
               </button>
             </div>

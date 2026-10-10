@@ -214,7 +214,7 @@ export default function SystemPage() {
   return (
     <div className="space-y-4">
       {/* ── System Status Banner ── */}
-      <div className={`rounded-xl border p-4 ${info?.status === 'ok' ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+      <div className={`rounded-xl border p-4 ${info?.status === 'ok' ? 'border-emerald-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${info?.status === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
@@ -230,7 +230,7 @@ export default function SystemPage() {
               </div>
             </div>
           </div>
-          <button onClick={() => { fetchOverview(); fetchOrgans(); fetchBootstrap(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+          <button onClick={() => { fetchOverview(); fetchOrgans(); fetchBootstrap(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
             <RefreshCw className="w-3.5 h-3.5" />刷新
           </button>
         </div>
@@ -277,7 +277,7 @@ export default function SystemPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
               tab === t.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -297,7 +297,7 @@ export default function SystemPage() {
                 <span className="text-sm font-medium">器官健康状态</span>
                 {totalOrganCount > 0 && <span className="text-[10px] text-muted-foreground">({healthyOrganCount}/{totalOrganCount} 正常)</span>}
               </div>
-              <button onClick={checkOrganHealth} disabled={healthLoading} className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 disabled:opacity-50">
+              <button onClick={checkOrganHealth} disabled={healthLoading} className="flex items-center gap-1.5 px-2.5 py-1 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
                 {healthLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                 {healthLoading ? '检测中...' : '健康检查'}
               </button>
@@ -310,7 +310,7 @@ export default function SystemPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                 {organHealth.map(o => (
                   <div key={o.key} className={`rounded-lg border p-2 transition-colors cursor-pointer ${
-                    o.status === 'ok' ? 'border-green-500/30 bg-green-500/5' :
+                    o.status === 'ok' ? 'border-emerald-500/30 bg-green-500/5' :
                     o.status === 'error' ? 'border-red-500/30 bg-red-500/5' :
                     o.status === 'timeout' ? 'border-amber-500/30 bg-amber-500/5' :
                     'border-border bg-card'
@@ -392,7 +392,7 @@ export default function SystemPage() {
               <div
                 key={organ.key}
                 className={`rounded-lg border bg-card p-4 transition-colors ${
-                  organ.enabled ? 'border-green-500/30' : 'border-border opacity-60'
+                  organ.enabled ? 'border-emerald-500/30' : 'border-border opacity-60'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -453,7 +453,7 @@ export default function SystemPage() {
               <button
                 onClick={runBootstrap}
                 disabled={bootstrapping}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
               >
                 {bootstrapping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
                 {bootstrapping ? '执行中...' : '执行初始化'}
@@ -488,13 +488,13 @@ export default function SystemPage() {
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">直接编辑系统配置 JSON（谨慎操作）</p>
             <div className="flex items-center gap-2">
-              <button onClick={configDiff} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+              <button onClick={configDiff} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
                 <Terminal className="w-3 h-3" />配置差异
               </button>
               <button
                 onClick={saveConfig}
                 disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
               >
                 <Save className="w-3.5 h-3.5" />{saving ? '保存中...' : '保存配置'}
               </button>

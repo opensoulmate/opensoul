@@ -77,7 +77,7 @@ function AgentCard({
           <span className="text-sm font-medium">{agent.name}</span>
           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] ${
             agent.available
-              ? 'bg-green-500/10 text-green-600'
+              ? 'bg-emerald-500/10 text-emerald-500'
               : 'bg-muted text-muted-foreground'
           }`}>
             {agent.available ? <CheckCircle className="w-2.5 h-2.5" /> : <XCircle className="w-2.5 h-2.5" />}
@@ -127,7 +127,7 @@ function ChatPanel({
           <div className="text-[10px] text-muted-foreground">{agent.description}</div>
         </div>
         <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-          agent.available ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'
+          agent.available ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
         }`}>
           {agent.available ? '在线' : '离线'}
         </span>
@@ -198,7 +198,7 @@ function ChatPanel({
           <button
             onClick={handleSubmit}
             disabled={!input.trim() || !agent.available || sending}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
           >
             {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
           </button>
@@ -352,7 +352,7 @@ export default function AgentProxyPage() {
             <span className="text-sm font-medium">Agent 列表</span>
             <button
               onClick={fetchAgents}
-              className="p-1 rounded hover:bg-muted"
+              className="p-1 rounded-md hover:bg-muted"
               title="刷新"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -376,7 +376,7 @@ export default function AgentProxyPage() {
               <button
                 key={f.value}
                 onClick={() => setFilterAvail(f.value)}
-                className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                className={`px-2 py-0.5 text-[10px] rounded-lg border transition-colors ${
                   filterAvail === f.value
                     ? 'bg-primary/10 border-primary/30 text-primary'
                     : 'border-border text-muted-foreground hover:bg-muted/50'
@@ -428,7 +428,7 @@ export default function AgentProxyPage() {
           >
             <Clock className="w-4 h-4" />
             <span className="text-sm font-medium">对话历史</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
               {conversations.length} 条
             </span>
             <div className="flex-1" />

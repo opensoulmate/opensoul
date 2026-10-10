@@ -65,7 +65,7 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
   const severityConfig = {
     high: { color: 'border-red-500/30 bg-red-500/5', badge: 'bg-red-500/10 text-red-500', label: '高度重复' },
     medium: { color: 'border-amber-500/30 bg-amber-500/5', badge: 'bg-amber-500/10 text-amber-500', label: '中度重复' },
-    low: { color: 'border-green-500/30 bg-green-500/5', badge: 'bg-green-500/10 text-green-500', label: '低度重复' },
+    low: { color: 'border-emerald-500/30 bg-green-500/5', badge: 'bg-emerald-500/10 text-emerald-500', label: '低度重复' },
   };
   const sev = severityConfig[severity];
 
@@ -80,8 +80,8 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded ${sev.badge}`}>{sev.label}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sev.badge}`}>{sev.label}</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
               {pair.content_type || 'unknown'}
             </span>
           </div>
@@ -123,13 +123,13 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
           <div className="flex items-center gap-2">
             <button
               onClick={() => onRemove(pair.id_b)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/30 rounded-md hover:bg-red-500/20"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20"
             >
               <Trash2 className="w-3 h-3" />删除条目B（保留A）
             </button>
             <button
               onClick={() => onRemove(pair.id_a)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-500/10 text-red-500 border border-red-500/30 rounded-md hover:bg-red-500/20"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20"
             >
               <Trash2 className="w-3 h-3" />删除条目A（保留B）
             </button>
@@ -260,14 +260,14 @@ export default function DedupPage() {
         </select>
         <button
           onClick={fetchDuplicates}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
         <button
           onClick={() => setShowDedupConfirm(true)}
           disabled={deduping || duplicates.length === 0}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
         >
           {deduping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
           自动去重
@@ -276,7 +276,7 @@ export default function DedupPage() {
 
       {/* ── Dedup Result ── */}
       {dedupResult && (
-        <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4">
+        <div className="rounded-lg border border-emerald-500/30 bg-green-500/5 p-4">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle className="w-4 h-4 text-green-500" />
             <span className="text-sm font-medium text-green-500">去重完成</span>
@@ -358,14 +358,14 @@ export default function DedupPage() {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowDedupConfirm(false)}
-                className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+                className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleDeduplicate}
                 disabled={deduping}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-500 text-white rounded-md hover:bg-red-600 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
               >
                 {deduping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                 确认去重
@@ -380,7 +380,7 @@ export default function DedupPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded">
+          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
             <X className="w-3 h-3" />
           </button>
         </div>

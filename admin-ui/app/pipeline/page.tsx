@@ -99,7 +99,7 @@ function StatusBadge({ status }: { status: string }) {
     partial: '部分完成', failed: '失败', error: '错误', skipped: '已跳过',
   };
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${STATUS_BG[status] || 'bg-muted'} ${STATUS_COLORS[status] || 'text-muted-foreground'}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_BG[status] || 'bg-muted'} ${STATUS_COLORS[status] || 'text-muted-foreground'}`}>
       {status === 'completed' || status === 'ok' ? <CheckCircle className="w-2.5 h-2.5" /> :
        status === 'running' ? <Clock className="w-2.5 h-2.5 animate-spin" /> :
        status === 'failed' || status === 'error' ? <XCircle className="w-2.5 h-2.5" /> :
@@ -274,7 +274,7 @@ export default function PipelinePage() {
 
       {/* Upload result banner */}
       {uploadResult && (
-        <div className={`rounded-lg border p-3 flex items-start gap-3 ${uploadResult.status === 'completed' ? 'border-green-500/30 bg-green-500/5' : uploadResult.status === 'blocked' ? 'border-orange-500/30 bg-orange-500/5' : 'border-border bg-card'}`}>
+        <div className={`rounded-lg border p-3 flex items-start gap-3 ${uploadResult.status === 'completed' ? 'border-emerald-500/30 bg-green-500/5' : uploadResult.status === 'blocked' ? 'border-amber-500/30 bg-orange-500/5' : 'border-border bg-card'}`}>
           <div className="flex-1">
             <div className="flex items-center gap-2 text-sm font-medium">
               <StatusBadge status={uploadResult.status} />
@@ -284,7 +284,7 @@ export default function PipelinePage() {
               类型: {uploadResult.pipeline_type} | 耗时: {formatElapsed(uploadResult.elapsed_ms)}
             </p>
           </div>
-          <button onClick={() => setUploadResult(null)} className="p-1 rounded hover:bg-muted">
+          <button onClick={() => setUploadResult(null)} className="p-1 rounded-md hover:bg-muted">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -325,13 +325,13 @@ export default function PipelinePage() {
         </select>
         <button
           onClick={() => fetchHistory()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
         <button
           onClick={() => setShowUpload(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90"
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
         >
           <Upload className="w-3.5 h-3.5" />上传文件
         </button>
@@ -351,7 +351,7 @@ export default function PipelinePage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium font-mono truncate">{p.pipeline_id}</span>
                   {p.pipeline_type && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{p.pipeline_type}</span>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{p.pipeline_type}</span>
                   )}
                 </div>
               </div>
@@ -402,7 +402,7 @@ export default function PipelinePage() {
                 <h2 className="text-base font-medium font-mono">{selectedPipeline.pipeline_id}</h2>
                 <StatusBadge status={selectedPipeline.status} />
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded hover:bg-muted">
+              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -463,7 +463,7 @@ export default function PipelinePage() {
                 <Upload className="w-4 h-4" />
                 <h2 className="text-base font-medium">上传文件到流水线</h2>
               </div>
-              <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-muted">
+              <button onClick={() => setShowUpload(false)} className="p-1 rounded-md hover:bg-muted">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -491,7 +491,7 @@ export default function PipelinePage() {
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); setUploadFile(null); }}
-                        className="p-1 rounded hover:bg-muted ml-2"
+                        className="p-1 rounded-md hover:bg-muted ml-2"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -564,14 +564,14 @@ export default function PipelinePage() {
                 <button
                   onClick={handleUpload}
                   disabled={!uploadFile || uploading}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
                 >
                   {uploading ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                   {uploading ? '处理中...' : '开始处理'}
                 </button>
                 <button
                   onClick={() => setShowUpload(false)}
-                  className="px-4 py-2 text-xs bg-muted border border-border rounded-md hover:bg-muted/80"
+                  className="px-4 py-2 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
                 >
                   取消
                 </button>
@@ -586,7 +586,7 @@ export default function PipelinePage() {
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-500">
           <AlertTriangle className="w-3.5 h-3.5" />
           {error}
-          <button onClick={() => setError('')} className="p-0.5 rounded hover:bg-red-500/20">
+          <button onClick={() => setError('')} className="p-0.5 rounded-md hover:bg-red-500/20">
             <X className="w-3 h-3" />
           </button>
         </div>

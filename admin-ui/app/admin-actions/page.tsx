@@ -104,13 +104,13 @@ function ResultPanel({ result, onClose }: { result: ActionResult; onClose: () =>
           )}
           <span className="text-sm font-medium">{result.action}</span>
           {result.cleared !== undefined && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500">清除 {result.cleared}/{result.total}</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">清除 {result.cleared}/{result.total}</span>
           )}
           {result.cleaned !== undefined && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500">清理 {result.cleaned}/{result.total}</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">清理 {result.cleaned}/{result.total}</span>
           )}
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+        <button onClick={onClose} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
       </div>
       {result.results && (
         <div className="p-3 space-y-1">
@@ -253,7 +253,7 @@ export default function AdminActionsPage() {
               if (key === 'overview' && !overview) fetchOverview();
               if (key === 'report' && !report) fetchReport();
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             <Icon className="w-3.5 h-3.5" />{label}
           </button>

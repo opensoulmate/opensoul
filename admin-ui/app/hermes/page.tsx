@@ -70,7 +70,7 @@ function SessionCard({ session, onSend, onDelete }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">{session.name}</span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${pc.color}`}>{pc.label}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${pc.color}`}>{pc.label}</span>
         </div>
         {session.last_message && (
           <p className="text-[10px] text-muted-foreground truncate mt-0.5">{session.last_message}</p>
@@ -82,10 +82,10 @@ function SessionCard({ session, onSend, onDelete }: {
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        <button onClick={onSend} className="p-1.5 rounded hover:bg-muted" title="发送消息">
+        <button onClick={onSend} className="p-1.5 rounded-md hover:bg-muted" title="发送消息">
           <Send className="w-3.5 h-3.5 text-muted-foreground" />
         </button>
-        <button onClick={onDelete} className="p-1.5 rounded hover:bg-red-500/10" title="删除会话">
+        <button onClick={onDelete} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除会话">
           <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-red-500" />
         </button>
       </div>
@@ -123,7 +123,7 @@ function SendDialog({ sessionId, onClose }: { sessionId: string; onClose: () => 
       <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-medium">发送消息到 {sessionId.slice(0, 20)}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4 space-y-3">
           <textarea
@@ -135,9 +135,9 @@ function SendDialog({ sessionId, onClose }: { sessionId: string; onClose: () => 
           />
           {result && <div className="text-xs p-2 rounded bg-muted">{result}</div>}
           <div className="flex justify-end gap-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs border border-border rounded-md hover:bg-muted">关闭</button>
+            <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">关闭</button>
             <button onClick={handleSend} disabled={!text.trim() || sending}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}发送
             </button>
           </div>
@@ -241,7 +241,7 @@ export default function HermesBridgePage() {
           <option value="tg">Telegram</option>
           <option value="dc">Discord</option>
         </select>
-        <button onClick={fetchSessions} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80">
+        <button onClick={fetchSessions} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </button>
       </div>

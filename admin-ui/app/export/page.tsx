@@ -218,7 +218,7 @@ export default function ExportPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{format.label}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground font-mono">
                       .{format.ext}
                     </span>
                   </div>
@@ -233,7 +233,7 @@ export default function ExportPage() {
                 <button
                   onClick={() => handleExport(format)}
                   disabled={isExporting || !userId}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 shrink-0"
+                  className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 shrink-0 font-medium transition-colors"
                 >
                   {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {isExporting ? '导出中...' : '导出'}
@@ -264,7 +264,7 @@ export default function ExportPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500 flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded"><X className="w-3 h-3" /></button>
+          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded-md"><X className="w-3 h-3" /></button>
         </div>
       )}
     </div>

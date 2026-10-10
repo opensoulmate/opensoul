@@ -365,7 +365,7 @@ export default function ConnectorsPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -379,7 +379,7 @@ export default function ConnectorsPage() {
         <button
           onClick={handleScan}
           disabled={scanning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 mb-1"
+          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 mb-1 font-medium transition-colors"
         >
           {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
           {scanning ? '扫描中...' : '系统扫描'}
@@ -397,7 +397,7 @@ export default function ConnectorsPage() {
                 <div key={adapter.name} className="rounded border border-border p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-medium">{adapter.name}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${adapter.configured ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${adapter.configured ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                       {adapter.configured ? '已配置' : '未配置'}
                     </span>
                   </div>
@@ -508,11 +508,11 @@ export default function ConnectorsPage() {
             </div>
             <div className="flex items-center gap-2 mt-3">
               <button onClick={handleRestConfigure} disabled={restLoading || !restConfig.base_url}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 {restLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}配置
               </button>
               <button onClick={handleRestProbe} disabled={restLoading || !restConfig.base_url}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-md hover:bg-blue-500/20 disabled:opacity-50">
+                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50">
                 <Eye className="w-3 h-3" />探测OpenAPI
               </button>
             </div>
@@ -534,7 +534,7 @@ export default function ConnectorsPage() {
               <input className="flex-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono"
                 value={restPath} onChange={(e) => setRestPath(e.target.value)} placeholder="/api/v1/resource" />
               <button onClick={handleRestRequest} disabled={restLoading || !restPath}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 {restLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}发送
               </button>
             </div>
@@ -577,7 +577,7 @@ export default function ConnectorsPage() {
               </div>
             </div>
             <button onClick={handleDbConfigure} disabled={dbLoading || !dbConfig.connection_string}
-              className="flex items-center gap-1 px-3 py-1.5 mt-3 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 mt-3 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {dbLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}配置连接
             </button>
           </div>
@@ -587,14 +587,14 @@ export default function ConnectorsPage() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-medium text-muted-foreground">SQL查询</h3>
               <button onClick={handleDbTables}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted border border-border rounded hover:bg-muted/80">
+                className="flex items-center gap-1 px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted transition-colors">
                 <Table className="w-3 h-3" />查看表
               </button>
             </div>
             <textarea className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono h-20 resize-none mb-2"
               value={dbQuery} onChange={(e) => setDbQuery(e.target.value)} placeholder="SELECT * FROM table_name LIMIT 100" />
             <button onClick={handleDbQuery} disabled={dbLoading || !dbQuery}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {dbLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}执行查询
             </button>
 
@@ -607,7 +607,7 @@ export default function ConnectorsPage() {
                     const name = typeof t === 'string' ? t : t.name || t.table_name;
                     return (
                       <button key={name} onClick={() => handleDbDescribe(name)}
-                        className="text-[10px] px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20">
+                        className="text-[10px] px-2 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary/20">
                         {name}
                       </button>
                     );
@@ -659,7 +659,7 @@ export default function ConnectorsPage() {
               </div>
             </div>
             <button onClick={handleFsConfigure} disabled={fsLoading || !fsConfig.root_path}
-              className="flex items-center gap-1 px-3 py-1.5 mt-3 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 mt-3 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
               {fsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}配置
             </button>
           </div>
@@ -671,11 +671,11 @@ export default function ConnectorsPage() {
               <input className="flex-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono"
                 value={fsPath} onChange={(e) => setFsPath(e.target.value)} placeholder="/" />
               <button onClick={handleFsList} disabled={fsLoading}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50">
+                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
                 <FolderOpen className="w-3 h-3" />列出
               </button>
               <button onClick={handleFsRead} disabled={fsLoading}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-md hover:bg-blue-500/20 disabled:opacity-50">
+                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50">
                 <FileText className="w-3 h-3" />读取
               </button>
             </div>
@@ -685,7 +685,7 @@ export default function ConnectorsPage() {
               <input className="flex-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md"
                 value={fsPattern} onChange={(e) => setFsPattern(e.target.value)} placeholder="搜索文件名模式 (*.txt)" />
               <button onClick={handleFsSearch} disabled={fsLoading || !fsPattern}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-md hover:bg-purple-500/20 disabled:opacity-50">
+                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-purple-500/20 rounded-lg hover:bg-violet-500/20 disabled:opacity-50">
                 <Search className="w-3 h-3" />搜索
               </button>
             </div>
