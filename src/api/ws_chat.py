@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -26,11 +27,35 @@ CLI_ARGS: dict[str, list[str]] = {
     "hermes": ["-z"],
     "mimo": ["run"],
     "codex": ["exec"],
-    "opencode": ["-q"],
+    "opencode": ["run"],
     "openclaw": ["agent", "--agent", "main", "-m"],
     "copilot": ["copilot", "-p"],
     "amazon-q": ["chat", "--no-interactive", "-p"],
 }
+
+# agent CLI 常见用户安装目录——systemd 服务的 PATH 常不含这些目录，
+# 裸 shutil.which 会把装在 ~/.local/bin 的 agent 误判"未安装"
+# （2026-10-11 周期#53 e2e 实证：mimo 只在 ~/.local/bin，服务里 which("mimo")=None）。
+_EXTRA_BIN_DIRS = (
+    str(Path.home() / ".local" / "bin"),
+    str(Path.home() / ".npm-global" / "bin"),
+    "/usr/local/bin",
+)
+
+
+def which_agent(name: str) -> str | None:
+    """找 agent CLI 的真实可执行路径：先常规 PATH，再补用户安装目录（返回绝对路径）。
+
+    返回绝对路径同时解决子进程 PATH 盲区（spawn 用绝对路径不依赖 env PATH）。"""
+    hit = shutil.which(name)
+    if hit:
+        return hit
+    for d in _EXTRA_BIN_DIRS:
+        p = os.path.join(d, name)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
 
 # Cache of available agents from detect API
 _available_agents: dict[str, dict] = {}
@@ -100,15 +125,17 @@ async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str,
     agent_info = _available_agents.get(agent_id)
     binary = agent_info["binary"] if agent_info else agent_id
 
-    if not shutil.which(binary):
+    binary_path = which_agent(binary)
+    if not binary_path:
         return f"Agent未安装: {binary}", "error", False
 
     args = CLI_ARGS.get(agent_id, ["-p"])
-    cmd = [binary] + args + [text]
+    cmd = [binary_path] + args + [text]
     logger.info(f"Agent proxy running: {' '.join(cmd)}")
 
     try:
         env = os.environ.copy()
+        env["PATH"] = os.pathsep.join(_EXTRA_BIN_DIRS) + os.pathsep + env.get("PATH", "")
         llm_cfg = _get_llm_config()
         if llm_cfg.get("api_key"):
             env["OPENAI_API_KEY"] = llm_cfg["api_key"]

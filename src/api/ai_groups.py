@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 import sqlite3
 import statistics
 import uuid
@@ -13,7 +14,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.api.ws_chat import run_agent_proxy
+from src.api.ws_chat import run_agent_proxy, which_agent
 
 logger = logging.getLogger(__name__)
 
@@ -805,19 +806,38 @@ class RetryTaskRequest(BaseModel):
     agent_id: str = ""
 
 
+_ROLE_SLOT_RE = re.compile(r"^(advisor|executor|verifier|human)(-\d+)?$", re.IGNORECASE)
+
+
 def _resolve_agent_binary(agent_id: str, model: str = "") -> str:
-    """将AI群组agent_id映射到实际CLI agent二进制名。
+    """将AI群组agent_id映射到实际CLI agent二进制名（2026-10-11 独立性铁律重写）。
 
-    群组里的agent_id如 executor-1/advisor-1 不是真实binary名，
-    需要根据model字段或agent_id关键词推断应该调用哪个CLI agent。
-    """
-    import shutil
+    两类 id 两种语义：
+    - 角色槽位（advisor-1/executor/verifier…）：不是真实身份，按 model/关键词映射 CLI；
+    - 真实身份（soulmate/hermes/mimo/…，含 claude-2 这类实例后缀）：**只认自己**，
+      找不到就原样返回、由下游显式报"Agent未安装"。
 
-    # 直接匹配 — agent_id本身就是binary名
-    if shutil.which(agent_id):
+    旧版尾部"默认用hermes"兜底把 mimo/soulmate 成员的任务静默变身 hermes 大脑
+    （周期#53 e2e 实证：journal "Agent resolve: mimo -> hermes"），违反
+    "每个agent都应该是独立的"铁律——已删除，禁止任何冒名兜底。"""
+    aid = (agent_id or "").strip()
+    if not aid:
         return agent_id
 
-    # 根据model字段推断
+    # 直接匹配 — agent_id本身就是binary名（含用户安装目录，修 systemd PATH 盲区）
+    if which_agent(aid):
+        return aid
+
+    # 实例后缀身份（claude-2/mimo-1）：剥后缀找本体，仍只认自己
+    m = re.match(r"^(.+?)-\d+$", aid)
+    if m and which_agent(m.group(1)):
+        return m.group(1)
+
+    # 真实身份绝不映射成别的 agent（找不到=显式未安装，不变身）
+    if not _ROLE_SLOT_RE.match(aid):
+        return agent_id
+
+    # ── 以下仅角色槽位：按 model 字段推断 ──
     model_lower = model.lower()
     model_to_agent = {
         "claude": "claude",
@@ -836,29 +856,31 @@ def _resolve_agent_binary(agent_id: str, model: str = "") -> str:
         "qwen2": "ollama",
     }
     for keyword, binary in model_to_agent.items():
-        if keyword in model_lower and shutil.which(binary):
+        if keyword in model_lower and which_agent(binary):
             return binary
 
-    # 根据agent_id关键词推断
-    id_lower = agent_id.lower()
+    # 角色关键词推断（advisor/executor/verifier 槽位 → 常规CLI）
+    id_lower = aid.lower()
     id_to_agent = {
         "advisor": "hermes",
         "executor": "hermes",
         "verifier": "hermes",
-        "claude": "claude",
-        "gpt": "codex",
-        "mimo": "mimo",
-        "codex": "codex",
     }
     for keyword, binary in id_to_agent.items():
-        if keyword in id_lower and shutil.which(binary):
+        if keyword in id_lower and which_agent(binary):
             return binary
 
-    # 默认用hermes
-    if shutil.which("hermes"):
-        return "hermes"
+    return agent_id  # 槽位无可用映射 → 原样返回，下游显式报"Agent未安装"
 
-    return agent_id  # 最后回退
+
+def _channel_desc(agent_id: str, real_binary: str) -> str:
+    """started 事件的执行通道标签——按 agent 独立性铁律如实标注真实通道。
+
+    soulmate 子任务走自己的 ACP WS（_run_soulmate_turn），不是 CLI，
+    事件里禁显示 "binary=hermes"（_resolve_agent_binary 的信息位推断会误导观测）。"""
+    if (agent_id or "").lower() == "soulmate":
+        return "channel=soulmate-acp"
+    return f"binary={real_binary}"
 
 
 # 任务执行并发保护（异步202模式）：同task_id同时只允许一个执行
@@ -1235,7 +1257,7 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
             task_id,
             req.agent_id,
             "started",
-            f"agent={req.agent_id} binary={real_binary} goal={run_goal[:120]}",
+            f"agent={req.agent_id} {_channel_desc(req.agent_id, real_binary)} goal={run_goal[:120]}",
         )
 
         # ── A1认知层接入：执行前brain.think（意图+风险+决策），被调用而非仅存在 ──
