@@ -13,22 +13,92 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border-hover: var(--border-hover);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
 }
 
+/* ── DS v2.0 字体/字阶/圆角 ─────────────────────────────────────────────
+   落在未分层 :root：CSS 层叠里 unlayered 覆盖 @layer theme 的 Tailwind
+   默认值，rounded 系与 font-sans 等工具类经 var(--radius-md)、
+   var(--font-sans) 自动取到与 OpenMate 同尺寸的令牌。
+   （注释里禁写星号斜杠序列，会提前闭合注释吞掉 :root） ──────────── */
+
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  --card: #0a0a0c;
-  --card-foreground: #fafafa;
-  --border: #27272a;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
+  /* ── OpenMate Design System v2.0（Dracula 默认暗色）──────────────────
+     值逐字对齐正典来源 ~/openmate/src/app/globals.css（2026-10-11 C3 对齐）。
+     本块是 OpenSoul 管理后台的令牌单一源，换主题只改这里。 ── */
+  --background: #282a36;
+  --foreground: #f8f8f2;
+  --card: #2d2f3d;
+  --card-foreground: #f8f8f2;
+  --popover: #2d2f3d;
+  --popover-foreground: #f8f8f2;
+  --primary: #bd93f9;
+  --primary-foreground: #f8f8f2;
+  --secondary: #44475a;
+  --secondary-foreground: #6272a4;
+  --muted: #343746;
+  --muted-foreground: #6272a4;
+  --accent: #44475a;
+  --accent-foreground: #f8f8f2;
+  --destructive: #ff5555;
+  --destructive-foreground: #f8f8f2;
+  --border: #44475a;
+  --input: #44475a;
+  --ring: #bd93f9;
+  --sidebar: #21222c;
+  --sidebar-foreground: #6272a4;
+  --sidebar-accent: #2d2f3d;
+  --success: #50fa7b;
+  --warning: #e0af68;
+  --error: #ff5555;
+  --info: #8be9fd;
+
+  /* ── DS v2.0 文字层级 / 表面色 ── */
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-tertiary: rgba(248, 248, 242, 0.4);
+  --surface: var(--card);
+  --surface-hover: rgba(255, 255, 255, 0.05);
+  --border-hover: rgba(255, 255, 255, 0.15);
+
+  /* ── DS v2.0 过渡动画 ── */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* ── DS v2.0 字体（与 OpenMate 同栈）── */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --font-cn: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* ── DS v2.0 字阶 ── */
+  --text-display: 1.75rem;
+  --text-h1: 1.25rem;
+  --text-h2: 1rem;
+  --text-h3: 0.875rem;
+  --text-body: 0.875rem;
+  --text-caption: 0.75rem;
+  --text-overline: 0.625rem;
+
+  /* ── DS v2.0 圆角（覆盖 Tailwind 默认，rounded-* 与 OpenMate 同尺寸）── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 50%;
+  --radius-nav: 8px;
+  --radius-bubble: 12px;
+  --radius-sheet: 20px;
+  --radius: 0.625rem;
 }
 
 * {
@@ -38,7 +108,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
