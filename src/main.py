@@ -66,6 +66,7 @@ from src.api.notifications import router as notifications_router
 from src.api.permission import router as permission_router
 from src.api.pipeline import router as pipeline_router
 from src.api.plugins_api import router as plugins_router
+from src.api.proactive import router as proactive_router
 from src.api.pulse import router as pulse_router
 from src.api.reflex import router as reflex_router
 from src.api.registry import router as registry_router
@@ -393,9 +394,19 @@ async def lifespan(app: FastAPI):
     # 进化提案stale pending周期清扫（48h TTL契约运行时接线，见_evolution_retention_loop）
     retention_task = asyncio.create_task(_evolution_retention_loop())
 
+    # 主动行为引擎（A3）：心跳驱动的定期任务，不只被动响应——
+    # 三个默认行为（memory_decay/experience_collect/heredity_triggers）
+    # 按各自interval到期执行，每次执行留痕data/proactive.db，见src/will/proactive.py
+    from src.will.proactive import proactive_engine
+    from src.will.proactive_behaviors import register_default_watchers
+
+    register_default_watchers(proactive_engine)
+    await proactive_engine.start(interval_seconds=30)
+
     yield
 
     # Shutdown
+    await proactive_engine.stop()
     bootstrap_task.cancel()
     dream_task.cancel()
     retention_task.cancel()
@@ -647,6 +658,7 @@ app.include_router(hippo_router, prefix="/api/hippo", tags=["hippo"])
 app.include_router(reflex_router, prefix="/api/reflex", tags=["reflex"])
 app.include_router(heredity_router, prefix="/api/heredity", tags=["heredity"])
 app.include_router(pulse_router, prefix="/api/pulse", tags=["pulse"])
+app.include_router(proactive_router, prefix="/api/proactive", tags=["proactive"])
 app.include_router(nest_router, prefix="/api/nest", tags=["nest"])
 app.include_router(limb_router, prefix="/api/limb", tags=["limb"])
 app.include_router(limb_rpa_router, prefix="/api/limb/rpa", tags=["Limb RPA"])
