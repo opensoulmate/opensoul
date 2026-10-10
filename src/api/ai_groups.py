@@ -14,7 +14,12 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.api.ws_chat import run_agent_proxy, which_agent
+from src.api.ws_chat import (
+    cancel_proxy_run,
+    find_proxy_run,
+    run_agent_proxy,
+    which_agent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1317,6 +1322,8 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
             _emit_exec_event(group_id, task_id, req.agent_id, etype, line)
 
         # 失败自动重试1次（自动重试上限1，手动retry不受影响）
+        # run_ref=任务级执行登记（10.3：进度心跳/时长查询/显式取消的查找键）
+        run_ref = f"{group_id}/{task_id}"
         attempt = 0
         while True:
             if (req.agent_id or "").lower() == "soulmate":
@@ -1325,9 +1332,9 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
                 source = "soulmate-agent"
             else:
                 response_text, source, success = await run_agent_proxy(
-                    real_binary, run_goal, on_event=_on_exec_event
+                    real_binary, run_goal, on_event=_on_exec_event, task_ref=run_ref
                 )
-            if success or attempt >= 1:
+            if success or attempt >= 1 or source == "cancelled":
                 break
             attempt += 1
             conn.execute(
@@ -1338,13 +1345,37 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
             _emit_exec_event(
                 group_id, task_id, req.agent_id, "retry", f"auto-retry #{attempt}（上次失败）"
             )
-        _emit_exec_event(
-            group_id,
-            task_id,
-            req.agent_id,
-            "finished" if success else "failed",
-            f"success={success} len={len(response_text)} attempts={attempt + 1}",
-        )
+        if source == "cancelled":
+            _emit_exec_event(
+                group_id,
+                task_id,
+                req.agent_id,
+                "cancelled",
+                f"任务执行被显式取消（不自动重试、不评分）：{response_text[:120]}",
+            )
+        else:
+            _emit_exec_event(
+                group_id,
+                task_id,
+                req.agent_id,
+                "finished" if success else "failed",
+                f"success={success} len={len(response_text)} attempts={attempt + 1}",
+            )
+
+        # 显式取消：任务以取消收口（尊重用户意图，跳过评分/能力画像）
+        if source == "cancelled":
+            result_now = datetime.now().isoformat()
+            conn.execute(
+                "UPDATE ai_group_tasks SET result=?, status='failed', updated_at=? WHERE id=?",
+                (response_text, result_now, task_id),
+            )
+            conn.commit()
+            return {
+                "status": "cancelled",
+                "task_id": task_id,
+                "agent_id": req.agent_id,
+                "success": False,
+            }
 
         # 保存结果
         result_now = datetime.now().isoformat()
@@ -1496,6 +1527,54 @@ async def retry_task(group_id: str, task_id: str, req: RetryTaskRequest):
         {"status": "executing", "task_id": task_id, "message": "已开始重试，进度见事件流"},
         status_code=202,
     )
+
+
+class CancelExecRequest(BaseModel):
+    force: bool = False
+
+
+@router.get("/{group_id}/tasks/{task_id}/exec-status")
+def get_task_exec_status(group_id: str, task_id: str):
+    """执行时长/进度可查询（10.3 挂死可见性）：agent 执行登记项快照 + 任务行状态。
+
+    快照含 elapsed_s（实时执行时长）/last_event（最近输出行）/lines（已收行数）/
+    cancel_requested；无在跑执行时 run=None（不造假）。"""
+    conn = get_db()
+    try:
+        task = conn.execute(
+            "SELECT status, assigned_agent_id FROM ai_group_tasks WHERE id=? AND group_id=?",
+            (task_id, group_id),
+        ).fetchone()
+    finally:
+        conn.close()
+    run = find_proxy_run(f"{group_id}/{task_id}", running_only=False)
+    return {
+        "group_id": group_id,
+        "task_id": task_id,
+        "task_status": task["status"] if task else None,
+        "assigned_agent_id": task["assigned_agent_id"] if task else None,
+        "run": run,
+    }
+
+
+@router.post("/{group_id}/tasks/{task_id}/exec-cancel")
+async def cancel_task_exec(group_id: str, task_id: str, req: CancelExecRequest):
+    """显式取消任务的 agent 执行（用户意图：SIGTERM→有界等待，force=True 才 SIGKILL）。
+
+    不加到点自动杀——正常长回合绝不被误杀；取消只由本端点显式发起。"""
+    run = find_proxy_run(f"{group_id}/{task_id}")
+    if not run:
+        raise HTTPException(404, "该任务当前没有在跑的 agent 执行进程（无可取消对象）")
+    result = await cancel_proxy_run(run["run_id"], force=req.force)
+    if result.get("ok"):
+        _emit_exec_event(
+            group_id,
+            task_id,
+            run.get("agent_id") or "",
+            "cancel-requested",
+            f"显式取消执行：signal={result.get('signal')} force={req.force} exited={result.get('exited')}",
+        )
+    return result
 
 
 @router.get("/{group_id}/tasks/{task_id}/events")

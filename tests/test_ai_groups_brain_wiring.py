@@ -28,10 +28,11 @@ def brain_wiring_env(tmp_path, monkeypatch):
     # agent执行桩：只桩子进程调用，brain管线全走真代码
     calls = {"n": 0}
 
-    async def fake_run_agent_proxy(agent_id, text, on_event=None):
+    async def fake_run_agent_proxy(agent_id, text, on_event=None, **kwargs):
         calls["n"] += 1
         calls["agent_id"] = agent_id
         calls["goal"] = text
+        calls["kwargs"] = kwargs
         return ("桩执行结果：任务完成", "stub-agent", True)
 
     monkeypatch.setattr(ai_groups, "run_agent_proxy", fake_run_agent_proxy)

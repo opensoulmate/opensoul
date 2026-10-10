@@ -5,6 +5,8 @@ import logging
 import os
 import shutil
 import time
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -113,12 +115,120 @@ def _classify_stream_event(etype: str, line: str) -> str:
     return "tool_call" if any(m in low for m in _TOOL_EVENT_MARKERS) else etype
 
 
-async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str, str, bool]:
+# ── 10.3 run_agent_proxy 挂死可见性（周期#53 诚实边界②销账）────────────────
+# 治理 = 进度心跳 + 执行时长可查询 + 可显式取消；**不加到点 SIGKILL**（禁硬杀铁律：
+# hermes 长回合实测 12 分钟+仍完成，自动超时杀 = 误杀正常长回合）。取消是显式意图：
+# 先 SIGTERM 独立进程组，有界等待，force=True 才升级 SIGKILL（对齐 process_tools 9.2
+# 纪律）。心跳走 on_event("heartbeat", ...)，群组任务经 _emit_exec_event 可见进度。
+_PROXY_HEARTBEAT_S = float(os.environ.get("SOULMATE_PROXY_HEARTBEAT_S", "30"))
+_PROXY_RUNS: dict[str, dict] = {}  # run_id -> 执行登记项（proc 不外泄，快照走 proxy_run_snapshot）
+_PROXY_RUNS_MAX = 64
+
+
+def _prune_proxy_runs() -> None:
+    """登记表有界：超上限先删已结束的旧项（在跑的绝不删）。"""
+    overflow = len(_PROXY_RUNS) - _PROXY_RUNS_MAX
+    if overflow <= 0:
+        return
+    finished = [
+        rid for rid, e in _PROXY_RUNS.items() if e["status"] not in ("running", "cancelling")
+    ]
+    for rid in sorted(finished, key=lambda r: _PROXY_RUNS[r]["started_mono"])[:overflow]:
+        _PROXY_RUNS.pop(rid, None)
+
+
+def proxy_run_snapshot(run_id: str) -> dict | None:
+    """执行登记项的 JSON 安全快照（执行时长实时计算；proc 对象不外泄）。"""
+    entry = _PROXY_RUNS.get(run_id)
+    if not entry:
+        return None
+    return {
+        "run_id": entry["run_id"],
+        "agent_id": entry["agent_id"],
+        "task_ref": entry.get("task_ref"),
+        "status": entry["status"],
+        "started_at": entry["started_at"],
+        "elapsed_s": round(time.monotonic() - entry["started_mono"], 1),
+        "pid": entry.get("pid"),
+        "returncode": entry.get("returncode"),
+        "lines": entry.get("lines", 0),
+        "last_event_type": entry.get("last_event_type"),
+        "last_event": entry.get("last_event"),
+        "cancel_requested": entry.get("cancel_requested", False),
+    }
+
+
+def list_proxy_runs(task_ref: str | None = None) -> list[dict]:
+    snaps = [s for s in (proxy_run_snapshot(rid) for rid in list(_PROXY_RUNS)) if s]
+    if task_ref is not None:
+        snaps = [s for s in snaps if s.get("task_ref") == task_ref]
+    return sorted(snaps, key=lambda s: s["started_at"])
+
+
+def find_proxy_run(task_ref: str, running_only: bool = True) -> dict | None:
+    """按 task_ref 找执行登记项：优先在跑的（含 cancelling），其次最近一次。"""
+    cands = list_proxy_runs(task_ref)
+    if running_only:
+        running = [s for s in cands if s["status"] in ("running", "cancelling")]
+        return running[-1] if running else None
+    return cands[-1] if cands else None
+
+
+async def cancel_proxy_run(run_id: str, force: bool = False) -> dict:
+    """显式取消一次 agent 执行（用户意图，非到点自动杀）。
+
+    SIGTERM 独立进程组（create_subprocess_exec start_new_session=True 保证进程组
+    收编），有界等待退出；force=True 才升级 SIGKILL。禁任何定时自动 SIGKILL。
+    """
+    entry = _PROXY_RUNS.get(run_id)
+    if not entry:
+        return {"ok": False, "reason": f"未知 run_id: {run_id}"}
+    if entry["status"] not in ("running", "cancelling"):
+        return {
+            "ok": False,
+            "reason": f"run 已结束（status={entry['status']}），无可取消对象",
+            "run_id": run_id,
+        }
+    proc = entry.get("proc")
+    if proc is None or proc.returncode is not None:
+        return {"ok": False, "reason": "执行进程已退出，无可取消对象", "run_id": run_id}
+    entry["cancel_requested"] = True
+    entry["status"] = "cancelling"
+    sig_name, signum = ("SIGKILL", 9) if force else ("SIGTERM", 15)
+    try:
+        os.killpg(os.getpgid(proc.pid), signum)
+    except (ProcessLookupError, PermissionError, OSError) as e:
+        return {"ok": False, "reason": f"信号发送失败: {type(e).__name__}: {e}", "run_id": run_id}
+    # 有界等待退出（等待观察窗口，不是超时杀）
+    deadline = time.monotonic() + (5.0 if force else 3.0)
+    while time.monotonic() < deadline and proc.returncode is None:
+        await asyncio.sleep(0.05)
+    return {
+        "ok": True,
+        "run_id": run_id,
+        "signal": sig_name,
+        "force": force,
+        "exited": proc.returncode is not None,
+        "returncode": proc.returncode,
+        "elapsed_s": round(time.monotonic() - entry["started_mono"], 1),
+    }
+
+
+async def run_agent_proxy(
+    agent_id: str,
+    text: str,
+    on_event=None,
+    run_id: str | None = None,
+    task_ref: str | None = None,
+    heartbeat_s: float | None = None,
+) -> tuple[str, str, bool]:
     """Run a message through any installed agent with system LLM config injected.
 
     on_event: 可选回调 on_event(event_type, line)，逐行推送执行过程事件
-    （event_type: output=stdout行 / stderr=stderr行 / tool_call=stderr里的工具活动行），
-    实现执行过程可视化。
+    （event_type: output=stdout行 / stderr=stderr行 / tool_call=stderr里的工具活动行
+    / heartbeat=执行进度心跳[已用时/行数/最近输出]），实现执行过程可视化。
+    run_id/task_ref：执行登记（查询/取消用，见 proxy_run_snapshot/cancel_proxy_run）；
+    heartbeat_s 覆盖心跳间隔（测试用）。**无到点超时杀**：长回合跑完为止，取消只能显式发起。
     """
     _refresh_agent_list()
 
@@ -133,6 +243,26 @@ async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str,
     cmd = [binary_path] + args + [text]
     logger.info(f"Agent proxy running: {' '.join(cmd)}")
 
+    run_id = run_id or f"run-{uuid.uuid4().hex[:12]}"
+    entry = {
+        "run_id": run_id,
+        "agent_id": agent_id,
+        "task_ref": task_ref,
+        "status": "running",
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+        "started_mono": time.monotonic(),
+        "pid": None,
+        "proc": None,
+        "returncode": None,
+        "lines": 0,
+        "last_event_type": None,
+        "last_event": None,
+        "cancel_requested": False,
+    }
+    _PROXY_RUNS[run_id] = entry
+    _prune_proxy_runs()
+
+    heartbeat_task: asyncio.Task | None = None
     try:
         env = os.environ.copy()
         env["PATH"] = os.pathsep.join(_EXTRA_BIN_DIRS) + os.pathsep + env.get("PATH", "")
@@ -152,7 +282,10 @@ async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
+            start_new_session=True,  # 独立进程组：显式取消可 killpg 收编整棵进程树
         )
+        entry["proc"] = proc
+        entry["pid"] = proc.pid
 
         # 流式逐行读取输出（替代原communicate()一次拿完，执行过程不可见问题的根因）
         collected: dict[str, list[str]] = {"out": [], "err": []}
@@ -166,6 +299,9 @@ async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str,
                 if not s:
                     continue
                 bucket.append(s)
+                entry["lines"] = entry.get("lines", 0) + 1
+                entry["last_event_type"] = etype
+                entry["last_event"] = s
                 if on_event is not None:
                     try:
                         r = on_event(_classify_stream_event(etype, s), s)
@@ -174,18 +310,71 @@ async def run_agent_proxy(agent_id: str, text: str, on_event=None) -> tuple[str,
                     except Exception:
                         pass  # 事件回调失败不影响执行本身
 
+        async def _heartbeat():
+            """进度心跳：只报进度不打断执行；失败旁路（只计时冒泡，不阻塞）。"""
+            interval = float(heartbeat_s if heartbeat_s is not None else _PROXY_HEARTBEAT_S)
+            if interval <= 0:
+                return
+            try:
+                while entry["status"] == "running":
+                    await asyncio.sleep(interval)
+                    if entry["status"] != "running":
+                        break
+                    elapsed = time.monotonic() - entry["started_mono"]
+                    last = entry.get("last_event") or "（暂无输出）"
+                    msg = (
+                        f"⏳ 执行进行中：已用 {elapsed:.0f}s｜已收 {entry.get('lines', 0)} 行"
+                        f"｜最近: {last[:80]}"
+                    )
+                    if on_event is not None:
+                        try:
+                            r = on_event("heartbeat", msg)
+                            if asyncio.iscoroutine(r):
+                                await r
+                        except Exception:
+                            pass
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+
+        heartbeat_task = asyncio.create_task(_heartbeat())
+
         await asyncio.gather(
             _pump(proc.stdout, collected["out"], "output"),
             _pump(proc.stderr, collected["err"], "stderr"),
             proc.wait(),
         )
+        entry["returncode"] = proc.returncode
         response = "\n".join(collected["out"]).strip()
         if not response and proc.returncode != 0:
             response = "\n".join(collected["err"]).strip()
+        if entry.get("cancel_requested"):
+            # 显式取消：如实报告被取消 + 部分输出，绝不冒充正常完成
+            entry["status"] = "cancelled"
+            elapsed = time.monotonic() - entry["started_mono"]
+            partial = response[-800:]
+            note = "（截断显示末尾800字）" if len(response) > 800 else ""
+            body = f"\n已收集的部分输出{note}：\n{partial}" if partial else ""
+            return f"⚠️ 执行已被显式取消（用时 {elapsed:.1f}s）{body}", "cancelled", False
+        entry["status"] = "done" if proc.returncode == 0 else "failed"
         return response or "（无响应）", agent_id, proc.returncode == 0
     except Exception as e:
         logger.error(f"Agent proxy error: {e}")
+        entry["status"] = "failed"
         return f"Agent执行出错: {type(e).__name__}", "error", False
+    finally:
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+        entry["proc"] = None  # 释放进程对象引用（快照仍留 pid/returncode）
+        if entry["status"] == "running":
+            entry["status"] = "failed"  # 兜底：异常路径不留 running 假象
 
 
 @router.websocket("/chat")
