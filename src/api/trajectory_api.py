@@ -30,9 +30,14 @@ class EventCreateRequest(BaseModel):
 
 
 # ── Table Init ───────────────────────────────────────────────
+# C1（2026-10-11）拆表：原表名trajectory_events与trajectory/store.py的同名表
+# 同名不同形（那边TEXT uuid主键/metadata_json/created_at，这边自增id/metadata/
+# timestamp），共享一张表必互相"no such column/NOT NULL冲突"（live实测GET
+# /api/trajectory-v2/sessions恒500）。各归各表：v2事件落自己的表，store的
+# trajectory_events及其存量数据零改动。
 
 _TABLE_DDL = """
-CREATE TABLE IF NOT EXISTS trajectory_events (
+CREATE TABLE IF NOT EXISTS trajectory_v2_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
     agent_id TEXT NOT NULL DEFAULT '',
@@ -45,7 +50,7 @@ CREATE TABLE IF NOT EXISTS trajectory_events (
 
 _INDEX_DDL = """
 CREATE INDEX IF NOT EXISTS idx_traj_api_session
-ON trajectory_events(session_id, timestamp)
+ON trajectory_v2_events(session_id, timestamp)
 """
 
 
@@ -75,7 +80,7 @@ async def record_event(req: EventCreateRequest):
     await _ensure_table()
     ts = datetime.now(UTC).isoformat()
     await db_pool.execute(
-        """INSERT INTO trajectory_events
+        """INSERT INTO trajectory_v2_events
            (session_id, agent_id, event_type, content, metadata, timestamp)
            VALUES (?, ?, ?, ?, ?, ?)""",
         req.session_id,
@@ -88,7 +93,7 @@ async def record_event(req: EventCreateRequest):
     # Extract the autoincremented id from the result string
     # db_pool.execute returns "INSERT 0 {rowcount}"
     row = await db_pool.fetchrow(
-        "SELECT * FROM trajectory_events WHERE session_id = ? AND timestamp = ? ORDER BY id DESC LIMIT 1",
+        "SELECT * FROM trajectory_v2_events WHERE session_id = ? AND timestamp = ? ORDER BY id DESC LIMIT 1",
         req.session_id,
         ts,
     )
@@ -111,7 +116,7 @@ async def list_sessions(
                   MIN(timestamp) as first_event,
                   MAX(timestamp) as last_event,
                   GROUP_CONCAT(DISTINCT agent_id) as agents
-           FROM trajectory_events
+           FROM trajectory_v2_events
            GROUP BY session_id
            ORDER BY last_event DESC
            LIMIT ? OFFSET ?""",
@@ -119,7 +124,7 @@ async def list_sessions(
         offset,
     )
     total_row = await db_pool.fetchrow(
-        "SELECT COUNT(DISTINCT session_id) as cnt FROM trajectory_events"
+        "SELECT COUNT(DISTINCT session_id) as cnt FROM trajectory_v2_events"
     )
     return {
         "sessions": [dict(r) for r in rows],
@@ -140,7 +145,7 @@ async def get_session_trajectory(
     """Get the full trajectory for a session."""
     await _ensure_table()
     rows = await db_pool.fetch(
-        """SELECT * FROM trajectory_events
+        """SELECT * FROM trajectory_v2_events
            WHERE session_id = ?
            ORDER BY timestamp ASC
            LIMIT ?""",
@@ -169,7 +174,7 @@ async def replay_session(
     await _ensure_table()
     if from_event > 0:
         rows = await db_pool.fetch(
-            """SELECT * FROM trajectory_events
+            """SELECT * FROM trajectory_v2_events
                WHERE session_id = ? AND id >= ?
                ORDER BY timestamp ASC""",
             session_id,
@@ -177,7 +182,7 @@ async def replay_session(
         )
     else:
         rows = await db_pool.fetch(
-            """SELECT * FROM trajectory_events
+            """SELECT * FROM trajectory_v2_events
                WHERE session_id = ?
                ORDER BY timestamp ASC""",
             session_id,

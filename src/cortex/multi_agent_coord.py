@@ -41,8 +41,13 @@ class MultiAgentCoordinator:
                     UNIQUE(tenant_id, agent_id)
                 )
             """)
+            # C1（2026-10-11）拆表：原表名agent_messages与消息树（acp-proxy/
+            # ws_chat同库的session_id/role/content/timestamp形状）同名不同形，
+            # 共享一张表必互相"no such column/NOT NULL冲突"。各归各表：协作
+            # 收件箱落自己的表，消息树及其存量数据零改动（防假行被
+            # experience_collector按消息树语义采集）。
             await self.db.execute("""
-                CREATE TABLE IF NOT EXISTS agent_messages (
+                CREATE TABLE IF NOT EXISTS agent_coord_messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     tenant_id TEXT NOT NULL,
                     from_agent TEXT NOT NULL,
@@ -145,7 +150,7 @@ class MultiAgentCoordinator:
         if not self.db:
             return
         await self.db.execute(
-            "INSERT INTO agent_messages (tenant_id, from_agent, to_agent, message_type, content, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO agent_coord_messages (tenant_id, from_agent, to_agent, message_type, content, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (self.tenant_id, from_agent, to_agent, message_type, content, time.time()),
         )
 
@@ -156,7 +161,7 @@ class MultiAgentCoordinator:
             return []
         condition = "AND read = 0" if unread_only else ""
         rows = await self.db.fetch(
-            f"SELECT * FROM agent_messages WHERE tenant_id = ? AND to_agent = ? {condition} ORDER BY created_at DESC LIMIT 20",
+            f"SELECT * FROM agent_coord_messages WHERE tenant_id = ? AND to_agent = ? {condition} ORDER BY created_at DESC LIMIT 20",
             (self.tenant_id, agent_id),
         )
         return [dict(row) for row in rows]

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import re
 
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # SQL dialect conversion: PostgreSQL → SQLite
@@ -185,6 +188,8 @@ class SQLitePool:
 
         模式：PRAGMA table_info探测→缺失才ALTER，幂等可重复执行。
         每补一列在_SCHEMA_FIXES登记一行；出现新的"no column named"错误时在此登记。
+        C1（2026-10-11）：captures单表自愈推广到全库——对生产data/opensoul.db
+        全表审计（实测DDL vs 调用点列集）后在此登记其余漂移表，补列留痕journal。
         """
         _SCHEMA_FIXES = [
             (
@@ -192,6 +197,37 @@ class SQLitePool:
                 "token_count",
                 "ALTER TABLE knowledge_chunks ADD COLUMN token_count INT DEFAULT 0",
             ),
+            # ── C1 2026-10-11 全库漂移审计登记（生产实测DDL vs 真实调用点列集）──
+            # agents：生产是logo_url形状（type列非agent_type、无token），而
+            # api/agent.py:81/103/139与middleware/auth.py:46（require_agent鉴权）
+            # 引用agent_type/metadata/token/last_heartbeat——缺列时注册/心跳/
+            # X-Agent-Token鉴权全no such column。token默认NULL而非''：空串会与
+            # 存量行匹配（require_agent WHERE token=$1），NULL不等于任何传入值，
+            # 防默认值造出"万能token"
+            (
+                "agents",
+                "agent_type",
+                "ALTER TABLE agents ADD COLUMN agent_type TEXT DEFAULT ''",
+            ),
+            (
+                "agents",
+                "metadata",
+                "ALTER TABLE agents ADD COLUMN metadata TEXT DEFAULT '{}'",
+            ),
+            (
+                "agents",
+                "token",
+                "ALTER TABLE agents ADD COLUMN token TEXT DEFAULT NULL",
+            ),
+            (
+                "agents",
+                "last_heartbeat",
+                "ALTER TABLE agents ADD COLUMN last_heartbeat TEXT DEFAULT NULL",
+            ),
+            # 审计另发现两张"同名不同形"表冲突（trajectory_events：store.py形状
+            # vs api/trajectory_api.py形状；agent_messages：消息树形状 vs
+            # cortex/multi_agent_coord形状）——NOT NULL无默认列ALTER补不了，
+            # 补列只是堵漏。已根因拆表（各归各表，见对应模块注释），不在此登记。
         ]
         conn = self._conn
         if conn is None:
@@ -202,6 +238,8 @@ class SQLitePool:
             if cols and column not in cols:
                 await conn.execute(ddl)
                 await conn.commit()
+                # 不可逆结构操作留痕（captures迁移同款纪律：失败/变更必须可见）
+                logger.info("schema drift healed: %s.%s added", table, column)
 
     async def disconnect(self):
         if self._conn:
