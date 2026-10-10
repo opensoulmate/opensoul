@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from src.api.user import get_current_user
+from src.api.ws_chat import which_agent
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -70,11 +71,9 @@ class AgentResponse(BaseModel):
 @router.get("/agents")
 async def list_agents():
     """列出所有可用的CLI Agent"""
-    import shutil
-
     agents = []
     for agent_id, config in AGENT_REGISTRY.items():
-        binary_path = shutil.which(config["binary"])
+        binary_path = which_agent(config["binary"])
         agents.append(
             {
                 "id": agent_id,
@@ -94,15 +93,14 @@ async def send_to_agent(data: AgentMessage, user_id: UUID = Depends(get_current_
     if not agent_config:
         raise HTTPException(status_code=404, detail=f"Agent not found: {data.agent_id}")
 
-    import shutil
-
-    if not shutil.which(agent_config["binary"]):
+    binary_path = which_agent(agent_config["binary"])
+    if not binary_path:
         raise HTTPException(
             status_code=400, detail=f"Agent binary not found: {agent_config['binary']}"
         )
 
     try:
-        cmd = [agent_config["binary"]] + agent_config["args"] + [data.message]
+        cmd = [binary_path] + agent_config["args"] + [data.message]
         logger.info(f"Running: {' '.join(cmd)}")
 
         proc = await asyncio.create_subprocess_exec(

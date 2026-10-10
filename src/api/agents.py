@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.api.user import get_current_user
+from src.api.ws_chat import which_agent
 from src.services.agent_registry import (
     list_registered as list_registered_agents,
 )
@@ -809,13 +810,15 @@ async def detect_agents():
         os_name = _get_os()
         result = []
         for agent_id, info in AGENT_REGISTRY.items():
-            path = shutil.which(info["binary"])
+            # which_agent：PATH+用户安装目录（~/.local/bin 等）——裸 shutil.which
+            # 在 systemd 服务 PATH 盲区会把已安装 agent 误报 available=False
+            path = which_agent(info["binary"])
             version = None
             if path:
                 # Only probe version for installed agents (skip to avoid 2s timeout per missing binary)
                 try:
                     r = subprocess.run(
-                        [info["binary"], "--version"],
+                        [path, "--version"],
                         capture_output=True,
                         text=True,
                         timeout=3,
@@ -938,7 +941,7 @@ async def uninstall_agent(req: UninstallRequest, user_id: UUID = Depends(get_cur
     if req.agent_id not in AGENT_REGISTRY:
         return {"success": False, "error": f"Unknown agent: {req.agent_id}"}
     agent = AGENT_REGISTRY[req.agent_id]
-    path = shutil.which(agent["binary"])
+    path = which_agent(agent["binary"])
     if not path:
         return {"success": False, "error": "Agent not installed"}
     cmds = []
