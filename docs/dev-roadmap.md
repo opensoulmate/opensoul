@@ -11,7 +11,7 @@
 6. SQLite 陷阱：UUID 手动 str()、metadata 要 json.dumps、migrations 是 PG 语法不能直接跑
 
 ## Phase A — 认知层接入执行（对齐 docs/roadmap.md 最紧迫问题）
-- [ ] A1 SoulBrain `/api/brain/think|verify` 接入实际执行流程（被调用而非仅存在）
+- [x] A1 SoulBrain `/api/brain/think|verify` 接入实际执行流程（被调用而非仅存在）（2026-10-10 已落）
 - [ ] A2 记忆存储迁 SQLite（与 hippo 统一，替换 JSON 文件存储）
 - [ ] A3 主动行为能力（心跳驱动的定期任务，不只被动响应）
 
@@ -27,4 +27,5 @@
 - [ ] C3 管理后台（8090 单页SPA）与 OpenMate 同设计风格对齐
 
 ## 周期日志（倒序追加，一行一拍）
+- 2026-10-10 22:14 | A1落：brain/think|verify接入真实执行流程_execute_task_impl（execute/retry/任务链共用路径）——think在执行前（意图+风险+决策，决策真生效：deny即拒执行落failed不静默跳过），verify在执行后（结果入认知记忆，失败加重），brain自身故障不阻断执行但必发brain-error事件。三重校验：①git diff +84行真实落盘②grep调用链_run_task_background:709/retry:1188/任务链:906→_execute_task_impl→brain，main.py:616已挂router③pytest test_ai_groups_brain_wiring 3 passed（含deny门禁/故障不阻断）+test_ai_groups回归10 passed + live :8090 echo桩真e2e：POST execute→事件流brain-think(goal=fix_bug risk=low mode=auto)→started→output→finished→scored→brain-verify，/api/brain/recall?session_id=task回读[think]/[verify]双记忆。验证组a1proof已清理
 - 2026-10-10 21:58 | B0收尾（上拍遗落未提交改动，实测发现两处假接线）：①_notify_group_chat推送不存在的:8092/internal/group-message（httpx收404不抛异常→静默丢弃）改为直写共享库discussion_messages（ws_group._persist_message同款schema）+_emit_exec_event供WS尾随广播 ②_run_soulmate_turn线协议对齐live :8092/ws/acp实测：session/new取result.sessionId→session/prompt(sessionId,messageId,prompt)→session/update流式params.update.content.text。实测SoulMate真回'收到'+群聊落库回读✓、task_execution_events广播事件✓、pytest test_ai_groups 10 passed

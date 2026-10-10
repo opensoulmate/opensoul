@@ -956,6 +956,59 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
             f"agent={req.agent_id} binary={real_binary} goal={run_goal[:120]}",
         )
 
+        # ── A1认知层接入：执行前brain.think（意图+风险+决策），被调用而非仅存在 ──
+        # 决策真正生效：deny（critical风险）直接拒执行落failed，不静默跳过；
+        # 认知层自身故障不阻断执行但必须可见（brain-error事件）。同一session_id=task_id，
+        # 执行后的brain.verify记忆与think记忆同会话可回溯。
+        brain_decision: dict | None = None
+        try:
+            from src.api.brain import ThinkRequest
+            from src.api.brain import think as brain_think
+
+            think_result = await brain_think(
+                ThinkRequest(
+                    agent_id=req.agent_id,
+                    user_input=run_goal,
+                    session_id=task_id,
+                )
+            )
+            brain_decision = dict(think_result.get("decision") or {})
+            _emit_exec_event(
+                group_id,
+                task_id,
+                req.agent_id,
+                "brain-think",
+                "goal={g} risk={r} mode={m}".format(
+                    g=(think_result.get("intent") or {}).get("goal", "?"),
+                    r=(think_result.get("risk") or {}).get("overall_level", "?"),
+                    m=brain_decision.get("execute_mode", "?"),
+                ),
+            )
+            if brain_decision.get("execute_mode") == "deny":
+                deny_reason = (
+                    brain_decision.get("confirm_prompt") or "brain风险门禁拒绝（critical风险）"
+                )
+                conn.execute(
+                    "UPDATE ai_group_tasks SET status='failed', result=?, updated_at=? WHERE id=?",
+                    (deny_reason, datetime.now().isoformat(), task_id),
+                )
+                conn.commit()
+                _emit_exec_event(
+                    group_id, task_id, req.agent_id, "failed", f"brain deny: {deny_reason}"
+                )
+                return {
+                    "status": "denied",
+                    "task_id": task_id,
+                    "agent_id": req.agent_id,
+                    "success": False,
+                    "deny_reason": deny_reason,
+                    "brain_decision": brain_decision,
+                }
+        except Exception as e:
+            _emit_exec_event(
+                group_id, task_id, req.agent_id, "brain-error", f"think失败(不阻断执行): {e}"
+            )
+
         async def _on_exec_event(etype: str, line: str):
             _emit_exec_event(group_id, task_id, req.agent_id, etype, line)
 
@@ -1054,6 +1107,38 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
 
         conn.commit()
 
+        # ── A1认知层接入：执行后brain.verify（反思+记忆+事件，失败记忆加重） ──
+        # 与think同session（task_id），执行结果进认知层可回溯；故障不阻断回群聊。
+        try:
+            from src.api.brain import VerifyRequest
+            from src.api.brain import verify as brain_verify
+
+            await brain_verify(
+                VerifyRequest(
+                    agent_id=req.agent_id,
+                    task_id=task_id,
+                    action=run_goal,
+                    result={
+                        "success": success,
+                        "source": source,
+                        "auto_score": auto_score,
+                        "attempts": attempt + 1,
+                        "length": len(response_text),
+                    },
+                )
+            )
+            _emit_exec_event(
+                group_id,
+                task_id,
+                req.agent_id,
+                "brain-verify",
+                f"success={success} score={auto_score} 已入认知记忆(session={task_id})",
+            )
+        except Exception as e:
+            _emit_exec_event(
+                group_id, task_id, req.agent_id, "brain-error", f"verify失败(不阻断执行): {e}"
+            )
+
         # 执行结果回群聊（用户可见的 Agent 回复）
         _agent_name = (
             agent_row["name"] if agent_row and "name" in agent_row.keys() else req.agent_id
@@ -1070,6 +1155,7 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
             "auto_score": auto_score,
             "reason": auto_reason,
             "capability": capability,
+            "brain_decision": brain_decision,
         }
     finally:
         conn.close()
