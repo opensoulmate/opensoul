@@ -59,7 +59,8 @@
   --sidebar-accent: #2d2f3d;
   --success: #50fa7b;
   --warning: #e0af68;
-  --error: #ff5555;
+  /* error 与 OpenMate 同语义跟随 destructive（跨主题自动换色，暗色下仍 #ff5555） */
+  --error: var(--destructive);
   --info: #8be9fd;
 
   /* ── DS v2.0 文字层级 / 表面色 ── */
@@ -111,4 +112,62 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── C3-⑤ 主题块：light / purple（html.light 与 html.dark.theme-purple 生效）
+   值逐字对齐正典来源 ~/openmate/src/app/globals.css 的 .light 与 .theme-purple
+   块（2026-10-11 C3-⑤ 对齐，--color-X 映射为本仓 --X）。类名语义与 OpenMate
+   applyTheme 一致：light 只加 light 类，purple 加 dark+theme-purple 两类。
+   文字层级/表面色/语义四色与 OpenMate 同保持主题不变量（其 .light 与
+   .theme-purple 亦不覆盖这些键，7 套新主题才覆盖），不在此发明新值。
+   （注释里禁写星号斜杠序列，会提前闭合注释） ──────────────────────── */
+
+.light {
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #fafafa;
+  --card-foreground: #18181b;
+  --popover: #fafafa;
+  --popover-foreground: #18181b;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #71717a;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #6366f1;
+  --sidebar: #f8f9fa;
+  --sidebar-foreground: #374151;
+  --sidebar-accent: #e5e7eb;
+}
+
+.theme-purple {
+  --background: #0c0514;
+  --foreground: #e8e0f0;
+  --card: #130a1f;
+  --card-foreground: #e8e0f0;
+  --popover: #130a1f;
+  --popover-foreground: #e8e0f0;
+  --primary: #a855f7;
+  --primary-foreground: #fafafa;
+  --secondary: #1e1230;
+  --secondary-foreground: #a78bbc;
+  --muted: #160d24;
+  --muted-foreground: #8b72a0;
+  --accent: #1e1230;
+  --accent-foreground: #e8e0f0;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #2a1a40;
+  --input: #2a1a40;
+  --ring: #a855f7;
+  --sidebar: #111118;
+  --sidebar-foreground: #a1a1aa;
+  --sidebar-accent: #1a1a20;
 }

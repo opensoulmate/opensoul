@@ -16,6 +16,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { LoginPage } from '@/app/login-page';
+import { ThemeSwitcher } from '@/app/theme-switcher';
 
 // ── 一级导航（BottomBar）────────────────────────────────────────
 
@@ -223,7 +224,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
           workspaceTitle="OpenSoul Workspace"
         />
       }
-      bottomRight={<span className="text-[10px] text-muted-foreground px-2">v0.1.0</span>}
+      bottomRight={
+        <div className="flex items-center gap-1 pr-2">
+          <ThemeSwitcher />
+          <span className="text-[10px] text-muted-foreground px-2">v0.1.0</span>
+        </div>
+      }
       mainPanelProps={{
         title: currentPage?.label || '总览',
         icon: currentPage?.icon,
