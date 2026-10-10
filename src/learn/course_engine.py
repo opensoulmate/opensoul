@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import threading
 import time
 import uuid
@@ -48,17 +49,90 @@ class Course:
 
 
 class CourseEngine:
-    """Course management with persistence."""
+    """Course management with SQLite persistence (A2: 替换JSON文件存储，与hippo统一).
 
-    def __init__(self, storage_dir: str | Path | None = None):
+    数据面：storage_dir/learn.db（courses + chapters两表）。历史 per-course JSON
+    文件（course_*.json）在首载时一次性迁移入库（INSERT OR IGNORE幂等），
+    成功后改名 *.json.migrated 不再重复读；新写入只走SQLite。
+    """
+
+    def __init__(self, storage_dir: str | Path | None = None, db_path: str | Path | None = None):
         self.storage_dir = Path(storage_dir or os.path.expanduser("~/.opensoul/learn"))
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.db_path = Path(db_path) if db_path else self.storage_dir / "learn.db"
+        # check_same_thread=False：模块级单例被FastAPI多线程/测试共用；
+        # timeout=30防嵌套连接死锁时硬失败（与get_db惯例一致）。
+        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=30)
+        self._conn.row_factory = sqlite3.Row
         self._courses: dict[str, Course] = {}
         self._lock = threading.Lock()
+        self._ensure_schema()
         self._load_courses()
 
-    def _load_courses(self):
-        for f in self.storage_dir.glob("*.json"):
+    def _ensure_schema(self):
+        with self._conn:
+            self._conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS courses (
+                    course_id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    tags TEXT DEFAULT '[]',
+                    topics TEXT DEFAULT '[]',
+                    domain TEXT DEFAULT '',
+                    knowledge_ids TEXT DEFAULT '[]',
+                    status TEXT DEFAULT 'not_started',
+                    created_at REAL,
+                    updated_at REAL,
+                    generated_by TEXT DEFAULT 'manual'
+                );
+                CREATE TABLE IF NOT EXISTS chapters (
+                    chapter_id TEXT PRIMARY KEY,
+                    course_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    content TEXT DEFAULT '',
+                    ord INTEGER DEFAULT 0,
+                    completed INTEGER DEFAULT 0,
+                    completed_at REAL,
+                    quiz TEXT DEFAULT '[]'
+                );
+                CREATE INDEX IF NOT EXISTS idx_chapters_course ON chapters(course_id);
+                """
+            )
+
+    @staticmethod
+    def _row_to_course(row: sqlite3.Row, chapters: list[Chapter]) -> Course:
+        return Course(
+            course_id=row["course_id"],
+            title=row["title"],
+            description=row["description"] or "",
+            tags=json.loads(row["tags"] or "[]"),
+            topics=json.loads(row["topics"] or "[]"),
+            domain=row["domain"] or "",
+            knowledge_ids=json.loads(row["knowledge_ids"] or "[]"),
+            chapters=chapters,
+            status=row["status"] or "not_started",
+            created_at=row["created_at"] or time.time(),
+            updated_at=row["updated_at"] or time.time(),
+            generated_by=row["generated_by"] or "manual",
+        )
+
+    @staticmethod
+    def _row_to_chapter(row: sqlite3.Row) -> Chapter:
+        quiz = [QuizQuestion(**q) for q in json.loads(row["quiz"] or "[]")]
+        return Chapter(
+            chapter_id=row["chapter_id"],
+            title=row["title"],
+            content=row["content"] or "",
+            order=row["ord"] or 0,
+            completed=bool(row["completed"]),
+            completed_at=row["completed_at"],
+            quiz=quiz,
+        )
+
+    def _migrate_legacy_json(self):
+        """一次性迁移旧 per-course JSON 文件入库，成功即改名 *.json.migrated。"""
+        for f in sorted(self.storage_dir.glob("*.json")):
             try:
                 data = json.loads(f.read_text())
                 chapters = []
@@ -66,15 +140,103 @@ class CourseEngine:
                     quiz = [QuizQuestion(**q) for q in ch.pop("quiz", [])]
                     chapters.append(Chapter(quiz=quiz, **ch))
                 data["chapters"] = chapters
-                c = Course(**data)
-                self._courses[c.course_id] = c
+                course = Course(**data)
+                with self._lock, self._conn:
+                    cur = self._conn.execute(
+                        "INSERT OR IGNORE INTO courses "
+                        "(course_id, title, description, tags, topics, domain, "
+                        " knowledge_ids, status, created_at, updated_at, generated_by) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            str(course.course_id),
+                            course.title,
+                            course.description,
+                            json.dumps(course.tags, ensure_ascii=False),
+                            json.dumps(course.topics, ensure_ascii=False),
+                            course.domain,
+                            json.dumps(course.knowledge_ids, ensure_ascii=False),
+                            course.status,
+                            course.created_at,
+                            course.updated_at,
+                            course.generated_by,
+                        ),
+                    )
+                    if cur.rowcount:
+                        for ch in course.chapters:
+                            self._conn.execute(
+                                "INSERT OR IGNORE INTO chapters "
+                                "(chapter_id, course_id, title, content, ord, completed, completed_at, quiz) "
+                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                (
+                                    str(ch.chapter_id),
+                                    str(course.course_id),
+                                    ch.title,
+                                    ch.content,
+                                    ch.order,
+                                    1 if ch.completed else 0,
+                                    ch.completed_at,
+                                    json.dumps([asdict(q) for q in ch.quiz], ensure_ascii=False),
+                                ),
+                            )
+                f.rename(f.with_suffix(f.suffix + ".migrated"))
+                logging.getLogger(__name__).info("legacy course JSON migrated: %s", f.name)
             except Exception as exc:
-                logging.getLogger(__name__).debug("probe skipped: %s", exc)
+                logging.getLogger(__name__).warning(
+                    "legacy JSON migrate skipped %s: %s", f.name, exc
+                )
+
+    def _load_courses(self):
+        self._migrate_legacy_json()
+        self._courses.clear()
+        for row in self._conn.execute("SELECT * FROM courses"):
+            chapters = [
+                self._row_to_chapter(ch_row)
+                for ch_row in self._conn.execute(
+                    "SELECT * FROM chapters WHERE course_id = ? ORDER BY ord",
+                    (str(row["course_id"]),),
+                )
+            ]
+            course = self._row_to_course(row, chapters)
+            self._courses[course.course_id] = course
 
     def _save_course(self, course: Course):
-        path = self.storage_dir / f"{course.course_id}.json"
-        data = asdict(course)
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO courses "
+                "(course_id, title, description, tags, topics, domain, "
+                " knowledge_ids, status, created_at, updated_at, generated_by) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    str(course.course_id),
+                    course.title,
+                    course.description,
+                    json.dumps(course.tags, ensure_ascii=False),
+                    json.dumps(course.topics, ensure_ascii=False),
+                    course.domain,
+                    json.dumps(course.knowledge_ids, ensure_ascii=False),
+                    course.status,
+                    course.created_at,
+                    course.updated_at,
+                    course.generated_by,
+                ),
+            )
+            self._conn.execute("DELETE FROM chapters WHERE course_id = ?", (str(course.course_id),))
+            for ch in course.chapters:
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO chapters "
+                    "(chapter_id, course_id, title, content, ord, completed, completed_at, quiz) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        str(ch.chapter_id),
+                        str(course.course_id),
+                        ch.title,
+                        ch.content,
+                        ch.order,
+                        1 if ch.completed else 0,
+                        ch.completed_at,
+                        json.dumps([asdict(q) for q in ch.quiz], ensure_ascii=False),
+                    ),
+                )
 
     def _update_status(self, course: Course):
         if not course.chapters:
@@ -141,8 +303,13 @@ class CourseEngine:
         with self._lock:
             if course_id in self._courses:
                 del self._courses[course_id]
-                path = self.storage_dir / f"{course_id}.json"
-                path.unlink(missing_ok=True)
+                with self._conn:
+                    self._conn.execute(
+                        "DELETE FROM chapters WHERE course_id = ?", (str(course_id),)
+                    )
+                    self._conn.execute("DELETE FROM courses WHERE course_id = ?", (str(course_id),))
+                # 遗留JSON文件兜底清理（迁移失败残片不再复活）
+                (self.storage_dir / f"{course_id}.json").unlink(missing_ok=True)
                 return True
         return False
 
