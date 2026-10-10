@@ -14,6 +14,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.api.user import get_current_user
+from src.services.agent_registry import (
+    list_registered as list_registered_agents,
+)
+from src.services.agent_registry import (
+    probe_agent as acp_probe_agent,
+)
 
 router = APIRouter()
 
@@ -790,50 +796,76 @@ _DETECT_CACHE_TTL = 300  # 5 minutes
 
 @router.get("/detect")
 async def detect_agents():
-    """检测本机安装的AI Agent (结果缓存5分钟)"""
+    """检测本机安装的AI Agent (结果缓存5分钟)
+
+    B3打通：session_agents 与 /api/agents/registry、/api/agents/probe 同表一条真源
+    （探测即注册）。装没装=目录信息；能否开会话=真ACP探测后的注册状态。
+    """
     global _detect_cache, _detect_cache_time
     import time
 
     now = time.time()
-    if _detect_cache and (now - _detect_cache_time) < _DETECT_CACHE_TTL:
-        return _detect_cache
+    if not _detect_cache or (now - _detect_cache_time) >= _DETECT_CACHE_TTL:
+        os_name = _get_os()
+        result = []
+        for agent_id, info in AGENT_REGISTRY.items():
+            path = shutil.which(info["binary"])
+            version = None
+            if path:
+                # Only probe version for installed agents (skip to avoid 2s timeout per missing binary)
+                try:
+                    r = subprocess.run(
+                        [info["binary"], "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=3,
+                        env={**os.environ, "NO_COLOR": "1"},
+                    )
+                    version = r.stdout.strip()[:50] or None
+                except Exception as exc:
+                    logging.getLogger(__name__).debug("probe skipped: %s", exc)
+            result.append(
+                {
+                    "id": agent_id,
+                    "name": info["name"],
+                    "binary": info["binary"],
+                    "description": info["description"],
+                    "icon": info["icon"],
+                    "category": info.get("category", "other"),
+                    "available": path is not None,
+                    "version": version,
+                    "path": path,
+                    "installCommand": info["install"].get(os_name),
+                    "os": os_name,
+                }
+            )
+        _detect_cache = {"os": os_name, "agents": result, "total": len(result)}
+        _detect_cache_time = now
+    # session_agents 每次现读注册表（一条真源，不进安装目录缓存）
+    return {**_detect_cache, "session_agents": list_registered_agents()}
 
-    os_name = _get_os()
-    result = []
-    for agent_id, info in AGENT_REGISTRY.items():
-        path = shutil.which(info["binary"])
-        version = None
-        if path:
-            # Only probe version for installed agents (skip to avoid 2s timeout per missing binary)
-            try:
-                r = subprocess.run(
-                    [info["binary"], "--version"],
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                    env={**os.environ, "NO_COLOR": "1"},
-                )
-                version = r.stdout.strip()[:50] or None
-            except Exception as exc:
-                logging.getLogger(__name__).debug("probe skipped: %s", exc)
-        result.append(
-            {
-                "id": agent_id,
-                "name": info["name"],
-                "binary": info["binary"],
-                "description": info["description"],
-                "icon": info["icon"],
-                "category": info.get("category", "other"),
-                "available": path is not None,
-                "version": version,
-                "path": path,
-                "installCommand": info["install"].get(os_name),
-                "os": os_name,
-            }
-        )
-    _detect_cache = {"os": os_name, "agents": result, "total": len(result)}
-    _detect_cache_time = now
-    return _detect_cache
+
+class ProbeRequest(BaseModel):
+    agent_id: str
+    cmd: list[str] | None = None
+    verify_session: bool = True
+
+
+@router.post("/probe")
+async def probe_agent_endpoint(req: ProbeRequest):
+    """探测即注册（B3）：L1真ACP握手（acp-proxy /agents/probe）+ L2真开会话
+    （ws session/new 拿到 sessionId），两级全过才注册——检测成功=必能开会话。
+    verify_session=false 只做连通性体检，不改注册状态。"""
+    result = await acp_probe_agent(req.agent_id, cmd=req.cmd, verify_session=req.verify_session)
+    return result
+
+
+@router.get("/registry")
+async def agent_registry_list():
+    """已注册（可开会话）agent 列表——未注册不进列表。
+    与 /detect.session_agents、/probe 同表一条真源。"""
+    rows = list_registered_agents()
+    return {"agents": rows, "total": len(rows)}
 
 
 class InstallRequest(BaseModel):
