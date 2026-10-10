@@ -6,7 +6,7 @@ import logging
 import sqlite3
 import statistics
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -562,10 +562,145 @@ async def submit_task(group_id: str, req: SubmitTaskRequest):
         conn.close()
 
 
+# ── B1 旧任务/子任务状态治理（历史pending清理+父任务收口，看板数据可信） ──
+_TASK_TERMINAL_STATUSES = ("scored", "failed", "completed", "skipped")
+_GOVERNABLE_OPEN_STATUSES = ("pending", "planning", "discussing")
+_GOVERN_TTL_HOURS = 24  # 未启动任务超龄作废时限；executing/reviewing永不在此强杀
+
+
+def _as_naive_local(dt: datetime | None) -> datetime | None:
+    """时间戳归一：带时区转本地naive。存量行有+00:00格式，aware/naive相减会TypeError"""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone().replace(tzinfo=None)
+    return dt
+
+
+def _insert_govern_event(conn, group_id: str, task_id: str, content: str):
+    """治理留痕——必须走同一连接：外层事务未提交时另开连接写库必死锁（SQLite教训）"""
+    conn.execute(
+        "INSERT INTO task_execution_events (group_id, task_id, agent_id, event_type, content, created_at) VALUES (?,?,?,?,?,?)",
+        (group_id, task_id, "governor", "governed", content[:2000], datetime.now().isoformat()),
+    )
+
+
+def _finalize_parent_task(conn, parent_task_id: str) -> str | None:
+    """R3 父任务收口：子任务全部终结但父任务卡planning → scored/failed/skipped。"""
+    parent = conn.execute(
+        "SELECT * FROM ai_group_tasks WHERE id=? AND parent_task_id IS NULL",
+        (parent_task_id,),
+    ).fetchone()
+    if not parent or parent["status"] not in _GOVERNABLE_OPEN_STATUSES:
+        return None
+    subs = conn.execute(
+        "SELECT status, quality_score FROM ai_group_tasks WHERE parent_task_id=?",
+        (parent_task_id,),
+    ).fetchall()
+    if not subs or any(s["status"] not in _TASK_TERMINAL_STATUSES for s in subs):
+        return None
+    statuses = [s["status"] for s in subs]
+    if all(s == "skipped" for s in statuses):
+        new_status = "skipped"
+    elif "failed" in statuses:
+        new_status = "failed"
+    else:
+        new_status = "scored"
+    scores = [
+        float(s["quality_score"] or 0) for s in subs if s["status"] in ("scored", "completed")
+    ]
+    avg = round(statistics.mean(scores), 2) if scores else 0.0
+    conn.execute(
+        "UPDATE ai_group_tasks SET status=?, quality_score=?, updated_at=? WHERE id=?",
+        (new_status, avg, datetime.now().isoformat(), parent_task_id),
+    )
+    _insert_govern_event(
+        conn,
+        parent["group_id"],
+        parent_task_id,
+        f"chain_finalized: {parent['status']}->{new_status} subtasks={len(subs)} avg_score={avg}",
+    )
+    return new_status
+
+
+def govern_stale_tasks(
+    conn, group_id: str | None = None, ttl_hours: float = _GOVERN_TTL_HOURS
+) -> dict:
+    """B1 旧任务/子任务状态治理：历史pending清理+父任务收口，看板数据可信。
+
+    R1 孤儿子任务：open子任务的父任务已终结（链永远不会跑到它）→ skipped
+    R3 父任务收口：子任务全部终结但父任务卡planning → scored（子任务均分）/
+       failed（任一failed）/skipped（全部skipped）。先于R2跑：真跑完的链要如实
+       收口，不能被超龄清扫误杀成skipped。
+    R2 超龄未启动：pending/planning/discussing超过TTL零进展 → skipped
+    只清"从未启动"的行；executing/reviewing永不在此强杀（卡死只提醒不杀任务）。
+    每次状态变化都在task_execution_events留痕（governed事件），禁静默改状态。
+    """
+    now = datetime.now()
+    cutoff = now - timedelta(hours=ttl_hours)
+    where = " WHERE group_id=?" if group_id else ""
+    params = (group_id,) if group_id else ()
+    rows = conn.execute(f"SELECT * FROM ai_group_tasks{where}", params).fetchall()
+    stats = {"skipped_parent_finished": 0, "skipped_stale": 0, "parent_finalized": 0}
+    details: list[dict] = []
+    by_id = {r["id"]: r for r in rows}
+    handled: set[str] = set()  # 已治理行id：内存快照陈旧，防R2重复治理R1已处理的行
+
+    def _skip(row, reason: str, stat_key: str):
+        handled.add(row["id"])
+        conn.execute(
+            "UPDATE ai_group_tasks SET status='skipped', updated_at=? WHERE id=?",
+            (now.isoformat(), row["id"]),
+        )
+        _insert_govern_event(
+            conn, row["group_id"], row["id"], f"{reason}: {row['status']}->skipped (never started)"
+        )
+        stats[stat_key] += 1
+        details.append({"task_id": row["id"], "action": "skipped", "reason": reason})
+
+    # R1 孤儿子任务：父任务已终结（含R2刚skipped的父任务），子任务永远轮不到跑
+    for r in rows:
+        if r["status"] not in _GOVERNABLE_OPEN_STATUSES or not r["parent_task_id"]:
+            continue
+        parent = by_id.get(r["parent_task_id"])
+        if parent and parent["status"] in _TASK_TERMINAL_STATUSES:
+            _skip(r, "parent_finished", "skipped_parent_finished")
+
+    # R3 父任务收口（子任务状态以库为准，含刚被R1改过的行）
+    def _finalize_all():
+        for r in rows:
+            if r["parent_task_id"] is not None:
+                continue
+            if r["status"] not in _GOVERNABLE_OPEN_STATUSES:
+                continue
+            new_status = _finalize_parent_task(conn, r["id"])
+            if new_status:
+                stats["parent_finalized"] += 1
+                details.append({"task_id": r["id"], "action": "finalized", "status": new_status})
+
+    _finalize_all()
+    # R2 超龄未启动清扫（R3之后：真跑完的链先如实收口）
+    for r in rows:
+        if r["id"] in handled or r["status"] not in _GOVERNABLE_OPEN_STATUSES:
+            continue
+        last = _as_naive_local(_parse_ts(r["updated_at"])) or _as_naive_local(
+            _parse_ts(r["created_at"])
+        )
+        if last and last < cutoff:
+            _skip(r, f"stale_ttl_{int(ttl_hours)}h", "skipped_stale")
+    # R3尾部复跑：R2清完超龄子任务后，其父任务若已全终结立即收口（单次扫描即收敛）
+    _finalize_all()
+    return {**stats, "details": details}
+
+
 @router.get("/{group_id}/tasks")
 def list_tasks(group_id: str):
     conn = get_db()
     try:
+        # B1惰性治理：看板读取前先清扫旧任务/子任务（与POST .../tasks/govern同一函数），
+        # 历史pending不再冒充"待处理"，看板数据可信
+        govern_stale_tasks(conn, group_id)
+        conn.commit()
         tasks = rows_to_list(
             conn.execute(
                 "SELECT * FROM ai_group_tasks WHERE group_id=? AND parent_task_id IS NULL ORDER BY created_at DESC",
@@ -615,6 +750,18 @@ def list_tasks(group_id: str):
             t["completion_criteria"] = json.loads(t.get("completion_criteria", "[]"))
             _annotate(t)
         return tasks
+    finally:
+        conn.close()
+
+
+@router.post("/{group_id}/tasks/govern")
+def govern_tasks(group_id: str):
+    """手动触发旧任务/子任务状态治理（list_tasks读取时惰性清扫的同一函数），返回治理统计。"""
+    conn = get_db()
+    try:
+        stats = govern_stale_tasks(conn, group_id)
+        conn.commit()
+        return {"group_id": group_id, **stats}
     finally:
         conn.close()
 
@@ -913,6 +1060,21 @@ async def _run_task_chain(group_id: str, parent_task_id: str):
                 "failed",
                 f"链式执行失败: {e}",
             )
+    # B1根因修复：链跑完收口父任务（此前父任务永远卡planning，看板不可信）
+    conn = get_db()
+    try:
+        final_status = _finalize_parent_task(conn, parent_task_id)
+        conn.commit()
+    finally:
+        conn.close()
+    if final_status:
+        _emit_exec_event(
+            group_id,
+            parent_task_id,
+            "chain",
+            "chain-finished",
+            f"任务链执行完毕，父任务收口为{final_status}",
+        )
 
 
 async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskRequest") -> dict:
