@@ -18,7 +18,27 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from src.nest.isolation import IsolationEngine, ResourceType
+from src.nest.tenant import tenant_namespace
+
 logger = logging.getLogger(__name__)
+
+# F3b-③c-2②a（2026-10-12）数据面租户缺省：心跳调度（系统行为无身份上下文）与
+# 匿名调用归 'default' 租户——与生产数据分布（proactive.db 存量行）迁移回填一致。
+DEFAULT_TENANT = "default"
+
+
+class ProactiveEventAccessDenied(Exception):
+    """跨租户 proactive 事件访问被 IsolationEngine 拒绝（API 层映射 403）。
+
+    verdict=check_access 原始回包（allowed/reason/namespaced_id），审计留痕在
+    IsolationEngine 审计日志（data/nest.db），此处只携带原因供 API 如实报。
+    """
+
+    def __init__(self, reason: str, verdict: dict | None = None):
+        super().__init__(reason)
+        self.reason = reason
+        self.verdict = verdict or {}
 
 
 def _default_events_db() -> str:
@@ -52,6 +72,30 @@ class ProactiveEngine:
         self._heartbeat_s = 60.0
         self._events_memory: list[dict] = []  # 无DB时的内存环形留痕（get_status仍可读）
         self._db_ready = False
+        # F3b-③c-2②a：数据面咨询 IsolationEngine（懒构造——首个 gate 调用才建
+        # NestStore，收集期零生产库接触）。默认实例即真审计，无"未接线"模式。
+        self._isolation: IsolationEngine | None = None
+
+    @property
+    def isolation(self) -> IsolationEngine:
+        """隔离引擎（check_access 真执行点；审计日志落 NestStore=data/nest.db）。"""
+        if self._isolation is None:
+            self._isolation = IsolationEngine()
+        return self._isolation
+
+    def gate_bulk(self, tenant_id: str, action: str) -> None:
+        """bulk 操作审计留痕（F3b-③c-2②a）：执行隔离由 WHERE tenant_id=? 承担，
+        引擎侧记 list 审计（audit_access="Log all access attempts"）。
+
+        本表无 by-ID 读写面（api/proactive.py 仅 status/events/run 三口），故无
+        by-ID 闸门；跨租户拒绝面=查询过滤（B 恒读不到 A 的行）。
+        """
+        self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.PROACTIVE_EVENT,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(tenant_id), "*"),
+            action=action,
+        )
 
     def register_watcher(self, name: str, callback: Callable, interval_seconds: float = 60.0):
         """注册一个观察者（interval=执行间隔，心跳tick只跑到期的watcher）"""
@@ -101,11 +145,20 @@ class ProactiveEngine:
                 logger.error("观察循环异常: %s", e)
             await asyncio.sleep(interval)
 
-    async def run_watcher(self, name: str) -> dict:
-        """执行单个watcher并留痕（心跳到期调用与API手动触发共用此路径）。"""
+    async def run_watcher(self, name: str, tenant_id: str | None = None) -> dict:
+        """执行单个watcher并留痕（心跳到期调用与API手动触发共用此路径）。
+
+        F3b-③c-2②a：事件行归属租户=显式 tenant_id（API 手动触发=调用方
+        bind_identity 派生租户）或引擎租户（心跳调度=系统行为），缺失/空白→
+        'default' 兜底（键派生故障绝不吃掉落库，③b-2 同款旁路纪律）。watcher
+        执行本体是全局系统行为（回调无租户参数），本拍隔离的是事件留痕面。
+        """
         w = self._watchers.get(name)
         if w is None:
             raise KeyError(f"unknown watcher: {name}")
+        row_tenant = (
+            str(tenant_id or "").strip() or str(self.tenant_id or "").strip() or DEFAULT_TENANT
+        )
         started = time.time()
         started_at = datetime.now(UTC).isoformat()
         ok, error = True, ""
@@ -136,6 +189,7 @@ class ProactiveEngine:
                 "duration_ms": round(duration_ms, 1),
                 "result": result,
                 "error": error,
+                "tenant_id": row_tenant,
             }
         )
         logger.info(
@@ -165,11 +219,34 @@ class ProactiveEngine:
                     id TEXT PRIMARY KEY, watcher TEXT NOT NULL,
                     ok INTEGER NOT NULL, started_at TEXT NOT NULL,
                     finished_at TEXT NOT NULL, duration_ms REAL NOT NULL,
-                    result TEXT DEFAULT '{}', error TEXT DEFAULT '')"""
+                    result TEXT DEFAULT '{}', error TEXT DEFAULT '',
+                    tenant_id TEXT DEFAULT 'default')"""
+            )
+            # F3b-③c-2②a：DDL+ALTER 双轨幂等——老库（迁移前形状无 tenant_id）补列+
+            # 存量行回填 'default'（与生产数据分布一致），缺列才 ALTER（幂等）。
+            # 租户索引必须在补列之后建（老库形态下先建索引会 no such column，③c-2① 坑）。
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(proactive_events)").fetchall()}
+            if "tenant_id" not in cols:
+                conn.execute(
+                    "ALTER TABLE proactive_events ADD COLUMN tenant_id TEXT DEFAULT 'default'"
+                )
+                conn.execute(
+                    "UPDATE proactive_events SET tenant_id = 'default' WHERE tenant_id IS NULL"
+                )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pe_tenant ON proactive_events(tenant_id, started_at DESC)"
             )
         self._db_ready = True
 
     def _record_event(self, event: dict):
+        # F3b-③c-2②a：行归属租户=事件自带键，缺失/空白→引擎租户→'default' 兜底
+        # （键派生故障绝不吃掉落库，③b-2/③c-2① 同款旁路纪律）。
+        tenant_val = (
+            str(event.get("tenant_id") or "").strip()
+            or str(self.tenant_id or "").strip()
+            or DEFAULT_TENANT
+        )
+        event = {**event, "tenant_id": tenant_val}
         self._events_memory.append(event)
         self._events_memory = self._events_memory[-200:]
         if not self.db_path:
@@ -178,8 +255,8 @@ class ProactiveEngine:
             self._ensure_db()
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
-                    "INSERT INTO proactive_events (id, watcher, ok, started_at, finished_at, duration_ms, result, error)"
-                    " VALUES (?,?,?,?,?,?,?,?)",
+                    "INSERT INTO proactive_events (id, watcher, ok, started_at, finished_at, duration_ms, result, error, tenant_id)"
+                    " VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         str(event["id"]),
                         event["watcher"],
@@ -189,21 +266,38 @@ class ProactiveEngine:
                         event["duration_ms"],
                         json.dumps(event["result"], ensure_ascii=False),
                         event["error"],
+                        tenant_val,
                     ),
                 )
         except Exception as e:  # 留痕失败绝不反噬行为执行
             logger.warning("proactive event persist failed: %s", e)
 
-    def recent_events(self, limit: int = 50) -> list[dict]:
+    def recent_events(self, limit: int = 50, tenant_id: str | None = None) -> list[dict]:
+        """回读事件留痕。
+
+        F3b-③c-2②a：tenant_id=None=系统视图（全租户，不闸不过滤——心跳/维护/health）；
+        显式租户=bulk 恒 WHERE tenant_id=?（执行隔离真源）+引擎审计留痕。
+        """
         if not self.db_path:
-            return list(reversed(self._events_memory[-limit:]))
+            mem = self._events_memory
+            if tenant_id is not None:
+                self.gate_bulk(tenant_id, "list")
+                mem = [e for e in mem if e.get("tenant_id", DEFAULT_TENANT) == tenant_id]
+            return list(reversed(mem[-limit:]))
         try:
             self._ensure_db()
+            if tenant_id is not None:
+                self.gate_bulk(tenant_id, "list")
+            sql = "SELECT * FROM proactive_events"
+            params: list = []
+            if tenant_id is not None:
+                sql += " WHERE tenant_id = ?"
+                params.append(tenant_id)
+            sql += " ORDER BY started_at DESC LIMIT ?"
+            params.append(int(limit))
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
-                rows = conn.execute(
-                    "SELECT * FROM proactive_events ORDER BY started_at DESC LIMIT ?", (int(limit),)
-                ).fetchall()
+                rows = conn.execute(sql, params).fetchall()
             events = []
             for r in rows:
                 d = dict(r)
@@ -212,11 +306,16 @@ class ProactiveEngine:
                 except Exception:
                     d["result"] = {}
                 d["ok"] = bool(d["ok"])
+                d["tenant_id"] = d.get("tenant_id") or DEFAULT_TENANT
                 events.append(d)
             return events
         except Exception as e:
             logger.warning("proactive events read failed: %s", e)
-            return list(reversed(self._events_memory[-limit:]))
+            # 降级内存回读同样恒带租户键（禁 DB 故障降级变成跨租户泄露）
+            mem = self._events_memory
+            if tenant_id is not None:
+                mem = [x for x in mem if x.get("tenant_id", DEFAULT_TENANT) == tenant_id]
+            return list(reversed(mem[-limit:]))
 
     async def get_status(self) -> dict:
         return {
