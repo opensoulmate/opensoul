@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -67,6 +68,20 @@ class WorkflowTaskResponse(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────────
 
 
+def _task_row(r) -> dict:
+    """Row → API dict: config TEXT → dict（读侧 json.loads，与 WorkflowTaskCreate.config 契约对齐）。"""
+    d = dict(r)
+    cfg = d.get("config")
+    if isinstance(cfg, str):
+        try:
+            d["config"] = json.loads(cfg) if cfg else {}
+        except ValueError:
+            d["config"] = {}
+    elif cfg is None:
+        d["config"] = {}
+    return d
+
+
 @router.get("/tasks")
 async def list_tasks(
     status: str | None = None,
@@ -88,7 +103,7 @@ async def list_tasks(
             "FROM workflow_tasks WHERE user_id = $1 ORDER BY created_at DESC",
             current_user["id"],
         )
-    return [dict(r) for r in rows]
+    return [_task_row(r) for r in rows]
 
 
 @router.post("/tasks", status_code=201)
@@ -103,17 +118,17 @@ async def create_task(
         "VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle') "
         "RETURNING id, name, description, task_type, config, schedule, status, "
         "last_run_at, next_run_at, created_at",
-        task_id,
+        str(task_id),
         current_user["id"],
         req.name,
         req.description,
         req.task_type,
-        req.config,
+        json.dumps(req.config),
         req.schedule,
     )
     if not row:
         raise HTTPException(status_code=500, detail="Failed to create task")
-    return dict(row)
+    return _task_row(row)
 
 
 @router.post("/tasks/{task_id}/run")

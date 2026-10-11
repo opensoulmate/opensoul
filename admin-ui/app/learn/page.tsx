@@ -346,7 +346,7 @@ export default function LearnPage() {
                           variant="chip-sm" className={`w-full text-left flex items-center gap-2 transition-colors  ${
                             showResult
                               ? isCorrect
-                                ? 'bg-green-500/10 border border-emerald-500/30 text-green-700'
+                                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-700'
                                 : selected
                                   ? 'bg-red-500/10 border border-red-500/30 text-red-600'
                                   : 'bg-muted/30 border border-transparent'
@@ -792,7 +792,7 @@ export default function LearnPage() {
               <p className="text-[10px] text-muted-foreground">AI 将自动生成课程大纲、章节内容和测验题目。</p>
               <div className="flex justify-end gap-2 pt-2">
                 <Button onClick={() => setShowGenerate(false)} variant="secondary">取消</Button>
-                <Button onClick={handleGenerate} disabled={!generateForm.topic.trim() || generating} variant="chip-sm" className="flex items-center gap-1 bg-purple-500 text-white hover:opacity-90 disabled:opacity-50">
+                <Button onClick={handleGenerate} disabled={!generateForm.topic.trim() || generating} variant="chip-sm" className="flex items-center gap-1 bg-violet-500 text-white hover:opacity-90 disabled:opacity-50">
                   {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}{generating ? '生成中...' : '开始生成'}
                 </Button>
               </div>

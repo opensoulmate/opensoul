@@ -124,7 +124,7 @@ export default function SystemPage() {
 
   const fetchOrgans = useCallback(async () => {
     try {
-      const data = await apiFetch('/api/config/organs');
+      const data = await apiFetch('/api/organs');
       setOrgans(data.organs || []);
     } catch { /* ignore */ }
   }, []);
@@ -155,8 +155,8 @@ export default function SystemPage() {
 
   const toggleOrgan = async (key: string, current: boolean) => {
     try {
-      await apiFetch(`/api/config/organs/${key}`, {
-        method: 'PATCH',
+      await apiFetch(`/api/organs/${key}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !current }),
       });
@@ -183,7 +183,7 @@ export default function SystemPage() {
     setHealthLoading(true);
     try {
       const data = await apiFetch('/api/diagnostics/check-all');
-      setOrganHealth(data.results || []);
+      setOrganHealth(data.organs || []);
     } catch (e: any) {
       setError(e.message);
     } finally { setHealthLoading(false); }
@@ -312,7 +312,7 @@ export default function SystemPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                 {organHealth.map(o => (
                   <div key={o.key} className={`rounded-lg border p-2 transition-colors cursor-pointer ${
-                    o.status === 'ok' ? 'border-emerald-500/30 bg-green-500/5' :
+                    o.status === 'ok' ? 'border-emerald-500/30 bg-emerald-500/5' :
                     o.status === 'error' ? 'border-red-500/30 bg-red-500/5' :
                     o.status === 'timeout' ? 'border-amber-500/30 bg-amber-500/5' :
                     'border-border bg-card'

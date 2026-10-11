@@ -235,7 +235,7 @@ export default function KnowledgePage() {
         <Button
           onClick={() => setFilterStarred(!filterStarred)}
           variant="chip-sm" className={`flex items-center gap-1 border  ${
-            filterStarred ? 'bg-yellow-50 border-yellow-300 text-yellow-700 dark:bg-yellow-950/20 dark:border-yellow-800' : 'bg-muted border-border hover:bg-muted'
+            filterStarred ? 'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-950/20 dark:border-amber-800' : 'bg-muted border-border hover:bg-muted'
           }`}
         >
           <Star className="w-3.5 h-3.5" />收藏
@@ -374,7 +374,7 @@ export default function KnowledgePage() {
                   <div className="flex items-center gap-2 pt-2 border-t border-border">
                     <Button
                       onClick={() => handleStar(selected.id)}
-                      variant="chip-xs" className={`flex items-center gap-1  ${selected.starred ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/20' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                      variant="chip-xs" className={`flex items-center gap-1  ${selected.starred ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/20' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
                     >
                       <Star className="w-3 h-3" />{selected.starred ? '已收藏' : '收藏'}
                     </Button>
@@ -508,7 +508,7 @@ function KnowledgeCard({
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <Button
             onClick={() => onStar(entry.id)}
-            variant="icon-sm" className={` ${entry.starred ? 'text-yellow-500' : 'text-muted-foreground hover:text-yellow-500'}`}
+            variant="icon-sm" className={` ${entry.starred ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}
             title="收藏"
           >
             <Star className="w-3.5 h-3.5" fill={entry.starred ? 'currentColor' : 'none'} />

@@ -453,7 +453,7 @@ export default function NotificationsPage() {
                 </div>
                 <Button variant="bare"
                   onClick={() => handleToggleForward(!forwardRules.enabled)}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${forwardRules.enabled ? 'bg-green-500' : 'bg-muted'}`}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${forwardRules.enabled ? 'bg-emerald-500' : 'bg-muted'}`}
                 >
                   <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${forwardRules.enabled ? 'left-5' : 'left-0.5'}`} />
                 </Button>

@@ -389,12 +389,12 @@ export default function WorkflowPage() {
               </div>
               <div className="flex gap-2">
                 {(selectedTask.status === 'idle' || selectedTask.status === 'active') && (
-                  <Button onClick={() => { handleRun(selectedTask.id); setShowDetail(false); }} variant="chip-sm" className="flex items-center gap-1.5 bg-green-500 text-white hover:bg-green-600">
+                  <Button onClick={() => { handleRun(selectedTask.id); setShowDetail(false); }} variant="chip-sm" className="flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600">
                     <Play className="w-3 h-3" />运行
                   </Button>
                 )}
                 {(selectedTask.status === 'running' || selectedTask.status === 'idle') && (
-                  <Button onClick={() => { handlePause(selectedTask.id); setShowDetail(false); }} variant="chip-sm" className="flex items-center gap-1.5 bg-orange-500 text-white hover:bg-orange-600">
+                  <Button onClick={() => { handlePause(selectedTask.id); setShowDetail(false); }} variant="chip-sm" className="flex items-center gap-1.5 bg-amber-500 text-white hover:bg-amber-600">
                     <Pause className="w-3 h-3" />暂停
                   </Button>
                 )}

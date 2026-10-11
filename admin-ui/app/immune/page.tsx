@@ -396,7 +396,7 @@ export default function ImmunePage() {
                 {blockedIps.map(ip => (
                   <div key={ip} className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 rounded text-xs">
                     <span className="font-mono">{ip}</span>
-                    <Button variant="bare" onClick={() => handleUnblockIp(ip)} className="text-muted-foreground hover:text-green-600"><Unlock className="w-3 h-3" /></Button>
+                    <Button variant="bare" onClick={() => handleUnblockIp(ip)} className="text-muted-foreground hover:text-emerald-600"><Unlock className="w-3 h-3" /></Button>
                   </div>
                 ))}
               </div>
@@ -567,7 +567,7 @@ export default function ImmunePage() {
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <Button onClick={() => setShowAddIp(false)} variant="chip-sm" className="bg-muted border border-border">取消</Button>
-              <Button onClick={handleAddIp} disabled={!ipForm.ip.trim()} variant="chip-sm" className={`flex items-center gap-1.5 disabled:opacity-50  ${ipAction === 'blacklist' ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
+              <Button onClick={handleAddIp} disabled={!ipForm.ip.trim()} variant="chip-sm" className={`flex items-center gap-1.5 disabled:opacity-50  ${ipAction === 'blacklist' ? 'bg-red-500 text-white' : 'bg-emerald-600 text-white'}`}>
                 {ipAction === 'blacklist' ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                 确认
               </Button>

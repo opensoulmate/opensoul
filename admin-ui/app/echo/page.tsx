@@ -134,7 +134,7 @@ function ChannelCard({ channel, health, onConfigure, onToggle }: {
         <Button
           onClick={onToggle}
           variant="icon-md" className={`transition-colors  ${
-            channel.enabled ? 'text-green-500 hover:bg-emerald-500/10' : 'text-muted-foreground hover:bg-muted'
+            channel.enabled ? 'text-emerald-500 hover:bg-emerald-500/10' : 'text-muted-foreground hover:bg-muted'
           }`}
           title={channel.enabled ? '禁用' : '启用'}
         >

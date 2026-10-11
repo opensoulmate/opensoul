@@ -258,7 +258,7 @@ export default function PulsePage() {
             <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
               {s.status === 'active' ? (
                 <>
-                  <Button onClick={() => handlePause(s.signal_id)} variant="chip-xs" className="bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20">
+                  <Button onClick={() => handlePause(s.signal_id)} variant="chip-xs" className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20">
                     <Pause className="w-3 h-3 inline mr-0.5" />暂停
                   </Button>
                   <Button onClick={() => handleTick(s.signal_id)} variant="chip-xs" className="bg-primary/10 text-primary hover:bg-primary/20">

@@ -471,12 +471,12 @@ export default function MirrorPage() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                       {sb.status === 'active' && (
-                        <Button onClick={() => handlePause(sb.sandbox_id)} variant="icon-md" className="hover:bg-yellow-400/10 text-yellow-400" title="暂停">
+                        <Button onClick={() => handlePause(sb.sandbox_id)} variant="icon-md" className="hover:bg-amber-400/10 text-amber-400" title="暂停">
                           <Pause className="w-4 h-4" />
                         </Button>
                       )}
                       {sb.status === 'paused' && (
-                        <Button onClick={() => handleResume(sb.sandbox_id)} variant="icon-md" className="hover:bg-green-400/10 text-green-400" title="恢复">
+                        <Button onClick={() => handleResume(sb.sandbox_id)} variant="icon-md" className="hover:bg-emerald-400/10 text-emerald-400" title="恢复">
                           <Play className="w-4 h-4" />
                         </Button>
                       )}
