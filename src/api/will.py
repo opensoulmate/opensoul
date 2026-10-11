@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.services.tenant_binding import bind_identity
+from src.will.checkpoint import CheckpointAccessDenied
 from src.will.dag_planner import DAGPlanner
 from src.will.engine import WorkflowEngine
 from src.will.models import (
@@ -189,9 +190,20 @@ async def validate_workflow(workflow_id: str):
 
 
 @router.post("/workflows/{workflow_id}/execute")
-async def execute_workflow(workflow_id: str, req: ExecuteRequest = ExecuteRequest()):
-    """Execute a workflow with real cross-component action execution."""
-    execution = await engine.execute_async(workflow_id, input_vars=req.variables)
+async def execute_workflow(
+    workflow_id: str,
+    req: ExecuteRequest = ExecuteRequest(),
+    authorization: str | None = Header(None),
+):
+    """Execute a workflow with real cross-component action execution.
+
+    F3b-③c-1：执行归属租户从认证身份派生（bind_identity，匿名='default'），禁自报——
+    checkpoint 表数据面隔离键由此落行。
+    """
+    identity = bind_identity(authorization)
+    execution = await engine.execute_async(
+        workflow_id, input_vars=req.variables, tenant_id=identity.tenant_id
+    )
     if not execution:
         raise HTTPException(404, "Workflow not found")
     return _execution_dict(execution)
@@ -201,25 +213,38 @@ async def execute_workflow(workflow_id: str, req: ExecuteRequest = ExecuteReques
 async def list_executions(
     workflow_id: str = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
+    authorization: str | None = Header(None),
 ):
-    """List workflow executions."""
-    execs = engine.list_executions(workflow_id=workflow_id, limit=limit)
+    """List workflow executions. F3b-③c-1：列表恒按派生租户过滤（跨租户行不可见）。"""
+    identity = bind_identity(authorization)
+    execs = engine.list_executions(
+        workflow_id=workflow_id, limit=limit, tenant_id=identity.tenant_id
+    )
     return {"executions": [_execution_dict(e) for e in execs], "count": len(execs)}
 
 
 @router.get("/executions/{execution_id}")
-async def get_execution(execution_id: str):
-    """Get execution details."""
-    exec = engine.get_execution(execution_id)
+async def get_execution(execution_id: str, authorization: str | None = Header(None)):
+    """Get execution details. F3b-③c-1：by-ID 读走隔离闸门，跨租户 403。"""
+    identity = bind_identity(authorization)
+    try:
+        exec = engine.get_execution(execution_id, tenant_id=identity.tenant_id)
+    except CheckpointAccessDenied as e:
+        raise HTTPException(403, f"checkpoint access denied: {e.reason}")
     if not exec:
         raise HTTPException(404, "Execution not found")
     return _execution_dict(exec)
 
 
 @router.post("/executions/{execution_id}/cancel")
-async def cancel_execution(execution_id: str):
-    """Cancel a running execution."""
-    if not engine.cancel_execution(execution_id):
+async def cancel_execution(execution_id: str, authorization: str | None = Header(None)):
+    """Cancel a running execution. F3b-③c-1：写操作走隔离闸门，跨租户 403。"""
+    identity = bind_identity(authorization)
+    try:
+        ok = engine.cancel_execution(execution_id, tenant_id=identity.tenant_id)
+    except CheckpointAccessDenied as e:
+        raise HTTPException(403, f"checkpoint access denied: {e.reason}")
+    if not ok:
         raise HTTPException(400, "Execution cannot be cancelled")
     return {"status": "cancelled", "execution_id": execution_id}
 
@@ -228,13 +253,20 @@ async def cancel_execution(execution_id: str):
 
 
 @router.post("/executions/{execution_id}/continue")
-async def continue_execution(execution_id: str):
+async def continue_execution(execution_id: str, authorization: str | None = Header(None)):
     """断点续跑：从checkpoint恢复已完成阶段产物，从失败/中断节点继续（agno /continue语义）。
 
     仅waiting/failed可续跑；success/cancelled拒绝（409，"绝不静默重跑"）。
     每次调用恰好续跑一遍，resume_count逐次+1。
+    F3b-③c-1：续跑走隔离闸门（写操作），跨租户 403。
     """
-    execution, reason = await engine.resume_execution(execution_id)
+    identity = bind_identity(authorization)
+    try:
+        execution, reason = await engine.resume_execution(
+            execution_id, tenant_id=identity.tenant_id
+        )
+    except CheckpointAccessDenied as e:
+        raise HTTPException(403, f"checkpoint access denied: {e.reason}")
     if execution is None:
         status = 404 if reason == "not_found" else 409
         raise HTTPException(status, f"Cannot resume: {reason}")
@@ -246,18 +278,31 @@ async def list_checkpoints(
     workflow_id: str = Query(default=None),
     resumable_only: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
+    authorization: str | None = Header(None),
 ):
-    """列出execution checkpoints（哪些执行可续跑/被打断——monitoring可观测）。"""
+    """列出execution checkpoints（哪些执行可续跑/被打断——monitoring可观测）。
+
+    F3b-③c-1：列表恒按派生租户过滤（跨租户行不可见）+bulk 引擎审计留痕。
+    """
+    identity = bind_identity(authorization)
     items = engine.list_checkpoints(
-        workflow_id=workflow_id, resumable_only=resumable_only, limit=limit
+        workflow_id=workflow_id,
+        resumable_only=resumable_only,
+        limit=limit,
+        tenant_id=identity.tenant_id,
     )
     return {"checkpoints": items, "count": len(items)}
 
 
 @router.delete("/checkpoints/{execution_id}")
-async def delete_checkpoint(execution_id: str):
-    """删除checkpoint行+执行记录（清理通道）。"""
-    if not engine.delete_checkpoint(execution_id):
+async def delete_checkpoint(execution_id: str, authorization: str | None = Header(None)):
+    """删除checkpoint行+执行记录（清理通道）。F3b-③c-1：写操作走隔离闸门，跨租户 403。"""
+    identity = bind_identity(authorization)
+    try:
+        ok = engine.delete_checkpoint(execution_id, tenant_id=identity.tenant_id)
+    except CheckpointAccessDenied as e:
+        raise HTTPException(403, f"checkpoint access denied: {e.reason}")
+    if not ok:
         raise HTTPException(404, "Checkpoint not found")
     return {"status": "deleted", "execution_id": execution_id}
 
@@ -434,6 +479,8 @@ def _execution_dict(exec: Any) -> dict:
         "error": exec.error,
         "trigger_type": exec.trigger_type,
         "resume_count": getattr(exec, "resume_count", 0),
+        # F3b-③c-1：行归属租户随执行回显（可观测；派生自认证身份非自报）
+        "tenant_id": getattr(exec, "tenant_id", "default") or "default",
     }
 
 

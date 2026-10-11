@@ -168,6 +168,10 @@ class WorkflowExecution(BaseModel):
     trigger_type: str = "manual"
     # agno budget grant语义：每次人工resume恰好+1，"用户触发的一次续跑绝不静默重跑"
     resume_count: int = 0
+    # F3b-③c-1 数据面隔离键：归属租户（execute 时从认证身份派生落行，后续读/改/删
+    # 按此过滤；IsolationEngine check_access 的资源 namespace 来源。缺省 'default'
+    # 与生产数据分布一致——匿名/内部执行归 'default'）
+    tenant_id: str = "default"
 
     @property
     def duration_ms(self) -> float:

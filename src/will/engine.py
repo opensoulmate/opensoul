@@ -21,7 +21,7 @@ from uuid import uuid4
 
 import httpx
 
-from .checkpoint import RESUMABLE_STATES, CheckpointStore
+from .checkpoint import DEFAULT_TENANT, RESUMABLE_STATES, CheckpointStore
 from .models import (
     ExecutionStatus,
     NodeType,
@@ -256,9 +256,14 @@ class WorkflowEngine:
     # ── Execution ───────────────────────────────────────────────
 
     async def execute_async(
-        self, workflow_id: str, input_vars: dict | None = None
+        self, workflow_id: str, input_vars: dict | None = None, tenant_id: str = ""
     ) -> WorkflowExecution | None:
-        """Execute workflow asynchronously with real action execution."""
+        """Execute workflow asynchronously with real action execution.
+
+        F3b-③c-1：tenant_id=执行归属租户（API 层来自 bind_identity 派生，禁自报；
+        空/缺省='default'，与匿名/内部执行契约一致）。
+        """
+        tenant = (tenant_id or "").strip() or DEFAULT_TENANT
         wf = self._workflows.get(workflow_id)
         if not wf:
             return None
@@ -273,6 +278,7 @@ class WorkflowEngine:
                 status=ExecutionStatus.FAILED,
                 error=f"Validation failed: {'; '.join(errors)}",
                 completed_at=datetime.now(UTC).isoformat(),
+                tenant_id=tenant,
             )
 
         exec_id = f"exec_{uuid4().hex[:12]}"
@@ -283,6 +289,7 @@ class WorkflowEngine:
             workflow_name=wf.name,
             variables=variables,
             trigger_type="manual",
+            tenant_id=tenant,
         )
 
         self._executions[exec_id] = execution
@@ -296,8 +303,11 @@ class WorkflowEngine:
         await self._run_execution_async(wf, execution)
         return execution
 
-    def execute(self, workflow_id: str, input_vars: dict | None = None) -> WorkflowExecution | None:
-        """Synchronous wrapper — creates an event loop task."""
+    def execute(
+        self, workflow_id: str, input_vars: dict | None = None, tenant_id: str = ""
+    ) -> WorkflowExecution | None:
+        """Synchronous wrapper — creates an event loop task. F3b-③c-1：tenant 同 execute_async。"""
+        tenant = (tenant_id or "").strip() or DEFAULT_TENANT
         wf = self._workflows.get(workflow_id)
         if not wf:
             return None
@@ -312,6 +322,7 @@ class WorkflowEngine:
                 status=ExecutionStatus.FAILED,
                 error=f"Validation failed: {'; '.join(errors)}",
                 completed_at=datetime.now(UTC).isoformat(),
+                tenant_id=tenant,
             )
 
         exec_id = f"exec_{uuid4().hex[:12]}"
@@ -322,6 +333,7 @@ class WorkflowEngine:
             workflow_name=wf.name,
             variables=variables,
             trigger_type="manual",
+            tenant_id=tenant,
         )
 
         self._executions[exec_id] = execution
@@ -915,14 +927,28 @@ class WorkflowEngine:
 
     # ── Execution History ───────────────────────────────────────
 
-    def get_execution(self, execution_id: str) -> WorkflowExecution | None:
+    def get_execution(
+        self, execution_id: str, tenant_id: str | None = None
+    ) -> WorkflowExecution | None:
         # 内存miss时回落checkpoint store（_trim_history裁掉的旧执行仍可按id读回，
         # Langflow"重启后按run_id恢复"读路径语义）
-        return self._executions.get(execution_id) or self._checkpoints.load(execution_id)
+        # F3b-③c-1：显式租户=by-ID 闸门真执行（内存行与checkpoint行同一资源同一闸门，
+        # 跨租户 CheckpointAccessDenied 禁静默 None）；None=系统内部读。
+        execution = self._executions.get(execution_id) or self._checkpoints.load(execution_id)
+        if execution is not None and tenant_id is not None:
+            self._checkpoints.gate(
+                tenant_id,
+                getattr(execution, "tenant_id", "") or DEFAULT_TENANT,
+                execution_id,
+                "read",
+            )
+        return execution
 
     # ── Checkpoint / Resume（STORM分阶段断点续跑 + agno /continue） ──
 
-    async def resume_execution(self, execution_id: str) -> tuple[WorkflowExecution | None, str]:
+    async def resume_execution(
+        self, execution_id: str, tenant_id: str | None = None
+    ) -> tuple[WorkflowExecution | None, str]:
         """断点续跑：从checkpoint恢复已完成阶段产物，从失败/中断节点继续执行。
 
         agno语义（evolution-engine-patterns §5.2）：
@@ -932,10 +958,19 @@ class WorkflowEngine:
         - 失败再次可见：续跑后再失败error原文随执行状态返回，不静默
 
         返回(execution | None, reason)：None时reason说明为什么不可续跑（API映射404/409）。
+        F3b-③c-1：显式租户=by-ID 闸门真执行（action=write，续跑会写状态），跨租户
+        CheckpointAccessDenied 上抛（API 403，禁静默当 not_found）；None=系统内部续跑。
         """
         execution = self._executions.get(execution_id) or self._checkpoints.load(execution_id)
         if execution is None:
             return None, "not_found"
+        if tenant_id is not None:
+            self._checkpoints.gate(
+                tenant_id,
+                getattr(execution, "tenant_id", "") or DEFAULT_TENANT,
+                execution_id,
+                "write",
+            )
         if execution.status not in RESUMABLE_STATES:
             return (
                 None,
@@ -979,29 +1014,66 @@ class WorkflowEngine:
         )
 
     def list_checkpoints(
-        self, workflow_id: str | None = None, resumable_only: bool = False, limit: int = 100
+        self,
+        workflow_id: str | None = None,
+        resumable_only: bool = False,
+        limit: int = 100,
+        tenant_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """checkpoint列表（API/monitoring消费：哪些执行可续跑/被打断）。"""
+        """checkpoint列表（API/monitoring消费：哪些执行可续跑/被打断）。
+
+        F3b-③c-1：显式租户=bulk 过滤+引擎留痕；None=系统内部扫描（启动恢复）。
+        """
         return self._checkpoints.list_checkpoints(
-            workflow_id=workflow_id, resumable_only=resumable_only, limit=limit
+            workflow_id=workflow_id,
+            resumable_only=resumable_only,
+            limit=limit,
+            tenant_id=tenant_id,
         )
 
-    def delete_checkpoint(self, execution_id: str) -> bool:
-        """删除checkpoint行+内存执行记录（清理通道）。"""
+    def delete_checkpoint(self, execution_id: str, tenant_id: str | None = None) -> bool:
+        """删除checkpoint行+内存执行记录（清理通道）。
+
+        F3b-③c-1：显式租户=内存行先行闸门（禁跨租户清他租户执行记录）+store 行闸门。
+        """
+        if tenant_id is not None:
+            exec = self._executions.get(execution_id)
+            if exec is not None:
+                self._checkpoints.gate(
+                    tenant_id,
+                    getattr(exec, "tenant_id", "") or DEFAULT_TENANT,
+                    execution_id,
+                    "write",
+                )
         self._executions.pop(execution_id, None)
-        return self._checkpoints.delete(execution_id)
+        return self._checkpoints.delete(execution_id, tenant_id=tenant_id)
 
     def list_executions(
-        self, workflow_id: str | None = None, limit: int = 50
+        self, workflow_id: str | None = None, limit: int = 50, tenant_id: str | None = None
     ) -> list[WorkflowExecution]:
         execs = list(self._executions.values())
+        if tenant_id is not None:
+            # F3b-③c-1：内存执行面按租户过滤（与 checkpoint 表查询过滤同语义）
+            execs = [
+                e for e in execs if (getattr(e, "tenant_id", "") or DEFAULT_TENANT) == tenant_id
+            ]
         if workflow_id:
             execs = [e for e in execs if e.workflow_id == workflow_id]
         return sorted(execs, key=lambda e: e.started_at, reverse=True)[:limit]
 
-    def cancel_execution(self, execution_id: str) -> bool:
+    def cancel_execution(self, execution_id: str, tenant_id: str | None = None) -> bool:
         exec = self._executions.get(execution_id)
-        if not exec or exec.status not in (ExecutionStatus.PENDING, ExecutionStatus.RUNNING):
+        if not exec:
+            return False
+        # F3b-③c-1：闸门先于状态检查——跨租户恒 403（禁用 400/403 差分泄露他租户执行状态）
+        if tenant_id is not None:
+            self._checkpoints.gate(
+                tenant_id,
+                getattr(exec, "tenant_id", "") or DEFAULT_TENANT,
+                execution_id,
+                "write",
+            )
+        if exec.status not in (ExecutionStatus.PENDING, ExecutionStatus.RUNNING):
             return False
         exec.status = ExecutionStatus.CANCELLED
         exec.completed_at = datetime.now(UTC).isoformat()
