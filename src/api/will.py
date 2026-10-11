@@ -2,9 +2,10 @@
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.services.tenant_binding import bind_identity
 from src.will.dag_planner import DAGPlanner
 from src.will.engine import WorkflowEngine
 from src.will.models import (
@@ -646,6 +647,7 @@ async def goal_stats():
 # 时start()（agno "executor上线才claim任务"）。此前c1feb676只落了队列基础
 # 设施+API，register_handler/start调用点为0，提交的作业永远pending。
 from src.will.job_handlers import register_default_handlers as _register_job_handlers
+from src.will.job_queue import JobAccessDenied as _JobAccessDenied
 from src.will.job_queue import get_job_queue as _get_job_queue
 
 _register_job_handlers(_get_job_queue())
@@ -676,16 +678,19 @@ async def job_queue_health():
 
 
 @router.post("/jobs/submit")
-async def job_submit(req: JobSubmitRequest):
+async def job_submit(req: JobSubmitRequest, authorization: str | None = Header(None)):
     """Submit a background job. Returns job_id immediately.
 
     接线语义：首次提交懒启动worker池（start()幂等）；未注册handler的作业
     落FAILED("No handler for job type")——失败可见（mem0 §1.1），不静默吞。
+    F3b-③a：作业归属租户从认证身份派生（bind_identity，匿名='default'），
+    禁客户端自报——jobs 表数据面隔离键由此落行。
     """
+    identity = bind_identity(authorization)
     jq = _get_job_queue()
     _register_job_handlers(jq)  # 幂等兜底（模块加载时已注册）
     await jq.start()
-    existing = jq.find_by_idempotency_key(req.idempotency_key)
+    existing = jq.find_by_idempotency_key(req.idempotency_key, tenant_id=identity.tenant_id)
     job_id = await jq.submit(
         req.name,
         req.params,
@@ -693,6 +698,7 @@ async def job_submit(req: JobSubmitRequest):
         req.max_retries,
         idempotency_key=req.idempotency_key,
         source=req.source,
+        tenant_id=identity.tenant_id,
     )
     return {
         "job_id": job_id,
@@ -704,64 +710,88 @@ async def job_submit(req: JobSubmitRequest):
 
 @router.post("/jobs/purge")
 async def job_purge(
-    status: str = "", name_pattern: str = "", older_than_days: int = 0, source: str = ""
+    status: str = "",
+    name_pattern: str = "",
+    older_than_days: int = 0,
+    source: str = "",
+    authorization: str | None = Header(None),
 ):
     """清理作业历史 — 集成修复#4: test_job/stress_test等测试噪声积压清理。
 
     source='test'：provenance精确打击（只清标记为测试的行，不按名字猜）。
     零过滤拒绝：无任何过滤条件=DELETE全表——误清footgun，强制至少一个过滤。
+    F3b-③a：清理范围恒限派生租户名下（跨租户历史行绝不动）。
     """
     if not (status or name_pattern or older_than_days or source):
         raise HTTPException(
             status_code=400,
             detail="purge requires at least one filter (status/name_pattern/older_than_days/source)",
         )
+    identity = bind_identity(authorization)
     from src.will.job_queue import get_job_queue
 
     purged = get_job_queue().purge(
-        status=status, name_pattern=name_pattern, older_than_days=older_than_days, source=source
+        status=status,
+        name_pattern=name_pattern,
+        older_than_days=older_than_days,
+        source=source,
+        tenant_id=identity.tenant_id,
     )
     return {"purged": purged}
 
 
 @router.get("/jobs/{job_id}")
-async def job_status(job_id: str):
-    """Get job status and result."""
+async def job_status(job_id: str, authorization: str | None = Header(None)):
+    """Get job status and result. F3b-③a：by-ID 读走隔离闸门，跨租户 403。"""
+    identity = bind_identity(authorization)
     from src.will.job_queue import get_job_queue
 
-    result = get_job_queue().get(job_id)
+    try:
+        result = get_job_queue().get(job_id, tenant_id=identity.tenant_id)
+    except _JobAccessDenied as e:
+        raise HTTPException(403, f"job access denied: {e.reason}")
     if not result:
         raise HTTPException(404, "Job not found")
     return result
 
 
 @router.get("/jobs")
-async def job_list(status: str = "", limit: int = 50):
-    """List jobs, optionally filtered by status."""
+async def job_list(status: str = "", limit: int = 50, authorization: str | None = Header(None)):
+    """List jobs, optionally filtered by status. F3b-③a：只列派生租户名下作业。"""
+    identity = bind_identity(authorization)
     from src.will.job_queue import get_job_queue
 
-    return {"jobs": get_job_queue().list_jobs(status, limit)}
+    return {"jobs": get_job_queue().list_jobs(status, limit, tenant_id=identity.tenant_id)}
 
 
 @router.post("/jobs/{job_id}/cancel")
-async def job_cancel(job_id: str):
-    """Cancel a pending job."""
+async def job_cancel(job_id: str, authorization: str | None = Header(None)):
+    """Cancel a pending job. F3b-③a：by-ID 写走隔离闸门，跨租户 403。"""
+    identity = bind_identity(authorization)
     from src.will.job_queue import get_job_queue
 
-    ok = get_job_queue().cancel(job_id)
+    try:
+        ok = get_job_queue().cancel(job_id, tenant_id=identity.tenant_id)
+    except _JobAccessDenied as e:
+        raise HTTPException(403, f"job access denied: {e.reason}")
     return {"cancelled": ok}
 
 
 @router.post("/jobs/{job_id}/requeue")
-async def job_requeue(job_id: str):
+async def job_requeue(job_id: str, authorization: str | None = Header(None)):
     """agno /queue/jobs/{id}/requeue：终态（failed/timeout/cancelled）作业人工续跑。
 
     budget grant=恰好一次（evolution-engine-patterns §5.2 "用户触发的一次续跑
     绝不静默重跑"）；pending/running返回not_terminal不重复排队。
+    F3b-③a：by-ID 写走隔离闸门，跨租户 403。
     """
+    identity = bind_identity(authorization)
     from src.will.job_queue import get_job_queue
 
-    result = await get_job_queue().requeue(job_id)
+    try:
+        result = await get_job_queue().requeue(job_id, tenant_id=identity.tenant_id)
+    except _JobAccessDenied as e:
+        raise HTTPException(403, f"job access denied: {e.reason}")
     if result.get("reason") == "not_found":
         raise HTTPException(404, "Job not found")
     return result

@@ -446,7 +446,9 @@ class ExperienceCollector:
     def _collect_from_jobs(self) -> dict:
         """jobs（job_queue.db）→ 经验：作业真实执行结果（completed=success；
         failed/timeout/orphaned=failure带error原文；pending/running未有结果跳过
-        ——TradingAgents"pending不冒充outcome"）。"""
+        ——TradingAgents"pending不冒充outcome"）。
+        F3b-③a：只采集 self.tenant_id 名下作业——经验归属租户与作业归属租户
+        同源，禁跨租户作业结果混入本租户经验/进化链。"""
         stats: dict = {
             "scanned": 0,
             "written": 0,
@@ -454,6 +456,7 @@ class ExperienceCollector:
             "successes": 0,
             "deduped": 0,
             "skipped_test": 0,
+            "skipped_other_tenant": 0,
         }
         path = self.job_db_path
         if not path:
@@ -469,14 +472,9 @@ class ExperienceCollector:
                 stats["note"] = "jobs table missing"
                 return stats
             try:
-                rows = conn.execute(
-                    "SELECT id, name, status, error, created_at, source FROM jobs"
-                ).fetchall()
+                rows = conn.execute("SELECT * FROM jobs").fetchall()
             except sqlite3.OperationalError:
-                # 老库无source列（迁移前）：按real处理（fail-safe不误杀存量真实作业）
-                rows = conn.execute(
-                    "SELECT id, name, status, error, created_at FROM jobs"
-                ).fetchall()
+                rows = []
         finally:
             conn.close()
         main = sqlite3.connect(self.db_path)
@@ -484,6 +482,15 @@ class ExperienceCollector:
         try:
             self.ensure_schema(main)
             for row in rows:
+                # F3b-③a 租户门：行归属租户≠采集租户不产经验（老库无 tenant 列=
+                # 行按 'default' 归属，_row_to_job 同款宽容读——禁跨租户作业结果
+                # 混入本租户经验/进化链）
+                row_tenant = (
+                    (row["tenant_id"] or "default") if "tenant_id" in row.keys() else "default"
+                )
+                if row_tenant != self.tenant_id:
+                    stats["skipped_other_tenant"] += 1
+                    continue
                 status = (row["status"] or "").lower()
                 if status not in ("completed", "failed", "timeout", "orphaned"):
                     continue  # pending/running：无执行结果，不产经验

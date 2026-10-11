@@ -26,6 +26,7 @@ class ResourceType(StrEnum):
     API_KEY = "api_key"
     FILE = "file"
     SESSION = "session"
+    JOB = "job"  # F3b-③a（2026-10-12）：will 执行面后台作业（jobs 表）——数据面首个真消费轴
 
 
 @dataclass
@@ -86,6 +87,9 @@ class IsolationEngine:
             ResourceType.SESSION,
             namespace_scoped=True,
             cross_tenant_allowed=True,  # Shared sessions allowed
+        ),
+        ResourceType.JOB: IsolationPolicy(
+            ResourceType.JOB, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 

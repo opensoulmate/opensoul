@@ -126,6 +126,13 @@ class ResourceUsage:
             self._day_key = today
 
 
+def tenant_namespace(tenant_id: str) -> str:
+    """租户命名空间派生单一源（F3b-③a）：IsolationEngine check_access 的资源
+    namespace 前缀都从这里派生（create/ensure_default/数据面 gate 共用），
+    禁各处手抄 f"ns-{...}" 防双源漂移。"""
+    return f"ns-{tenant_id}"
+
+
 @dataclass
 class Tenant:
     """A tenant in the multi-tenant system."""
@@ -269,7 +276,7 @@ class TenantManager:
                 name="default",
                 tier=TenantTier.FREE,
                 status=TenantStatus.ACTIVE,
-                namespace="ns-default",
+                namespace=tenant_namespace("default"),
                 description="系统默认租户（生产数据 tenant_id='default' 归属）",
                 created_at=now,
                 updated_at=now,
@@ -291,7 +298,7 @@ class TenantManager:
     ) -> Tenant:
         """Create a new tenant with isolated namespace."""
         tenant_id = f"tenant-{uuid.uuid4().hex[:8]}"
-        namespace = f"ns-{tenant_id}"
+        namespace = tenant_namespace(tenant_id)
 
         tier_enum = TenantTier(tier)
         quota = ResourceQuota.for_tier(tier_enum)

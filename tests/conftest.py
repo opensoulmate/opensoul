@@ -10,6 +10,15 @@ import pytest
 BASE_URL = "http://localhost:8090"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_nest_db(tmp_path, monkeypatch):
+    """NEST_DB 全测试隔离（F3b-③a 增补）：数据面咨询 IsolationEngine 的审计日志
+    落 NestStore——测试绝不写生产 data/nest.db（JobQueue 等 gate 调用会留审计行）。
+    显式指定 NEST_DB 的测试（test_nest_persistence/test_tenant_binding）按其
+    monkeypatch.setenv 覆盖为准。"""
+    monkeypatch.setenv("NEST_DB", str(tmp_path / "nest.db"))
+
+
 @pytest.fixture(scope="session")
 def base_url():
     return BASE_URL

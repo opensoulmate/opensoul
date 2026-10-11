@@ -43,7 +43,27 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Optional
 
+from src.nest.isolation import IsolationEngine, ResourceType
+from src.nest.tenant import tenant_namespace
+
 logger = logging.getLogger("opensoul.job_queue")
+
+# F3b-③a（2026-10-12）数据面租户缺省：匿名/内部提交（proactive、dream_producer
+# 等系统作业）归 'default' 租户——与生产数据分布（tenant_id 全='default'）一致。
+DEFAULT_TENANT = "default"
+
+
+class JobAccessDenied(Exception):
+    """跨租户作业访问被 IsolationEngine 拒绝（API 层映射 403，禁静默当 not_found）。
+
+    verdict=check_access 原始回包（allowed/reason/namespaced_id），审计留痕在
+    IsolationEngine 审计日志（data/nest.db），此处只携带原因供 API 如实报。
+    """
+
+    def __init__(self, reason: str, verdict: dict | None = None):
+        super().__init__(reason)
+        self.reason = reason
+        self.verdict = verdict or {}
 
 
 class JobStatus(StrEnum):
@@ -74,6 +94,8 @@ class Job:
     # test=测试作业——测试垃圾不进经验/进化链（systemic_test往生产API提交test_job/
     # test_cancel/stress_test曾污染job_queue.db 1092行→experiences 1092行→
     # evolution_log 279行假"高频失败进化"）
+    tenant_id: str = DEFAULT_TENANT  # F3b-③a 数据面隔离键：归属租户（提交时落，
+    # 后续读/改/删按此过滤；IsolationEngine check_access 的资源 namespace 来源）
 
     @property
     def duration_s(self) -> float:
@@ -97,6 +119,7 @@ class Job:
             "timeout_s": self.timeout_s,
             "next_retry_at": self.next_retry_at,
             "source": self.source,
+            "tenant_id": self.tenant_id,
         }
 
 
@@ -129,7 +152,45 @@ class JobQueue:
         self._storm_cooldown_s = storm_cooldown_s
         self._retry_tasks: dict[str, asyncio.Task] = {}
         self._breakers: dict[str, dict] = {}
+        # F3b-③a：数据面咨询 IsolationEngine（懒构造——首个 gate 调用才建
+        # NestStore，收集期零生产库接触）。默认实例即真闸门，无"未接线"模式。
+        self._isolation: IsolationEngine | None = None
         self._init_db()
+
+    @property
+    def isolation(self) -> IsolationEngine:
+        """隔离引擎（check_access 真执行点；审计日志落 NestStore=data/nest.db）。"""
+        if self._isolation is None:
+            self._isolation = IsolationEngine()
+        return self._isolation
+
+    def _gate(self, tenant_id: str, row_tenant: str, resource_id: str, action: str) -> None:
+        """by-ID 访问闸门：IsolationEngine.check_access 真执行（F3b-③a）。
+
+        资源 ID 用 namespaced_id(row_tenant ns, job_id)——资源的 namespace 前缀
+        是行归属租户，比较基准是访问者派生租户；namespace 不匹配=跨租户冒读，
+        引擎拒绝（allowed=False）→ JobAccessDenied 上抛，禁静默当 not_found。
+        允许/拒绝都进引擎审计日志（audit_access=True），total_access_checks>0。
+        """
+        verdict = self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.JOB,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(row_tenant), resource_id),
+            action=action,
+        )
+        if not verdict.get("allowed"):
+            raise JobAccessDenied(verdict.get("reason", "access denied"), verdict)
+
+    def _gate_bulk(self, tenant_id: str, action: str) -> None:
+        """bulk 操作（list/purge）审计留痕：执行隔离由 WHERE tenant_id=? 承担，
+        引擎侧记一次 namespace 自匹配访问（audit_access=True「Log all access
+        attempts」语义），使数据面访问在 /api/nest 隔离审计里可见。"""
+        self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.JOB,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(tenant_id), "*"),
+            action=action,
+        )
 
     def _conn(self) -> sqlite3.Connection:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -155,7 +216,8 @@ class JobQueue:
                     max_retries INTEGER DEFAULT 2,
                     idempotency_key TEXT DEFAULT '',
                     next_retry_at REAL DEFAULT 0,
-                    source TEXT DEFAULT 'real'
+                    source TEXT DEFAULT 'real',
+                    tenant_id TEXT DEFAULT 'default'
                 )
             """)
             # 幂等键列迁移（既有库补列；重复列错误按消息匹配安全吞掉）
@@ -177,23 +239,39 @@ class JobQueue:
             except sqlite3.OperationalError as e:
                 if "duplicate column" not in str(e).lower():
                     raise
+            # F3b-③a 数据面隔离键迁移：既有库补列，存量行 DEFAULT 'default'
+            # （与 F3 审计实测数据分布 tenant_id 全='default' 一致）
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN tenant_id TEXT DEFAULT 'default'")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_idem ON jobs(idempotency_key, status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_tenant ON jobs(tenant_id, created_at)"
             )
 
     def register_handler(self, name: str, handler: Callable[..., Awaitable[Any]]):
         """注册作业处理器"""
         self._handlers[name] = handler
 
-    def find_by_idempotency_key(self, idempotency_key: str) -> str | None:
-        """按幂等键查pending/running作业id（API层duplicate回执用，agno §5.2）"""
+    def find_by_idempotency_key(
+        self, idempotency_key: str, tenant_id: str = DEFAULT_TENANT
+    ) -> str | None:
+        """按幂等键查pending/running作业id（API层duplicate回执用，agno §5.2）。
+
+        F3b-③a：幂等键按租户隔离（同key不同租户=两个独立作业，互不去重——
+        幂等键是调用方命名空间内的去重承诺，不是跨租户全局锁）。
+        """
         if not idempotency_key:
             return None
         try:
             with self._conn() as conn:
                 row = conn.execute(
-                    "SELECT id FROM jobs WHERE idempotency_key = ? AND status IN ('pending','running') LIMIT 1",
-                    (idempotency_key,),
+                    "SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ? AND status IN ('pending','running') LIMIT 1",
+                    (idempotency_key, tenant_id or DEFAULT_TENANT),
                 ).fetchone()
             return row["id"] if row else None
         except Exception as e:
@@ -289,6 +367,9 @@ class JobQueue:
             max_retries=row["max_retries"] if row["max_retries"] is not None else 2,
             next_retry_at=(row["next_retry_at"] or 0) if "next_retry_at" in row.keys() else 0,
             source=(row["source"] or "real") if "source" in row.keys() else "real",
+            tenant_id=(row["tenant_id"] or DEFAULT_TENANT)
+            if "tenant_id" in row.keys()
+            else DEFAULT_TENANT,
         )
 
     async def stop(self):
@@ -310,6 +391,7 @@ class JobQueue:
         max_retries: int = 2,
         idempotency_key: str = "",
         source: str = "real",
+        tenant_id: str = DEFAULT_TENANT,
     ) -> str:
         """提交后台作业，立即返回job_id。
 
@@ -317,12 +399,15 @@ class JobQueue:
         不静默重复执行；已完成/失败的同key作业不拦新提交（重试是合法意图）。
         source（provenance）：'test'=测试作业（经验采集侧跳过，learned_skills.source
         同款）；其他值原样保留（未知不猜不归一）。
+        tenant_id（F3b-③a）：作业归属租户（API 层来自 bind_identity 派生，禁自报；
+        内部/系统作业缺省 'default'）——后续读/改/删按此过滤+IsolationEngine 闸门。
         """
+        tenant_id = (tenant_id or "").strip() or DEFAULT_TENANT
         if idempotency_key:
             with self._conn() as conn:
                 existing = conn.execute(
-                    "SELECT id FROM jobs WHERE idempotency_key = ? AND status IN ('pending','running') LIMIT 1",
-                    (idempotency_key,),
+                    "SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ? AND status IN ('pending','running') LIMIT 1",
+                    (idempotency_key, tenant_id),
                 ).fetchone()
             if existing:
                 logger.info(
@@ -337,6 +422,7 @@ class JobQueue:
             timeout_s=timeout_s,
             max_retries=max_retries,
             source=(source or "real").strip() or "real",
+            tenant_id=tenant_id,
         )
         self._jobs[job_id] = job
         self._persist(job, idempotency_key=idempotency_key)
@@ -344,26 +430,35 @@ class JobQueue:
         logger.info(f"Job submitted: {job_id} ({name})")
         return job_id
 
-    def get(self, job_id: str) -> dict | None:
-        """查询作业状态"""
+    def get(self, job_id: str, tenant_id: str = DEFAULT_TENANT) -> dict | None:
+        """查询作业状态（F3b-③a：by-ID 读走 IsolationEngine 闸门——跨租户冒读
+        抛 JobAccessDenied，不静默当 not_found）。"""
         job = self._jobs.get(job_id)
-        if job:
-            return job.to_dict()
-        # Try loading from DB
-        with self._conn() as conn:
-            row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-            if row:
-                job = self._row_to_job(row)
-                self._jobs[job_id] = job
-                return job.to_dict()
-        return None
+        if not job:
+            # Try loading from DB
+            with self._conn() as conn:
+                row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+                if row:
+                    job = self._row_to_job(row)
+                    self._jobs[job_id] = job
+        if not job:
+            return None
+        self._gate(tenant_id, job.tenant_id, job_id, "read")
+        return job.to_dict()
 
-    def list_jobs(self, status: str = "", limit: int = 50) -> list[dict]:
-        """列出作业（SQLite为真源——重启后历史仍可见，monitoring面板依赖）"""
-        query = "SELECT * FROM jobs"
-        args: list[Any] = []
+    def list_jobs(
+        self, status: str = "", limit: int = 50, tenant_id: str = DEFAULT_TENANT
+    ) -> list[dict]:
+        """列出作业（SQLite为真源——重启后历史仍可见，monitoring面板依赖）。
+
+        F3b-③a：bulk 读按租户过滤（WHERE tenant_id=? 为执行真源）+引擎审计留痕。
+        """
+        tenant_id = (tenant_id or "").strip() or DEFAULT_TENANT
+        self._gate_bulk(tenant_id, "list")
+        query = "SELECT * FROM jobs WHERE tenant_id = ?"
+        args: list[Any] = [tenant_id]
         if status:
-            query += " WHERE status = ?"
+            query += " AND status = ?"
             args.append(status)
         query += " ORDER BY created_at DESC LIMIT ?"
         args.append(limit)
@@ -379,10 +474,19 @@ class JobQueue:
             jobs.append(job.to_dict() if job else self._row_to_job(row).to_dict())
         return jobs
 
-    def cancel(self, job_id: str) -> bool:
-        """取消作业"""
+    def cancel(self, job_id: str, tenant_id: str = DEFAULT_TENANT) -> bool:
+        """取消作业（F3b-③a：by-ID 写走 IsolationEngine 闸门）"""
         job = self._jobs.get(job_id)
-        if job and job.status == JobStatus.PENDING:
+        if not job:
+            with self._conn() as conn:
+                row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+                if row:
+                    job = self._row_to_job(row)
+                    self._jobs[job_id] = job
+        if not job:
+            return False
+        self._gate(tenant_id, job.tenant_id, job_id, "write")
+        if job.status == JobStatus.PENDING:
             job.status = JobStatus.CANCELLED
             job.finished_at = time.time()
             job.next_retry_at = 0
@@ -394,19 +498,28 @@ class JobQueue:
         return False
 
     def purge(
-        self, status: str = "", name_pattern: str = "", older_than_days: int = 0, source: str = ""
+        self,
+        status: str = "",
+        name_pattern: str = "",
+        older_than_days: int = 0,
+        source: str = "",
+        tenant_id: str = DEFAULT_TENANT,
     ) -> int:
         """清理作业历史 — 集成修复#4: 测试噪声积压(test_job failed×20等)。
 
         source过滤（provenance精确打击）：source='test'只清测试作业行——
         不按名字猜（LIKE误伤含'test'的真实作业名），按schema标记清。
         零过滤=DELETE全表footgun：调用方（API层）必须给至少一个过滤条件。
+        F3b-③a：恒按租户过滤（tenant 不算过滤条件——防"只给租户"变相清全史），
+        跨租户历史行绝不动。
         """
         if not (status or name_pattern or older_than_days or source):
             logger.warning("JobQueue.purge拒绝零过滤调用（防误清全表）")
             return 0
-        where: list[str] = []
-        params: list = []
+        tenant_id = (tenant_id or "").strip() or DEFAULT_TENANT
+        self._gate_bulk(tenant_id, "delete")
+        where: list[str] = ["tenant_id = ?"]
+        params: list = [tenant_id]
         if status:
             where.append("status = ?")
             params.append(status)
@@ -626,7 +739,7 @@ class JobQueue:
             logger.warning(f"No event loop for delayed retry of {job_id}; enqueue immediately")
             self._queue.put_nowait(job_id)
 
-    async def requeue(self, job_id: str) -> dict:
+    async def requeue(self, job_id: str, tenant_id: str = DEFAULT_TENANT) -> dict:
         """agno /queue/jobs/{id}/requeue：终态作业人工续跑。
 
         budget grant = max_retries = retries（evolution-engine-patterns §5.2：
@@ -646,6 +759,7 @@ class JobQueue:
                 return {"requeued": False, "reason": "not_found"}
             job = self._row_to_job(row)
             self._jobs[job_id] = job
+        self._gate(tenant_id, job.tenant_id, job_id, "write")
         if job.status not in (JobStatus.FAILED, JobStatus.TIMEOUT, JobStatus.CANCELLED):
             return {"requeued": False, "reason": f"not_terminal:{job.status}", "job": job.to_dict()}
         old = self._retry_tasks.pop(job_id, None)
@@ -667,8 +781,8 @@ class JobQueue:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO jobs
-                    (id, name, status, params, result, error, created_at, started_at, finished_at, timeout_s, retries, max_retries, idempotency_key, next_retry_at, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, (SELECT idempotency_key FROM jobs WHERE id = ?), ''), ?, COALESCE(?, (SELECT source FROM jobs WHERE id = ?), 'real'))
+                    (id, name, status, params, result, error, created_at, started_at, finished_at, timeout_s, retries, max_retries, idempotency_key, next_retry_at, source, tenant_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, (SELECT idempotency_key FROM jobs WHERE id = ?), ''), ?, COALESCE(?, (SELECT source FROM jobs WHERE id = ?), 'real'), COALESCE(?, (SELECT tenant_id FROM jobs WHERE id = ?), 'default'))
                 """,
                     (
                         job.id,
@@ -691,6 +805,10 @@ class JobQueue:
                         # source粘性（idempotency_key同款COALESCE）：状态更新轮的
                         # REPLACE不把既有provenance冲回默认值——'test'永不被洗白
                         (job.source or "").strip() or None,
+                        job.id,
+                        # tenant粘性（同款COALESCE）：归属租户不被状态更新轮洗回
+                        # 'default'（F3b-③a）
+                        (job.tenant_id or "").strip() or None,
                         job.id,
                     ),
                 )

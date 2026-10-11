@@ -2,13 +2,14 @@
 
 import time
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.hippo import memory_model as _memory_model
 from src.hippo.decay import DecayStrategy
 from src.hippo.memory_store import MemoryStore
 from src.hippo.session import SessionManager, SessionStatus
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -628,7 +629,7 @@ class RecallMarkRequest(BaseModel):
 
 
 @router.post("/ltm/dream")
-async def ltm_dream(req: DreamRequest):
+async def ltm_dream(req: DreamRequest, authorization: str | None = Header(None)):
     """Run Dream memory distillation from conversation history.
 
     CowAgent 5-step prompt + nanobot archive-as-tool-call +
@@ -646,6 +647,8 @@ async def ltm_dream(req: DreamRequest):
         job_id = await jq.submit(
             "hippo.dream",
             {"messages": req.messages, "force": req.force},
+            # F3b-③a：作业归属租户从认证身份派生（禁自报），只在提交作业路径绑定
+            tenant_id=bind_identity(authorization).tenant_id,
         )
         return {
             "queued": True,
@@ -731,7 +734,7 @@ async def ltm_pipeline_extract(req: PipelineExtractRequest):
 
 
 @router.post("/ltm/pipeline/run")
-async def ltm_pipeline_run(req: PipelineRunRequest):
+async def ltm_pipeline_run(req: PipelineRunRequest, authorization: str | None = Header(None)):
     """端到端管线：Phase1→Phase2整合→版本化落库→workspace diff。
 
     background=True → will job_queue后台作业（LLM长任务不阻塞请求方，
@@ -754,6 +757,8 @@ async def ltm_pipeline_run(req: PipelineRunRequest):
                 "use_llm_phase2": req.use_llm_phase2,
                 "force": req.force,
             },
+            # F3b-③a：作业归属租户从认证身份派生（禁自报），只在提交作业路径绑定
+            tenant_id=bind_identity(authorization).tenant_id,
         )
         return {
             "queued": True,
