@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import sqlite3
 import statistics
@@ -12,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -25,6 +26,9 @@ from src.api.ws_chat import (
     run_agent_proxy,
     which_agent,
 )
+from src.nest.isolation import IsolationEngine, ResourceType
+from src.nest.tenant import tenant_namespace
+from src.services.tenant_binding import DEFAULT_TENANT, bind_identity
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +86,7 @@ def init_db():
             iteration INTEGER DEFAULT 0,
             max_iterations INTEGER DEFAULT 2,
             source_task_id TEXT DEFAULT '',
+            tenant_id TEXT NOT NULL DEFAULT 'default',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY (group_id) REFERENCES ai_groups(id)
@@ -106,6 +111,18 @@ def init_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass  # 列已存在
+
+    # F3b-③b-1 数据面隔离键：任务归属租户（DDL+ALTER 双轨幂等；存量行随
+    # NOT NULL DEFAULT 'default' 回填，与 F3 审计实测数据分布一致）
+    try:
+        conn.execute(
+            "ALTER TABLE ai_group_tasks ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_tenant ON ai_group_tasks(tenant_id)")
+    conn.commit()
 
     # 讨论与评分相关表
     conn.executescript("""
@@ -168,6 +185,100 @@ def init_db():
 
 
 init_db()
+
+
+# ── F3b-③b-1 任务面数据面隔离（ai_group_tasks 表）─────────────────────────
+# 租户键落行（tenant_id）+ 查询过滤 + IsolationEngine.check_access 真执行
+# （F3b-③a jobs 表同款三件套）。资源 ID=namespaced_id(行归属租户 ns, task_id)，
+# 跨租户 namespace mismatch 引擎真拒绝→403，禁静默当 not_found。
+
+
+class TaskAccessDenied(Exception):
+    """跨租户任务访问被 IsolationEngine 拒绝（审计留痕在 NestStore）。
+
+    verdict=check_access 原始回包（allowed/reason/namespaced_id），此处只
+    携带原因供 API 如实报。"""
+
+    def __init__(self, reason: str, verdict: dict | None = None):
+        super().__init__(reason)
+        self.reason = reason
+        self.verdict = verdict or {}
+
+
+_isolation_cache: tuple[str, IsolationEngine] | None = None
+
+
+def _iso() -> IsolationEngine:
+    """隔离引擎（check_access 真执行点；审计落 NestStore=NEST_DB 或 data/nest.db）。
+
+    按 NEST_DB env 值缓存：测试 env 切换自动换引擎（conftest 全测试隔离），
+    默认实例即真闸门，无"未接线"模式。"""
+    global _isolation_cache
+    key = os.environ.get("NEST_DB") or ""
+    if _isolation_cache is None or _isolation_cache[0] != key:
+        _isolation_cache = (key, IsolationEngine())
+    return _isolation_cache[1]
+
+
+def _gate_task(tenant_id: str, row_tenant: str, task_id: str, action: str) -> None:
+    """by-ID 任务访问闸门：IsolationEngine.check_access 真执行（F3b-③b-1）。
+
+    资源 ID 用 namespaced_id(row_tenant ns, task_id)——资源的 namespace 前缀
+    必须来自行归属（tenant_namespace 单一源派生），跨租户 namespace mismatch
+    引擎拒绝（allowed=False）→ TaskAccessDenied 上抛。"""
+    iso = _iso()
+    verdict = iso.check_access(
+        tenant_namespace=tenant_namespace(tenant_id),
+        resource_type=ResourceType.AI_GROUP_TASK,
+        resource_id=iso.namespaced_id(tenant_namespace(row_tenant), task_id),
+        action=action,
+    )
+    if not verdict.get("allowed", True):
+        raise TaskAccessDenied(verdict.get("reason", "access denied"), verdict)
+
+
+def _gate_task_bulk(tenant_id: str, action: str) -> None:
+    """bulk（list/govern）闸门：只审计留痕不拦（audit_access="Log all access attempts"）。
+
+    govern 的租户过滤在 govern_stale_tasks 查询层（防"只给租户"变相清全史）。"""
+    iso = _iso()
+    iso.check_access(
+        tenant_namespace=tenant_namespace(tenant_id),
+        resource_type=ResourceType.AI_GROUP_TASK,
+        resource_id=iso.namespaced_id(tenant_namespace(tenant_id), "*"),
+        action=action,
+    )
+
+
+def _gate403(tenant_id: str, row_tenant: str, task_id: str, action: str) -> None:
+    """闸门 + HTTP 映射：跨租户 403（reason 如实带 namespace mismatch 真因）。"""
+    try:
+        _gate_task(tenant_id, row_tenant, task_id, action)
+    except TaskAccessDenied as e:
+        raise HTTPException(403, f"task access denied: {e.reason}")
+
+
+def _load_gated_task(conn, tenant_id: str, group_id: str, task_id: str, action: str = "read"):
+    """by-ID 任务行加载 + 闸门统一收口：行存在→闸门真执行，行不存在→404。"""
+    row = conn.execute(
+        "SELECT * FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "任务不存在")
+    _gate403(tenant_id, row["tenant_id"], task_id, action)
+    return row
+
+
+def _gate_existing_task(conn, tenant_id: str, group_id: str, task_id: str, action: str):
+    """行存在才闸门（盲 UPDATE / 容忍缺行端点用，既有缺行契约不变）。
+
+    行存在但跨租户→403（失败可见）；行不存在→None 由调用方按既有语义处理。"""
+    row = conn.execute(
+        "SELECT tenant_id FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
+    ).fetchone()
+    if row:
+        _gate403(tenant_id, row["tenant_id"], task_id, action)
+    return row
 
 
 def _emit_exec_event(group_id: str, task_id: str, agent_id: str, event_type: str, content: str):
@@ -536,7 +647,12 @@ def get_group(group_id: str):
 
 
 @router.post("/{group_id}/tasks")
-async def submit_task(group_id: str, req: SubmitTaskRequest):
+async def submit_task(
+    group_id: str, req: SubmitTaskRequest, authorization: str | None = Header(None)
+):
+    """F3b-③b-1：任务归属租户从认证身份派生（bind_identity，匿名='default'），
+    禁客户端自报——ai_group_tasks 表数据面隔离键由此落行（子任务同源继承）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
         group = conn.execute("SELECT id FROM ai_groups WHERE id=?", (group_id,)).fetchone()
@@ -548,7 +664,7 @@ async def submit_task(group_id: str, req: SubmitTaskRequest):
 
         # 创建主任务
         conn.execute(
-            "INSERT INTO ai_group_tasks (id, group_id, goal, constraints, completion_criteria, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO ai_group_tasks (id, group_id, goal, constraints, completion_criteria, status, created_at, updated_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 task_id,
                 group_id,
@@ -558,6 +674,7 @@ async def submit_task(group_id: str, req: SubmitTaskRequest):
                 "planning",
                 now,
                 now,
+                identity.tenant_id,
             ),
         )
 
@@ -566,7 +683,7 @@ async def submit_task(group_id: str, req: SubmitTaskRequest):
         for st in subtasks:
             agent_id = select_agent_for_role(conn, group_id, st["role"])
             conn.execute(
-                "INSERT INTO ai_group_tasks (id, group_id, parent_task_id, goal, status, assigned_agent_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO ai_group_tasks (id, group_id, parent_task_id, goal, status, assigned_agent_id, created_at, updated_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     str(uuid.uuid4())[:8],
                     group_id,
@@ -576,6 +693,7 @@ async def submit_task(group_id: str, req: SubmitTaskRequest):
                     agent_id,
                     now,
                     now,
+                    identity.tenant_id,
                 ),
             )
 
@@ -650,7 +768,10 @@ def _finalize_parent_task(conn, parent_task_id: str) -> str | None:
 
 
 def govern_stale_tasks(
-    conn, group_id: str | None = None, ttl_hours: float = _GOVERN_TTL_HOURS
+    conn,
+    group_id: str | None = None,
+    ttl_hours: float = _GOVERN_TTL_HOURS,
+    tenant_id: str = DEFAULT_TENANT,
 ) -> dict:
     """B1 旧任务/子任务状态治理：历史pending清理+父任务收口，看板数据可信。
 
@@ -661,12 +782,18 @@ def govern_stale_tasks(
     R2 超龄未启动：pending/planning/discussing超过TTL零进展 → skipped
     只清"从未启动"的行；executing/reviewing永不在此强杀（卡死只提醒不杀任务）。
     每次状态变化都在task_execution_events留痕（governed事件），禁静默改状态。
-    """
+
+    F3b-③b-1：治理范围恒限派生租户名下（WHERE tenant_id=?，缺省 'default'
+    与匿名契约一致）——防"只给租户"的治理变相改写他租户任务状态（跨租户写）。"""
     now = datetime.now()
     cutoff = now - timedelta(hours=ttl_hours)
-    where = " WHERE group_id=?" if group_id else ""
-    params = (group_id,) if group_id else ()
-    rows = conn.execute(f"SELECT * FROM ai_group_tasks{where}", params).fetchall()
+    conds = ["tenant_id=?"]
+    params: list = [tenant_id]
+    if group_id:
+        conds.append("group_id=?")
+        params.append(group_id)
+    where = " WHERE " + " AND ".join(conds)
+    rows = conn.execute(f"SELECT * FROM ai_group_tasks{where}", tuple(params)).fetchall()
     stats = {"skipped_parent_finished": 0, "skipped_stale": 0, "parent_finalized": 0}
     details: list[dict] = []
     by_id = {r["id"]: r for r in rows}
@@ -720,17 +847,20 @@ def govern_stale_tasks(
 
 
 @router.get("/{group_id}/tasks")
-def list_tasks(group_id: str):
+def list_tasks(group_id: str, authorization: str | None = Header(None)):
+    """F3b-③b-1：只列派生租户名下任务（bulk 闸门审计留痕+查询过滤恒 WHERE tenant_id=?）。"""
+    identity = bind_identity(authorization)
+    _gate_task_bulk(identity.tenant_id, "list")
     conn = get_db()
     try:
         # B1惰性治理：看板读取前先清扫旧任务/子任务（与POST .../tasks/govern同一函数），
         # 历史pending不再冒充"待处理"，看板数据可信
-        govern_stale_tasks(conn, group_id)
+        govern_stale_tasks(conn, group_id, tenant_id=identity.tenant_id)
         conn.commit()
         tasks = rows_to_list(
             conn.execute(
-                "SELECT * FROM ai_group_tasks WHERE group_id=? AND parent_task_id IS NULL ORDER BY created_at DESC",
-                (group_id,),
+                "SELECT * FROM ai_group_tasks WHERE group_id=? AND parent_task_id IS NULL AND tenant_id=? ORDER BY created_at DESC",
+                (group_id, identity.tenant_id),
             ).fetchall()
         )
         # 一次性取每任务最后事件时间 + 按agent分组的历史耗时（ETA/卡死检测用）
@@ -765,8 +895,8 @@ def list_tasks(group_id: str):
         for t in tasks:
             t["subtasks"] = rows_to_list(
                 conn.execute(
-                    "SELECT * FROM ai_group_tasks WHERE parent_task_id=? ORDER BY created_at",
-                    (t["id"],),
+                    "SELECT * FROM ai_group_tasks WHERE parent_task_id=? AND tenant_id=? ORDER BY created_at",
+                    (t["id"], identity.tenant_id),
                 ).fetchall()
             )
             for st in t["subtasks"]:
@@ -781,11 +911,14 @@ def list_tasks(group_id: str):
 
 
 @router.post("/{group_id}/tasks/govern")
-def govern_tasks(group_id: str):
-    """手动触发旧任务/子任务状态治理（list_tasks读取时惰性清扫的同一函数），返回治理统计。"""
+def govern_tasks(group_id: str, authorization: str | None = Header(None)):
+    """手动触发旧任务/子任务状态治理（list_tasks读取时惰性清扫的同一函数），返回治理统计。
+    F3b-③b-1：治理范围恒限派生租户名下（bulk 闸门留痕+查询过滤）。"""
+    identity = bind_identity(authorization)
+    _gate_task_bulk(identity.tenant_id, "write")
     conn = get_db()
     try:
-        stats = govern_stale_tasks(conn, group_id)
+        stats = govern_stale_tasks(conn, group_id, tenant_id=identity.tenant_id)
         conn.commit()
         return {"group_id": group_id, **stats}
     finally:
@@ -793,9 +926,14 @@ def govern_tasks(group_id: str):
 
 
 @router.post("/{group_id}/tasks/{task_id}/assign")
-def assign_task(group_id: str, task_id: str, req: AssignTaskRequest):
+def assign_task(
+    group_id: str, task_id: str, req: AssignTaskRequest, authorization: str | None = Header(None)
+):
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
+        # F3b-③b-1：行存在即闸门（跨租户 403 禁静默改写他租户任务）
+        _gate_existing_task(conn, identity.tenant_id, group_id, task_id, "write")
         now = datetime.now().isoformat()
         conn.execute(
             "UPDATE ai_group_tasks SET assigned_agent_id=?, status='executing', updated_at=? WHERE id=? AND group_id=?",
@@ -911,15 +1049,15 @@ async def _run_task_background(group_id: str, task_id: str, req: "ExecuteTaskReq
 
 
 @router.post("/{group_id}/tasks/{task_id}/execute")
-async def execute_task(group_id: str, task_id: str, req: ExecuteTaskRequest):
-    """执行任务（异步）：立即返回202，执行进度靠task_execution_events+WS广播task_progress"""
+async def execute_task(
+    group_id: str, task_id: str, req: ExecuteTaskRequest, authorization: str | None = Header(None)
+):
+    """执行任务（异步）：立即返回202，执行进度靠task_execution_events+WS广播task_progress
+    F3b-③b-1：by-ID 写走隔离闸门（跨租户 403 禁冒执行他租户任务）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        task = conn.execute(
-            "SELECT id FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
     finally:
         conn.close()
     if task_id in _RUNNING_TASKS:
@@ -1247,11 +1385,18 @@ async def _run_soulmate_turn(
 
 
 # ── B2 任务链↔讨论联动：任务执行完可发起讨论（start_discussion与任务链联动） ──
-def _start_post_task_discussion(group_id: str, source_task_id: str, goal: str = "") -> dict:
+def _start_post_task_discussion(
+    group_id: str,
+    source_task_id: str,
+    goal: str = "",
+    gate_tenant: str | None = None,
+) -> dict:
     """任务执行完发起复盘讨论：讨论任务挂source_task_id回链源任务，系统消息带
     子任务结果摘要，start_discussion的respond/decide/messages端点原样可用。
     幂等：源任务已有进行中的复盘讨论则返回既有讨论（existing=True），禁重复发起。
-    只接受已终结源任务（scored/failed/completed/skipped），没跑完不许开复盘。"""
+    只接受已终结源任务（scored/failed/completed/skipped），没跑完不许开复盘。
+    F3b-③b-1：gate_tenant 给定时源任务走写闸门（端点入口）；讨论任务租户从
+    源任务行继承（内部链路无身份，入口已闸）。"""
     conn = get_db()
     try:
         src = conn.execute(
@@ -1259,6 +1404,8 @@ def _start_post_task_discussion(group_id: str, source_task_id: str, goal: str = 
         ).fetchone()
         if not src:
             raise HTTPException(404, "任务不存在")
+        if gate_tenant is not None:
+            _gate403(gate_tenant, src["tenant_id"], source_task_id, "write")
         if src["status"] not in _TASK_TERMINAL_STATUSES:
             raise HTTPException(409, "任务尚未执行完，不能发起复盘讨论")
         dup = conn.execute(
@@ -1289,7 +1436,7 @@ def _start_post_task_discussion(group_id: str, source_task_id: str, goal: str = 
         discussion_id = str(uuid.uuid4())[:8]
         discussion_goal = goal or f"复盘讨论：{src['goal']}"
         conn.execute(
-            "INSERT INTO ai_group_tasks (id, group_id, goal, constraints, completion_criteria, status, source_task_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO ai_group_tasks (id, group_id, goal, constraints, completion_criteria, status, source_task_id, created_at, updated_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 discussion_id,
                 group_id,
@@ -1300,6 +1447,7 @@ def _start_post_task_discussion(group_id: str, source_task_id: str, goal: str = 
                 source_task_id,
                 now,
                 now,
+                src["tenant_id"],  # F3b-③b-1：讨论任务租户从源任务行继承
             ),
         )
         conn.execute(
@@ -1709,15 +1857,15 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
 
 
 @router.post("/{group_id}/tasks/{task_id}/retry")
-async def retry_task(group_id: str, task_id: str, req: RetryTaskRequest):
-    """Paperclip式单任务/单子任务重试：重置该行状态后独立重跑（不影响兄弟子任务）"""
+async def retry_task(
+    group_id: str, task_id: str, req: RetryTaskRequest, authorization: str | None = Header(None)
+):
+    """Paperclip式单任务/单子任务重试：重置该行状态后独立重跑（不影响兄弟子任务）
+    F3b-③b-1：by-ID 写走隔离闸门（跨租户 403 禁重试他租户任务）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        task = conn.execute(
-            "SELECT * FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        task = _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
         now = datetime.now().isoformat()
         conn.execute(
             "UPDATE ai_group_tasks SET status='pending', result='', iteration=0, updated_at=? WHERE id=?",
@@ -1746,19 +1894,23 @@ class CancelExecRequest(BaseModel):
 
 
 @router.get("/{group_id}/tasks/{task_id}/exec-status")
-def get_task_exec_status(group_id: str, task_id: str):
+def get_task_exec_status(group_id: str, task_id: str, authorization: str | None = Header(None)):
     """执行时长/进度可查询（10.3 挂死可见性）：agent 执行登记项快照 + 任务行状态。
 
     快照含 elapsed_s（实时执行时长）/last_event（最近输出行）/lines（已收行数）/
-    cancel_requested；无在跑执行时 run=None（不造假）。"""
+    cancel_requested；无在跑执行时 run=None（不造假）。
+    F3b-③b-1：行存在走读闸门（跨租户 403 禁探他租户执行进度）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
         task = conn.execute(
-            "SELECT status, assigned_agent_id FROM ai_group_tasks WHERE id=? AND group_id=?",
+            "SELECT status, assigned_agent_id, tenant_id FROM ai_group_tasks WHERE id=? AND group_id=?",
             (task_id, group_id),
         ).fetchone()
     finally:
         conn.close()
+    if task:
+        _gate403(identity.tenant_id, task["tenant_id"], task_id, "read")
     run = find_proxy_run(f"{group_id}/{task_id}", running_only=False)
     return {
         "group_id": group_id,
@@ -1770,10 +1922,19 @@ def get_task_exec_status(group_id: str, task_id: str):
 
 
 @router.post("/{group_id}/tasks/{task_id}/exec-cancel")
-async def cancel_task_exec(group_id: str, task_id: str, req: CancelExecRequest):
+async def cancel_task_exec(
+    group_id: str, task_id: str, req: CancelExecRequest, authorization: str | None = Header(None)
+):
     """显式取消任务的 agent 执行（用户意图：SIGTERM→有界等待，force=True 才 SIGKILL）。
 
-    不加到点自动杀——正常长回合绝不被误杀；取消只由本端点显式发起。"""
+    不加到点自动杀——正常长回合绝不被误杀；取消只由本端点显式发起。
+    F3b-③b-1：行存在走写闸门（跨租户 403 禁取消他租户在跑执行）。"""
+    identity = bind_identity(authorization)
+    conn = get_db()
+    try:
+        _gate_existing_task(conn, identity.tenant_id, group_id, task_id, "write")
+    finally:
+        conn.close()
     run = find_proxy_run(f"{group_id}/{task_id}")
     if not run:
         raise HTTPException(404, "该任务当前没有在跑的 agent 执行进程（无可取消对象）")
@@ -1795,10 +1956,15 @@ async def cancel_task_exec(group_id: str, task_id: str, req: CancelExecRequest):
 
 
 @router.get("/{group_id}/tasks/{task_id}/events")
-def get_task_events(group_id: str, task_id: str, after_id: int = 0):
-    """执行过程事件回放（after_id增量拉取，供时间线面板回看）"""
+def get_task_events(
+    group_id: str, task_id: str, after_id: int = 0, authorization: str | None = Header(None)
+):
+    """执行过程事件回放（after_id增量拉取，供时间线面板回看）
+    F3b-③b-1：行存在走读闸门（跨租户 403 禁回放他租户任务事件）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
+        _gate_existing_task(conn, identity.tenant_id, group_id, task_id, "read")
         rows = rows_to_list(
             conn.execute(
                 "SELECT * FROM task_execution_events WHERE task_id=? AND id>? ORDER BY id LIMIT 500",
@@ -1827,9 +1993,14 @@ def get_task_events(group_id: str, task_id: str, after_id: int = 0):
 
 
 @router.post("/{group_id}/tasks/{task_id}/complete")
-def complete_task(group_id: str, task_id: str, req: CompleteTaskRequest):
+def complete_task(
+    group_id: str, task_id: str, req: CompleteTaskRequest, authorization: str | None = Header(None)
+):
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
+        # F3b-③b-1：行存在即闸门（跨租户 403 禁静默改写他租户任务）
+        _gate_existing_task(conn, identity.tenant_id, group_id, task_id, "write")
         now = datetime.now().isoformat()
         conn.execute(
             "UPDATE ai_group_tasks SET result=?, quality_score=?, status='verifying', updated_at=? WHERE id=? AND group_id=?",
@@ -1842,15 +2013,14 @@ def complete_task(group_id: str, task_id: str, req: CompleteTaskRequest):
 
 
 @router.post("/{group_id}/tasks/{task_id}/verify")
-def verify_task(group_id: str, task_id: str, req: VerifyTaskRequest):
+def verify_task(
+    group_id: str, task_id: str, req: VerifyTaskRequest, authorization: str | None = Header(None)
+):
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
         now = datetime.now().isoformat()
-        task = conn.execute(
-            "SELECT * FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        task = _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
 
         if req.passed:
             conn.execute(
@@ -2005,8 +2175,12 @@ def update_agent(group_id: str, agent_id: str, req: UpdateAgentRequest):
 
 
 @router.post("/{group_id}/discuss")
-def start_discussion(group_id: str, req: StartDiscussionRequest):
-    """发起群组讨论式任务"""
+def start_discussion(
+    group_id: str, req: StartDiscussionRequest, authorization: str | None = Header(None)
+):
+    """发起群组讨论式任务
+    F3b-③b-1：讨论任务归属租户从认证身份派生（匿名='default'）落行。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
         group = conn.execute("SELECT id FROM ai_groups WHERE id=?", (group_id,)).fetchone()
@@ -2018,7 +2192,7 @@ def start_discussion(group_id: str, req: StartDiscussionRequest):
 
         # 创建任务（状态为 discussing）
         conn.execute(
-            "INSERT INTO ai_group_tasks (id, group_id, goal, constraints, completion_criteria, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO ai_group_tasks (id, group_id, goal, constraints, completion_criteria, status, created_at, updated_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 task_id,
                 group_id,
@@ -2028,6 +2202,7 @@ def start_discussion(group_id: str, req: StartDiscussionRequest):
                 "discussing",
                 now,
                 now,
+                identity.tenant_id,
             ),
         )
 
@@ -2053,23 +2228,35 @@ def start_discussion(group_id: str, req: StartDiscussionRequest):
 
 
 @router.post("/{group_id}/tasks/{task_id}/discuss-after")
-def discuss_after_task(group_id: str, task_id: str, req: DiscussAfterRequest | None = None):
+def discuss_after_task(
+    group_id: str,
+    task_id: str,
+    req: DiscussAfterRequest | None = None,
+    authorization: str | None = Header(None),
+):
     """B2 任务执行完可发起讨论：为已终结任务创建复盘讨论（讨论任务挂source_task_id
     回链源任务、系统消息带子任务结果摘要），respond/decide/messages等既有讨论端点
-    原样可用。幂等：已有进行中的复盘讨论则返回既有讨论（existing=True）。"""
-    return _start_post_task_discussion(group_id, task_id, req.goal if req else "")
+    原样可用。幂等：已有进行中的复盘讨论则返回既有讨论（existing=True）。
+    F3b-③b-1：源任务走写闸门（跨租户 403 禁拿他租户任务开复盘）。"""
+    identity = bind_identity(authorization)
+    return _start_post_task_discussion(
+        group_id, task_id, req.goal if req else "", gate_tenant=identity.tenant_id
+    )
 
 
 @router.post("/{group_id}/discuss/{task_id}/respond")
-def discussion_respond(group_id: str, task_id: str, req: DiscussionResponseRequest):
-    """Agent提交讨论回复"""
+def discussion_respond(
+    group_id: str,
+    task_id: str,
+    req: DiscussionResponseRequest,
+    authorization: str | None = Header(None),
+):
+    """Agent提交讨论回复
+    F3b-③b-1：讨论任务走写闸门（跨租户 403 禁往他租户讨论插话）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        task = conn.execute(
-            "SELECT id, status FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        task = _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
         if task["status"] != "discussing":
             raise HTTPException(400, "任务不在讨论状态")
 
@@ -2102,15 +2289,18 @@ def discussion_respond(group_id: str, task_id: str, req: DiscussionResponseReque
 
 
 @router.post("/{group_id}/discuss/{task_id}/decide")
-def decide_discussion(group_id: str, task_id: str, req: DecideDiscussionRequest):
-    """结束讨论，分配子任务"""
+def decide_discussion(
+    group_id: str,
+    task_id: str,
+    req: DecideDiscussionRequest,
+    authorization: str | None = Header(None),
+):
+    """结束讨论，分配子任务
+    F3b-③b-1：讨论任务走写闸门（跨租户 403）；派生子任务租户从讨论任务行继承。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        task = conn.execute(
-            "SELECT id, status FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        task = _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
 
         now = datetime.now().isoformat()
 
@@ -2132,7 +2322,7 @@ def decide_discussion(group_id: str, task_id: str, req: DecideDiscussionRequest)
         # 创建子任务
         for assign in req.assignments:
             conn.execute(
-                "INSERT INTO ai_group_tasks (id, group_id, parent_task_id, goal, status, assigned_agent_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO ai_group_tasks (id, group_id, parent_task_id, goal, status, assigned_agent_id, created_at, updated_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     str(uuid.uuid4())[:8],
                     group_id,
@@ -2142,6 +2332,7 @@ def decide_discussion(group_id: str, task_id: str, req: DecideDiscussionRequest)
                     assign.agent_id,
                     now,
                     now,
+                    task["tenant_id"],  # F3b-③b-1：派生子任务租户从讨论任务行继承
                 ),
             )
 
@@ -2157,15 +2348,13 @@ def decide_discussion(group_id: str, task_id: str, req: DecideDiscussionRequest)
 
 
 @router.get("/{group_id}/discuss/{task_id}/messages")
-def get_discussion_messages(group_id: str, task_id: str):
-    """获取任务讨论消息列表"""
+def get_discussion_messages(group_id: str, task_id: str, authorization: str | None = Header(None)):
+    """获取任务讨论消息列表
+    F3b-③b-1：讨论任务走读闸门（跨租户 403 禁读他租户讨论消息）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        task = conn.execute(
-            "SELECT id FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        _load_gated_task(conn, identity.tenant_id, group_id, task_id, "read")
 
         messages = rows_to_list(
             conn.execute(
@@ -2179,15 +2368,15 @@ def get_discussion_messages(group_id: str, task_id: str):
 
 
 @router.post("/{group_id}/tasks/{task_id}/review")
-def review_task(group_id: str, task_id: str, req: ReviewTaskRequest):
-    """提交任务结果供群组评审"""
+def review_task(
+    group_id: str, task_id: str, req: ReviewTaskRequest, authorization: str | None = Header(None)
+):
+    """提交任务结果供群组评审
+    F3b-③b-1：by-ID 写走隔离闸门（跨租户 403）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        task = conn.execute(
-            "SELECT * FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        task = _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
 
         now = datetime.now().isoformat()
         conn.execute(
@@ -2217,15 +2406,15 @@ def review_task(group_id: str, task_id: str, req: ReviewTaskRequest):
 
 
 @router.post("/{group_id}/tasks/{task_id}/score")
-def score_task(group_id: str, task_id: str, req: ScoreTaskRequest):
-    """Agent对任务结果评分"""
+def score_task(
+    group_id: str, task_id: str, req: ScoreTaskRequest, authorization: str | None = Header(None)
+):
+    """Agent对任务结果评分
+    F3b-③b-1：by-ID 写走隔离闸门（跨租户 403 禁评他租户任务）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        task = conn.execute(
-            "SELECT * FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        task = _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
         if req.score < 1 or req.score > 10:
             raise HTTPException(400, "分数必须在1-10之间")
 
@@ -2665,7 +2854,9 @@ def _auto_score_from_result(result_text: str, success: bool, goal: str) -> tuple
 
 
 @router.post("/{group_id}/tasks/{task_id}/auto-evaluate")
-async def auto_evaluate_task(group_id: str, task_id: str, req: AutoEvaluateRequest):
+async def auto_evaluate_task(
+    group_id: str, task_id: str, req: AutoEvaluateRequest, authorization: str | None = Header(None)
+):
     """自动评估任务结果 — 无需人工干预，直接生成评分并更新能力画像。
 
     评分维度：
@@ -2674,14 +2865,12 @@ async def auto_evaluate_task(group_id: str, task_id: str, req: AutoEvaluateReque
     3. 内容质量信号（代码、解释、格式）
 
     自动触发能力画像更新，完成闭环。
+    F3b-③b-1：by-ID 写走隔离闸门（跨租户 403 禁评估他租户任务）。
     """
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        task = conn.execute(
-            "SELECT * FROM ai_group_tasks WHERE id=? AND group_id=?", (task_id, group_id)
-        ).fetchone()
-        if not task:
-            raise HTTPException(404, "任务不存在")
+        task = _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
 
         assigned_agent = task["assigned_agent_id"]
         if not assigned_agent:

@@ -27,6 +27,7 @@ class ResourceType(StrEnum):
     FILE = "file"
     SESSION = "session"
     JOB = "job"  # F3b-③a（2026-10-12）：will 执行面后台作业（jobs 表）——数据面首个真消费轴
+    AI_GROUP_TASK = "ai_group_task"  # F3b-③b-1（2026-10-12）：AI 群组任务面（ai_group_tasks 表）
 
 
 @dataclass
@@ -90,6 +91,9 @@ class IsolationEngine:
         ),
         ResourceType.JOB: IsolationPolicy(
             ResourceType.JOB, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.AI_GROUP_TASK: IsolationPolicy(
+            ResourceType.AI_GROUP_TASK, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 
