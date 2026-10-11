@@ -154,14 +154,14 @@ export default function RegistryPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-orange-500" />
+            <Zap className="w-4 h-4 text-amber-500" />
             <span className="text-xs text-muted-foreground">能力总数</span>
           </div>
           <div className="text-2xl font-bold mt-1">{capabilities?.total_capabilities || 0}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-green-500" />
+            <Layers className="w-4 h-4 text-emerald-500" />
             <span className="text-xs text-muted-foreground">架构层级</span>
           </div>
           <div className="text-2xl font-bold mt-1">{graph?.layers?.length || 0}</div>
@@ -242,7 +242,7 @@ export default function RegistryPage() {
                         <h4 className="text-xs font-medium truncate">{comp.name}</h4>
                         {health !== undefined && (
                           health ?
-                            <CheckCircle className="w-3 h-3 text-green-500 shrink-0" /> :
+                            <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" /> :
                             <AlertCircle className="w-3 h-3 text-red-500 shrink-0" />
                         )}
                       </div>

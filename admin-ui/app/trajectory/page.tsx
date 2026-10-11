@@ -260,7 +260,7 @@ function AnalyticsView() {
       {/* Agent performance */}
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-          <Bot className="w-4 h-4 text-purple-500" />Agent 性能统计
+          <Bot className="w-4 h-4 text-violet-500" />Agent 性能统计
         </h3>
         {agents.length === 0 ? (
           <div className="text-xs text-muted-foreground text-center py-8">暂无数据</div>
@@ -269,7 +269,7 @@ function AnalyticsView() {
             {agents.map(a => (
               <div key={a.agent_id} className="rounded-md border border-border p-3 hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-2 mb-2">
-                  <Bot className="w-3.5 h-3.5 text-purple-400" />
+                  <Bot className="w-3.5 h-3.5 text-violet-400" />
                   <span className="text-sm font-medium font-mono truncate">{a.agent_id || '未命名'}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">

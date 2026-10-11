@@ -332,7 +332,7 @@ export default function MarketplacePage() {
                 title={src.enabled ? '点击禁用' : '点击启用'}
               >
                 {src.enabled ? (
-                  <ToggleRight className="w-5 h-5 text-green-500" />
+                  <ToggleRight className="w-5 h-5 text-emerald-500" />
                 ) : (
                   <ToggleLeft className="w-5 h-5 text-muted-foreground" />
                 )}

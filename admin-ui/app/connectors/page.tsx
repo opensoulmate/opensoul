@@ -343,8 +343,8 @@ export default function ConnectorsPage() {
           <div className="text-lg font-bold">{adapters.length}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><CheckCircle className="w-3.5 h-3.5 text-green-500" />已配置</div>
-          <div className="text-lg font-bold text-green-600">{adapters.filter(a => a.configured).length}</div>
+          <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" />已配置</div>
+          <div className="text-lg font-bold text-emerald-600">{adapters.filter(a => a.configured).length}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><Terminal className="w-3.5 h-3.5" />CLI工具</div>
@@ -677,7 +677,7 @@ export default function ConnectorsPage() {
               <input className="flex-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md"
                 value={fsPattern} onChange={(e) => setFsPattern(e.target.value)} placeholder="搜索文件名模式 (*.txt)" />
               <Button onClick={handleFsSearch} disabled={fsLoading || !fsPattern}
-                variant="chip-sm" className="flex items-center gap-1 bg-violet-500/10 text-violet-500 border border-purple-500/20 hover:bg-violet-500/20 disabled:opacity-50">
+                variant="chip-sm" className="flex items-center gap-1 bg-violet-500/10 text-violet-500 border border-violet-500/20 hover:bg-violet-500/20 disabled:opacity-50">
                 <Search className="w-3 h-3" />搜索
               </Button>
             </div>

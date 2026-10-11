@@ -155,9 +155,9 @@ export default function CapturePage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <MousePointer className="w-3.5 h-3.5 text-purple-500" />
+            <MousePointer className="w-3.5 h-3.5 text-violet-500" />
           </div>
-          <div className="text-2xl font-bold text-purple-500">{stats.selections}</div>
+          <div className="text-2xl font-bold text-violet-500">{stats.selections}</div>
           <div className="text-xs text-muted-foreground">选区捕获</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
@@ -211,12 +211,12 @@ export default function CapturePage() {
               variant="row" className="gap-3 p-3"
             >
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                capture.capture_type === 'page' ? 'bg-blue-500/10' : 'bg-purple-500/10'
+                capture.capture_type === 'page' ? 'bg-blue-500/10' : 'bg-violet-500/10'
               }`}>
                 {capture.capture_type === 'page' ? (
                   <Globe className="w-5 h-5 text-blue-500" />
                 ) : (
-                  <MousePointer className="w-5 h-5 text-purple-500" />
+                  <MousePointer className="w-5 h-5 text-violet-500" />
                 )}
               </div>
               <div className="flex-1 min-w-0">

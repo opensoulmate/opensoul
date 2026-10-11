@@ -419,7 +419,7 @@ function RPCLogPanel({ logs }: { logs: RPCLog[] }) {
               {log.error ? (
                 <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
               ) : (
-                <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
               )}
               <span className="text-xs font-mono">{log.method}</span>
               <span className="text-[10px] text-muted-foreground">{log.duration}ms</span>

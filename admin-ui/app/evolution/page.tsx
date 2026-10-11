@@ -146,13 +146,13 @@ function CycleDiagram({ latestCycle }: { latestCycle?: EvolutionCycle }) {
                 <Icon className={`w-7 h-7 ${isCompleted ? c.text : isRunning ? 'text-primary' : isError ? 'text-red-500' : 'text-muted-foreground'}`} />
                 {/* Step number */}
                 <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                  isCompleted ? 'bg-green-500 text-white' : isRunning ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  isCompleted ? 'bg-emerald-500 text-white' : isRunning ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                 }`}>
                   {i + 1}
                 </div>
                 {/* Status icon */}
                 {isCompleted && (
-                  <CheckCircle className="absolute -bottom-1 -right-1 w-4 h-4 text-green-500 bg-background rounded-full" />
+                  <CheckCircle className="absolute -bottom-1 -right-1 w-4 h-4 text-emerald-500 bg-background rounded-full" />
                 )}
               </div>
               <span className="text-xs font-medium">{stage.label}</span>
@@ -469,7 +469,7 @@ export default function EvolutionPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-2">
-            <Zap className="w-3.5 h-3.5 text-purple-500" />
+            <Zap className="w-3.5 h-3.5 text-violet-500" />
             <span className="text-xs font-medium">Skill层 · 技能</span>
           </div>
           <div className="text-lg font-bold">{skills.filter((s: any) => s.installed).length}</div>
@@ -477,7 +477,7 @@ export default function EvolutionPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-2">
-            <Shield className="w-3.5 h-3.5 text-green-500" />
+            <Shield className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-xs font-medium">引擎</span>
           </div>
           <div className="text-lg font-bold">{engineStatus ? `${(((engineStatus as any).success_rate || 0) * 100).toFixed(0)}%` : '-'}</div>

@@ -276,7 +276,7 @@ export default function DiagnosticsPage() {
                     {CATEGORY_LABELS[organ.category] || organ.category}
                   </Badge>
                   {isOk ? (
-                    <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
                   ) : (
                     <XCircle className="w-3.5 h-3.5 text-red-500" />
                   )}
@@ -324,7 +324,7 @@ export default function DiagnosticsPage() {
             <div className="flex-1 overflow-y-auto p-4">
               {configChanges.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
-                  <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-600 opacity-50" />
+                  <CheckCircle className="w-8 h-8 mx-auto mb-2 text-emerald-600 opacity-50" />
                   <p>使用默认配置，无自定义修改</p>
                 </div>
               ) : (

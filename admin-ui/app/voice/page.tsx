@@ -199,8 +199,8 @@ export default function VoicePage() {
           </Button>
         </div>
         {testResult && !testResult.error && (
-          <div className="mt-2 p-2 rounded bg-green-500/5 border border-green-500/20 text-xs">
-            <CheckCircle className="w-3 h-3 inline text-green-600 mr-1" />
+          <div className="mt-2 p-2 rounded bg-emerald-500/5 border border-emerald-500/20 text-xs">
+            <CheckCircle className="w-3 h-3 inline text-emerald-600 mr-1" />
             引擎: {testResult.engine} | 声音: {testResult.voice_id} | 时长: {testResult.duration_seconds}s | 耗时: {testResult.elapsed_ms}ms
             {testResult.cached && ' (缓存)'}
           </div>

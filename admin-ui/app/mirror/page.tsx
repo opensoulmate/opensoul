@@ -419,7 +419,7 @@ export default function MirrorPage() {
             <Button onClick={() => fetchSandboxes()}  title="刷新" variant="secondary" className="p-2 bg-muted">
               <RefreshCw className="w-4 h-4" />
             </Button>
-            <Button variant="bare" onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-orange-500/10 text-orange-400 hover:bg-amber-500/20 border border-orange-500/20" title="清理过期沙箱">
+            <Button variant="bare" onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20" title="清理过期沙箱">
               <Trash2 className="w-4 h-4" /> 清理过期
             </Button>
             <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5 px-3 text-sm">

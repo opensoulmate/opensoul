@@ -247,7 +247,7 @@ export default function MonitoringPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-green-500" />
+            <CheckCircle className="w-4 h-4 text-emerald-500" />
             <span className="text-xs text-muted-foreground">健康组件</span>
           </div>
           <div className="text-lg font-bold mt-1">{data?.summary?.healthy || 0}/{data?.summary?.total || 0}</div>
@@ -261,14 +261,14 @@ export default function MonitoringPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-orange-500" />
+            <Zap className="w-4 h-4 text-amber-500" />
             <span className="text-xs text-muted-foreground">最慢响应</span>
           </div>
           <div className="text-lg font-bold mt-1">{data?.summary?.max_response_ms || 0}ms</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Server className="w-4 h-4 text-purple-500" />
+            <Server className="w-4 h-4 text-violet-500" />
             <span className="text-xs text-muted-foreground">系统运行</span>
           </div>
           <div className="text-lg font-bold mt-1">{formatUptime(data?.system?.uptime_seconds)}</div>
@@ -453,7 +453,7 @@ export default function MonitoringPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     {organ.status === 'ok' ? (
-                      <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
                     ) : (
                       <XCircle className="w-4 h-4 text-red-500 shrink-0" />
                     )}

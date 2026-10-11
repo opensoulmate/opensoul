@@ -102,7 +102,7 @@ function ResultPanel({ result, onClose }: { result: ActionResult; onClose: () =>
           {failCount > 0 ? (
             <AlertCircle className="w-4 h-4 text-amber-500" />
           ) : (
-            <CheckCircle className="w-4 h-4 text-green-500" />
+            <CheckCircle className="w-4 h-4 text-emerald-500" />
           )}
           <span className="text-sm font-medium">{result.action}</span>
           {result.cleared !== undefined && (
@@ -119,7 +119,7 @@ function ResultPanel({ result, onClose }: { result: ActionResult; onClose: () =>
           {Object.entries(result.results).map(([name, info]) => (
             <div key={name} className="flex items-center gap-2 text-xs">
               {info.status === 'ok' ? (
-                <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
+                <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" />
               ) : (
                 <XCircle className="w-3 h-3 text-red-500 shrink-0" />
               )}
@@ -356,7 +356,7 @@ export default function AdminActionsPage() {
                     {Object.entries(overview.health.organs).map(([key, organ]) => (
                       <div key={key} className="flex items-center gap-2 p-2 rounded bg-muted/30">
                         {organ.status === 'ok' ? (
-                          <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                         ) : (
                           <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                         )}

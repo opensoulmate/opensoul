@@ -264,8 +264,8 @@ export default function AgentNodesPage() {
           <div className="text-lg font-bold">{stats?.total_agents ?? nodes.length}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><Radio className="w-3.5 h-3.5 text-green-500" />在线</div>
-          <div className="text-lg font-bold text-green-600">{onlineCount}</div>
+          <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><Radio className="w-3.5 h-3.5 text-emerald-500" />在线</div>
+          <div className="text-lg font-bold text-emerald-600">{onlineCount}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />离线</div>
@@ -445,7 +445,7 @@ export default function AgentNodesPage() {
           {/* Remember */}
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Brain className="w-4 h-4 text-purple-500" />
+              <Brain className="w-4 h-4 text-violet-500" />
               <h3 className="text-sm font-medium">存储记忆</h3>
             </div>
             <div className="space-y-3">
@@ -479,7 +479,7 @@ export default function AgentNodesPage() {
               <Button
                 onClick={handleRemember}
                 disabled={remembering || !rememberTitle || !rememberContent}
-                variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-purple-500/20 hover:bg-violet-500/20 disabled:opacity-50"
+                variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-violet-500/20 hover:bg-violet-500/20 disabled:opacity-50"
               >
                 {remembering ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
                 {remembering ? '存储中...' : '存储记忆'}
@@ -599,10 +599,10 @@ export default function AgentNodesPage() {
 
             {/* Register Result */}
             {registerResult && (
-              <div className="mt-4 p-3 rounded-md bg-green-500/5 border border-green-500/20">
+              <div className="mt-4 p-3 rounded-md bg-emerald-500/5 border border-emerald-500/20">
                 <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span className="text-xs font-medium text-green-600">注册成功</span>
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  <span className="text-xs font-medium text-emerald-600">注册成功</span>
                 </div>
                 <div className="space-y-1 text-[10px]">
                   <div><span className="text-muted-foreground">Agent ID: </span><span className="font-mono">{registerResult.agent_id}</span></div>

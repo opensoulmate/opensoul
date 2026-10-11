@@ -460,7 +460,7 @@ export default function HippoPage() {
           {simResult && (
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center gap-2 mb-3">
-                <BarChart3 className="w-4 h-4 text-purple-500" />
+                <BarChart3 className="w-4 h-4 text-violet-500" />
                 <h3 className="text-sm font-medium">模拟结果</h3>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">

@@ -136,7 +136,7 @@ export default function IntelligencePage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-green-500" />
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
             <div className="text-2xl font-bold">{summary?.health_score ?? '-'}</div>
           </div>
           <div className="text-xs text-muted-foreground">健康分数</div>
@@ -150,14 +150,14 @@ export default function IntelligencePage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Lightbulb className="w-4 h-4 text-orange-500" />
+            <Lightbulb className="w-4 h-4 text-amber-500" />
             <div className="text-2xl font-bold">{summary?.total_insights ?? insights.length}</div>
           </div>
           <div className="text-xs text-muted-foreground">洞察数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-purple-500" />
+            <Zap className="w-4 h-4 text-violet-500" />
             <div className="text-2xl font-bold">{recommendations.length}</div>
           </div>
           <div className="text-xs text-muted-foreground">优化建议</div>
@@ -261,7 +261,7 @@ export default function IntelligencePage() {
                       <p className="text-xs text-muted-foreground mb-2">{insight.description}</p>
                       {insight.recommendation && (
                         <div className="flex items-start gap-1.5 text-xs">
-                          <Lightbulb className="w-3 h-3 text-yellow-500 mt-0.5 shrink-0" />
+                          <Lightbulb className="w-3 h-3 text-amber-500 mt-0.5 shrink-0" />
                           <span>{insight.recommendation}</span>
                         </div>
                       )}
@@ -317,8 +317,8 @@ export default function IntelligencePage() {
               {recommendations.map((rec, i) => (
                 <div key={i} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${rec.priority === 'high' ? 'bg-red-500/10' : rec.priority === 'medium' ? 'bg-orange-500/10' : 'bg-blue-500/10'}`}>
-                      <Lightbulb className={`w-4 h-4 ${rec.priority === 'high' ? 'text-red-500' : rec.priority === 'medium' ? 'text-orange-500' : 'text-blue-500'}`} />
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${rec.priority === 'high' ? 'bg-red-500/10' : rec.priority === 'medium' ? 'bg-amber-500/10' : 'bg-blue-500/10'}`}>
+                      <Lightbulb className={`w-4 h-4 ${rec.priority === 'high' ? 'text-red-500' : rec.priority === 'medium' ? 'text-amber-500' : 'text-blue-500'}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">

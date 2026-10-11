@@ -191,7 +191,7 @@ export default function VisionPage() {
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Activity className="w-3.5 h-3.5 text-green-500" />
+            <Activity className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-xs text-muted-foreground">状态</span>
           </div>
           <div className="text-lg font-bold">{stats?.status === 'ok' ? '正常' : '未知'}</div>

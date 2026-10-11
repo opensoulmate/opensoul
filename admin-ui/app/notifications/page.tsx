@@ -228,10 +228,10 @@ export default function NotificationsPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-orange-500" />
+            <Zap className="w-4 h-4 text-amber-500" />
             <span className="text-xs text-muted-foreground">未读</span>
           </div>
-          <div className="text-2xl font-bold text-orange-500 mt-1">{unreadCount}</div>
+          <div className="text-2xl font-bold text-amber-500 mt-1">{unreadCount}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">

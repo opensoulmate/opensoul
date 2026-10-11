@@ -128,8 +128,8 @@ function PatternCard({ pattern, expanded, onToggle }: {
             <ArrowRight className="w-4 h-4 text-muted-foreground/30 shrink-0 mt-3" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1 text-muted-foreground">
-                <CheckCircle className="w-3 h-3 text-green-400 shrink-0" />
-                <span className="text-[10px] text-green-400 font-medium">方案</span>
+                <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span className="text-[10px] text-emerald-400 font-medium">方案</span>
               </div>
               <p className="text-muted-foreground line-clamp-1 mt-0.5">{solution || '-'}</p>
             </div>
@@ -157,10 +157,10 @@ function PatternCard({ pattern, expanded, onToggle }: {
               </div>
               <p className="text-xs text-muted-foreground whitespace-pre-wrap">{problem || '无'}</p>
             </div>
-            <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
               <div className="flex items-center gap-1.5 mb-2">
-                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                <span className="text-xs font-medium text-green-500">解决方案</span>
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-xs font-medium text-emerald-500">解决方案</span>
               </div>
               <p className="text-xs text-muted-foreground whitespace-pre-wrap">{solution || '无'}</p>
             </div>

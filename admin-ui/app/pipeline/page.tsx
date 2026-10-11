@@ -276,7 +276,7 @@ export default function PipelinePage() {
 
       {/* Upload result banner */}
       {uploadResult && (
-        <div className={`rounded-lg border p-3 flex items-start gap-3 ${uploadResult.status === 'completed' ? 'border-emerald-500/30 bg-green-500/5' : uploadResult.status === 'blocked' ? 'border-amber-500/30 bg-orange-500/5' : 'border-border bg-card'}`}>
+        <div className={`rounded-lg border p-3 flex items-start gap-3 ${uploadResult.status === 'completed' ? 'border-emerald-500/30 bg-emerald-500/5' : uploadResult.status === 'blocked' ? 'border-amber-500/30 bg-amber-500/5' : 'border-border bg-card'}`}>
           <div className="flex-1">
             <div className="flex items-center gap-2 text-sm font-medium">
               <StatusBadge status={uploadResult.status} />

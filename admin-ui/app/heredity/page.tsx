@@ -205,7 +205,7 @@ function ComponentCard({ comp, expanded, onToggle, detail, loadingDetail }: {
                         {typeof v === 'object' && v !== null && (v as any).compatible === false ? (
                           <XCircle className="w-3 h-3 text-red-500" />
                         ) : (
-                          <CheckCircle className="w-3 h-3 text-green-500" />
+                          <CheckCircle className="w-3 h-3 text-emerald-500" />
                         )}
                         <span className="text-muted-foreground">{k}</span>
                       </div>

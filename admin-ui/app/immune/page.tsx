@@ -287,7 +287,7 @@ export default function ImmunePage() {
               <div className="mt-4 p-3 rounded-lg bg-muted/50 space-y-3">
                 <div className="flex items-center gap-2">
                   {moderateResult.is_safe ? (
-                    <><CheckCircle className="w-5 h-5 text-green-600" /><span className="text-sm font-medium text-green-600">安全</span></>
+                    <><CheckCircle className="w-5 h-5 text-emerald-600" /><span className="text-sm font-medium text-emerald-600">安全</span></>
                   ) : (
                     <><AlertTriangle className="w-5 h-5 text-red-500" /><span className="text-sm font-medium text-red-500">发现风险</span></>
                   )}
@@ -356,8 +356,8 @@ export default function ImmunePage() {
 
             {/* Whitelist */}
             <div className="rounded-lg border border-border overflow-hidden">
-              <div className="bg-green-500/5 px-4 py-2 border-b border-border">
-                <h3 className="text-sm font-medium flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-green-600" />白名单 ({ipLists.whitelist.length})</h3>
+              <div className="bg-emerald-500/5 px-4 py-2 border-b border-border">
+                <h3 className="text-sm font-medium flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-emerald-600" />白名单 ({ipLists.whitelist.length})</h3>
               </div>
               <div className="max-h-[400px] overflow-auto">
                 {ipLists.whitelist.length === 0 ? (

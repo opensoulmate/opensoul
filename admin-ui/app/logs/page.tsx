@@ -227,14 +227,14 @@ export default function LogsPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Eye className="w-4 h-4 text-purple-500" />
+            <Eye className="w-4 h-4 text-violet-500" />
             <span className="text-xs text-muted-foreground">活跃器官</span>
           </div>
           <div className="text-2xl font-bold mt-1">{Object.keys(summary?.by_organ || {}).length}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <Radio className="w-4 h-4 text-green-500" />
+            <Radio className="w-4 h-4 text-emerald-500" />
             <span className="text-xs text-muted-foreground">SSE客户端</span>
           </div>
           <div className="text-2xl font-bold mt-1">{streamSummary?.sse_clients || 0}</div>
@@ -270,7 +270,7 @@ export default function LogsPage() {
         </select>
         <Button
           onClick={() => setUseSse(!useSse)}
-          variant="chip-sm" className={`flex items-center gap-1.5 border transition-colors  ${useSse ? 'bg-emerald-500/10 text-emerald-500 border-green-500/20' : 'bg-muted border-border hover:bg-muted'}`}
+          variant="chip-sm" className={`flex items-center gap-1.5 border transition-colors  ${useSse ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-muted border-border hover:bg-muted'}`}
         >
           {useSse ? (
             sseConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />

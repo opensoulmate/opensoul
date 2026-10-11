@@ -365,8 +365,8 @@ export default function SessionsPage() {
                       </div>
                     </div>
                     {m.role === 'user' && (
-                      <div className="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
-                        <User className="w-3 h-3 text-orange-500" />
+                      <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                        <User className="w-3 h-3 text-amber-500" />
                       </div>
                     )}
                   </div>

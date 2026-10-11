@@ -261,7 +261,7 @@ export default function PermissionsPage() {
                   <tr key={r.name} className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-2 lg:px-4 py-2.5 text-xs font-medium">
                       <span className="flex items-center gap-1.5">
-                        <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
                         {r.name}
                       </span>
                     </td>

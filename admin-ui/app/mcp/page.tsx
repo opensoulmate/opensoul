@@ -245,15 +245,15 @@ export default function McpPage() {
                 <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                   {srv.connected ? (
                     <Button onClick={() => handleDisconnect(srv.id)} variant="icon-md" className="hover:bg-amber-500/10" title="断开">
-                      <Unlink className="w-3.5 h-3.5 text-orange-500" />
+                      <Unlink className="w-3.5 h-3.5 text-amber-500" />
                     </Button>
                   ) : (
                     <Button onClick={() => handleConnect(srv.id)} variant="icon-md" className="hover:bg-emerald-500/10" title="连接">
-                      <Link className="w-3.5 h-3.5 text-green-500" />
+                      <Link className="w-3.5 h-3.5 text-emerald-500" />
                     </Button>
                   )}
                   <Button onClick={() => handleToggleEnabled(srv)} variant="icon-md" className={` ${srv.enabled ? 'hover:bg-amber-500/10' : 'hover:bg-emerald-500/10'}`} title={srv.enabled ? '禁用' : '启用'}>
-                    {srv.enabled ? <Settings className="w-3.5 h-3.5 text-orange-500" /> : <Settings className="w-3.5 h-3.5 text-green-500" />}
+                    {srv.enabled ? <Settings className="w-3.5 h-3.5 text-amber-500" /> : <Settings className="w-3.5 h-3.5 text-emerald-500" />}
                   </Button>
                   <Button onClick={() => handleDelete(srv.id)} variant="icon-md" className="hover:bg-red-500/10" title="删除">
                     <Trash2 className="w-3.5 h-3.5 text-red-500" />

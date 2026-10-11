@@ -113,8 +113,8 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex items-center gap-1.5 mb-1">
-                <Database className="w-3 h-3 text-purple-500" />
-                <span className="text-[10px] font-medium text-purple-500">条目 B</span>
+                <Database className="w-3 h-3 text-violet-500" />
+                <span className="text-[10px] font-medium text-violet-500">条目 B</span>
               </div>
               <p className="text-xs font-medium">{pair.title_b || '无标题'}</p>
               <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{pair.id_b}</p>
@@ -272,10 +272,10 @@ export default function DedupPage() {
 
       {/* ── Dedup Result ── */}
       {dedupResult && (
-        <div className="rounded-lg border border-emerald-500/30 bg-green-500/5 p-4">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <CheckCircle className="w-4 h-4 text-green-500" />
-            <span className="text-sm font-medium text-green-500">去重完成</span>
+            <CheckCircle className="w-4 h-4 text-emerald-500" />
+            <span className="text-sm font-medium text-emerald-500">去重完成</span>
           </div>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
@@ -330,7 +330,7 @@ export default function DedupPage() {
 
       {filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <CheckCircle className="w-10 h-10 mb-2 opacity-30 text-green-500" />
+          <CheckCircle className="w-10 h-10 mb-2 opacity-30 text-emerald-500" />
           <p className="text-xs">
             {duplicates.length === 0 ? '知识库无重复条目' : '无匹配的重复项'}
           </p>

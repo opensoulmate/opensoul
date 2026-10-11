@@ -391,7 +391,7 @@ export default function AIEnginePage() {
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-yellow-400" /> 工具路由矩阵
+              <Shield className="w-4 h-4 text-amber-400" /> 工具路由矩阵
             </h3>
             <div className="space-y-2">
               {toolRoutes.map((r, i) => (

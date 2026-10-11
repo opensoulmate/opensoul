@@ -678,7 +678,7 @@ export default function EchoPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium truncate">{msg.title}</span>
                     {msg.success ? (
-                      <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
+                      <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" />
                     ) : (
                       <XCircle className="w-3 h-3 text-red-500 shrink-0" />
                     )}

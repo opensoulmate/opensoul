@@ -448,7 +448,7 @@ export default function AgentProxyPage() {
                     </div>
                   </div>
                   {conv.success ? (
-                    <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
+                    <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" />
                   ) : (
                     <XCircle className="w-3 h-3 text-red-500 shrink-0" />
                   )}

@@ -449,7 +449,7 @@ export default function MindPage() {
           <div className="bg-card rounded-lg border border-border p-6 max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-500" />
+                <Sparkles className="w-5 h-5 text-violet-500" />
                 <h2 className="text-lg font-medium">情绪分析</h2>
               </div>
               <Button variant="bare" onClick={() => setShowEmotion(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>

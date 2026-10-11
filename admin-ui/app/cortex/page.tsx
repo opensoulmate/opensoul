@@ -174,10 +174,10 @@ export default function CortexPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Users className="w-3.5 h-3.5 text-purple-500" />
+            <Users className="w-3.5 h-3.5 text-violet-500" />
             <span className="text-xs text-muted-foreground">多Agent</span>
           </div>
-          <div className="text-2xl font-bold text-purple-500">{stats?.usage?.agent_calls || 0}</div>
+          <div className="text-2xl font-bold text-violet-500">{stats?.usage?.agent_calls || 0}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
@@ -313,7 +313,7 @@ export default function CortexPage() {
                 <Button
                   onClick={handleAgent}
                   disabled={!agentTopic.trim() || agentRunning}
-                  variant="chip-lg" className="flex items-center gap-1.5 bg-purple-500/10 text-purple-600 border border-purple-500/20 hover:bg-violet-500/20 disabled:opacity-50"
+                  variant="chip-lg" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-600 border border-violet-500/20 hover:bg-violet-500/20 disabled:opacity-50"
                 >
                   {agentRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
                   {agentRunning ? '运行中...' : '启动'}

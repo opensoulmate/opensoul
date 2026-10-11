@@ -201,7 +201,7 @@ export default function GitPage() {
 
             {/* Change counts */}
             <div className="grid grid-cols-3 gap-3">
-              <div className={`rounded-lg border p-3 text-center ${status.staged > 0 ? 'border-emerald-500/30 bg-green-500/5' : 'border-border bg-muted/30'}`}>
+              <div className={`rounded-lg border p-3 text-center ${status.staged > 0 ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-muted/30'}`}>
                 <div className={`text-xl font-bold ${status.staged > 0 ? 'text-green-500' : 'text-muted-foreground'}`}>{status.staged}</div>
                 <div className="text-[10px] text-muted-foreground">已暂存</div>
               </div>
@@ -217,9 +217,9 @@ export default function GitPage() {
 
             {/* Clean state */}
             {!hasChanges && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                <CheckCircle className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-green-500">工作区干净，无待提交更改</span>
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                <CheckCircle className="w-4 h-4 text-emerald-500" />
+                <span className="text-xs text-emerald-500">工作区干净，无待提交更改</span>
               </div>
             )}
           </div>

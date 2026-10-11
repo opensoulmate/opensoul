@@ -279,7 +279,7 @@ function SystemResources({ metrics }: { metrics: SystemMetrics }) {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <MemoryStick className="w-4 h-4 text-purple-400 shrink-0" />
+          <MemoryStick className="w-4 h-4 text-violet-400 shrink-0" />
           <div className="flex-1">
             <ProgressBar
               value={metrics.memory.used_mb}

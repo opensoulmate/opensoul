@@ -259,15 +259,15 @@ export default function MarrowPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Calendar className="w-3.5 h-3.5 text-green-500" />
+            <Calendar className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-xs text-muted-foreground">备份计划</span>
           </div>
-          <div className="text-2xl font-bold text-green-600">{stats?.scheduler?.active_schedules || 0}</div>
+          <div className="text-2xl font-bold text-emerald-600">{stats?.scheduler?.active_schedules || 0}</div>
           <div className="text-[10px] text-muted-foreground">{stats?.scheduler?.total_schedules || 0} 个计划</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <FileText className="w-3.5 h-3.5 text-purple-500" />
+            <FileText className="w-3.5 h-3.5 text-violet-500" />
             <span className="text-xs text-muted-foreground">文件总数</span>
           </div>
           <div className="text-2xl font-bold">{stats?.backup?.total_files || 0}</div>
@@ -396,7 +396,7 @@ export default function MarrowPage() {
                 <div className="flex items-start justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <Clock className={`w-4 h-4 ${sch.enabled ? 'text-green-500' : 'text-muted-foreground'} shrink-0`} />
+                      <Clock className={`w-4 h-4 ${sch.enabled ? 'text-emerald-500' : 'text-muted-foreground'} shrink-0`} />
                       <h3 className="text-sm font-medium truncate">{sch.name}</h3>
                       <Badge variant="bare" className={`${sch.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                         {sch.enabled ? '已启用' : '已禁用'}
@@ -422,7 +422,7 @@ export default function MarrowPage() {
                       variant="icon-md" className={` ${sch.enabled ? 'hover:bg-amber-500/10' : 'hover:bg-emerald-500/10'}`}
                       title={sch.enabled ? '禁用' : '启用'}
                     >
-                      {sch.enabled ? <PowerOff className="w-3.5 h-3.5 text-orange-500" /> : <Power className="w-3.5 h-3.5 text-green-500" />}
+                      {sch.enabled ? <PowerOff className="w-3.5 h-3.5 text-amber-500" /> : <Power className="w-3.5 h-3.5 text-emerald-500" />}
                     </Button>
                     <Button
                       onClick={() => handleDeleteSchedule(sch.schedule_id)}
@@ -451,7 +451,7 @@ export default function MarrowPage() {
             exports.map((exp) => (
               <div key={exp.job_id} className="rounded-lg border border-border bg-card p-3 hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-3">
-                  <FileText className="w-4 h-4 text-purple-500 shrink-0" />
+                  <FileText className="w-4 h-4 text-violet-500 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium font-mono">{exp.job_id}</span>

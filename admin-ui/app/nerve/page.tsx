@@ -227,14 +227,14 @@ export default function NervePage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Users className="w-3.5 h-3.5 text-purple-500" />
+            <Users className="w-3.5 h-3.5 text-violet-500" />
             <span className="text-xs text-muted-foreground">订阅</span>
           </div>
           <div className="text-2xl font-bold">{stats?.total_subscriptions || 0}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Radio className="w-3.5 h-3.5 text-green-500" />
+            <Radio className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-xs text-muted-foreground">SSE流</span>
           </div>
           <div className="text-2xl font-bold">{stats?.active_streams || 0}</div>
@@ -354,7 +354,7 @@ export default function NervePage() {
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <Radio className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                      <Radio className="w-3.5 h-3.5 text-violet-500 shrink-0" />
                       <span className="text-xs font-medium font-mono">{sub.id}</span>
                       <Badge variant="bare" className={`border ${topicColor(sub.topic_pattern)}`}>{sub.topic_pattern}</Badge>
                     </div>
@@ -392,7 +392,7 @@ export default function NervePage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       {node.status === 'online' ? (
-                        <Wifi className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        <Wifi className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       ) : (
                         <WifiOff className="w-3.5 h-3.5 text-red-500 shrink-0" />
                       )}

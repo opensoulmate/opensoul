@@ -220,11 +220,11 @@ export default function CronPage() {
                 </Button>
                 {job.status === 'active' ? (
                   <Button onClick={() => handlePause(job.id)} variant="icon-md" className="hover:bg-amber-500/10" title="暂停">
-                    <Pause className="w-3.5 h-3.5 text-orange-500" />
+                    <Pause className="w-3.5 h-3.5 text-amber-500" />
                   </Button>
                 ) : (
                   <Button onClick={() => handleResume(job.id)} variant="icon-md" className="hover:bg-emerald-500/10" title="恢复">
-                    <Play className="w-3.5 h-3.5 text-green-500" />
+                    <Play className="w-3.5 h-3.5 text-emerald-500" />
                   </Button>
                 )}
                 <Button onClick={() => handleDelete(job.id)} variant="icon-md" className="hover:bg-red-500/10" title="删除">

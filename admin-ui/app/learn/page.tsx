@@ -356,7 +356,7 @@ export default function LearnPage() {
                           }`}
                         >
                           {showResult ? (
-                            isCorrect ? <CheckCircle className="w-3 h-3 text-green-600 shrink-0" /> : selected ? <X className="w-3 h-3 text-red-500 shrink-0" /> : <Square className="w-3 h-3 text-muted-foreground shrink-0" />
+                            isCorrect ? <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" /> : selected ? <X className="w-3 h-3 text-red-500 shrink-0" /> : <Square className="w-3 h-3 text-muted-foreground shrink-0" />
                           ) : (
                             selected ? <CheckSquare className="w-3 h-3 text-primary shrink-0" /> : <Square className="w-3 h-3 text-muted-foreground shrink-0" />
                           )}
@@ -489,7 +489,7 @@ export default function LearnPage() {
                     onClick={(e) => { e.stopPropagation(); handleMarkChapter(ch.id, !ch.completed); }}
                     className="shrink-0"
                   >
-                    {ch.completed ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Square className="w-4 h-4 text-muted-foreground" />}
+                    {ch.completed ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Square className="w-4 h-4 text-muted-foreground" />}
                   </Button>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -638,7 +638,7 @@ export default function LearnPage() {
         <Button onClick={() => { fetchCourses(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </Button>
-        <Button onClick={() => setShowGenerate(true)} variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-purple-500/20 hover:bg-violet-500/20">
+        <Button onClick={() => setShowGenerate(true)} variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-violet-500/20 hover:bg-violet-500/20">
           <Sparkles className="w-3.5 h-3.5" />AI生成
         </Button>
         <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
@@ -765,7 +765,7 @@ export default function LearnPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-500" />
+                <Sparkles className="w-4 h-4 text-violet-500" />
                 <h2 className="text-sm font-medium">AI 生成课程</h2>
               </div>
               <Button onClick={() => setShowGenerate(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>

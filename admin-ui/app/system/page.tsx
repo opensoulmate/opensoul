@@ -216,7 +216,7 @@ export default function SystemPage() {
   return (
     <div className="space-y-4">
       {/* ── System Status Banner ── */}
-      <div className={`rounded-xl border p-4 ${info?.status === 'ok' ? 'border-emerald-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+      <div className={`rounded-xl border p-4 ${info?.status === 'ok' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${info?.status === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
@@ -243,8 +243,8 @@ export default function SystemPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           {[
             { label: '器官', value: `${quick.organs_healthy}/${quick.organs_total}`, icon: <Cpu className="w-3.5 h-3.5 text-blue-500" /> },
-            { label: '知识条目', value: quick.knowledge_entries, icon: <Database className="w-3.5 h-3.5 text-purple-500" /> },
-            { label: '活跃Agent', value: quick.active_agents, icon: <Activity className="w-3.5 h-3.5 text-green-500" /> },
+            { label: '知识条目', value: quick.knowledge_entries, icon: <Database className="w-3.5 h-3.5 text-violet-500" /> },
+            { label: '活跃Agent', value: quick.active_agents, icon: <Activity className="w-3.5 h-3.5 text-emerald-500" /> },
             { label: '近期会话', value: quick.recent_sessions, icon: <Globe className="w-3.5 h-3.5 text-amber-500" /> },
             { label: 'CPU', value: `${(quick.cpu_percent || 0).toFixed(1)}%`, icon: <Cpu className="w-3.5 h-3.5 text-cyan-500" /> },
             { label: '内存', value: `${quick.memory_mb || 0} MB`, icon: <HardDrive className="w-3.5 h-3.5 text-pink-500" /> },
@@ -319,7 +319,7 @@ export default function SystemPage() {
                   }`} onClick={() => setExpandedOrgan(expandedOrgan === o.key ? null : o.key)}>
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-mono truncate">{o.key}</span>
-                      {o.status === 'ok' ? <CheckCircle className="w-3 h-3 text-green-500 shrink-0" /> :
+                      {o.status === 'ok' ? <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" /> :
                        o.status === 'error' ? <XCircle className="w-3 h-3 text-red-500 shrink-0" /> :
                        <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />}
                     </div>
@@ -342,7 +342,7 @@ export default function SystemPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Activity className="w-4 h-4 text-green-500" />
+                  <Activity className="w-4 h-4 text-emerald-500" />
                   <span className="text-sm font-medium">运行时信息</span>
                 </div>
                 <div className="space-y-2 text-xs">
@@ -361,7 +361,7 @@ export default function SystemPage() {
               </div>
               <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Database className="w-4 h-4 text-purple-500" />
+                  <Database className="w-4 h-4 text-violet-500" />
                   <span className="text-sm font-medium">数据统计</span>
                 </div>
                 <div className="space-y-2 text-xs">
@@ -408,7 +408,7 @@ export default function SystemPage() {
                     title={organ.enabled ? '点击禁用' : '点击启用'}
                   >
                     {organ.enabled ? (
-                      <ToggleRight className="w-7 h-7 text-green-500" />
+                      <ToggleRight className="w-7 h-7 text-emerald-500" />
                     ) : (
                       <ToggleLeft className="w-7 h-7 text-muted-foreground" />
                     )}
@@ -465,7 +465,7 @@ export default function SystemPage() {
               <div className="space-y-1.5">
                 {bootstrap.steps.map((step, i) => (
                   <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
-                    {step.status === 'ok' ? <CheckCircle className="w-4 h-4 text-green-500 shrink-0" /> :
+                    {step.status === 'ok' ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> :
                      step.status === 'error' ? <XCircle className="w-4 h-4 text-red-500 shrink-0" /> :
                      <Clock className="w-4 h-4 text-muted-foreground shrink-0" />}
                     <div className="flex-1 min-w-0">

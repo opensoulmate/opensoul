@@ -199,7 +199,7 @@ export default function HealerPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-green-500" />
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
             <span className="text-xs text-muted-foreground">成功率</span>
           </div>
           <div className="text-2xl font-bold mt-1">{stats?.success_rate ? `${(stats.success_rate * 100).toFixed(0)}%` : '-'}</div>
@@ -226,7 +226,7 @@ export default function HealerPage() {
         <Button
           onClick={handleHealAll}
           disabled={!!actionLoading}
-          variant="chip-lg" className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border border-green-500/20 hover:bg-emerald-500/20 disabled:opacity-50"
+          variant="chip-lg" className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20 disabled:opacity-50"
         >
           {actionLoading === 'heal' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Heart className="w-3.5 h-3.5" />}
           诊断+修复
@@ -297,7 +297,7 @@ export default function HealerPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0">
                       {organ.healthy ? (
-                        <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       ) : (
                         <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                       )}
@@ -314,9 +314,9 @@ export default function HealerPage() {
                           title="修复"
                         >
                           {actionLoading === `heal-${organ.organ}` ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-green-500" />
+                            <Loader2 className="w-3 h-3 animate-spin text-emerald-500" />
                           ) : (
-                            <Heart className="w-3 h-3 text-green-500" />
+                            <Heart className="w-3 h-3 text-emerald-500" />
                           )}
                         </Button>
                       )}
@@ -391,7 +391,7 @@ export default function HealerPage() {
                 return (
                   <div key={idx} className={`flex items-center gap-3 px-3 py-2 rounded-md text-xs ${item.healthy ? 'bg-muted/30' : 'bg-red-500/5'}`}>
                     {item.healthy ? (
-                      <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                     ) : (
                       <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                     )}

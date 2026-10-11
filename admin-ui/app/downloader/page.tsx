@@ -463,12 +463,12 @@ export default function DownloaderPage() {
                   <div className="flex items-center gap-1 shrink-0">
                     {task.status === 'downloading' && (
                       <Button onClick={() => handlePause(task.id)} variant="icon-md" className="hover:bg-amber-500/10" title="暂停">
-                        <Pause className="w-4 h-4 text-orange-500" />
+                        <Pause className="w-4 h-4 text-amber-500" />
                       </Button>
                     )}
                     {task.status === 'paused' && (
                       <Button onClick={() => handleResume(task.id)} variant="icon-md" className="hover:bg-emerald-500/10" title="继续">
-                        <Play className="w-4 h-4 text-green-500" />
+                        <Play className="w-4 h-4 text-emerald-500" />
                       </Button>
                     )}
                     {!['done', 'cancelled'].includes(task.status) && (

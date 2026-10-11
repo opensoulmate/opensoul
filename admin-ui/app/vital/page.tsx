@@ -226,7 +226,7 @@ function MetricCard({ label, value, unit, trend, sparkData, sparkColor }: {
         <span className="text-xs text-muted-foreground">{label}</span>
         {trend && (
           trend === 'up' ? <TrendingUp className="w-3 h-3 text-red-400" /> :
-          trend === 'down' ? <TrendingDown className="w-3 h-3 text-green-400" /> :
+          trend === 'down' ? <TrendingDown className="w-3 h-3 text-emerald-400" /> :
           <Minus className="w-3 h-3 text-muted-foreground" />
         )}
       </div>
@@ -450,7 +450,7 @@ export default function VitalPage() {
                 }`}
               >
                 {comp.status === 'ok' ? (
-                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                  <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500 shrink-0" />
                 )}

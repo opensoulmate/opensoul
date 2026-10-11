@@ -194,7 +194,7 @@ function GatingPanel({ gating }: { gating?: GatingResult }) {
         {gating.tests.map((test) => (
           <div key={test.name} className="flex items-center gap-2 text-xs">
             {test.passed ? (
-              <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             ) : (
               <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
             )}
@@ -236,15 +236,15 @@ function SkillCard({
       >
         {/* Icon */}
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-          skill.installed ? 'bg-green-500/10' : 'bg-muted'
+          skill.installed ? 'bg-emerald-500/10' : 'bg-muted'
         }`}>
-          <Zap className={`w-5 h-5 ${skill.installed ? 'text-green-500' : 'text-muted-foreground'}`} />
+          <Zap className={`w-5 h-5 ${skill.installed ? 'text-emerald-500' : 'text-muted-foreground'}`} />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{skill.name}</span>
-            {skill.installed && <CheckCircle className="w-3.5 h-3.5 text-green-500" />}
+            {skill.installed && <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
             {skill.version && (
               <Badge variant="default" className="font-mono">
                 v{skill.version}
@@ -656,10 +656,10 @@ export default function SkillsPage() {
 
       {/* ── Pending Proposals Banner ── */}
       {pendingProposals > 0 && (
-        <div className="rounded-lg border border-violet-500/30 bg-purple-500/5 p-3 flex items-center gap-2">
-          <Lightbulb className="w-4 h-4 text-purple-500 shrink-0" />
+        <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3 flex items-center gap-2">
+          <Lightbulb className="w-4 h-4 text-violet-500 shrink-0" />
           <div>
-            <span className="text-xs font-medium text-purple-500">Skill层 · 进化提案待审批</span>
+            <span className="text-xs font-medium text-violet-500">Skill层 · 进化提案待审批</span>
             <p className="text-[10px] text-muted-foreground mt-0.5">
               有 {pendingProposals} 个技能进化提案等待审批。智能引擎基于执行轨迹分析自动生成。
             </p>
@@ -704,7 +704,7 @@ export default function SkillsPage() {
         <Button
           onClick={handleMigrate}
           disabled={migrating}
-          variant="chip-sm" className="flex items-center gap-1.5 bg-orange-500/10 text-orange-600 border border-orange-500/20 hover:bg-amber-500/20 disabled:opacity-50"
+          variant="chip-sm" className="flex items-center gap-1.5 bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-500/20 disabled:opacity-50"
         >
           {migrating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderInput className="w-3.5 h-3.5" />}
           全部迁移
@@ -724,8 +724,8 @@ export default function SkillsPage() {
       )}
 
       {migrateResult && (
-        <div className="flex items-center gap-2 p-2 text-xs bg-green-500/5 rounded-md border border-green-500/20">
-          <CheckCircle className="w-3.5 h-3.5 text-green-600 shrink-0" />
+        <div className="flex items-center gap-2 p-2 text-xs bg-emerald-500/5 rounded-md border border-emerald-500/20">
+          <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
           <span>迁移完成：{migrateResult.count > 0 ? `成功迁移 ${migrateResult.count} 个技能 (${migrateResult.migrated.join(', ')})` : '所有技能已在共享目录中'}</span>
           <Button variant="bare" onClick={() => setMigrateResult(null)}><X className="w-3 h-3" /></Button>
         </div>

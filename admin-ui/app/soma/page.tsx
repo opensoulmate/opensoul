@@ -100,7 +100,7 @@ function OverviewCards({ data }: { data: ScanResult }) {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Terminal className="w-3.5 h-3.5 text-green-500" />
+            <Terminal className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-xs text-muted-foreground">CLI工具</span>
           </div>
           <div className="text-2xl font-bold">{data.cli_tools.length}</div>
@@ -108,7 +108,7 @@ function OverviewCards({ data }: { data: ScanResult }) {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Wifi className="w-3.5 h-3.5 text-purple-500" />
+            <Wifi className="w-3.5 h-3.5 text-violet-500" />
             <span className="text-xs text-muted-foreground">网络服务</span>
           </div>
           <div className="text-2xl font-bold">{data.services.length}</div>
@@ -181,7 +181,7 @@ function OverviewCards({ data }: { data: ScanResult }) {
       {/* Listening services */}
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Wifi className="w-4 h-4 text-purple-500" />
+          <Wifi className="w-4 h-4 text-violet-500" />
           <span className="text-sm font-medium">监听端口</span>
         </div>
         <div className="space-y-1">
@@ -333,8 +333,8 @@ function ToolsTab({ tools }: { tools: CLITool[] }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {filtered.map((tool) => (
           <div key={tool.name} className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
-            <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-              <Terminal className="w-4 h-4 text-green-500" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+              <Terminal className="w-4 h-4 text-emerald-500" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">

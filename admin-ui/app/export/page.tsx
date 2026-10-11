@@ -164,7 +164,7 @@ export default function ExportPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Layers className="w-3.5 h-3.5 text-purple-500" />
+            <Layers className="w-3.5 h-3.5 text-violet-500" />
             <span className="text-xs text-muted-foreground">实体</span>
           </div>
           <div className="text-lg font-bold">结构化数据</div>

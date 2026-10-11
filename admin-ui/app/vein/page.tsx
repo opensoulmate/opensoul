@@ -178,7 +178,7 @@ export default function VeinPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Database className="w-3.5 h-3.5 text-purple-500" />
+            <Database className="w-3.5 h-3.5 text-violet-500" />
             <span className="text-xs text-muted-foreground">版本</span>
           </div>
           <div className="text-2xl font-bold">{stats?.store?.total_versions || 0}</div>
@@ -193,7 +193,7 @@ export default function VeinPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Package className="w-3.5 h-3.5 text-green-500" />
+            <Package className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-xs text-muted-foreground">分片上传</span>
           </div>
           <div className="text-2xl font-bold">{stats?.uploads?.active || 0}</div>

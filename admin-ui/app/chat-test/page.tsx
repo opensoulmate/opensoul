@@ -95,7 +95,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             title="复制"
           >
             {copied ? (
-              <CheckCircle className="w-3 h-3 text-green-500" />
+              <CheckCircle className="w-3 h-3 text-emerald-500" />
             ) : (
               <Copy className="w-3 h-3 text-muted-foreground" />
             )}

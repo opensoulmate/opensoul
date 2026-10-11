@@ -460,12 +460,12 @@ export default function ReflexPage() {
           </div>
 
           {lookupResult && (
-            <div className={`rounded-lg border p-4 ${lookupResult.hit ? 'border-emerald-500/30 bg-green-500/5' : 'border-border bg-card'}`}>
+            <div className={`rounded-lg border p-4 ${lookupResult.hit ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-card'}`}>
               <div className="flex items-center gap-2 mb-2">
                 {lookupResult.hit ? (
                   <>
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span className="text-sm font-medium text-green-500">缓存命中</span>
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm font-medium text-emerald-500">缓存命中</span>
                     <span className="text-[10px] text-muted-foreground">命中次数: {lookupResult.hit_count}</span>
                   </>
                 ) : (

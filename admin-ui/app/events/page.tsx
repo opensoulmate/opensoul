@@ -208,7 +208,7 @@ export default function EventsPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
             <div className="text-2xl font-bold text-purple-500">{health?.sse_subscribers || 0}</div>
-            {sseConnected && <Wifi className="w-4 h-4 text-green-500 animate-pulse" />}
+            {sseConnected && <Wifi className="w-4 h-4 text-emerald-500 animate-pulse" />}
           </div>
           <div className="text-xs text-muted-foreground">SSE连接</div>
         </div>

@@ -561,9 +561,9 @@ export default function LinkPage() {
       {/* Test Result Toast */}
       {testResult && (
         <div className="fixed bottom-4 right-4 z-50 max-w-sm">
-          <div className={`rounded-lg border shadow-lg p-3 text-xs ${testResult.success === false ? 'bg-red-500/10 border-red-500/20' : 'bg-green-500/10 border-green-500/20'}`}>
+          <div className={`rounded-lg border shadow-lg p-3 text-xs ${testResult.success === false ? 'bg-red-500/10 border-red-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
             <div className="flex items-center gap-2 mb-1">
-              {testResult.success === false ? <XCircle className="w-4 h-4 text-red-500" /> : <CheckCircle className="w-4 h-4 text-green-600" />}
+              {testResult.success === false ? <XCircle className="w-4 h-4 text-red-500" /> : <CheckCircle className="w-4 h-4 text-emerald-600" />}
               <span className="font-medium">{testResult.success === false ? '测试失败' : '测试成功'}</span>
             </div>
             <pre className="text-[10px] text-muted-foreground max-h-24 overflow-auto">{JSON.stringify(testResult, null, 2)}</pre>

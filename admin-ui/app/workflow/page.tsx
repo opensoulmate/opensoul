@@ -276,12 +276,12 @@ export default function WorkflowPage() {
                 <span className="text-xs text-muted-foreground">{formatDate(task.created_at)}</span>
                 <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                   {(task.status === 'idle' || task.status === 'active') && (
-                    <Button onClick={() => handleRun(task.id)} variant="icon-sm" className="hover:bg-emerald-500/10 text-green-500" title="运行">
+                    <Button onClick={() => handleRun(task.id)} variant="icon-sm" className="hover:bg-emerald-500/10 text-emerald-500" title="运行">
                       <Play className="w-3.5 h-3.5" />
                     </Button>
                   )}
                   {(task.status === 'running' || task.status === 'idle') && (
-                    <Button onClick={() => handlePause(task.id)} variant="icon-sm" className="hover:bg-amber-500/10 text-orange-500" title="暂停">
+                    <Button onClick={() => handlePause(task.id)} variant="icon-sm" className="hover:bg-amber-500/10 text-amber-500" title="暂停">
                       <Pause className="w-3.5 h-3.5" />
                     </Button>
                   )}

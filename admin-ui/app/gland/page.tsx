@@ -318,10 +318,10 @@ export default function GlandPage() {
       {/* ── Test Result ── */}
       {testResult && (
         <div className={`flex items-center gap-2 p-3 rounded-lg border ${
-          testResult.ok ? 'border-emerald-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'
+          testResult.ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/5'
         }`}>
-          {testResult.ok ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-red-500" />}
-          <span className={`text-xs ${testResult.ok ? 'text-green-500' : 'text-red-500'}`}>
+          {testResult.ok ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <AlertCircle className="w-4 h-4 text-red-500" />}
+          <span className={`text-xs ${testResult.ok ? 'text-emerald-500' : 'text-red-500'}`}>
             {testResult.provider}: {testResult.msg}
           </span>
           <Button variant="bare" onClick={() => setTestResult(null)} className="ml-auto"><X className="w-3 h-3" /></Button>
@@ -347,9 +347,9 @@ export default function GlandPage() {
               .map((p) => (
                 <div key={p.name} className="flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    p.enabled ? 'bg-green-500/10' : 'bg-red-500/10'
+                    p.enabled ? 'bg-emerald-500/10' : 'bg-red-500/10'
                   }`}>
-                    {p.enabled ? <Wifi className="w-5 h-5 text-green-500" /> : <WifiOff className="w-5 h-5 text-red-500" />}
+                    {p.enabled ? <Wifi className="w-5 h-5 text-emerald-500" /> : <WifiOff className="w-5 h-5 text-red-500" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">

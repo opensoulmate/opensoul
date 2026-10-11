@@ -225,7 +225,7 @@ export default function PluginsPage() {
                   title={plugin.status === 'enabled' ? '禁用' : '启用'}
                 >
                   {plugin.status === 'enabled' ? (
-                    <Power className="w-4 h-4 text-green-600" />
+                    <Power className="w-4 h-4 text-emerald-600" />
                   ) : (
                     <PowerOff className="w-4 h-4 text-muted-foreground" />
                   )}
@@ -358,7 +358,7 @@ export default function PluginsPage() {
             <div className="flex items-center gap-2 p-4 border-t border-border shrink-0">
               <Button
                 onClick={() => handleToggle(selectedPlugin)}
-                variant="chip-sm" className={`flex items-center gap-1  ${selectedPlugin.status === 'enabled' ? 'bg-orange-500/10 text-orange-600 hover:bg-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'}`}
+                variant="chip-sm" className={`flex items-center gap-1  ${selectedPlugin.status === 'enabled' ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'}`}
               >
                 {selectedPlugin.status === 'enabled' ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
                 {selectedPlugin.status === 'enabled' ? '禁用' : '启用'}

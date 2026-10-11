@@ -59,9 +59,9 @@ function getFileIcon(name: string, isDir: boolean) {
   if (['py', 'js', 'ts', 'tsx', 'jsx', 'rs', 'go', 'java', 'c', 'cpp', 'h'].includes(ext))
     return <FileCode className="w-4 h-4 text-blue-500" />;
   if (['md', 'txt', 'log', 'json', 'yaml', 'yml', 'toml', 'ini', 'cfg'].includes(ext))
-    return <FileText className="w-4 h-4 text-green-500" />;
+    return <FileText className="w-4 h-4 text-emerald-500" />;
   if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'].includes(ext))
-    return <FileImage className="w-4 h-4 text-purple-500" />;
+    return <FileImage className="w-4 h-4 text-violet-500" />;
   return <File className="w-4 h-4 text-muted-foreground" />;
 }
 
@@ -307,7 +307,7 @@ export default function WorkspacePage() {
       {viewingFile && (
         <div className="rounded-lg border border-border bg-card">
           <div className="flex items-center gap-2 p-3 border-b border-border">
-            <FileText className="w-4 h-4 text-green-500" />
+            <FileText className="w-4 h-4 text-emerald-500" />
             <span className="text-sm font-medium truncate flex-1">{viewingFile.path}</span>
             <span className="text-[10px] text-muted-foreground">{formatSize(viewingFile.size)}</span>
             <Button
@@ -334,7 +334,7 @@ export default function WorkspacePage() {
       {showTerminal && (
         <div className="rounded-lg border border-border bg-card">
           <div className="flex items-center gap-2 p-3 border-b border-border">
-            <Terminal className="w-4 h-4 text-green-500" />
+            <Terminal className="w-4 h-4 text-emerald-500" />
             <span className="text-sm font-medium">终端</span>
             <span className="text-[10px] text-muted-foreground font-mono">{currentPath}</span>
             <Button

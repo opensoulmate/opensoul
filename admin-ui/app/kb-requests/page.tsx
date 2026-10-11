@@ -102,12 +102,12 @@ function RequestCard({
         variant="row" className="gap-3 p-3 hover:bg-muted/30 transition-colors"
       >
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-          type === 'create' ? 'bg-blue-500/10' : 'bg-purple-500/10'
+          type === 'create' ? 'bg-blue-500/10' : 'bg-violet-500/10'
         }`}>
           {type === 'create' ? (
             <FileText className="w-5 h-5 text-blue-500" />
           ) : (
-            <Share2 className="w-5 h-5 text-purple-500" />
+            <Share2 className="w-5 h-5 text-violet-500" />
           )}
         </div>
 
@@ -212,7 +212,7 @@ function RequestCard({
                 <Button
                   onClick={() => onReview(request.id, 'approved', reviewNote)}
                   disabled={reviewing}
-                  variant="chip-sm" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-green-500/20 hover:bg-emerald-500/20 disabled:opacity-50"
+                  variant="chip-sm" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20 disabled:opacity-50"
                 >
                   {reviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
                   通过

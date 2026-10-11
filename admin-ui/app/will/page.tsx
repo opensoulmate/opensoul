@@ -128,10 +128,10 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
     <div className="border border-border rounded-lg bg-card">
       <Button onClick={onToggle} variant="row" className="gap-3 p-3 hover:bg-muted/30 transition-colors">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-          wf.status === 'active' ? 'bg-green-500/10' : wf.status === 'paused' ? 'bg-amber-500/10' : 'bg-muted'
+          wf.status === 'active' ? 'bg-emerald-500/10' : wf.status === 'paused' ? 'bg-amber-500/10' : 'bg-muted'
         }`}>
           <Workflow className={`w-5 h-5 ${
-            wf.status === 'active' ? 'text-green-500' : wf.status === 'paused' ? 'text-amber-500' : 'text-muted-foreground'
+            wf.status === 'active' ? 'text-emerald-500' : wf.status === 'paused' ? 'text-amber-500' : 'text-muted-foreground'
           }`} />
         </div>
         <div className="flex-1 min-w-0">

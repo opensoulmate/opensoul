@@ -62,7 +62,7 @@ function EngineCard({ name, icon: Icon, engine, color }: {
           <div className="text-[10px] text-muted-foreground font-mono">{engine.engine}</div>
         </div>
         {engine.available ? (
-          <CheckCircle className="w-5 h-5 text-green-500" />
+          <CheckCircle className="w-5 h-5 text-emerald-500" />
         ) : (
           <XCircle className="w-5 h-5 text-red-500" />
         )}
@@ -238,7 +238,7 @@ function ASRPanel() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Mic className="w-4 h-4 text-green-500" />
+        <Mic className="w-4 h-4 text-emerald-500" />
         <span className="text-sm font-medium">ASR 语音转写</span>
       </div>
 
@@ -377,14 +377,14 @@ export default function SensePage() {
                 onClick={() => setTab('asr')}
                 className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
-                <Mic className="w-4 h-4 text-green-500" />
+                <Mic className="w-4 h-4 text-emerald-500" />
                 <div className="text-left">
                   <div className="text-xs font-medium">语音转写</div>
                   <div className="text-[10px] text-muted-foreground">音频→文字</div>
                 </div>
               </Button>
               <div className="flex items-center gap-2 p-3 rounded-lg border border-border opacity-50">
-                <Image className="w-4 h-4 text-purple-500" />
+                <Image className="w-4 h-4 text-violet-500" />
                 <div className="text-left">
                   <div className="text-xs font-medium">图像分析</div>
                   <div className="text-[10px] text-muted-foreground">多模态理解</div>
