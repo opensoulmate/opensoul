@@ -1,5 +1,6 @@
 import logging
 import os
+import stat
 import sys
 from contextlib import asynccontextmanager
 
@@ -442,11 +443,33 @@ app.add_middleware(
 app.add_middleware(MetricsMiddleware)
 app.add_middleware(IntrusionDetectionMiddleware)
 
+
+class AdminStaticFiles(StaticFiles):
+    """StaticFiles + 净URL回退（Next 静态导出产出 <page>.html 形状）。
+
+    直入/刷新 /admin/<page>（无 .html）此前 404（目录转跳后寻 index.html 失败
+    或 404.html 兜底），这里对 404 回退到同名 <page>.html；真缺失页仍如实 404，
+    带扩展名的资源（.js/.css 等）不做回退。
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code != 404 or path.endswith(".html"):
+            return response
+        alt = path.rstrip("/") + ".html"
+        full_path, stat_result = self.lookup_path(alt)
+        if stat_result is not None and stat.S_ISREG(stat_result.st_mode):
+            return await super().get_response(alt, scope)
+        return response
+
+
 # Static files
 _static_dir = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 app.mount(
-    "/admin", StaticFiles(directory=os.path.join(_static_dir, "admin"), html=True), name="admin"
+    "/admin",
+    AdminStaticFiles(directory=os.path.join(_static_dir, "admin"), html=True),
+    name="admin",
 )
 
 
