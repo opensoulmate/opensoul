@@ -34,6 +34,9 @@ class ResourceType(StrEnum):
     AI_GROUP_EVENT = (
         "ai_group_event"  # F3b-③b-2（2026-10-12）：AI 群组事件面（task_execution_events 表）
     )
+    AI_GROUP = (
+        "ai_group"  # F3b-③b-3（2026-10-12）：AI 群组组面（ai_groups 表）+ 成员/能力/评分行归属
+    )
 
 
 @dataclass
@@ -106,6 +109,9 @@ class IsolationEngine:
         ),
         ResourceType.AI_GROUP_EVENT: IsolationPolicy(
             ResourceType.AI_GROUP_EVENT, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.AI_GROUP: IsolationPolicy(
+            ResourceType.AI_GROUP, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 

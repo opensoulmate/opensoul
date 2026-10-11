@@ -60,6 +60,7 @@ def init_db():
             name TEXT NOT NULL,
             description TEXT DEFAULT '',
             status TEXT DEFAULT 'active',
+            tenant_id TEXT NOT NULL DEFAULT 'default',
             created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS ai_group_agents (
@@ -70,6 +71,7 @@ def init_db():
             role TEXT NOT NULL,
             model TEXT DEFAULT '',
             status TEXT DEFAULT 'online',
+            tenant_id TEXT NOT NULL DEFAULT 'default',
             FOREIGN KEY (group_id) REFERENCES ai_groups(id)
         );
         CREATE TABLE IF NOT EXISTS ai_group_tasks (
@@ -134,6 +136,7 @@ def init_db():
             avg_score REAL DEFAULT 0,
             task_count INTEGER DEFAULT 0,
             trend TEXT DEFAULT 'stable',
+            tenant_id TEXT NOT NULL DEFAULT 'default',
             updated_at TEXT NOT NULL,
             FOREIGN KEY (group_id) REFERENCES ai_groups(id),
             UNIQUE(group_id, agent_id, capability)
@@ -147,6 +150,7 @@ def init_db():
             score INTEGER NOT NULL,
             reason TEXT DEFAULT '',
             capability TEXT DEFAULT '',
+            tenant_id TEXT NOT NULL DEFAULT 'default',
             created_at TEXT NOT NULL,
             FOREIGN KEY (group_id) REFERENCES ai_groups(id)
         );
@@ -197,6 +201,20 @@ def init_db():
             pass  # 列已存在
     conn.execute("CREATE INDEX IF NOT EXISTS idx_dm_tenant ON discussion_messages(tenant_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tee_tenant ON task_execution_events(tenant_id)")
+
+    # F3b-③b-3 数据面隔离键：组面归属租户（ai_groups=组归属租户身份派生；成员/能力
+    # 行=组行继承；评分行=父任务行继承）。DDL+ALTER 双轨幂等；存量行随
+    # NOT NULL DEFAULT 'default' 回填，与 F3 审计实测数据分布一致。
+    for _tbl in ("ai_groups", "ai_group_agents", "agent_scores", "agent_capabilities"):
+        try:
+            conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # 列已存在
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_groups_tenant ON ai_groups(tenant_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_aga_tenant ON ai_group_agents(tenant_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_scores_tenant ON agent_scores(tenant_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_caps_tenant ON agent_capabilities(tenant_id)")
     conn.commit()
     conn.close()
 
@@ -334,6 +352,78 @@ def _gate_face_bulk(tenant_id: str, resource_type: ResourceType, action: str) ->
         resource_id=iso.namespaced_id(tenant_namespace(tenant_id), "*"),
         action=action,
     )
+
+
+# ── F3b-③b-3 组面数据面隔离（ai_groups/ai_group_agents/agent_scores/agent_capabilities）──
+# 行键语义：ai_groups.tenant_id=组归属租户（create_group 身份派生）；成员行
+# （ai_group_agents）与能力行（agent_capabilities）=组行继承（_group_tenant 单一
+# 权威）；评分行（agent_scores）=父任务行继承（_task_tenant，③b-2 同权威）。
+# 跨租户拒绝由组闸门承担（ResourceType.AI_GROUP by-ID 真执行），bulk 走
+# _gate_face_bulk 审计留痕。
+
+
+class GroupAccessDenied(TaskAccessDenied):
+    """跨租户组访问被 IsolationEngine 拒绝（审计留痕在 NestStore，③b-3）。"""
+
+
+def _group_tenant(conn, group_id: str) -> str:
+    """成员/能力行租户键取组行（ai_groups.tenant_id）。
+
+    组行缺失或父表不可查→DEFAULT_TENANT 兜底（与匿名契约一致）——兜底只影响
+    行键派生，绝不让键派生故障吃掉落库（旁路纪律同写入方）。"""
+    if not group_id:
+        return DEFAULT_TENANT
+    try:
+        row = conn.execute("SELECT tenant_id FROM ai_groups WHERE id=?", (group_id,)).fetchone()
+    except sqlite3.Error:
+        return DEFAULT_TENANT  # 键派生失败不阻断落库
+    return (row["tenant_id"] if row else DEFAULT_TENANT) or DEFAULT_TENANT
+
+
+def _gate_group(tenant_id: str, row_tenant: str, group_id: str, action: str) -> None:
+    """by-ID 组访问闸门：IsolationEngine.check_access 真执行（③b-3，③b-1 同款）。
+
+    资源 ID 用 namespaced_id(row_tenant ns, group_id)——namespace 前缀来自行
+    归属（tenant_namespace 单一源派生），跨租户 namespace mismatch
+    引擎拒绝→上抛。"""
+    iso = _iso()
+    verdict = iso.check_access(
+        tenant_namespace=tenant_namespace(tenant_id),
+        resource_type=ResourceType.AI_GROUP,
+        resource_id=iso.namespaced_id(tenant_namespace(row_tenant), group_id),
+        action=action,
+    )
+    if not verdict.get("allowed", True):
+        raise GroupAccessDenied(verdict.get("reason", "access denied"), verdict)
+
+
+def _gate_group403(tenant_id: str, row_tenant: str, group_id: str, action: str) -> None:
+    """组闸门 + HTTP 映射：跨租户 403（reason 如实带 namespace mismatch 真因）。"""
+    try:
+        _gate_group(tenant_id, row_tenant, group_id, action)
+    except GroupAccessDenied as e:
+        raise HTTPException(403, f"group access denied: {e.reason}")
+
+
+def _load_gated_group(
+    conn, tenant_id: str, group_id: str, action: str = "read", not_found: str = "AI群不存在"
+):
+    """by-ID 组行加载 + 闸门统一收口：行存在→闸门真执行，行不存在→404。"""
+    row = conn.execute("SELECT * FROM ai_groups WHERE id=?", (group_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, not_found)
+    _gate_group403(tenant_id, row["tenant_id"] or DEFAULT_TENANT, group_id, action)
+    return row
+
+
+def _gate_existing_group(conn, tenant_id: str, group_id: str, action: str):
+    """行存在才闸门（盲 UPDATE/DELETE、容忍缺行端点用，既有缺行契约不变）。
+
+    行存在但跨租户→403（失败可见）；行不存在→None 由调用方按既有语义处理。"""
+    row = conn.execute("SELECT tenant_id FROM ai_groups WHERE id=?", (group_id,)).fetchone()
+    if row:
+        _gate_group403(tenant_id, row["tenant_id"] or DEFAULT_TENANT, group_id, action)
+    return row
 
 
 def _emit_exec_event(group_id: str, task_id: str, agent_id: str, event_type: str, content: str):
@@ -617,8 +707,18 @@ def update_agent_capability(group_id: str, agent_id: str, capability: str, score
             )
         else:
             conn.execute(
-                "INSERT INTO agent_capabilities (id, group_id, agent_id, capability, avg_score, task_count, trend, updated_at) VALUES (?,?,?,?,?,?,?,?)",
-                (str(uuid.uuid4())[:8], group_id, agent_id, capability, score, 1, "stable", now),
+                "INSERT INTO agent_capabilities (id, group_id, agent_id, capability, avg_score, task_count, trend, updated_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    str(uuid.uuid4())[:8],
+                    group_id,
+                    agent_id,
+                    capability,
+                    score,
+                    1,
+                    "stable",
+                    now,
+                    _group_tenant(conn, group_id),  # F3b-③b-3：能力行租户=组行继承
+                ),
             )
         conn.commit()
     finally:
@@ -644,18 +744,21 @@ def calculate_task_avg_score(task_id: str) -> float | None:
 
 # ── Endpoints ────────────────────────────────────────────
 @router.post("")
-def create_group(req: CreateGroupRequest):
+def create_group(req: CreateGroupRequest, authorization: str | None = Header(None)):
+    """F3b-③b-3：组归属租户从认证身份派生（bind_identity，匿名='default'），
+    成员行同源继承——禁客户端自报。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
         group_id = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
         conn.execute(
-            "INSERT INTO ai_groups (id, name, description, status, created_at) VALUES (?,?,?,?,?)",
-            (group_id, req.name, req.description, "active", now),
+            "INSERT INTO ai_groups (id, name, description, status, created_at, tenant_id) VALUES (?,?,?,?,?,?)",
+            (group_id, req.name, req.description, "active", now, identity.tenant_id),
         )
         for agent in req.agents:
             conn.execute(
-                "INSERT INTO ai_group_agents (id, group_id, agent_id, name, role, model, status) VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO ai_group_agents (id, group_id, agent_id, name, role, model, status, tenant_id) VALUES (?,?,?,?,?,?,?,?)",
                 (
                     str(uuid.uuid4())[:8],
                     group_id,
@@ -664,6 +767,7 @@ def create_group(req: CreateGroupRequest):
                     agent.role,
                     agent.model,
                     "online",
+                    identity.tenant_id,
                 ),
             )
         conn.commit()
@@ -673,11 +777,17 @@ def create_group(req: CreateGroupRequest):
 
 
 @router.get("")
-def list_groups():
+def list_groups(authorization: str | None = Header(None)):
+    """F3b-③b-3：组列表恒按租户过滤（身份派生，禁自报）+ bulk 审计留痕。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
+        _gate_face_bulk(identity.tenant_id, ResourceType.AI_GROUP, "list")
         groups = rows_to_list(
-            conn.execute("SELECT * FROM ai_groups ORDER BY created_at DESC").fetchall()
+            conn.execute(
+                "SELECT * FROM ai_groups WHERE tenant_id=? ORDER BY created_at DESC",
+                (identity.tenant_id,),
+            ).fetchall()
         )
         for g in groups:
             g["agents"] = rows_to_list(
@@ -694,21 +804,24 @@ def list_groups():
 
 
 @router.get("/{group_id}")
-def get_group(group_id: str):
+def get_group(group_id: str, authorization: str | None = Header(None)):
+    """F3b-③b-3：组读走组闸门（跨租户 403 禁读他租户组）；agents/tasks
+    子查询恒按租户过滤（身份派生，与 list_tasks ③b-1 同语义：
+    租户只见自己的行）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        group = row_to_dict(
-            conn.execute("SELECT * FROM ai_groups WHERE id=?", (group_id,)).fetchone()
-        )
-        if not group:
-            raise HTTPException(404, "AI群不存在")
+        group = row_to_dict(_load_gated_group(conn, identity.tenant_id, group_id, "read"))
         group["agents"] = rows_to_list(
-            conn.execute("SELECT * FROM ai_group_agents WHERE group_id=?", (group_id,)).fetchall()
+            conn.execute(
+                "SELECT * FROM ai_group_agents WHERE group_id=? AND tenant_id=?",
+                (group_id, identity.tenant_id),
+            ).fetchall()
         )
         group["tasks"] = rows_to_list(
             conn.execute(
-                "SELECT * FROM ai_group_tasks WHERE group_id=? ORDER BY created_at DESC",
-                (group_id,),
+                "SELECT * FROM ai_group_tasks WHERE group_id=? AND tenant_id=? ORDER BY created_at DESC",
+                (group_id, identity.tenant_id),
             ).fetchall()
         )
         return group
@@ -1859,7 +1972,7 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
         )
         # 记录分数到agent_scores表
         conn.execute(
-            "INSERT INTO agent_scores (id, task_id, group_id, scored_agent_id, scorer_agent_id, score, reason, capability, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO agent_scores (id, task_id, group_id, scored_agent_id, scorer_agent_id, score, reason, capability, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 task_id,
@@ -1870,6 +1983,7 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
                 auto_reason,
                 capability,
                 result_now,
+                task["tenant_id"],  # F3b-③b-3：评分行租户=父任务行继承
             ),
         )
         # 更新Agent能力画像
@@ -2154,12 +2268,27 @@ def verify_task(
 
 
 @router.delete("/{group_id}")
-def delete_group(group_id: str):
+def delete_group(group_id: str, authorization: str | None = Header(None)):
+    """F3b-③b-3：删组走组闸门（跨租户 403 禁删他租户组）；级联清理由
+    "按 group_id 全清"收口为"按行租户键清"（组行归属租户）——他租户行
+    一律不动（禁跨租户破坏优先于不留孤儿，外来行残留是已知边界）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        conn.execute("DELETE FROM ai_group_tasks WHERE group_id=?", (group_id,))
-        conn.execute("DELETE FROM ai_group_agents WHERE group_id=?", (group_id,))
-        conn.execute("DELETE FROM ai_groups WHERE id=?", (group_id,))
+        group = _load_gated_group(conn, identity.tenant_id, group_id, "write")
+        row_tenant = group["tenant_id"] or DEFAULT_TENANT
+        for tbl in (
+            "ai_group_tasks",
+            "discussion_messages",
+            "task_execution_events",
+            "agent_scores",
+            "agent_capabilities",
+            "ai_group_agents",
+        ):
+            conn.execute(
+                f"DELETE FROM {tbl} WHERE group_id=? AND tenant_id=?", (group_id, row_tenant)
+            )
+        conn.execute("DELETE FROM ai_groups WHERE id=? AND tenant_id=?", (group_id, row_tenant))
         conn.commit()
         return {"status": "deleted"}
     finally:
@@ -2167,11 +2296,14 @@ def delete_group(group_id: str):
 
 
 @router.post("/{group_id}/agents")
-def add_agent(group_id: str, agent: AgentRole):
+def add_agent(group_id: str, agent: AgentRole, authorization: str | None = Header(None)):
+    """F3b-③b-3：成员写走组闸门；成员行租户=组行继承（_group_tenant 同源）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
+        _load_gated_group(conn, identity.tenant_id, group_id, "write")
         conn.execute(
-            "INSERT INTO ai_group_agents (id, group_id, agent_id, name, role, model, status) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO ai_group_agents (id, group_id, agent_id, name, role, model, status, tenant_id) VALUES (?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -2180,6 +2312,7 @@ def add_agent(group_id: str, agent: AgentRole):
                 agent.role,
                 agent.model,
                 "online",
+                _group_tenant(conn, group_id),
             ),
         )
         conn.commit()
@@ -2189,12 +2322,12 @@ def add_agent(group_id: str, agent: AgentRole):
 
 
 @router.patch("/{group_id}")
-def update_group(group_id: str, req: UpdateGroupRequest):
+def update_group(group_id: str, req: UpdateGroupRequest, authorization: str | None = Header(None)):
+    """F3b-③b-3：组资源写走组闸门（跨租户 403 禁改他租户组）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
-        group = conn.execute("SELECT id FROM ai_groups WHERE id=?", (group_id,)).fetchone()
-        if not group:
-            raise HTTPException(404, "AI群不存在")
+        _load_gated_group(conn, identity.tenant_id, group_id, "write")
         updates, params = [], []
         if req.name is not None:
             updates.append("name=?")
@@ -2213,9 +2346,12 @@ def update_group(group_id: str, req: UpdateGroupRequest):
 
 
 @router.delete("/{group_id}/agents/{agent_id}")
-def remove_agent(group_id: str, agent_id: str):
+def remove_agent(group_id: str, agent_id: str, authorization: str | None = Header(None)):
+    """F3b-③b-3：成员删除走组闸门（盲 DELETE 容忍缺组，缺行契约不变）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
+        _gate_existing_group(conn, identity.tenant_id, group_id, "write")
         result = conn.execute(
             "DELETE FROM ai_group_agents WHERE group_id=? AND agent_id=?", (group_id, agent_id)
         )
@@ -2228,9 +2364,14 @@ def remove_agent(group_id: str, agent_id: str):
 
 
 @router.patch("/{group_id}/agents/{agent_id}")
-def update_agent(group_id: str, agent_id: str, req: UpdateAgentRequest):
+def update_agent(
+    group_id: str, agent_id: str, req: UpdateAgentRequest, authorization: str | None = Header(None)
+):
+    """F3b-③b-3：成员改走组闸门（盲 UPDATE 容忍缺组，缺行契约不变）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
+        _gate_existing_group(conn, identity.tenant_id, group_id, "write")
         agent = conn.execute(
             "SELECT id FROM ai_group_agents WHERE group_id=? AND agent_id=?", (group_id, agent_id)
         ).fetchone()
@@ -2519,7 +2660,7 @@ def score_task(
 
         # 记录评分
         conn.execute(
-            "INSERT INTO agent_scores (id, group_id, task_id, scored_agent_id, scorer_agent_id, score, reason, capability, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO agent_scores (id, group_id, task_id, scored_agent_id, scorer_agent_id, score, reason, capability, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -2530,6 +2671,7 @@ def score_task(
                 req.reason,
                 req.capability,
                 now,
+                task["tenant_id"],  # F3b-③b-3：评分行租户=父任务行继承
             ),
         )
 
@@ -2585,10 +2727,13 @@ def score_task(
 
 
 @router.get("/{group_id}/agents/{agent_id}/capabilities")
-def get_agent_capabilities(group_id: str, agent_id: str):
-    """获取Agent能力画像"""
+def get_agent_capabilities(group_id: str, agent_id: str, authorization: str | None = Header(None)):
+    """获取Agent能力画像
+    F3b-③b-3：读走组闸门（跨租户 403 禁读他租户组能力画像，容忍缺组契约不变）。"""
+    identity = bind_identity(authorization)
     conn = get_db()
     try:
+        _gate_existing_group(conn, identity.tenant_id, group_id, "read")
         caps = rows_to_list(
             conn.execute(
                 "SELECT * FROM agent_capabilities WHERE group_id=? AND agent_id=? ORDER BY avg_score DESC",
@@ -2742,7 +2887,9 @@ def _extract_capability_tags(goal: str) -> list[str]:
 
 
 @router.post("/{group_id}/smart-assign")
-async def smart_assign(group_id: str, req: SmartAssignRequest):
+async def smart_assign(
+    group_id: str, req: SmartAssignRequest, authorization: str | None = Header(None)
+):
     """智能分配 — 基于Agent能力画像匹配任务到最佳Agent。
 
     1. 从goal提取能力维度标签
@@ -2751,9 +2898,8 @@ async def smart_assign(group_id: str, req: SmartAssignRequest):
     """
     conn = get_db()
     try:
-        group = conn.execute("SELECT id FROM ai_groups WHERE id=?", (group_id,)).fetchone()
-        if not group:
-            raise HTTPException(404, "群组不存在")
+        identity = bind_identity(authorization)
+        _load_gated_group(conn, identity.tenant_id, group_id, "read", not_found="群组不存在")
 
         agents = rows_to_list(
             conn.execute("SELECT * FROM ai_group_agents WHERE group_id=?", (group_id,)).fetchall()
@@ -2987,7 +3133,7 @@ async def auto_evaluate_task(
 
         # Insert auto-score record
         conn.execute(
-            "INSERT INTO agent_scores (id, task_id, group_id, scored_agent_id, scorer_agent_id, score, reason, capability, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO agent_scores (id, task_id, group_id, scored_agent_id, scorer_agent_id, score, reason, capability, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 task_id,
@@ -2998,6 +3144,7 @@ async def auto_evaluate_task(
                 reason,
                 capability,
                 now,
+                task["tenant_id"],  # F3b-③b-3：评分行租户=父任务行继承
             ),
         )
 
