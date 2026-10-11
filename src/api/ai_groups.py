@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -965,6 +966,25 @@ async def _notify_group_chat(
             conn.close()
         # 实时可见：ws_group尾随task_execution_events，把新事件广播到群组WS房间
         _emit_exec_event(group_id, task_id, agent_id or "soulmate", "agent_reply", content[:2000])
+        # 实时可见（聊天流）：推送 agent_message 广播帧到 acp-proxy ws_group 内部端点。
+        # 聊天流前端只认 agent_message 帧（task_progress 只进时间线面板），验收行4 要求
+        # "WS 收到 agent_message 帧"。落库以上面的直写为单一真源，此处只广播；
+        # 旁路纪律：推送失败只记日志，绝不阻塞任务本体。
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as push_cli:
+                await push_cli.post(
+                    GROUP_MSG_PUSH,
+                    json={
+                        "group_id": group_id,
+                        "agent_id": agent_id or "soulmate",
+                        "agent_name": agent_name or agent_id or "SoulMate",
+                        "content": content[:2000],
+                        "task_id": task_id,
+                        "intent": "agent_reply",
+                    },
+                )
+        except Exception as e:
+            logger.warning(f"群聊实时推送失败(不影响任务): {e}")
         logger.info(f"群聊回帖已落库: group={group_id} task={task_id}")
     except Exception as e:
         logger.warning(f"群聊回帖失败(不影响任务): {e}")
