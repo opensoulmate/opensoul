@@ -24,7 +24,10 @@ class AgentSkill(BaseModel):
 
 
 class AgentCapabilities(BaseModel):
-    streaming: bool = True
+    # capabilities.streaming = 支持 message/stream 等流式 RPC。默认 False=不虚报：
+    # 实际发布值由 api.streaming_supported() 按真实 RPC 方法面派生（见 api.py），
+    # 加了 message/stream 进 RPC_HANDLERS 才会 True —— 声明与实现禁漂移（F4b-⑤）。
+    streaming: bool = False
     pushNotifications: bool = False
     stateTransitionHistory: bool = True
 

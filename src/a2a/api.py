@@ -21,8 +21,13 @@ router = APIRouter()
 
 @router.get("/.well-known/agent.json")
 async def agent_card():
-    """A2A Agent Card discovery endpoint."""
-    card = task_manager.get_agent_card()
+    """A2A Agent Card discovery endpoint.
+
+    capabilities.streaming 由 streaming_supported() 按真实 RPC 方法面派生（单一源）：
+    本端点是 agent card 唯一发布口，声明恒等于实现，禁漂移。
+    """
+    card = task_manager.get_agent_card().model_copy(deep=True)
+    card.capabilities.streaming = streaming_supported()
     return card.model_dump()
 
 
@@ -60,13 +65,7 @@ async def handle_rpc(request: JSONRPCRequest):
     method = request.method
     params = request.params
 
-    handlers = {
-        "tasks/send": handle_task_send,
-        "tasks/get": handle_task_get,
-        "tasks/cancel": handle_task_cancel,
-    }
-
-    handler = handlers.get(method)
+    handler = RPC_HANDLERS.get(method)
     if not handler:
         raise ValueError(f"Method not found: {method}")
 
@@ -117,3 +116,27 @@ async def handle_task_cancel(params: dict) -> dict:
         raise ValueError(f"Task cannot be canceled: {task_id}")
 
     return task.model_dump(exclude_none=True)
+
+
+# === RPC 方法面（单一源）===
+# 已实现的 JSON-RPC 方法注册表。capabilities.streaming 派生自此表（见
+# streaming_supported）——加/删方法此处即唯一改动点，agent card 声明自动跟随，
+# 不必记得改第二处（否则正是 F4b-⑤ 修的声明漂移 bug 会复发）。
+RPC_HANDLERS = {
+    "tasks/send": handle_task_send,
+    "tasks/get": handle_task_get,
+    "tasks/cancel": handle_task_cancel,
+}
+
+# A2A 流式 RPC 方法名（message/stream=v1.0、tasks/sendSubscribe=旧草案）。
+# 命中任一即视为支持流式。
+STREAMING_RPC_METHODS = ("message/stream", "tasks/sendSubscribe")
+
+
+def streaming_supported() -> bool:
+    """capabilities.streaming 的单一真值：仅当流式 RPC 方法真注册才 True。
+
+    声明与实现禁漂移（F4b-⑤ 收口 F4 审计⑨ 对外谎报）：本函数是 agent card
+    streaming 位的唯一来源，实现里没有 message/stream 就不会对外宣称流式。
+    """
+    return any(m in RPC_HANDLERS for m in STREAMING_RPC_METHODS)
