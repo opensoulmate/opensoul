@@ -138,7 +138,7 @@ function RegisterDialog({ onClose, onRegistered }: { onClose: () => void; onRegi
       <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-medium">注册Agent</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+          <Button onClick={onClose} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
         </div>
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -227,7 +227,7 @@ function MessageDialog({ agents, onClose }: { agents: AgentStatus[]; onClose: ()
       <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-medium">发送消息</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+          <Button onClick={onClose} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
         </div>
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -353,7 +353,7 @@ export default function CollabPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3 h-3" /></Button>
         </div>
       )}
 

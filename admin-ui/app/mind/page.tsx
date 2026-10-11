@@ -212,7 +212,7 @@ export default function MindPage() {
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-500 text-xs">
           {error}
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -246,12 +246,12 @@ export default function MindPage() {
             value={search} onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={() => setShowEmotion(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20">
+        <Button onClick={() => setShowEmotion(true)} variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-border hover:bg-violet-500/20">
           <Sparkles className="w-3.5 h-3.5" />情绪分析
-        </button>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
+        </Button>
+        <Button onClick={openCreate} variant="chip-sm" className="flex items-center gap-1.5 bg-primary/10 text-primary border border-border hover:bg-primary/20">
           <Plus className="w-3.5 h-3.5" />新建人格
-        </button>
+        </Button>
         <Button onClick={() => { fetchAll(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </Button>
@@ -277,12 +277,12 @@ export default function MindPage() {
                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                   {!p.builtin && (
                     <>
-                      <button onClick={() => openEdit(p.personality_id)} className="p-1 text-muted-foreground hover:text-foreground rounded-md">
+                      <Button onClick={() => openEdit(p.personality_id)} variant="icon-sm" className="text-muted-foreground hover:text-foreground">
                         <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => handleDelete(p.personality_id)} className="p-1 text-muted-foreground hover:text-red-500 rounded-md">
+                      </Button>
+                      <Button onClick={() => handleDelete(p.personality_id)} variant="icon-sm" className="text-muted-foreground hover:text-red-500">
                         <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>
@@ -304,9 +304,9 @@ export default function MindPage() {
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
                 <span className="text-[10px] text-muted-foreground">使用 {p.usage_count} 次</span>
                 {!isActive && (
-                  <button onClick={() => handleSetActive(p.personality_id)} className="text-[10px] px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20">
+                  <Button onClick={() => handleSetActive(p.personality_id)} variant="chip-xs" className="bg-primary/10 text-primary hover:bg-primary/20">
                     设为激活
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -348,7 +348,7 @@ export default function MindPage() {
                 <h2 className="text-lg font-medium">{selected.name}</h2>
                 {selected.builtin && <Badge variant="info">内置</Badge>}
               </div>
-              <button onClick={() => setShowDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             <div className="space-y-3 text-sm">
               <div><span className="text-muted-foreground">描述: </span>{selected.description || '暂无'}</div>
@@ -372,7 +372,7 @@ export default function MindPage() {
             <div className="flex justify-end gap-2 mt-6">
               {!selected.builtin && <Button onClick={() => { setShowDetail(false); openEdit(selected.personality_id); }} variant="secondary">编辑</Button>}
               {selected.personality_id !== activeId && (
-                <button onClick={() => { handleSetActive(selected.personality_id); setShowDetail(false); }} className="px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">设为激活</button>
+                <Button onClick={() => { handleSetActive(selected.personality_id); setShowDetail(false); }} variant="chip-sm" className="bg-primary/10 text-primary border border-border hover:bg-primary/20">设为激活</Button>
               )}
             </div>
           </div>
@@ -385,7 +385,7 @@ export default function MindPage() {
           <div className="bg-card rounded-lg border border-border p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium">{editId ? '编辑人格' : '新建人格'}</h2>
-              <button onClick={() => setShowDialog(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowDialog(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             <div className="space-y-3">
               <div>
@@ -451,7 +451,7 @@ export default function MindPage() {
                 <Sparkles className="w-5 h-5 text-purple-500" />
                 <h2 className="text-lg font-medium">情绪分析</h2>
               </div>
-              <button onClick={() => setShowEmotion(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowEmotion(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             <div className="space-y-3">
               <textarea
@@ -459,10 +459,10 @@ export default function MindPage() {
                 value={emotionText} onChange={e => setEmotionText(e.target.value)}
                 placeholder="输入要分析的文本..."
               />
-              <button onClick={handleAnalyzeEmotion} disabled={emotionLoading || !emotionText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20 disabled:opacity-50">
+              <Button onClick={handleAnalyzeEmotion} disabled={emotionLoading || !emotionText.trim()} variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-border hover:bg-violet-500/20 disabled:opacity-50">
                 {emotionLoading ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 {emotionLoading ? '分析中...' : '开始分析'}
-              </button>
+              </Button>
               {emotionResult && (
                 <div className="space-y-3 mt-3 p-3 rounded-lg bg-muted/50">
                   <div className="flex items-center gap-2">

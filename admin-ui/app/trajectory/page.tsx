@@ -446,14 +446,14 @@ function SessionEvents({ sessionId, onClose }: { sessionId: string; onClose: () 
               {replayStep < 0 ? '回放' : replayStep + 1 >= events.length ? '停止' : `步骤 ${replayStep + 1}/${events.length}`}
             </Button>
             {replayStep >= 0 && events[replayStep] && (
-              <button
+              <Button
                 onClick={doFork}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-lg hover:bg-amber-500/20"
+                variant="chip-sm" className="flex items-center gap-1.5 bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500/20"
               >
                 <GitFork className="w-3 h-3" />从此处分支
-              </button>
+              </Button>
             )}
-            <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+            <Button onClick={onClose} variant="icon-md" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
           </div>
         </div>
         <div className="flex-1 overflow-auto p-4">
@@ -641,15 +641,15 @@ export default function TrajectoryPage() {
         {tabs.map(t => {
           const Icon = t.icon;
           return (
-            <button
+            <Button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+              variant="tabline" className={`font-medium  ${
                 tab === t.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />{t.label}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -703,9 +703,9 @@ export default function TrajectoryPage() {
             <div className="space-y-2">
               {filtered.map((s) => (
                 <div key={s.session_id} className="border border-border rounded-lg bg-card hover:bg-muted/20 transition-colors">
-                  <button
+                  <Button
                     onClick={() => setDetailSession(s.session_id)}
-                    className="flex items-center gap-3 w-full p-3 text-left"
+                    variant="row" className="gap-3 p-3"
                   >
                     <div className="relative">
                       <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
@@ -734,22 +734,22 @@ export default function TrajectoryPage() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {s.status === 'running' && (
-                        <button
+                        <Button
                           onClick={(e) => { e.stopPropagation(); doEnd(s.session_id); }}
-                          className="p-1.5 hover:bg-muted rounded-md" title="结束会话"
+                          variant="icon-md" className="hover:bg-muted" title="结束会话"
                         >
                           <StopCircle className="w-3.5 h-3.5 text-amber-500" />
-                        </button>
+                        </Button>
                       )}
-                      <button
+                      <Button
                         onClick={(e) => { e.stopPropagation(); doDelete(s.session_id); }}
-                        className="p-1.5 hover:bg-red-500/10 rounded-md" title="删除"
+                        variant="icon-md" className="hover:bg-red-500/10" title="删除"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                      </button>
+                      </Button>
                       <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -825,9 +825,9 @@ export default function TrajectoryPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
+          <Button onClick={() => setError('')} variant="icon-sm" className="ml-auto hover:bg-muted">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

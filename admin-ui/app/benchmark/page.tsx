@@ -152,7 +152,7 @@ export default function BenchmarkPage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
+          <Button onClick={() => setError('')} variant="icon-xs" className="hover:bg-red-500/20"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -179,14 +179,14 @@ export default function BenchmarkPage() {
       {/* Tab Bar */}
       <div className="flex items-center gap-1 border-b border-border">
         {([['latest', '最新结果'], ['history', '历史记录'], ['run', '运行测试']] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key as any)} className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+          <Button variant="bare" key={key} onClick={() => setTab(key as any)} className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             {label}
-          </button>
+          </Button>
         ))}
         <div className="flex-1" />
-        <button onClick={handleClearHistory} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm text-red-500 hover:bg-red-500/10 rounded-lg mr-1">
+        <Button onClick={handleClearHistory} variant="chip-sm" className="flex items-center gap-1 text-red-500 hover:bg-red-500/10 mr-1">
           <Trash2 className="w-3 h-3" />清除历史
-        </button>
+        </Button>
       </div>
 
       {/* Run Tab */}
@@ -198,9 +198,9 @@ export default function BenchmarkPage() {
               <Button onClick={() => setSelectedOrgans(new Set(targets.map((t) => t.organ)))} variant="secondary" className="px-2 py-1">全选</Button>
               <Button onClick={() => setSelectedOrgans(new Set())} variant="secondary" className="px-2 py-1">清空</Button>
               {targets.map((t) => (
-                <button key={t.organ} onClick={() => toggleOrgan(t.organ)} className={`text-xs lg:text-sm px-2.5 py-1 rounded-lg border transition-colors ${selectedOrgans.has(t.organ) ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground hover:text-foreground'}`}>
+                <Button variant="bare" key={t.organ} onClick={() => toggleOrgan(t.organ)} className={`text-xs lg:text-sm px-2.5 py-1 rounded-lg border transition-colors ${selectedOrgans.has(t.organ) ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground hover:text-foreground'}`}>
                   {t.label || t.organ}
-                </button>
+                </Button>
               ))}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">

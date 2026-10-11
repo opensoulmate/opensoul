@@ -234,8 +234,8 @@ export default function SessionsPage() {
                         onKeyDown={(e) => e.key === 'Enter' && handleRename(s.id)}
                         autoFocus
                       />
-                      <button onClick={() => handleRename(s.id)} className="text-xs lg:text-sm text-primary hover:underline">保存</button>
-                      <button onClick={() => setEditingId(null)} className="text-xs lg:text-sm text-muted-foreground hover:underline">取消</button>
+                      <Button variant="bare" onClick={() => handleRename(s.id)} className="text-xs lg:text-sm text-primary hover:underline">保存</Button>
+                      <Button variant="bare" onClick={() => setEditingId(null)} className="text-xs lg:text-sm text-muted-foreground hover:underline">取消</Button>
                     </div>
                   ) : (
                     <div>
@@ -260,20 +260,20 @@ export default function SessionsPage() {
                 <td className="px-2 lg:px-4 py-2.5 text-xs text-muted-foreground">{formatTime(s.updated_at)}</td>
                 <td className="px-2 lg:px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1">
-                    <button
+                    <Button
                       onClick={() => { setEditingId(s.id); setEditTitle(s.title || ''); }}
-                      className="p-1 rounded-md hover:bg-muted"
+                      variant="icon-sm" className="hover:bg-muted"
                       title="重命名"
                     >
                       <Edit3 className="w-3 h-3 text-muted-foreground" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => handleDelete(s.id)}
-                      className="p-1 rounded-md hover:bg-red-500/10"
+                      variant="icon-sm" className="hover:bg-red-500/10"
                       title="删除"
                     >
                       <Trash2 className="w-3 h-3 text-red-500" />
-                    </button>
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -319,9 +319,9 @@ export default function SessionsPage() {
                   <span>消息: {selectedSession.message_count}</span>
                 </div>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted shrink-0 ml-2">
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted shrink-0 ml-2">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             {/* Tags section */}
@@ -330,9 +330,9 @@ export default function SessionsPage() {
               {selectedSession.tags?.map((t) => (
                 <span key={t} className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
                   {t}
-                  <button onClick={() => handleRemoveTag(selectedSession.id, t)} className="hover:text-red-500">
+                  <Button variant="bare" onClick={() => handleRemoveTag(selectedSession.id, t)} className="hover:text-red-500">
                     <X className="w-2.5 h-2.5" />
-                  </button>
+                  </Button>
                 </span>
               ))}
               <input
@@ -379,12 +379,12 @@ export default function SessionsPage() {
               <Button onClick={() => { setEditingId(selectedSession.id); setEditTitle(selectedSession.title || ''); setShowDetail(false); }} variant="secondary" className="gap-1">
                 <Edit3 className="w-3 h-3" />重命名
               </Button>
-              <button
+              <Button
                 onClick={() => { handleDelete(selectedSession.id); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
+                variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20"
               >
                 <Trash2 className="w-3 h-3" />删除会话
-              </button>
+              </Button>
             </div>
           </div>
         </div>

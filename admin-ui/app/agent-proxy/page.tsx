@@ -63,9 +63,9 @@ function AgentCard({
   onSelect: () => void;
 }) {
   return (
-    <button
+    <Button
       onClick={onSelect}
-      className={`flex items-center gap-3 p-3 rounded-lg border transition-all text-left w-full ${
+      variant="row" className={`gap-3 p-3 rounded-lg border transition-all  ${
         selected
           ? 'border-primary bg-primary/5 shadow-sm'
           : agent.available
@@ -92,7 +92,7 @@ function AgentCard({
           {agent.binary}
         </div>
       </div>
-    </button>
+    </Button>
   );
 }
 
@@ -307,7 +307,7 @@ export default function AgentProxyPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -349,13 +349,13 @@ export default function AgentProxyPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Agent 列表</span>
-            <button
+            <Button
               onClick={fetchAgents}
-              className="p-1 rounded-md hover:bg-muted"
+              variant="icon-sm" className="hover:bg-muted"
               title="刷新"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
           <div className="relative">
             <input
@@ -372,7 +372,7 @@ export default function AgentProxyPage() {
               { value: 'available' as const, label: '可用' },
               { value: 'unavailable' as const, label: '未安装' },
             ].map((f) => (
-              <button
+              <Button variant="bare"
                 key={f.value}
                 onClick={() => setFilterAvail(f.value)}
                 className={`px-2 py-0.5 text-[10px] rounded-lg border transition-colors ${
@@ -382,7 +382,7 @@ export default function AgentProxyPage() {
                 }`}
               >
                 {f.label}
-              </button>
+              </Button>
             ))}
           </div>
           <div className="space-y-2">
@@ -421,9 +421,9 @@ export default function AgentProxyPage() {
       {/* Conversation History */}
       {conversations.length > 0 && (
         <div className="rounded-lg border border-border bg-card">
-          <button
+          <Button
             onClick={() => setShowHistory(!showHistory)}
-            className="flex items-center gap-2 w-full p-3 text-left hover:bg-muted/30 transition-colors"
+            variant="row" className="gap-2 p-3 hover:bg-muted/30 transition-colors"
           >
             <Clock className="w-4 h-4" />
             <span className="text-sm font-medium">对话历史</span>
@@ -432,7 +432,7 @@ export default function AgentProxyPage() {
             </Badge>
             <div className="flex-1" />
             {showHistory ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
+          </Button>
           {showHistory && (
             <div className="border-t border-border divide-y divide-border max-h-[300px] overflow-auto">
               {conversations.slice().reverse().map((conv) => (

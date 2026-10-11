@@ -287,7 +287,7 @@ export default function LimbPage() {
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-border">
         {([['tasks', '任务管理'], ['templates', '模板库'], ['history', '执行历史'], ['tools', 'RPA工具']] as const).map(([t, label]) => (
-          <button key={t} onClick={() => {
+          <Button variant="bare" key={t} onClick={() => {
             setTab(t as any);
             if (t === 'templates') fetchTemplates();
             if (t === 'history') fetchHistory();
@@ -295,14 +295,14 @@ export default function LimbPage() {
           }}
             className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
               tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}>{label}</button>
+            }`}>{label}</Button>
         ))}
       </div>
 
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-500 text-xs">
           <AlertCircle className="w-3.5 h-3.5" /><span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5"><X className="w-3.5 h-3.5" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="p-0.5"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -359,21 +359,21 @@ export default function LimbPage() {
                 </div>
                 <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border" onClick={(e) => e.stopPropagation()}>
                   {(task.status === 'queued') && (
-                    <button onClick={() => handleExecuteTask(task.task_id)} disabled={executing === task.task_id}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50">
+                    <Button onClick={() => handleExecuteTask(task.task_id)} disabled={executing === task.task_id}
+                      variant="chip-xs" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50">
                       {executing === task.task_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}执行
-                    </button>
+                    </Button>
                   )}
                   {task.status === 'running' && (
-                    <button onClick={() => handleCancelTask(task.task_id)}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
+                    <Button onClick={() => handleCancelTask(task.task_id)}
+                      variant="chip-xs" className="flex items-center gap-1 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20">
                       <Square className="w-3 h-3" />取消
-                    </button>
+                    </Button>
                   )}
-                  <button onClick={() => handleDeleteTask(task.task_id, task.name)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
+                  <Button onClick={() => handleDeleteTask(task.task_id, task.name)}
+                    variant="chip-xs" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20">
                     <Trash2 className="w-3 h-3" />删除
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
@@ -407,15 +407,15 @@ export default function LimbPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border">
-                <button onClick={() => handleInstantiateTemplate(tmpl.template_id)}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary/10 text-primary rounded-lg hover:bg-primary/20">
+                <Button onClick={() => handleInstantiateTemplate(tmpl.template_id)}
+                  variant="chip-xs" className="flex items-center gap-1 bg-primary/10 text-primary hover:bg-primary/20">
                   <Copy className="w-3 h-3" />实例化
-                </button>
+                </Button>
                 {!tmpl.is_builtin && (
-                  <button onClick={() => handleDeleteTemplate(tmpl.template_id, tmpl.name)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
+                  <Button onClick={() => handleDeleteTemplate(tmpl.template_id, tmpl.name)}
+                    variant="chip-xs" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20">
                     <Trash2 className="w-3 h-3" />删除
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -530,7 +530,7 @@ export default function LimbPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">新建RPA任务</h2>
-              <button onClick={() => setShowCreateTask(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreateTask(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -570,7 +570,7 @@ export default function LimbPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">新建模板</h2>
-              <button onClick={() => setShowCreateTemplate(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreateTemplate(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -608,7 +608,7 @@ export default function LimbPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">任务详情</h2>
-              <button onClick={() => setSelectedTask(null)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setSelectedTask(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">

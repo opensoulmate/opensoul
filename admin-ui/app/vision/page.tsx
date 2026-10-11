@@ -219,7 +219,7 @@ export default function VisionPage() {
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
-            <button
+            <Button variant="bare"
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setPreviewUrl(null); setPreviewMeta(null); }}
               className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors ${
@@ -230,7 +230,7 @@ export default function VisionPage() {
             >
               <Icon className="w-3.5 h-3.5" />
               {tab.label}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -414,12 +414,12 @@ export default function VisionPage() {
                     {f.created_at && ` · ${new Date(f.created_at).toLocaleString('zh-CN')}`}
                   </span>
                 </div>
-                <button
+                <Button
                   onClick={() => handleDeleteOutput(f.filename)}
-                  className="text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 shrink-0"
+                  variant="chip-xs" className="bg-red-500/10 text-red-500 hover:bg-red-500/20 shrink-0"
                 >
                   <Trash2 className="w-3 h-3" />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -431,7 +431,7 @@ export default function VisionPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500 flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded-md"><X className="w-3 h-3" /></button>
+          <Button onClick={() => setError('')} variant="icon-sm" className="hover:bg-muted"><X className="w-3 h-3" /></Button>
         </div>
       )}
     </div>

@@ -97,9 +97,9 @@ function RequestCard({
       request.status === 'rejected' ? 'border-red-500/20' :
       'border-border'
     }`}>
-      <button
+      <Button
         onClick={onToggle}
-        className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/30 transition-colors"
+        variant="row" className="gap-3 p-3 hover:bg-muted/30 transition-colors"
       >
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
           type === 'create' ? 'bg-blue-500/10' : 'bg-purple-500/10'
@@ -144,7 +144,7 @@ function RequestCard({
         </div>
 
         {expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="px-3 pb-3 border-t border-border pt-2 space-y-3">
@@ -209,22 +209,22 @@ function RequestCard({
                 onChange={(e) => setReviewNote(e.target.value)}
               />
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   onClick={() => onReview(request.id, 'approved', reviewNote)}
                   disabled={reviewing}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 border border-green-500/20 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
+                  variant="chip-sm" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-green-500/20 hover:bg-emerald-500/20 disabled:opacity-50"
                 >
                   {reviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
                   通过
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => onReview(request.id, 'rejected', reviewNote)}
                   disabled={reviewing}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20 disabled:opacity-50"
+                  variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20 disabled:opacity-50"
                 >
                   {reviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
                   拒绝
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -397,7 +397,7 @@ export default function KbRequestsPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 

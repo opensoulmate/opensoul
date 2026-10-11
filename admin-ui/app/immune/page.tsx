@@ -226,7 +226,7 @@ export default function ImmunePage() {
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-500 text-xs">
           <AlertTriangle className="w-3.5 h-3.5" />{error}
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -257,13 +257,13 @@ export default function ImmunePage() {
       {/* Tab Bar */}
       <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit overflow-x-auto">
         {tabs.map(t => (
-          <button
+          <Button variant="bare"
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors whitespace-nowrap ${tab === t.key ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <t.icon className="w-3.5 h-3.5" />{t.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -278,10 +278,10 @@ export default function ImmunePage() {
               placeholder="输入要扫描的文本内容（PII检测、敏感数据检测等）..."
             />
             <div className="flex items-center gap-2 mt-3">
-              <button onClick={handleModerate} disabled={moderateLoading || !moderateText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20 disabled:opacity-50">
+              <Button onClick={handleModerate} disabled={moderateLoading || !moderateText.trim()} variant="chip-sm" className="flex items-center gap-1.5 bg-primary/10 text-primary border border-border hover:bg-primary/20 disabled:opacity-50">
                 {moderateLoading ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
                 {moderateLoading ? '扫描中...' : '开始扫描'}
-              </button>
+              </Button>
             </div>
             {moderateResult && (
               <div className="mt-4 p-3 rounded-lg bg-muted/50 space-y-3">
@@ -320,12 +320,12 @@ export default function ImmunePage() {
       {tab === 'ip' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button onClick={() => { setIpAction('blacklist'); setShowAddIp(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-border rounded-lg hover:bg-red-500/20">
+            <Button onClick={() => { setIpAction('blacklist'); setShowAddIp(true); }} variant="chip-sm" className="flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-border hover:bg-red-500/20">
               <Ban className="w-3.5 h-3.5" />加入黑名单
-            </button>
-            <button onClick={() => { setIpAction('whitelist'); setShowAddIp(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 border border-border rounded-lg hover:bg-emerald-500/20">
+            </Button>
+            <Button onClick={() => { setIpAction('whitelist'); setShowAddIp(true); }} variant="chip-sm" className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border border-border hover:bg-emerald-500/20">
               <CheckCircle className="w-3.5 h-3.5" />加入白名单
-            </button>
+            </Button>
             <Button onClick={fetchIpLists} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </Button>
@@ -346,9 +346,9 @@ export default function ImmunePage() {
                       <div className="text-sm font-mono">{entry.ip}</div>
                       <div className="text-xs text-muted-foreground">{entry.reason || '—'}</div>
                     </div>
-                    <button onClick={() => handleRemoveIp(entry.ip, 'blacklist')} className="p-1 text-muted-foreground hover:text-red-500">
+                    <Button variant="bare" onClick={() => handleRemoveIp(entry.ip, 'blacklist')} className="p-1 text-muted-foreground hover:text-red-500">
                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -368,9 +368,9 @@ export default function ImmunePage() {
                       <div className="text-sm font-mono">{entry.ip}</div>
                       <div className="text-xs text-muted-foreground">{entry.reason || '—'}</div>
                     </div>
-                    <button onClick={() => handleRemoveIp(entry.ip, 'whitelist')} className="p-1 text-muted-foreground hover:text-red-500">
+                    <Button variant="bare" onClick={() => handleRemoveIp(entry.ip, 'whitelist')} className="p-1 text-muted-foreground hover:text-red-500">
                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -396,7 +396,7 @@ export default function ImmunePage() {
                 {blockedIps.map(ip => (
                   <div key={ip} className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 rounded text-xs">
                     <span className="font-mono">{ip}</span>
-                    <button onClick={() => handleUnblockIp(ip)} className="text-muted-foreground hover:text-green-600"><Unlock className="w-3 h-3" /></button>
+                    <Button variant="bare" onClick={() => handleUnblockIp(ip)} className="text-muted-foreground hover:text-green-600"><Unlock className="w-3 h-3" /></Button>
                   </div>
                 ))}
               </div>
@@ -427,9 +427,9 @@ export default function ImmunePage() {
                     <td className="px-2 lg:px-4 py-2.5 text-xs text-muted-foreground truncate max-w-[200px]">{t.detail}</td>
                     <td className="px-2 lg:px-4 py-2.5 text-xs text-muted-foreground">{t.timestamp ? new Date(t.timestamp).toLocaleString() : '—'}</td>
                     <td className="px-2 lg:px-4 py-2.5 text-right">
-                      <button onClick={() => handleBlockIp(t.source_ip)} className="p-1 text-muted-foreground hover:text-red-500" title="封锁IP">
+                      <Button variant="bare" onClick={() => handleBlockIp(t.source_ip)} className="p-1 text-muted-foreground hover:text-red-500" title="封锁IP">
                         <Ban className="w-3.5 h-3.5" />
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -504,9 +504,9 @@ export default function ImmunePage() {
             <Button onClick={fetchRateStats} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
             </Button>
-            <button onClick={handleResetRateLimit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 border border-border rounded-lg hover:bg-amber-500/20">
+            <Button onClick={handleResetRateLimit} variant="chip-sm" className="flex items-center gap-1.5 bg-amber-500/10 text-amber-500 border border-border hover:bg-amber-500/20">
               <Zap className="w-3.5 h-3.5" />重置计数
-            </button>
+            </Button>
           </div>
 
           {rateStats && (
@@ -547,7 +547,7 @@ export default function ImmunePage() {
           <div className="bg-card rounded-lg border border-border p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium">{ipAction === 'blacklist' ? '加入黑名单' : '加入白名单'}</h2>
-              <button onClick={() => setShowAddIp(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowAddIp(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             <div className="space-y-3">
               <div>
@@ -566,11 +566,11 @@ export default function ImmunePage() {
               )}
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowAddIp(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
-              <button onClick={handleAddIp} disabled={!ipForm.ip.trim()} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm rounded-lg disabled:opacity-50 ${ipAction === 'blacklist' ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
+              <Button onClick={() => setShowAddIp(false)} variant="chip-sm" className="bg-muted border border-border">取消</Button>
+              <Button onClick={handleAddIp} disabled={!ipForm.ip.trim()} variant="chip-sm" className={`flex items-center gap-1.5 disabled:opacity-50  ${ipAction === 'blacklist' ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
                 {ipAction === 'blacklist' ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                 确认
-              </button>
+              </Button>
             </div>
           </div>
         </div>

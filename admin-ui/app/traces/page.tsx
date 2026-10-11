@@ -109,9 +109,9 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
 
   return (
     <div className="border border-border rounded-lg bg-card">
-      <button
+      <Button
         onClick={onToggle}
-        className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/30 transition-colors"
+        variant="row" className="gap-3 p-3 hover:bg-muted/30 transition-colors"
       >
         {/* Immutable badge */}
         <div className="relative">
@@ -149,7 +149,7 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
         </div>
 
         {expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="px-3 pb-3 border-t border-border pt-2">
@@ -382,9 +382,9 @@ export default function TracesPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
+          <Button onClick={() => setError('')} variant="icon-sm" className="ml-auto hover:bg-muted">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

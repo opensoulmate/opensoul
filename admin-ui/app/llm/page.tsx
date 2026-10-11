@@ -155,7 +155,7 @@ export default function LlmPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -202,14 +202,14 @@ export default function LlmPage() {
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             {saving ? '保存中...' : '保存'}
           </Button>
-          <button
+          <Button
             onClick={handleTest}
             disabled={testing}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50"
+            variant="chip-sm" className="flex items-center gap-1 bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20 disabled:opacity-50"
           >
             {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
             {testing ? '测试中...' : '测试连接'}
-          </button>
+          </Button>
         </div>
         {testResult && (
           <div className={`mt-3 p-2 rounded text-xs ${testResult.status === 'ok' ? 'bg-green-500/5 text-green-600 border border-green-500/20' : 'bg-red-500/5 text-red-500 border border-red-500/20'}`}>
@@ -266,9 +266,9 @@ export default function LlmPage() {
                       </div>
                     )}
                   </div>
-                  <button onClick={() => handleDeleteProvider(p.name)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除">
+                  <Button onClick={() => handleDeleteProvider(p.name)} variant="icon-md" className="hover:bg-red-500/10" title="删除">
                     <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -282,7 +282,7 @@ export default function LlmPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加 Provider</h2>
-              <button onClick={() => setShowAddProvider(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowAddProvider(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

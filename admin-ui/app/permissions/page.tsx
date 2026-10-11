@@ -168,7 +168,7 @@ export default function PermissionsPage() {
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 p-3 text-xs text-red-600 dark:text-red-400 flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-md"><X className="w-3.5 h-3.5" /></button>
+          <Button onClick={() => setError('')} variant="icon-xs" className="hover:bg-red-100 dark:hover:bg-red-900/30"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -197,10 +197,10 @@ export default function PermissionsPage() {
           { key: 'policies', label: '权限策略', icon: Key },
           { key: 'assignments', label: '角色分配', icon: FileText },
         ] as { key: Tab; label: string; icon: any }[]).map((t) => (
-          <button
+          <Button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+            variant="tabline" className={`font-medium  ${
               tab === t.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -208,7 +208,7 @@ export default function PermissionsPage() {
           >
             <t.icon className="w-3.5 h-3.5" />
             {t.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -267,13 +267,13 @@ export default function PermissionsPage() {
                     </td>
                     <td className="px-2 lg:px-4 py-2.5 text-xs text-muted-foreground">{policyCount} 条</td>
                     <td className="px-2 lg:px-4 py-2.5 text-right">
-                      <button
+                      <Button
                         onClick={() => handleDeleteRole(r.name)}
-                        className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-md"
+                        variant="icon-sm" className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
                         title="删除角色"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 );
@@ -312,13 +312,13 @@ export default function PermissionsPage() {
                   <td className="px-2 lg:px-4 py-2.5 text-xs font-mono">{p.resource}</td>
                   <td className="px-2 lg:px-4 py-2.5 text-xs font-mono">{p.action}</td>
                   <td className="px-2 lg:px-4 py-2.5 text-right">
-                    <button
+                    <Button
                       onClick={() => handleDeletePolicy(p)}
-                      className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-md"
+                      variant="icon-sm" className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
                       title="删除策略"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -350,7 +350,7 @@ export default function PermissionsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">新建角色</h2>
-              <button onClick={() => setShowCreateRole(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreateRole(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -379,7 +379,7 @@ export default function PermissionsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加权限策略</h2>
-              <button onClick={() => setShowCreatePolicy(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreatePolicy(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -428,7 +428,7 @@ export default function PermissionsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">分配角色</h2>
-              <button onClick={() => setShowAssignRole(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowAssignRole(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

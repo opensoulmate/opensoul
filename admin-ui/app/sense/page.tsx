@@ -319,16 +319,16 @@ export default function SensePage() {
           ].map((t) => {
             const Icon = t.icon;
             return (
-              <button
+              <Button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm rounded-lg transition-colors ${
+                variant="chip-sm" className={`flex items-center gap-1.5 transition-colors  ${
                   tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
                 {t.label}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -342,7 +342,7 @@ export default function SensePage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -363,7 +363,7 @@ export default function SensePage() {
               <span className="text-sm font-medium">快速操作</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button
+              <Button variant="bare"
                 onClick={() => setTab('ocr')}
                 className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
@@ -372,8 +372,8 @@ export default function SensePage() {
                   <div className="text-xs font-medium">OCR识别</div>
                   <div className="text-[10px] text-muted-foreground">图片/PDF文字提取</div>
                 </div>
-              </button>
-              <button
+              </Button>
+              <Button variant="bare"
                 onClick={() => setTab('asr')}
                 className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
@@ -382,7 +382,7 @@ export default function SensePage() {
                   <div className="text-xs font-medium">语音转写</div>
                   <div className="text-[10px] text-muted-foreground">音频→文字</div>
                 </div>
-              </button>
+              </Button>
               <div className="flex items-center gap-2 p-3 rounded-lg border border-border opacity-50">
                 <Image className="w-4 h-4 text-purple-500" />
                 <div className="text-left">

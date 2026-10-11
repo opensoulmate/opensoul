@@ -253,7 +253,7 @@ export default function NervePage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -365,9 +365,9 @@ export default function NervePage() {
                       <span>注册: {formatTime(sub.created_at)}</span>
                     </div>
                   </div>
-                  <button onClick={() => handleUnsubscribe(sub.id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="取消订阅">
+                  <Button onClick={() => handleUnsubscribe(sub.id)} variant="icon-md" className="hover:bg-red-500/10" title="取消订阅">
                     <Unplug className="w-3.5 h-3.5 text-red-500" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))
@@ -409,12 +409,12 @@ export default function NervePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => handleHeartbeat(node.node_id)} className="p-1.5 rounded-md hover:bg-blue-500/10" title="发送心跳">
+                    <Button onClick={() => handleHeartbeat(node.node_id)} variant="icon-md" className="hover:bg-blue-500/10" title="发送心跳">
                       <Activity className="w-3.5 h-3.5 text-blue-500" />
-                    </button>
-                    <button onClick={() => handleRemoveNode(node.node_id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="移除">
+                    </Button>
+                    <Button onClick={() => handleRemoveNode(node.node_id)} variant="icon-md" className="hover:bg-red-500/10" title="移除">
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -429,7 +429,7 @@ export default function NervePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">发布事件</h2>
-              <button onClick={() => setShowPublish(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowPublish(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -461,7 +461,7 @@ export default function NervePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加订阅</h2>
-              <button onClick={() => setShowSubscribe(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowSubscribe(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -493,7 +493,7 @@ export default function NervePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">注册节点</h2>
-              <button onClick={() => setShowRegisterNode(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowRegisterNode(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

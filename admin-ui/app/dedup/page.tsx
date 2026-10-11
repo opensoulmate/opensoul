@@ -73,9 +73,9 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
 
   return (
     <div className={`border rounded-lg bg-card transition-colors ${sev.color}`}>
-      <button
+      <Button
         onClick={onToggle}
-        className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/20 transition-colors"
+        variant="row" className="gap-3 p-3 hover:bg-muted/20 transition-colors"
       >
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${sev.badge}`}>
           <Copy className="w-5 h-5" />
@@ -97,7 +97,7 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
           <SimilarityBar value={pair.similarity} />
         </div>
         {expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="px-3 pb-3 border-t border-border pt-2 space-y-2">
@@ -123,18 +123,18 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
+            <Button
               onClick={() => onRemove(pair.id_b)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20"
+              variant="chip-sm" className="flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20"
             >
               <Trash2 className="w-3 h-3" />删除条目B（保留A）
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => onRemove(pair.id_a)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20"
+              variant="chip-sm" className="flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20"
             >
               <Trash2 className="w-3 h-3" />删除条目A（保留B）
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -355,14 +355,14 @@ export default function DedupPage() {
               <Button onClick={() => setShowDedupConfirm(false)} variant="secondary">
                 取消
               </Button>
-              <button
+              <Button
                 onClick={handleDeduplicate}
                 disabled={deduping}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
+                variant="chip-sm" className="flex items-center gap-1.5 bg-red-500 text-white hover:bg-red-600 disabled:opacity-50"
               >
                 {deduping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                 确认去重
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -373,9 +373,9 @@ export default function DedupPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
+          <Button onClick={() => setError('')} variant="icon-sm" className="ml-auto hover:bg-muted">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -333,9 +333,9 @@ export default function NestPage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 rounded-md hover:bg-red-500/10">
+          <Button onClick={() => setError('')} variant="icon-xs" className="hover:bg-red-500/10">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
 
@@ -366,15 +366,15 @@ export default function NestPage() {
           { key: 'policies', label: '隔离策略', icon: <Shield className="w-3.5 h-3.5" /> },
           { key: 'audit', label: '访问审计', icon: <FileText className="w-3.5 h-3.5" /> },
         ] as { key: Tab; label: string; icon: React.ReactNode }[]).map((t) => (
-          <button
+          <Button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+            variant="tabline" className={`font-medium  ${
               tab === t.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
             {t.icon}{t.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -460,29 +460,29 @@ export default function NestPage() {
                     <td className="px-2 lg:px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {t.status === 'active' ? (
-                          <button
+                          <Button
                             onClick={() => handleSuspend(t.tenant_id)}
-                            className="p-1 rounded-md hover:bg-amber-500/10"
+                            variant="icon-sm" className="hover:bg-amber-500/10"
                             title="暂停"
                           >
                             <PauseCircle className="w-3 h-3 text-orange-500" />
-                          </button>
+                          </Button>
                         ) : (
-                          <button
+                          <Button
                             onClick={() => handleReactivate(t.tenant_id)}
-                            className="p-1 rounded-md hover:bg-emerald-500/10"
+                            variant="icon-sm" className="hover:bg-emerald-500/10"
                             title="恢复"
                           >
                             <PlayCircle className="w-3 h-3 text-green-600" />
-                          </button>
+                          </Button>
                         )}
-                        <button
+                        <Button
                           onClick={() => handleDelete(t.tenant_id)}
-                          className="p-1 rounded-md hover:bg-red-500/10"
+                          variant="icon-sm" className="hover:bg-red-500/10"
                           title="删除"
                         >
                           <Trash2 className="w-3 h-3 text-red-500" />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -559,12 +559,12 @@ export default function NestPage() {
                             <input type="checkbox" checked={policyForm.audit_access} onChange={(e) => setPolicyForm(prev => ({ ...prev, audit_access: e.target.checked }))} className="w-3.5 h-3.5" />
                           </td>
                           <td className="px-2 lg:px-4 py-2.5 text-right">
-                            <button onClick={() => handleUpdatePolicy(p.resource_type)} className="p-1 rounded-md hover:bg-primary/10" title="保存">
+                            <Button onClick={() => handleUpdatePolicy(p.resource_type)} variant="icon-sm" className="hover:bg-primary/10" title="保存">
                               <Save className="w-3 h-3 text-primary" />
-                            </button>
-                            <button onClick={() => setEditingPolicy(null)} className="p-1 rounded-md hover:bg-muted ml-1" title="取消">
+                            </Button>
+                            <Button onClick={() => setEditingPolicy(null)} variant="icon-sm" className="hover:bg-muted ml-1" title="取消">
                               <X className="w-3 h-3 text-muted-foreground" />
-                            </button>
+                            </Button>
                           </td>
                         </>
                       ) : (
@@ -582,7 +582,7 @@ export default function NestPage() {
                             {p.audit_access ? <CheckCircle className="w-3.5 h-3.5 text-green-600 mx-auto" /> : <X className="w-3.5 h-3.5 text-muted-foreground mx-auto" />}
                           </td>
                           <td className="px-2 lg:px-4 py-2.5 text-right">
-                            <button
+                            <Button
                               onClick={() => {
                                 setEditingPolicy(p.resource_type);
                                 setPolicyForm({
@@ -592,11 +592,11 @@ export default function NestPage() {
                                   audit_access: p.audit_access,
                                 });
                               }}
-                              className="p-1 rounded-md hover:bg-muted"
+                              variant="icon-sm" className="hover:bg-muted"
                               title="编辑"
                             >
                               <Edit3 className="w-3 h-3 text-muted-foreground" />
-                            </button>
+                            </Button>
                           </td>
                         </>
                       )}
@@ -680,9 +680,9 @@ export default function NestPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">新建租户</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted">
+              <Button onClick={() => setShowCreate(false)} variant="icon-sm" className="hover:bg-muted">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -734,9 +734,9 @@ export default function NestPage() {
                   <span className={`px-1.5 py-0.5 rounded-full ${TIER_COLORS[selectedTenant.tier]}`}>{TIERS.find(t => t.value === selectedTenant.tier)?.label || selectedTenant.tier}</span>
                 </div>
               </div>
-              <button onClick={() => { setShowDetail(false); setEditMode(false); }} className="p-1 rounded-md hover:bg-muted shrink-0 ml-2">
+              <Button onClick={() => { setShowDetail(false); setEditMode(false); }} variant="icon-sm" className="hover:bg-muted shrink-0 ml-2">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             {/* Content */}
@@ -832,17 +832,17 @@ export default function NestPage() {
                     <Edit3 className="w-3 h-3" />编辑
                   </Button>
                   {selectedTenant.status === 'active' ? (
-                    <button onClick={() => handleSuspend(selectedTenant.tenant_id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
+                    <Button onClick={() => handleSuspend(selectedTenant.tenant_id)} variant="chip-sm" className="flex items-center gap-1 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20">
                       <PauseCircle className="w-3 h-3" />暂停
-                    </button>
+                    </Button>
                   ) : (
-                    <button onClick={() => handleReactivate(selectedTenant.tenant_id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
+                    <Button onClick={() => handleReactivate(selectedTenant.tenant_id)} variant="chip-sm" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
                       <PlayCircle className="w-3 h-3" />恢复
-                    </button>
+                    </Button>
                   )}
-                  <button onClick={() => handleDelete(selectedTenant.tenant_id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto">
+                  <Button onClick={() => handleDelete(selectedTenant.tenant_id)} variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20 ml-auto">
                     <Trash2 className="w-3 h-3" />删除
-                  </button>
+                  </Button>
                 </>
               )}
             </div>

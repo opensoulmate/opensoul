@@ -213,7 +213,7 @@ export default function McpPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -244,20 +244,20 @@ export default function McpPage() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                   {srv.connected ? (
-                    <button onClick={() => handleDisconnect(srv.id)} className="p-1.5 rounded-md hover:bg-amber-500/10" title="断开">
+                    <Button onClick={() => handleDisconnect(srv.id)} variant="icon-md" className="hover:bg-amber-500/10" title="断开">
                       <Unlink className="w-3.5 h-3.5 text-orange-500" />
-                    </button>
+                    </Button>
                   ) : (
-                    <button onClick={() => handleConnect(srv.id)} className="p-1.5 rounded-md hover:bg-emerald-500/10" title="连接">
+                    <Button onClick={() => handleConnect(srv.id)} variant="icon-md" className="hover:bg-emerald-500/10" title="连接">
                       <Link className="w-3.5 h-3.5 text-green-500" />
-                    </button>
+                    </Button>
                   )}
-                  <button onClick={() => handleToggleEnabled(srv)} className={`p-1.5 rounded-md ${srv.enabled ? 'hover:bg-amber-500/10' : 'hover:bg-emerald-500/10'}`} title={srv.enabled ? '禁用' : '启用'}>
+                  <Button onClick={() => handleToggleEnabled(srv)} variant="icon-md" className={` ${srv.enabled ? 'hover:bg-amber-500/10' : 'hover:bg-emerald-500/10'}`} title={srv.enabled ? '禁用' : '启用'}>
                     {srv.enabled ? <Settings className="w-3.5 h-3.5 text-orange-500" /> : <Settings className="w-3.5 h-3.5 text-green-500" />}
-                  </button>
-                  <button onClick={() => handleDelete(srv.id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除">
+                  </Button>
+                  <Button onClick={() => handleDelete(srv.id)} variant="icon-md" className="hover:bg-red-500/10" title="删除">
                     <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -303,7 +303,7 @@ export default function McpPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加MCP服务器</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreate(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -355,7 +355,7 @@ export default function McpPage() {
                   {selectedServer.connected ? '已连接' : '未连接'}
                 </span>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3 min-h-0">
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -386,20 +386,20 @@ export default function McpPage() {
             </div>
             <div className="flex items-center gap-2 p-4 border-t border-border shrink-0">
               {selectedServer.connected ? (
-                <button onClick={() => handleDisconnect(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
+                <Button onClick={() => handleDisconnect(selectedServer.id)} variant="chip-sm" className="flex items-center gap-1 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20">
                   <Unlink className="w-3 h-3" />断开
-                </button>
+                </Button>
               ) : (
-                <button onClick={() => handleConnect(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
+                <Button onClick={() => handleConnect(selectedServer.id)} variant="chip-sm" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
                   <Link className="w-3 h-3" />连接
-                </button>
+                </Button>
               )}
               <Button onClick={handleSaveConfig} disabled={saving} variant="primary">
                 <Settings className="w-3 h-3" />{saving ? '保存中...' : '保存配置'}
               </Button>
-              <button onClick={() => handleDelete(selectedServer.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto">
+              <Button onClick={() => handleDelete(selectedServer.id)} variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20 ml-auto">
                 <Trash2 className="w-3 h-3" />删除
-              </button>
+              </Button>
             </div>
           </div>
         </div>

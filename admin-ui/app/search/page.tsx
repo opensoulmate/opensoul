@@ -113,7 +113,7 @@ export default function SearchPage() {
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-4 h-4" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-4 h-4" /></Button>
         </div>
       )}
 
@@ -147,7 +147,7 @@ export default function SearchPage() {
               { key: 'semantic' as const, label: '语义' },
               { key: 'fulltext' as const, label: '全文' },
             ].map(m => (
-              <button
+              <Button variant="bare"
                 key={m.key}
                 onClick={() => setMode(m.key)}
                 className={`px-2.5 py-1 text-xs lg:text-sm rounded-lg border transition-colors ${
@@ -157,7 +157,7 @@ export default function SearchPage() {
                 }`}
               >
                 {m.label}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -170,21 +170,21 @@ export default function SearchPage() {
               </Button>
               {showSourceFilter && (
                 <div className="absolute top-full left-0 mt-1 z-10 w-48 rounded-lg border border-border bg-card shadow-lg p-2 space-y-1">
-                  <button
+                  <Button variant="bare"
                     onClick={() => toggleSource('all')}
                     className={`w-full text-left px-2 py-1.5 text-xs lg:text-sm rounded-lg ${selectedSources.has('all') ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
                   >
                     全部来源
-                  </button>
+                  </Button>
                   {SOURCES.map(s => (
-                    <button
+                    <Button
                       key={s.key}
                       onClick={() => toggleSource(s.key)}
-                      className={`w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs lg:text-sm rounded-lg ${selectedSources.has(s.key) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+                      variant="row" className={`gap-2 px-2 py-1.5 text-xs lg:text-sm rounded-lg  ${selectedSources.has(s.key) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
                     >
                       <span className={s.color}>{s.icon}</span>
                       {s.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}

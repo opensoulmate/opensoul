@@ -313,9 +313,9 @@ export default function ReflexPage() {
         <Button onClick={fetchAll} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </Button>
-        <button onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/20">
+        <Button onClick={handleCleanup} variant="chip-sm" className="flex items-center gap-1.5 bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-500/20">
           <Clock className="w-3.5 h-3.5" />清理过期
-        </button>
+        </Button>
         <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />添加缓存
         </Button>
@@ -326,20 +326,20 @@ export default function ReflexPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
         {([['cache', '缓存列表', Layers], ['lookup', '模糊查询', Search], ['config', '配置', Settings]] as const).map(([key, label, Icon]) => (
-          <button
+          <Button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            variant="tabline" className={` ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             <Icon className="w-3.5 h-3.5" />{label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -419,12 +419,12 @@ export default function ReflexPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => startEdit(entry)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground" title="编辑">
+                        <Button onClick={() => startEdit(entry)} variant="icon-md" className="hover:bg-muted text-muted-foreground hover:text-foreground" title="编辑">
                           <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(entry.entry_id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-500" title="删除">
+                        </Button>
+                        <Button onClick={() => handleDelete(entry.entry_id)} variant="icon-md" className="hover:bg-red-500/10 text-muted-foreground hover:text-red-500" title="删除">
                           <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </>
@@ -561,7 +561,7 @@ export default function ReflexPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加缓存条目</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreate(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

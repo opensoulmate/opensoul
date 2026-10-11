@@ -189,7 +189,7 @@ export default function KnowledgePage() {
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 p-3 text-xs text-red-600 dark:text-red-400 flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-md"><X className="w-3.5 h-3.5" /></button>
+          <Button onClick={() => setError('')} variant="icon-xs" className="hover:bg-red-100 dark:hover:bg-red-900/30"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -232,14 +232,14 @@ export default function KnowledgePage() {
           <option value="all">全部类型</option>
           {types.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <button
+        <Button
           onClick={() => setFilterStarred(!filterStarred)}
-          className={`flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border rounded-lg ${
+          variant="chip-sm" className={`flex items-center gap-1 border  ${
             filterStarred ? 'bg-yellow-50 border-yellow-300 text-yellow-700 dark:bg-yellow-950/20 dark:border-yellow-800' : 'bg-muted border-border hover:bg-muted'
           }`}
         >
           <Star className="w-3.5 h-3.5" />收藏
-        </button>
+        </Button>
         <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-muted border border-border rounded-md hover:bg-muted/80 cursor-pointer">
           <Upload className="w-3.5 h-3.5" />{uploading ? '上传中...' : '上传文件'}
           <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
@@ -293,13 +293,13 @@ export default function KnowledgePage() {
               <h2 className="text-sm font-medium truncate flex-1 mr-2">{editing ? '编辑条目' : selected.title}</h2>
               <div className="flex items-center gap-1.5">
                 {!editing && (
-                  <button onClick={() => startEdit(selected)} className="p-1.5 rounded-md hover:bg-muted" title="编辑">
+                  <Button onClick={() => startEdit(selected)} variant="icon-md" className="hover:bg-muted" title="编辑">
                     <Edit2 className="w-4 h-4" />
-                  </button>
+                  </Button>
                 )}
-                <button onClick={() => { setSelected(null); setEditing(false); }} className="p-1.5 rounded-md hover:bg-muted">
+                <Button onClick={() => { setSelected(null); setEditing(false); }} variant="icon-md" className="hover:bg-muted">
                   <X className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             </div>
             <div className="p-4 space-y-3">
@@ -372,24 +372,24 @@ export default function KnowledgePage() {
                     </div>
                   )}
                   <div className="flex items-center gap-2 pt-2 border-t border-border">
-                    <button
+                    <Button
                       onClick={() => handleStar(selected.id)}
-                      className={`flex items-center gap-1 px-2 py-1 text-[10px] rounded-lg ${selected.starred ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/20' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                      variant="chip-xs" className={`flex items-center gap-1  ${selected.starred ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/20' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
                     >
                       <Star className="w-3 h-3" />{selected.starred ? '已收藏' : '收藏'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => handlePin(selected.id)}
-                      className={`flex items-center gap-1 px-2 py-1 text-[10px] rounded-lg ${selected.pinned ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/20' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                      variant="chip-xs" className={`flex items-center gap-1  ${selected.pinned ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/20' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
                     >
                       <Pin className="w-3 h-3" />{selected.pinned ? '已置顶' : '置顶'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => handleDelete(selected.id)}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-50 text-red-500 rounded-lg hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30"
+                      variant="chip-xs" className="flex items-center gap-1 bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30"
                     >
                       <Trash2 className="w-3 h-3" />删除
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -404,7 +404,7 @@ export default function KnowledgePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">添加知识条目</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreate(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -506,27 +506,27 @@ function KnowledgeCard({
           ))}
         </div>
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
+          <Button
             onClick={() => onStar(entry.id)}
-            className={`p-1 rounded-md ${entry.starred ? 'text-yellow-500' : 'text-muted-foreground hover:text-yellow-500'}`}
+            variant="icon-sm" className={` ${entry.starred ? 'text-yellow-500' : 'text-muted-foreground hover:text-yellow-500'}`}
             title="收藏"
           >
             <Star className="w-3.5 h-3.5" fill={entry.starred ? 'currentColor' : 'none'} />
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => onPin(entry.id)}
-            className={`p-1 rounded-md ${entry.pinned ? 'text-blue-500' : 'text-muted-foreground hover:text-blue-500'}`}
+            variant="icon-sm" className={` ${entry.pinned ? 'text-blue-500' : 'text-muted-foreground hover:text-blue-500'}`}
             title="置顶"
           >
             <Pin className="w-3.5 h-3.5" />
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => onDelete(entry.id)}
-            className="p-1 rounded-md text-muted-foreground hover:text-red-500"
+            variant="icon-sm" className="text-muted-foreground hover:text-red-500"
             title="删除"
           >
             <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

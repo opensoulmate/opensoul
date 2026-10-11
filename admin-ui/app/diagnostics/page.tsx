@@ -226,7 +226,7 @@ export default function DiagnosticsPage() {
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-500 text-xs">
           <AlertCircle className="w-3.5 h-3.5" /><span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5"><X className="w-3.5 h-3.5" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="p-0.5"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -318,7 +318,7 @@ export default function DiagnosticsPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h2 className="text-sm font-semibold">配置差异 ({configChanges.length} 项自定义)</h2>
-              <button onClick={() => setShowConfig(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowConfig(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {configChanges.length === 0 ? (

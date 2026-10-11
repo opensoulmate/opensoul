@@ -141,7 +141,7 @@ export default function FeedbackPage() {
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-500 text-xs">
           {error}
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -177,9 +177,9 @@ export default function FeedbackPage() {
           <option value="pattern">模式</option>
           <option value="decision">决策</option>
         </select>
-        <button onClick={() => { setExtractResult(null); setExtractText(''); setShowExtract(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20">
+        <Button onClick={() => { setExtractResult(null); setExtractText(''); setShowExtract(true); }} variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-border hover:bg-violet-500/20">
           <Sparkles className="w-3.5 h-3.5" />知识提取
-        </button>
+        </Button>
         <Button onClick={() => { fetchEntries(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </Button>
@@ -234,7 +234,7 @@ export default function FeedbackPage() {
                 {typeIcon(selected.feedback_type)}
                 <h2 className="text-lg font-medium">{selected.title}</h2>
               </div>
-              <button onClick={() => setShowDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
@@ -272,7 +272,7 @@ export default function FeedbackPage() {
                 <Sparkles className="w-5 h-5 text-purple-500" />
                 <h2 className="text-lg font-medium">知识提取</h2>
               </div>
-              <button onClick={() => setShowExtract(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowExtract(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             <div className="space-y-3">
               <div>
@@ -287,10 +287,10 @@ export default function FeedbackPage() {
                 <label className="text-xs text-muted-foreground mb-1 block">来源</label>
                 <input className="w-full px-3 py-1.5 text-sm bg-muted border border-border rounded-md" value={extractSource} onChange={e => setExtractSource(e.target.value)} placeholder="hermes" />
               </div>
-              <button onClick={handleExtract} disabled={extractLoading || !extractText.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20 disabled:opacity-50">
+              <Button onClick={handleExtract} disabled={extractLoading || !extractText.trim()} variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-border hover:bg-violet-500/20 disabled:opacity-50">
                 {extractLoading ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 {extractLoading ? '提取中...' : '开始提取'}
-              </button>
+              </Button>
 
               {extractResult && (
                 <div className="mt-4 space-y-3">

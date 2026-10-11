@@ -273,9 +273,9 @@ export default function AIGroupsPage() {
     const StsIcon = sts.icon;
     return (
       <div className="space-y-4">
-        <button onClick={() => setSelectedTask(null)} className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground hover:text-foreground">
+        <Button variant="bare" onClick={() => setSelectedTask(null)} className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-3.5 h-3.5" />返回群组详情
-        </button>
+        </Button>
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-start justify-between">
             <div>
@@ -297,14 +297,14 @@ export default function AIGroupsPage() {
               )}
               {(selectedTask.status === 'reviewing' || selectedTask.status === 'scored') && (
                 <>
-                  <button onClick={() => { handleVerifyTask(selectedTask.id, true); setSelectedTask(null); }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
+                  <Button onClick={() => { handleVerifyTask(selectedTask.id, true); setSelectedTask(null); }}
+                    variant="chip-sm" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
                     <CheckCircle className="w-3.5 h-3.5" />通过
-                  </button>
-                  <button onClick={() => { handleVerifyTask(selectedTask.id, false); setSelectedTask(null); }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
+                  </Button>
+                  <Button onClick={() => { handleVerifyTask(selectedTask.id, false); setSelectedTask(null); }}
+                    variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20">
                     <X className="w-3.5 h-3.5" />驳回
-                  </button>
+                  </Button>
                 </>
               )}
               <Button onClick={() => fetchDiscussion(selectedTask.id)} variant="secondary" className="gap-1">
@@ -358,7 +358,7 @@ export default function AIGroupsPage() {
             <div className="bg-card rounded-lg border border-border w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
                 <h3 className="text-sm font-medium">讨论记录</h3>
-                <button onClick={() => setShowDiscussion(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+                <Button onClick={() => setShowDiscussion(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-3">
                 {discussionMessages.length === 0 ? (
@@ -389,9 +389,9 @@ export default function AIGroupsPage() {
   if (selectedGroup) {
     return (
       <div className="space-y-4">
-        <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground hover:text-foreground">
+        <Button variant="bare" onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-3.5 h-3.5" />返回列表
-        </button>
+        </Button>
 
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-start justify-between">
@@ -406,24 +406,24 @@ export default function AIGroupsPage() {
               <Button onClick={() => { setTaskForm({ goal: '', constraints: '', criteria: '' }); setShowSubmitTask(true); }} variant="primary">
                 <Send className="w-3.5 h-3.5" />提交任务
               </Button>
-              <button onClick={() => handleDelete(selectedGroup.id)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
+              <Button onClick={() => handleDelete(selectedGroup.id)}
+                variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20">
                 <Trash2 className="w-3.5 h-3.5" />删除
-              </button>
+              </Button>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border">
-          <button onClick={() => setDetailTab('agents')}
+          <Button variant="bare" onClick={() => setDetailTab('agents')}
             className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${detailTab === 'agents' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             <Users className="w-3.5 h-3.5 inline mr-1" />Agent ({selectedGroup.agents?.length || 0})
-          </button>
-          <button onClick={() => setDetailTab('tasks')}
+          </Button>
+          <Button variant="bare" onClick={() => setDetailTab('tasks')}
             className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${detailTab === 'tasks' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             <ListChecks className="w-3.5 h-3.5 inline mr-1" />任务 ({selectedGroup.tasks?.length || 0})
-          </button>
+          </Button>
         </div>
 
         {/* Agents Tab */}
@@ -458,10 +458,10 @@ export default function AIGroupsPage() {
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => handleRemoveAgent(selectedGroup.id, agent.agent_id)}
-                    className="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-500">
+                  <Button onClick={() => handleRemoveAgent(selectedGroup.id, agent.agent_id)}
+                    variant="icon-md" className="hover:bg-red-500/10 text-muted-foreground hover:text-red-500">
                     <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -508,7 +508,7 @@ export default function AIGroupsPage() {
             <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h3 className="text-sm font-medium">添加Agent</h3>
-                <button onClick={() => setShowAddAgent(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+                <Button onClick={() => setShowAddAgent(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
               </div>
               <div className="p-4 space-y-3">
                 <div>
@@ -548,7 +548,7 @@ export default function AIGroupsPage() {
             <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h3 className="text-sm font-medium">提交任务</h3>
-                <button onClick={() => setShowSubmitTask(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+                <Button onClick={() => setShowSubmitTask(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
               </div>
               <div className="p-4 space-y-3">
                 <div>
@@ -587,7 +587,7 @@ export default function AIGroupsPage() {
         <div className="flex items-center gap-2 px-3 py-2 text-xs bg-red-500/10 text-red-500 rounded-md">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -682,7 +682,7 @@ export default function AIGroupsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h3 className="text-sm font-medium">新建AI群组</h3>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreate(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3">
               <div>
@@ -698,8 +698,8 @@ export default function AIGroupsPage() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs text-muted-foreground">初始Agent</label>
-                  <button onClick={() => setNewAgents((a) => [...a, { agent_id: '', name: '', role: 'executor', model: '' }])}
-                    className="text-[10px] text-primary hover:underline">+ 添加</button>
+                  <Button variant="bare" onClick={() => setNewAgents((a) => [...a, { agent_id: '', name: '', role: 'executor', model: '' }])}
+                    className="text-[10px] text-primary hover:underline">+ 添加</Button>
                 </div>
                 <div className="space-y-2">
                   {newAgents.map((agent, idx) => (
@@ -715,10 +715,10 @@ export default function AIGroupsPage() {
                         onChange={(e) => setNewAgents((a) => a.map((x, i) => i === idx ? { ...x, role: e.target.value } : x))}>
                         {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                       </select>
-                      <button onClick={() => setNewAgents((a) => a.filter((_, i) => i !== idx))}
-                        className="p-1 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-500">
+                      <Button onClick={() => setNewAgents((a) => a.filter((_, i) => i !== idx))}
+                        variant="icon-sm" className="hover:bg-red-500/10 text-muted-foreground hover:text-red-500">
                         <X className="w-3 h-3" />
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>

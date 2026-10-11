@@ -300,9 +300,9 @@ export default function NotificationsPage() {
         <Button onClick={handleTest} variant="secondary">
           <Beaker className="w-3.5 h-3.5" />测试
         </Button>
-        <button onClick={handleClearAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20">
+        <Button onClick={handleClearAll} variant="chip-sm" className="flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20">
           <Trash2 className="w-3.5 h-3.5" />清空
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -310,7 +310,7 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -343,28 +343,28 @@ export default function NotificationsPage() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {!notif.read && (
-                    <button
+                    <Button
                       onClick={() => handleMarkRead(notif.id)}
-                      className="p-1 rounded-md hover:bg-muted"
+                      variant="icon-sm" className="hover:bg-muted"
                       title="标为已读"
                     >
                       <CheckCheck className="w-3 h-3 text-muted-foreground" />
-                    </button>
+                    </Button>
                   )}
-                  <button
+                  <Button
                     onClick={() => { setForwardNotif(notif); setForwardChannel(''); }}
-                    className="p-1 rounded-md hover:bg-muted"
+                    variant="icon-sm" className="hover:bg-muted"
                     title="转发到Echo"
                   >
                     <Send className="w-3 h-3 text-muted-foreground" />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => handleDismiss(notif.id)}
-                    className="p-1 rounded-md hover:bg-muted"
+                    variant="icon-sm" className="hover:bg-muted"
                     title="关闭"
                   >
                     <X className="w-3 h-3 text-muted-foreground" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -391,7 +391,7 @@ export default function NotificationsPage() {
                 })()}
                 <h2 className="text-sm font-medium">{selectedNotif.emoji} {selectedNotif.title}</h2>
               </div>
-              <button onClick={() => setSelectedNotif(null)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setSelectedNotif(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 overflow-y-auto space-y-3 text-xs">
               <div className="p-3 rounded bg-muted/50">
@@ -443,7 +443,7 @@ export default function NotificationsPage() {
                 <Settings className="w-4 h-4 text-primary" />
                 <h2 className="text-sm font-medium">Echo 转发规则</h2>
               </div>
-              <button onClick={() => setShowForwardRules(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowForwardRules(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 overflow-y-auto space-y-3">
               <div className="flex items-center justify-between p-3 rounded bg-muted/30">
@@ -451,12 +451,12 @@ export default function NotificationsPage() {
                   <div className="text-xs font-medium">全局转发</div>
                   <div className="text-[10px] text-muted-foreground">启用后自动转发通知到Echo通道</div>
                 </div>
-                <button
+                <Button variant="bare"
                   onClick={() => handleToggleForward(!forwardRules.enabled)}
                   className={`relative w-10 h-5 rounded-full transition-colors ${forwardRules.enabled ? 'bg-green-500' : 'bg-muted'}`}
                 >
                   <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${forwardRules.enabled ? 'left-5' : 'left-0.5'}`} />
-                </button>
+                </Button>
               </div>
               <div className="text-xs text-muted-foreground">转发规则（通知级别 → Echo通道）</div>
               {Object.entries(forwardRules.rules).length === 0 ? (
@@ -498,7 +498,7 @@ export default function NotificationsPage() {
                 <BarChart3 className="w-4 h-4 text-primary" />
                 <h2 className="text-sm font-medium">通知统计</h2>
               </div>
-              <button onClick={() => setShowStats(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowStats(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 overflow-y-auto space-y-4">
               <div>
@@ -547,7 +547,7 @@ export default function NotificationsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">转发到 Echo 通道</h2>
-              <button onClick={() => setForwardNotif(null)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setForwardNotif(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div className="text-xs text-muted-foreground">

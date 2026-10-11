@@ -277,9 +277,9 @@ export default function GitPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
+          <Button onClick={() => setError('')} variant="icon-sm" className="ml-auto hover:bg-muted">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

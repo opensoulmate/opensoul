@@ -230,7 +230,7 @@ function SkillCard({
 
   return (
     <div className="border border-border rounded-lg bg-card hover:bg-muted/20 transition-colors">
-      <button
+      <Button variant="bare"
         onClick={onToggle}
         className="flex items-start gap-3 w-full p-4 text-left"
       >
@@ -286,15 +286,15 @@ function SkillCard({
         ) : (
           <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
         )}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-border pt-3">
           {/* Tabs */}
           <div className="flex items-center gap-1 mb-3 border-b border-border">
-            <button
+            <Button
               onClick={() => setActiveTab('versions')}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+              variant="tabline" className={`font-medium  ${
                 activeTab === 'versions' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -302,18 +302,18 @@ function SkillCard({
               {versions.length > 0 && (
                 <Badge variant="muted">{versions.length}</Badge>
               )}
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setActiveTab('gating')}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+              variant="tabline" className={`font-medium  ${
                 activeTab === 'gating' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <Shield className="w-3.5 h-3.5" />门控验证
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setActiveTab('proposals')}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+              variant="tabline" className={`font-medium  ${
                 activeTab === 'proposals' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -321,7 +321,7 @@ function SkillCard({
               {skillProposals.length > 0 && (
                 <Badge variant="accent">{skillProposals.length}</Badge>
               )}
-            </button>
+            </Button>
           </div>
 
           {/* Tab content */}
@@ -360,19 +360,19 @@ function SkillCard({
           {/* Actions */}
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
             {skill.installed && (
-              <button
+              <Button variant="bare"
                 onClick={() => onUninstall(skill.name)}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-colors"
               >
                 <Trash2 className="w-3 h-3" />卸载
-              </button>
+              </Button>
               )}
-              <button
+              <Button variant="bare"
                 onClick={() => onRollback(skill.name)}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20 transition-colors"
               >
                 <RotateCcw className="w-3 h-3" />回滚
-              </button>
+              </Button>
           </div>
         </div>
       )}
@@ -701,14 +701,14 @@ export default function SkillsPage() {
         <Button onClick={() => fetchData()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </Button>
-        <button
+        <Button
           onClick={handleMigrate}
           disabled={migrating}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-orange-500/10 text-orange-600 border border-orange-500/20 rounded-lg hover:bg-amber-500/20 disabled:opacity-50"
+          variant="chip-sm" className="flex items-center gap-1.5 bg-orange-500/10 text-orange-600 border border-orange-500/20 hover:bg-amber-500/20 disabled:opacity-50"
         >
           {migrating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderInput className="w-3.5 h-3.5" />}
           全部迁移
-        </button>
+        </Button>
         <Button onClick={() => { setShowInstall(true); setInstallResult(null); }} variant="primary" className="gap-1.5">
           <Download className="w-3.5 h-3.5" />安装技能
         </Button>
@@ -719,7 +719,7 @@ export default function SkillsPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -727,7 +727,7 @@ export default function SkillsPage() {
         <div className="flex items-center gap-2 p-2 text-xs bg-green-500/5 rounded-md border border-green-500/20">
           <CheckCircle className="w-3.5 h-3.5 text-green-600 shrink-0" />
           <span>迁移完成：{migrateResult.count > 0 ? `成功迁移 ${migrateResult.count} 个技能 (${migrateResult.migrated.join(', ')})` : '所有技能已在共享目录中'}</span>
-          <button onClick={() => setMigrateResult(null)}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setMigrateResult(null)}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -771,7 +771,7 @@ export default function SkillsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">安装技能</h2>
-              <button onClick={() => setShowInstall(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowInstall(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

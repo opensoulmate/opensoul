@@ -81,7 +81,7 @@ function TagDialog({ tag, onClose, onSave }: {
         <div className="flex items-center gap-2 mb-4">
           <Tag className="w-4 h-4" />
           <span className="text-sm font-medium">{tag ? '编辑标签' : '新建标签'}</span>
-          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+          <Button onClick={onClose} variant="icon-sm" className="ml-auto hover:bg-muted"><X className="w-4 h-4" /></Button>
         </div>
 
         <div className="space-y-3">
@@ -100,7 +100,7 @@ function TagDialog({ tag, onClose, onSave }: {
             <label className="text-xs text-muted-foreground mb-1 block">颜色</label>
             <div className="flex flex-wrap gap-1.5">
               {PRESET_COLORS.map((c) => (
-                <button
+                <Button variant="bare"
                   key={c}
                   onClick={() => setColor(c)}
                   className={`w-6 h-6 rounded-full border-2 transition-all ${color === c ? 'border-foreground scale-110' : 'border-transparent'}`}
@@ -265,13 +265,13 @@ export default function TagsPage() {
               <Button onClick={() => setEditingTag(tag)} variant="secondary" className="flex-1">
                 <Edit3 className="w-3 h-3" />编辑
               </Button>
-              <button
+              <Button
                 onClick={() => handleDelete(tag.id)}
                 disabled={deleting === tag.id}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20 disabled:opacity-50"
+                variant="chip-sm" className="flex items-center justify-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20 disabled:opacity-50"
               >
                 {deleting === tag.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-              </button>
+              </Button>
             </div>
           </div>
         ))}
@@ -305,9 +305,9 @@ export default function TagsPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
+          <Button onClick={() => setError('')} variant="icon-sm" className="ml-auto hover:bg-muted">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

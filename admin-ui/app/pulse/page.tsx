@@ -183,7 +183,7 @@ export default function PulsePage() {
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-500 text-xs">
           {error}
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -222,9 +222,9 @@ export default function PulsePage() {
         <Button onClick={() => { setShowTicks(true); fetchTicks(); }} variant="secondary">
           <BarChart3 className="w-3.5 h-3.5" />触发历史
         </Button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
+        <Button onClick={() => setShowCreate(true)} variant="chip-sm" className="flex items-center gap-1.5 bg-primary/10 text-primary border border-border hover:bg-primary/20">
           <Plus className="w-3.5 h-3.5" />新建信号
-        </button>
+        </Button>
         <Button onClick={() => { fetchSignals(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </Button>
@@ -257,21 +257,21 @@ export default function PulsePage() {
             <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
               {s.status === 'active' ? (
                 <>
-                  <button onClick={() => handlePause(s.signal_id)} className="text-[10px] px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded-lg hover:bg-yellow-500/20">
+                  <Button onClick={() => handlePause(s.signal_id)} variant="chip-xs" className="bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20">
                     <Pause className="w-3 h-3 inline mr-0.5" />暂停
-                  </button>
-                  <button onClick={() => handleTick(s.signal_id)} className="text-[10px] px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20">
+                  </Button>
+                  <Button onClick={() => handleTick(s.signal_id)} variant="chip-xs" className="bg-primary/10 text-primary hover:bg-primary/20">
                     <Zap className="w-3 h-3 inline mr-0.5" />手动触发
-                  </button>
+                  </Button>
                 </>
               ) : s.status === 'paused' ? (
-                <button onClick={() => handleResume(s.signal_id)} className="text-[10px] px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
+                <Button onClick={() => handleResume(s.signal_id)} variant="chip-xs" className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
                   <Play className="w-3 h-3 inline mr-0.5" />恢复
-                </button>
+                </Button>
               ) : null}
-              <button onClick={() => handleDelete(s.signal_id)} className="ml-auto text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
+              <Button onClick={() => handleDelete(s.signal_id)} variant="chip-xs" className="ml-auto bg-red-500/10 text-red-500 hover:bg-red-500/20">
                 <Trash2 className="w-3 h-3 inline mr-0.5" />删除
-              </button>
+              </Button>
             </div>
           </div>
         ))}
@@ -286,7 +286,7 @@ export default function PulsePage() {
           <div className="bg-card rounded-lg border border-border p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium">{selected.name}</h2>
-              <button onClick={() => setShowDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-2">
@@ -311,7 +311,7 @@ export default function PulsePage() {
           <div className="bg-card rounded-lg border border-border p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium">新建信号</h2>
-              <button onClick={() => setShowCreate(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowCreate(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             <div className="space-y-3">
               <div>
@@ -343,7 +343,7 @@ export default function PulsePage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
+              <Button onClick={() => setShowCreate(false)} variant="chip-sm" className="bg-muted border border-border">取消</Button>
               <Button onClick={handleCreate} disabled={saving || !form.name.trim()} variant="primary" className="gap-1.5">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}创建
               </Button>
@@ -358,7 +358,7 @@ export default function PulsePage() {
           <div className="bg-card rounded-lg border border-border p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium">触发历史</h2>
-              <button onClick={() => setShowTicks(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              <Button variant="bare" onClick={() => setShowTicks(false)}><X className="w-4 h-4 text-muted-foreground" /></Button>
             </div>
             {ticks.length === 0 ? (
               <div className="text-center text-muted-foreground py-8 text-sm">暂无触发记录</div>

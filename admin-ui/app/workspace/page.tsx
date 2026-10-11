@@ -9,6 +9,7 @@ import {
   HardDrive, Clock, Eye, Edit3, Save, Download, Trash2,
   Folder, Database, Shield, Settings,
 } from 'lucide-react';
+import { Button } from '../../components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -68,24 +69,24 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
   const parts = path.split('/').filter(Boolean);
   return (
     <div className="flex items-center gap-1 text-xs overflow-x-auto">
-      <button
+      <Button
         onClick={() => onNavigate('~')}
-        className="shrink-0 p-1 hover:bg-muted rounded-md"
+        variant="icon-sm" className="shrink-0 hover:bg-muted"
         title="Home"
       >
         <Home className="w-3.5 h-3.5" />
-      </button>
+      </Button>
       {parts.map((part, i) => {
         const subPath = '/' + parts.slice(0, i + 1).join('/');
         return (
           <span key={i} className="flex items-center gap-1 shrink-0">
             <ChevronRight className="w-3 h-3 text-muted-foreground" />
-            <button
+            <Button variant="bare"
               onClick={() => onNavigate(subPath)}
               className={`hover:text-primary hover:underline ${i === parts.length - 1 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}
             >
               {part}
-            </button>
+            </Button>
           </span>
         );
       })}
@@ -223,16 +224,16 @@ export default function WorkspacePage() {
       {/* ── Breadcrumb + Toolbar ── */}
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center gap-2 p-3 border-b border-border">
-          <button
+          <Button
             onClick={() => {
               const parent = currentPath.split('/').slice(0, -1).join('/') || '~';
               navigateTo(parent);
             }}
-            className="p-1.5 hover:bg-muted rounded-md shrink-0"
+            variant="icon-md" className="hover:bg-muted shrink-0"
             title="上级目录"
           >
             <ArrowLeft className="w-4 h-4" />
-          </button>
+          </Button>
           <div className="flex-1 min-w-0">
             <Breadcrumb path={currentPath} onNavigate={navigateTo} />
           </div>
@@ -249,20 +250,20 @@ export default function WorkspacePage() {
             <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} className="rounded" />
             隐藏文件
           </label>
-          <button
+          <Button
             onClick={() => fetchDir(currentPath)}
-            className="p-1.5 hover:bg-muted rounded-md shrink-0"
+            variant="icon-md" className="hover:bg-muted shrink-0"
             title="刷新"
           >
             <RefreshCw className="w-4 h-4" />
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setShowTerminal(!showTerminal)}
-            className={`p-1.5 rounded-md shrink-0 ${showTerminal ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+            variant="icon-md" className={`shrink-0  ${showTerminal ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
             title="终端"
           >
             <Terminal className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
 
         {/* ── File List ── */}
@@ -278,10 +279,10 @@ export default function WorkspacePage() {
             </div>
           ) : (
             filtered.map((entry) => (
-              <button
+              <Button
                 key={entry.path}
                 onClick={() => handleEntryClick(entry)}
-                className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-muted/30 transition-colors border-b border-border/50 last:border-0"
+                variant="row" className="gap-3 px-3 py-2 hover:bg-muted/30 transition-colors border-b border-border/50 last:border-0"
               >
                 {getFileIcon(entry.name, entry.type === 'directory')}
                 <div className="flex-1 min-w-0">
@@ -296,7 +297,7 @@ export default function WorkspacePage() {
                 <span className="text-[10px] text-muted-foreground w-24 text-right shrink-0">
                   {formatTime(entry.modified)}
                 </span>
-              </button>
+              </Button>
             ))
           )}
         </div>
@@ -309,12 +310,12 @@ export default function WorkspacePage() {
             <FileText className="w-4 h-4 text-green-500" />
             <span className="text-sm font-medium truncate flex-1">{viewingFile.path}</span>
             <span className="text-[10px] text-muted-foreground">{formatSize(viewingFile.size)}</span>
-            <button
+            <Button
               onClick={() => setViewingFile(null)}
-              className="p-1 hover:bg-muted rounded-md"
+              variant="icon-sm" className="hover:bg-muted"
             >
               <X className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
           <pre className="p-3 text-xs font-mono overflow-auto max-h-[400px] text-muted-foreground whitespace-pre-wrap break-all">
             {viewingFile.content}
@@ -336,18 +337,18 @@ export default function WorkspacePage() {
             <Terminal className="w-4 h-4 text-green-500" />
             <span className="text-sm font-medium">终端</span>
             <span className="text-[10px] text-muted-foreground font-mono">{currentPath}</span>
-            <button
+            <Button
               onClick={() => { setCmdHistory([]); }}
-              className="ml-auto p-1 hover:bg-muted rounded-md text-[10px] text-muted-foreground"
+              variant="icon-sm" className="ml-auto hover:bg-muted text-[10px] text-muted-foreground"
             >
               清空
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setShowTerminal(false)}
-              className="p-1 hover:bg-muted rounded-md"
+              variant="icon-sm" className="hover:bg-muted"
             >
               <X className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
 
           {/* Output */}
@@ -382,13 +383,13 @@ export default function WorkspacePage() {
               onKeyDown={(e) => { if (e.key === 'Enter') handleExecute(); }}
               disabled={cmdRunning}
             />
-            <button
+            <Button
               onClick={handleExecute}
               disabled={cmdRunning || !cmdInput.trim()}
-              className="p-1.5 hover:bg-muted rounded-md disabled:opacity-30"
+              variant="icon-md" className="hover:bg-muted disabled:opacity-30"
             >
               {cmdRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -398,9 +399,9 @@ export default function WorkspacePage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
+          <Button onClick={() => setError('')} variant="icon-sm" className="ml-auto hover:bg-muted">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

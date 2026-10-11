@@ -188,7 +188,7 @@ export default function PluginsPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -219,9 +219,9 @@ export default function PluginsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-                <button
+                <Button
                   onClick={() => handleToggle(plugin)}
-                  className={`p-1.5 rounded-md ${plugin.status === 'enabled' ? 'hover:bg-emerald-500/10' : 'hover:bg-muted'}`}
+                  variant="icon-md" className={` ${plugin.status === 'enabled' ? 'hover:bg-emerald-500/10' : 'hover:bg-muted'}`}
                   title={plugin.status === 'enabled' ? '禁用' : '启用'}
                 >
                   {plugin.status === 'enabled' ? (
@@ -229,14 +229,14 @@ export default function PluginsPage() {
                   ) : (
                     <PowerOff className="w-4 h-4 text-muted-foreground" />
                   )}
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => handleUninstall(plugin)}
-                  className="p-1.5 rounded-md hover:bg-red-500/10"
+                  variant="icon-md" className="hover:bg-red-500/10"
                   title="卸载"
                 >
                   <Trash2 className="w-4 h-4 text-red-500" />
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -255,7 +255,7 @@ export default function PluginsPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">安装插件</h2>
-              <button onClick={() => setShowInstall(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowInstall(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -331,7 +331,7 @@ export default function PluginsPage() {
                 <h2 className="text-sm font-medium">{selectedPlugin.name}</h2>
                 <Badge variant="muted">v{selectedPlugin.version}</Badge>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3 min-h-0">
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -356,23 +356,23 @@ export default function PluginsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 p-4 border-t border-border shrink-0">
-              <button
+              <Button
                 onClick={() => handleToggle(selectedPlugin)}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm rounded-lg ${selectedPlugin.status === 'enabled' ? 'bg-orange-500/10 text-orange-600 hover:bg-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'}`}
+                variant="chip-sm" className={`flex items-center gap-1  ${selectedPlugin.status === 'enabled' ? 'bg-orange-500/10 text-orange-600 hover:bg-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'}`}
               >
                 {selectedPlugin.status === 'enabled' ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
                 {selectedPlugin.status === 'enabled' ? '禁用' : '启用'}
-              </button>
+              </Button>
               <Button onClick={handleSaveConfig}
                 disabled={saving} variant="primary">
                 <Settings className="w-3 h-3" />{saving ? '保存中...' : '保存配置'}
               </Button>
-              <button
+              <Button
                 onClick={() => handleUninstall(selectedPlugin)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto"
+                variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20 ml-auto"
               >
                 <Trash2 className="w-3 h-3" />卸载
-              </button>
+              </Button>
             </div>
           </div>
         </div>

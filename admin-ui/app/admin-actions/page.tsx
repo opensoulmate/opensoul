@@ -8,6 +8,7 @@ import {
   Server, Wrench, FileText, BarChart3, Zap, Settings,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '../../components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ function ActionButton({ icon: Icon, label, sublabel, onClick, loading, variant =
     warning: 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20',
   };
   return (
-    <button
+    <Button variant="bare"
       onClick={onClick}
       disabled={loading}
       className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors disabled:opacity-50 ${colors[variant]}`}
@@ -82,7 +83,7 @@ function ActionButton({ icon: Icon, label, sublabel, onClick, loading, variant =
       {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Icon className="w-6 h-6" />}
       <span className="text-xs font-medium">{label}</span>
       <span className="text-[10px] opacity-70">{sublabel}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -111,7 +112,7 @@ function ResultPanel({ result, onClose }: { result: ActionResult; onClose: () =>
             <Badge variant="success">清理 {result.cleaned}/{result.total}</Badge>
           )}
         </div>
-        <button onClick={onClose} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+        <Button onClick={onClose} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
       </div>
       {result.results && (
         <div className="p-3 space-y-1">
@@ -231,7 +232,7 @@ export default function AdminActionsPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><Clock className="w-3.5 h-3.5" />更新时间</div>
           <div className="text-xs font-medium">{overview ? formatTime(overview.timestamp) : '-'}</div>
-          <button onClick={fetchOverview} className="text-[10px] text-primary mt-1 hover:underline">刷新</button>
+          <Button variant="bare" onClick={fetchOverview} className="text-[10px] text-primary mt-1 hover:underline">刷新</Button>
         </div>
       </div>
 
@@ -240,24 +241,24 @@ export default function AdminActionsPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
         {([['actions', '运维操作', Wrench], ['overview', '系统总览', BarChart3], ['report', '系统报告', FileText]] as const).map(([key, label, Icon]) => (
-          <button
+          <Button
             key={key}
             onClick={() => {
               setTab(key);
               if (key === 'overview' && !overview) fetchOverview();
               if (key === 'report' && !report) fetchReport();
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            variant="tabline" className={` ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             <Icon className="w-3.5 h-3.5" />{label}
-          </button>
+          </Button>
         ))}
       </div>
 

@@ -214,37 +214,37 @@ export default function HealerPage() {
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
           onClick={handleDiagnoseAll}
           disabled={!!actionLoading}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50"
+          variant="chip-lg" className="flex items-center gap-1.5 bg-blue-500/10 text-blue-600 border border-blue-500/20 hover:bg-blue-500/20 disabled:opacity-50"
         >
           {actionLoading === 'diagnose' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Stethoscope className="w-3.5 h-3.5" />}
           全量诊断
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={handleHealAll}
           disabled={!!actionLoading}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 border border-green-500/20 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
+          variant="chip-lg" className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border border-green-500/20 hover:bg-emerald-500/20 disabled:opacity-50"
         >
           {actionLoading === 'heal' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Heart className="w-3.5 h-3.5" />}
           诊断+修复
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={handleFullCycle}
           disabled={!!actionLoading}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-primary/10 text-primary border border-primary/20 rounded-lg hover:bg-primary/20 disabled:opacity-50"
+          variant="chip-lg" className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 disabled:opacity-50"
         >
           {actionLoading === 'cycle' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
           完整周期 (诊断→修复→通知→审计)
-        </button>
+        </Button>
         <div className="flex-1" />
-        <button
+        <Button variant="bare"
           onClick={() => setShowHistory(!showHistory)}
           className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg border transition-colors ${showHistory ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted border-border text-muted-foreground hover:bg-muted'}`}
         >
           <History className="w-3.5 h-3.5" />历史记录
-        </button>
+        </Button>
         <Button onClick={fetchData} variant="secondary" className="py-2">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </Button>
@@ -255,7 +255,7 @@ export default function HealerPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -306,10 +306,10 @@ export default function HealerPage() {
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-[10px] text-muted-foreground font-mono">{organ.response_time_ms}ms</span>
                       {!organ.healthy && (
-                        <button
+                        <Button
                           onClick={(e) => { e.stopPropagation(); handleHealOne(organ.organ); }}
                           disabled={!!actionLoading}
-                          className="p-1 rounded-md hover:bg-emerald-500/10"
+                          variant="icon-sm" className="hover:bg-emerald-500/10"
                           title="修复"
                         >
                           {actionLoading === `heal-${organ.organ}` ? (
@@ -317,12 +317,12 @@ export default function HealerPage() {
                           ) : (
                             <Heart className="w-3 h-3 text-green-500" />
                           )}
-                        </button>
+                        </Button>
                       )}
-                      <button
+                      <Button
                         onClick={(e) => { e.stopPropagation(); handleDiagnoseOne(organ.organ); }}
                         disabled={!!actionLoading}
-                        className="p-1 rounded-md hover:bg-blue-500/10"
+                        variant="icon-sm" className="hover:bg-blue-500/10"
                         title="重新诊断"
                       >
                         {actionLoading === `diagnose-${organ.organ}` ? (
@@ -330,7 +330,7 @@ export default function HealerPage() {
                         ) : (
                           <RefreshCw className="w-3 h-3 text-blue-500" />
                         )}
-                      </button>
+                      </Button>
                       {isExpanded ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
                     </div>
                   </div>

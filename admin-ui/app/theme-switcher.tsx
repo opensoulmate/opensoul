@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { Moon, Sun, Palette } from 'lucide-react';
 import { cn } from '@opensoulmate/openface';
 import { type ThemeId, getStoredTheme, persistTheme, applyTheme } from '@/lib/theme';
+import { Button } from '../components/ui/button';
 
 const OPTIONS: { id: ThemeId; label: string; Icon: typeof Moon }[] = [
   { id: 'dark', label: '深色', Icon: Moon },
@@ -27,7 +28,7 @@ export function ThemeSwitcher() {
   return (
     <div className="flex items-center gap-0.5" data-testid="theme-switcher">
       {OPTIONS.map(({ id, label, Icon }) => (
-        <button
+        <Button variant="bare"
           key={id}
           type="button"
           title={`主题：${label}`}
@@ -45,7 +46,7 @@ export function ThemeSwitcher() {
           )}
         >
           <Icon className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       ))}
     </div>
   );

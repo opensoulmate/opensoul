@@ -128,7 +128,7 @@ export default function IntelligencePage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
+          <Button onClick={() => setError('')} variant="icon-xs" className="hover:bg-red-500/20"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -168,9 +168,9 @@ export default function IntelligencePage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1 border-b border-border">
           {([['overview', '总览'], ['insights', '洞察'], ['components', '组件'], ['recommendations', '建议']] as const).map(([key, label]) => (
-            <button key={key} onClick={() => setTab(key as any)} className={`px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+            <Button variant="bare" key={key} onClick={() => setTab(key as any)} className={`px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
               {label}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="flex-1" />

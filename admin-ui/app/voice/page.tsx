@@ -233,7 +233,7 @@ export default function VoicePage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -262,9 +262,9 @@ export default function VoicePage() {
                   )}
                 </div>
                 {!p.builtin && (
-                  <button onClick={() => handleDelete(p.profile_id, p.builtin)} className="p-1 rounded-md hover:bg-red-500/10" title="删除">
+                  <Button onClick={() => handleDelete(p.profile_id, p.builtin)} variant="icon-sm" className="hover:bg-red-500/10" title="删除">
                     <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -311,7 +311,7 @@ export default function VoicePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">新建语音角色</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreate(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -368,7 +368,7 @@ export default function VoicePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">编辑角色 — {editProfile.name}</h2>
-              <button onClick={() => setShowEdit(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowEdit(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div><label className="text-xs text-muted-foreground">名称</label><input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md" value={editProfile.name} onChange={(e) => setEditProfile((p) => p ? { ...p, name: e.target.value } : null)} /></div>

@@ -119,9 +119,9 @@ function StepCard({ step }: { step: PipelineStep }) {
 
   return (
     <div className="border border-border rounded-lg bg-card">
-      <button
+      <Button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/30 transition-colors"
+        variant="row" className="gap-3 p-3 hover:bg-muted/30 transition-colors"
       >
         <Icon className={`w-4 h-4 shrink-0 ${STATUS_COLORS[step.status] || 'text-muted-foreground'}`} />
         <div className="flex-1 min-w-0">
@@ -133,7 +133,7 @@ function StepCard({ step }: { step: PipelineStep }) {
           {step.reason && <p className="text-xs text-muted-foreground mt-0.5 truncate">{step.reason}</p>}
         </div>
         {expanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
-      </button>
+      </Button>
       {expanded && (
         <div className="px-3 pb-3 border-t border-border pt-2 space-y-1">
           {Object.entries(step).filter(([k]) => !['step', 'status', 'error', 'reason'].includes(k)).map(([k, v]) => (
@@ -286,9 +286,9 @@ export default function PipelinePage() {
               类型: {uploadResult.pipeline_type} | 耗时: {formatElapsed(uploadResult.elapsed_ms)}
             </p>
           </div>
-          <button onClick={() => setUploadResult(null)} className="p-1 rounded-md hover:bg-muted">
+          <Button onClick={() => setUploadResult(null)} variant="icon-sm" className="hover:bg-muted">
             <X className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
       )}
 
@@ -398,9 +398,9 @@ export default function PipelinePage() {
                 <h2 className="text-base font-medium font-mono">{selectedPipeline.pipeline_id}</h2>
                 <StatusBadge status={selectedPipeline.status} />
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted">
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div className="p-4 space-y-4">
               {/* Summary */}
@@ -459,9 +459,9 @@ export default function PipelinePage() {
                 <Upload className="w-4 h-4" />
                 <h2 className="text-base font-medium">上传文件到流水线</h2>
               </div>
-              <button onClick={() => setShowUpload(false)} className="p-1 rounded-md hover:bg-muted">
+              <Button onClick={() => setShowUpload(false)} variant="icon-sm" className="hover:bg-muted">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div className="p-4 space-y-4">
               {/* File drop */}
@@ -485,12 +485,12 @@ export default function PipelinePage() {
                         <p className="text-sm font-medium">{uploadFile.name}</p>
                         <p className="text-xs text-muted-foreground">{(uploadFile.size / 1024).toFixed(1)} KB</p>
                       </div>
-                      <button
+                      <Button
                         onClick={(e) => { e.stopPropagation(); setUploadFile(null); }}
-                        className="p-1 rounded-md hover:bg-muted ml-2"
+                        variant="icon-sm" className="hover:bg-muted ml-2"
                       >
                         <X className="w-3.5 h-3.5" />
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <>
@@ -576,9 +576,9 @@ export default function PipelinePage() {
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-500">
           <AlertTriangle className="w-3.5 h-3.5" />
           {error}
-          <button onClick={() => setError('')} className="p-0.5 rounded-md hover:bg-red-500/20">
+          <Button onClick={() => setError('')} variant="icon-xs" className="hover:bg-red-500/20">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -225,7 +225,7 @@ export default function CortexPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -237,7 +237,7 @@ export default function CortexPage() {
             { key: 'agent' as const, label: '多Agent', icon: Users, color: 'text-purple-500' },
             { key: 'think' as const, label: '链式推理', icon: Brain, color: 'text-amber-500' },
           ].map(tab => (
-            <button
+            <Button variant="bare"
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${
@@ -248,7 +248,7 @@ export default function CortexPage() {
             >
               <tab.icon className="w-3.5 h-3.5" />
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -310,14 +310,14 @@ export default function CortexPage() {
                   onChange={(e) => setAgentTopic(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAgent()}
                 />
-                <button
+                <Button
                   onClick={handleAgent}
                   disabled={!agentTopic.trim() || agentRunning}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded-lg hover:bg-violet-500/20 disabled:opacity-50"
+                  variant="chip-lg" className="flex items-center gap-1.5 bg-purple-500/10 text-purple-600 border border-purple-500/20 hover:bg-violet-500/20 disabled:opacity-50"
                 >
                   {agentRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
                   {agentRunning ? '运行中...' : '启动'}
-                </button>
+                </Button>
               </div>
               {agentResult && (
                 <div className="space-y-2">
@@ -351,14 +351,14 @@ export default function CortexPage() {
                 value={thinkContext}
                 onChange={(e) => setThinkContext(e.target.value)}
               />
-              <button
+              <Button
                 onClick={handleThink}
                 disabled={!thinkQuestion.trim() || thinking}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs lg:text-sm bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 disabled:opacity-50"
+                variant="chip-lg" className="flex items-center gap-1.5 bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-500/20 disabled:opacity-50"
               >
                 {thinking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
                 {thinking ? '推理中...' : '开始推理'}
-              </button>
+              </Button>
               {thinkResult && (
                 <div className="space-y-2">
                   {thinkResult.reasoning_steps && thinkResult.reasoning_steps.length > 0 && (

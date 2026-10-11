@@ -83,12 +83,12 @@ function SessionCard({ session, onSend, onDelete }: {
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        <button onClick={onSend} className="p-1.5 rounded-md hover:bg-muted" title="发送消息">
+        <Button onClick={onSend} variant="icon-md" className="hover:bg-muted" title="发送消息">
           <Send className="w-3.5 h-3.5 text-muted-foreground" />
-        </button>
-        <button onClick={onDelete} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除会话">
+        </Button>
+        <Button onClick={onDelete} variant="icon-md" className="hover:bg-red-500/10" title="删除会话">
           <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-red-500" />
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -124,7 +124,7 @@ function SendDialog({ sessionId, onClose }: { sessionId: string; onClose: () => 
       <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-medium">发送消息到 {sessionId.slice(0, 20)}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+          <Button onClick={onClose} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
         </div>
         <div className="p-4 space-y-3">
           <textarea
@@ -251,7 +251,7 @@ export default function HermesBridgePage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3 h-3" /></Button>
         </div>
       )}
 

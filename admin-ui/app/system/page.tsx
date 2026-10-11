@@ -264,7 +264,7 @@ export default function SystemPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -276,15 +276,15 @@ export default function SystemPage() {
           { key: 'bootstrap' as Tab, label: '初始化', icon: <Play className="w-3.5 h-3.5" /> },
           { key: 'config' as Tab, label: '配置', icon: <Settings className="w-3.5 h-3.5" /> },
         ]).map(t => (
-          <button
+          <Button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+            variant="tabline" className={`font-medium  ${
               tab === t.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
             {t.icon}{t.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -402,7 +402,7 @@ export default function SystemPage() {
                     <div className={`w-2 h-2 rounded-full ${organ.enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
                     <span className="text-sm font-medium font-mono">{organ.key}</span>
                   </div>
-                  <button
+                  <Button variant="bare"
                     onClick={() => toggleOrgan(organ.key, organ.enabled)}
                     className="p-0.5"
                     title={organ.enabled ? '点击禁用' : '点击启用'}
@@ -412,17 +412,17 @@ export default function SystemPage() {
                     ) : (
                       <ToggleLeft className="w-7 h-7 text-muted-foreground" />
                     )}
-                  </button>
+                  </Button>
                 </div>
                 {Object.keys(organ.config).length > 0 && (
                   <div className="mt-2">
-                    <button
+                    <Button variant="bare"
                       onClick={() => setExpandedOrgan(expandedOrgan === organ.key ? null : organ.key)}
                       className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
                     >
                       {expandedOrgan === organ.key ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                       配置 ({Object.keys(organ.config).length} 项)
-                    </button>
+                    </Button>
                     {expandedOrgan === organ.key && (
                       <pre className="mt-1 text-[10px] text-muted-foreground font-mono bg-muted rounded p-2 max-h-[120px] overflow-auto">
                         {JSON.stringify(organ.config, null, 2)}

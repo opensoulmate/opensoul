@@ -7,6 +7,7 @@ import {
   RefreshCw, Filter, Eye, Tag, TrendingUp, Database, Network, X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '../../components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -320,7 +321,7 @@ export default function BrainPage() {
               const pct = Math.round((count / maxCount) * 100);
               const barColor = cfg.color.includes('blue') ? '#60a5fa' : cfg.color.includes('amber') ? '#fbbf24' : cfg.color.includes('emerald') ? '#34d399' : cfg.color.includes('purple') ? '#a78bfa' : cfg.color.includes('slate') ? '#94a3b8' : '#9ca3af';
               return (
-                <button
+                <Button variant="bare"
                   key={type}
                   onClick={() => setFilterType(filterType === type ? 'all' : type)}
                   className={`w-full text-left group transition-colors rounded-md p-2 -m-2 ${filterType === type ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
@@ -336,7 +337,7 @@ export default function BrainPage() {
                       style={{ width: `${pct}%`, backgroundColor: barColor }}
                     />
                   </div>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -352,7 +353,7 @@ export default function BrainPage() {
               {topTags.map(([tag, count]) => {
                 const size = Math.max(12, Math.min(20, 12 + count * 2));
                 return (
-                  <button
+                  <Button variant="bare"
                     key={tag}
                     onClick={() => setSearch(tag)}
                     className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 hover:bg-muted/50 transition-colors"
@@ -360,7 +361,7 @@ export default function BrainPage() {
                   >
                     <span className="text-muted-foreground">{tag}</span>
                     <span className="text-xs text-muted-foreground/60">{count}</span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -376,13 +377,13 @@ export default function BrainPage() {
             {sortedTypes.map(([type]) => {
               const cfg = getTypeConfig(type);
               return (
-                <button
+                <Button variant="bare"
                   key={type}
                   onClick={() => setFilterType(filterType === type ? 'all' : type)}
                   className={`text-xs lg:text-sm px-2 py-1 rounded-full border transition-colors ${filterType === type ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
                 >
                   {cfg.label}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -407,14 +408,14 @@ export default function BrainPage() {
               className="w-full pl-9 pr-8 py-2 rounded-md bg-muted border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <Button variant="bare" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             )}
           </div>
-          <button onClick={fetchData} className="flex items-center gap-1.5 text-xs lg:text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg border border-border hover:bg-muted/50">
+          <Button variant="bare" onClick={fetchData} className="flex items-center gap-1.5 text-xs lg:text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg border border-border hover:bg-muted/50">
             <RefreshCw className="w-3.5 h-3.5" />刷新
-          </button>
+          </Button>
         </div>
 
         {/* Entry list grouped by type */}
@@ -426,7 +427,7 @@ export default function BrainPage() {
               const cfg = getTypeConfig(entry.content_type);
               const Icon = cfg.icon;
               return (
-                <button
+                <Button variant="bare"
                   key={entry.id}
                   onClick={() => setSelectedEntry(entry)}
                   className="w-full text-left p-4 hover:bg-muted/30 transition-colors"
@@ -452,7 +453,7 @@ export default function BrainPage() {
                       </div>
                     </div>
                   </div>
-                </button>
+                </Button>
               );
             })
           )}
@@ -465,7 +466,7 @@ export default function BrainPage() {
           <div className="bg-card border border-border rounded-xl max-w-2xl w-full max-h-[80vh] overflow-auto p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{selectedEntry.title}</h2>
-              <button onClick={() => setSelectedEntry(null)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+              <Button variant="bare" onClick={() => setSelectedEntry(null)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></Button>
             </div>
             <div className="flex items-center gap-2 mb-4">
               {(() => { const cfg = getTypeConfig(selectedEntry.content_type); const Icon = cfg.icon; return <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${cfg.bg} ${cfg.color}`}><Icon className="w-3 h-3" />{cfg.label}</span>; })()}

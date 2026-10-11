@@ -206,7 +206,7 @@ export default function VeinPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -271,9 +271,9 @@ export default function VeinPage() {
                     </div>
                   )}
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.file_id); }} className="p-1 rounded-md hover:bg-red-500/10" title="删除">
+                    <Button onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.file_id); }} variant="icon-sm" className="hover:bg-red-500/10" title="删除">
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                    </button>
+                    </Button>
                   </div>
                   {expandedFile === file.file_id ? <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />}
                 </div>
@@ -318,12 +318,12 @@ export default function VeinPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={handleCacheCleanup} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/20">
+              <Button onClick={handleCacheCleanup} variant="chip-sm" className="flex items-center gap-1 bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-500/20">
                 <Zap className="w-3 h-3" />清理过期
-              </button>
-              <button onClick={handleCacheClear} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20">
+              </Button>
+              <Button onClick={handleCacheClear} variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20">
                 <Trash2 className="w-3 h-3" />清空缓存
-              </button>
+              </Button>
             </div>
           </div>
         </div>

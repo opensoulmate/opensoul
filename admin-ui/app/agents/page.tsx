@@ -266,18 +266,18 @@ export default function AgentsPage() {
                   <>
                     {agent.available ? (
                       <>
-                        <button
+                        <Button
                           onClick={() => handleUpdate(agent.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
+                          variant="chip-xs" className="flex items-center gap-1 bg-primary/10 text-primary hover:bg-primary/20"
                         >
                           <RefreshCw className="w-3 h-3" />更新
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleUninstall(agent.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
+                          variant="chip-xs" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20"
                         >
                           <Trash2 className="w-3 h-3" />卸载
-                        </button>
+                        </Button>
                       </>
                     ) : (
                       <Button onClick={() => handleInstall(agent.id)} variant="primary" className="py-1 text-[10px]">
@@ -308,9 +308,9 @@ export default function AgentsPage() {
                 <span className="text-2xl">{selectedAgent.icon}</span>
                 <h2 className="text-base font-medium">{selectedAgent.name}</h2>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted">
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -376,18 +376,18 @@ export default function AgentsPage() {
               <div className="flex items-center gap-2 pt-2">
                 {selectedAgent.available ? (
                   <>
-                    <button
+                    <Button
                       onClick={() => { handleUpdate(selectedAgent.id); }}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
+                      variant="chip-sm" className="flex items-center gap-1 bg-primary/10 text-primary hover:bg-primary/20"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />更新
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => { handleUninstall(selectedAgent.id); setShowDetail(false); }}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
+                      variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20"
                     >
                       <Trash2 className="w-3.5 h-3.5" />卸载
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <Button onClick={() => { handleInstall(selectedAgent.id); }} variant="primary">

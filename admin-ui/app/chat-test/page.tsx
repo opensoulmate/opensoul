@@ -89,9 +89,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             : 'bg-muted text-foreground'
         }`}>
           <div className="whitespace-pre-wrap break-words">{msg.content}</div>
-          <button
+          <Button
             onClick={handleCopy}
-            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-md hover:bg-black/10"
+            variant="icon-xs" className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10"
             title="复制"
           >
             {copied ? (
@@ -99,7 +99,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             ) : (
               <Copy className="w-3 h-3 text-muted-foreground" />
             )}
-          </button>
+          </Button>
         </div>
 
         {/* Meta */}
@@ -127,9 +127,9 @@ function ConfigPanel({
 
   return (
     <div className="rounded-lg border border-border bg-card">
-      <button
+      <Button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-muted/30 transition-colors"
+        variant="row" className="gap-2 px-3 py-2 hover:bg-muted/30 transition-colors"
       >
         <Settings className="w-3.5 h-3.5" />
         <span className="text-xs font-medium">RAG 配置</span>
@@ -137,7 +137,7 @@ function ConfigPanel({
           top_k={config.topK} · {config.stream ? '流式' : '非流式'}
         </span>
         {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-      </button>
+      </Button>
       {expanded && (
         <div className="px-3 pb-3 border-t border-border pt-2 space-y-2">
           <div>
@@ -154,7 +154,7 @@ function ConfigPanel({
           </div>
           <div className="flex items-center justify-between">
             <label className="text-xs text-muted-foreground">SSE 流式响应</label>
-            <button
+            <Button variant="bare"
               onClick={() => onChange({ ...config, stream: !config.stream })}
               className={`w-8 h-4 rounded-full transition-colors relative ${
                 config.stream ? 'bg-primary' : 'bg-muted'
@@ -163,7 +163,7 @@ function ConfigPanel({
               <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
                 config.stream ? 'translate-x-4' : 'translate-x-0.5'
               }`} />
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -356,7 +356,7 @@ export default function ChatTestPage() {
         <div className="flex items-center gap-2 p-2 mb-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -374,13 +374,13 @@ export default function ChatTestPage() {
                 '查找相关的决策记录',
                 '分析知识库中的模式',
               ].map((q) => (
-                <button
+                <Button variant="bare"
                   key={q}
                   onClick={() => { setInput(q); inputRef.current?.focus(); }}
                   className="text-[10px] text-left px-3 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                 >
                   {q}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -419,17 +419,17 @@ export default function ChatTestPage() {
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             disabled={sending}
           />
-          <button
+          <Button
             onClick={handleSend}
             disabled={!input.trim() || sending}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-primary/10 disabled:opacity-30"
+            variant="icon-sm" className="absolute right-2 top-1/2 -translate-y-1/2 hover:bg-primary/10 disabled:opacity-30"
           >
             {sending ? (
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
             ) : (
               <Send className="w-4 h-4 text-primary" />
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

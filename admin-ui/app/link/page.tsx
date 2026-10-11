@@ -249,12 +249,12 @@ export default function LinkPage() {
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-border">
         {(['connectors', 'events'] as const).map((t) => (
-          <button key={t} onClick={() => { setTab(t); if (t === 'events') fetchEvents(); }}
+          <Button variant="bare" key={t} onClick={() => { setTab(t); if (t === 'events') fetchEvents(); }}
             className={`px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
               tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}>
             {t === 'connectors' ? '连接器管理' : '事件日志'}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -262,7 +262,7 @@ export default function LinkPage() {
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-red-500 text-xs">
           <AlertCircle className="w-3.5 h-3.5" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5"><X className="w-3.5 h-3.5" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="p-0.5"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -337,24 +337,24 @@ export default function LinkPage() {
                 </div>
                 {/* Actions */}
                 <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => handleTest(c.connector_id)}
+                  <Button onClick={() => handleTest(c.connector_id)}
                     disabled={sending === c.connector_id}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20 disabled:opacity-50">
+                    variant="chip-xs" className="flex items-center gap-1 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 disabled:opacity-50">
                     {sending === c.connector_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />}
                     测试
-                  </button>
-                  <button onClick={() => setShowSendDialog(c.connector_id)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
+                  </Button>
+                  <Button onClick={() => setShowSendDialog(c.connector_id)}
+                    variant="chip-xs" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
                     <Send className="w-3 h-3" />发送
-                  </button>
-                  <button onClick={() => openEdit(c)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded-lg hover:bg-muted">
+                  </Button>
+                  <Button onClick={() => openEdit(c)}
+                    variant="chip-xs" className="flex items-center gap-1 bg-muted hover:bg-muted">
                     <Edit3 className="w-3 h-3" />编辑
-                  </button>
-                  <button onClick={() => handleDelete(c.connector_id, c.name)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
+                  </Button>
+                  <Button onClick={() => handleDelete(c.connector_id, c.name)}
+                    variant="chip-xs" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20">
                     <Trash2 className="w-3 h-3" />删除
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
@@ -363,8 +363,8 @@ export default function LinkPage() {
             <div className="text-center py-12 text-muted-foreground text-sm">
               <Link2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
               <p>暂无连接器</p>
-              <button onClick={() => { resetForm(); setShowCreate(true); }}
-                className="mt-2 text-xs lg:text-sm text-primary hover:underline">创建第一个连接器</button>
+              <Button variant="bare" onClick={() => { resetForm(); setShowCreate(true); }}
+                className="mt-2 text-xs lg:text-sm text-primary hover:underline">创建第一个连接器</Button>
             </div>
           )}
         </div>
@@ -408,9 +408,9 @@ export default function LinkPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">{editConnector ? '编辑连接器' : '新建连接器'}</h2>
-              <button onClick={() => { setShowCreate(false); setEditConnector(null); }} className="p-1 hover:bg-muted rounded-md">
+              <Button onClick={() => { setShowCreate(false); setEditConnector(null); }} variant="icon-sm" className="hover:bg-muted">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -481,7 +481,7 @@ export default function LinkPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">发送 Webhook</h2>
-              <button onClick={() => setShowSendDialog(null)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowSendDialog(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4">
               <label className="text-xs text-muted-foreground mb-1 block">Payload (JSON)</label>
@@ -505,7 +505,7 @@ export default function LinkPage() {
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">连接器详情</h2>
-              <button onClick={() => setDetailConnector(null)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setDetailConnector(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
@@ -567,7 +567,7 @@ export default function LinkPage() {
               <span className="font-medium">{testResult.success === false ? '测试失败' : '测试成功'}</span>
             </div>
             <pre className="text-[10px] text-muted-foreground max-h-24 overflow-auto">{JSON.stringify(testResult, null, 2)}</pre>
-            <button onClick={() => setTestResult(null)} className="mt-2 text-[10px] text-primary hover:underline">关闭</button>
+            <Button variant="bare" onClick={() => setTestResult(null)} className="mt-2 text-[10px] text-primary hover:underline">关闭</Button>
           </div>
         </div>
       )}

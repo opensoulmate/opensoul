@@ -171,7 +171,7 @@ export default function AIEnginePage() {
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><XCircle className="w-4 h-4" /></button>
+          <Button variant="bare" onClick={() => setError('')}><XCircle className="w-4 h-4" /></Button>
         </div>
       )}
 
@@ -230,7 +230,7 @@ export default function AIEnginePage() {
           { key: 'harness' as const, label: '工具路由', icon: <Shield className="w-4 h-4" /> },
           { key: 'graph' as const, label: 'AI群', icon: <Network className="w-4 h-4" /> },
         ].map(t => (
-          <button
+          <Button variant="bare"
             key={t.key}
             onClick={() => setActiveTab(t.key)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
@@ -238,7 +238,7 @@ export default function AIEnginePage() {
             }`}
           >
             {t.icon}{t.label}
-          </button>
+          </Button>
         ))}
       </div>
 

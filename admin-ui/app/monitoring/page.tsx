@@ -429,7 +429,7 @@ export default function MonitoringPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -445,7 +445,7 @@ export default function MonitoringPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
             {categoryOrgans.map((organ) => (
-              <button
+              <Button variant="bare"
                 key={organ.key}
                 onClick={() => fetchOrganDetail(organ.key)}
                 className={`text-left rounded-lg border p-3 transition-colors hover:bg-muted/30 ${organ.status === 'ok' ? 'border-border bg-card' : 'border-red-500/20 bg-red-500/5'}`}
@@ -468,7 +468,7 @@ export default function MonitoringPage() {
                   </div>
                 </div>
                 {organ.error && <p className="text-[10px] text-red-500 mt-1 truncate">{organ.error}</p>}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -487,7 +487,7 @@ export default function MonitoringPage() {
                 <StatusBadge status={selectedOrgan.status} />
                 <h2 className="text-sm font-medium">{selectedOrgan.label}</h2>
               </div>
-              <button onClick={() => setSelectedOrgan(null)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setSelectedOrgan(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 overflow-y-auto space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
@@ -537,7 +537,7 @@ export default function MonitoringPage() {
                 <h2 className="text-sm font-medium">配置差异</h2>
                 <span className="text-[10px] text-muted-foreground">{configDiff.changes.length} 项自定义</span>
               </div>
-              <button onClick={() => setShowConfigDiff(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowConfigDiff(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 overflow-y-auto">
               {configDiff.changes.length === 0 ? (
@@ -577,7 +577,7 @@ export default function MonitoringPage() {
                 <h2 className="text-sm font-medium">Prometheus Metrics</h2>
                 <span className="text-[10px] text-muted-foreground font-mono">/api/metrics</span>
               </div>
-              <button onClick={() => setShowMetrics(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowMetrics(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 overflow-y-auto">
               <pre className="text-[10px] font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">

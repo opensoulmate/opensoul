@@ -286,7 +286,7 @@ export default function MarrowPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -310,9 +310,9 @@ export default function MarrowPage() {
             <Button onClick={() => setShowCreateSchedule(true)} variant="primary" className="gap-1.5">
               <Plus className="w-3.5 h-3.5" />新建计划
             </Button>
-            <button onClick={handleRunDue} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20">
+            <Button onClick={handleRunDue} variant="chip-sm" className="flex items-center gap-1.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20">
               <Play className="w-3.5 h-3.5" />执行到期
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -357,22 +357,22 @@ export default function MarrowPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
-                    <button
+                    <Button
                       onClick={() => handleRestore(backup.backup_id)}
                       disabled={restoring === backup.backup_id}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
+                      variant="chip-xs" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
                       title="恢复"
                     >
                       {restoring === backup.backup_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
                       恢复
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => handleDeleteBackup(backup.backup_id)}
-                      className="p-1.5 rounded-md hover:bg-red-500/10"
+                      variant="icon-md" className="hover:bg-red-500/10"
                       title="删除"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -417,20 +417,20 @@ export default function MarrowPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
-                    <button
+                    <Button
                       onClick={() => handleToggleSchedule(sch)}
-                      className={`p-1.5 rounded-md ${sch.enabled ? 'hover:bg-amber-500/10' : 'hover:bg-emerald-500/10'}`}
+                      variant="icon-md" className={` ${sch.enabled ? 'hover:bg-amber-500/10' : 'hover:bg-emerald-500/10'}`}
                       title={sch.enabled ? '禁用' : '启用'}
                     >
                       {sch.enabled ? <PowerOff className="w-3.5 h-3.5 text-orange-500" /> : <Power className="w-3.5 h-3.5 text-green-500" />}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => handleDeleteSchedule(sch.schedule_id)}
-                      className="p-1.5 rounded-md hover:bg-red-500/10"
+                      variant="icon-md" className="hover:bg-red-500/10"
                       title="删除"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -477,7 +477,7 @@ export default function MarrowPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">创建备份</h2>
-              <button onClick={() => setShowCreateBackup(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreateBackup(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -516,7 +516,7 @@ export default function MarrowPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">创建备份计划</h2>
-              <button onClick={() => setShowCreateSchedule(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreateSchedule(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

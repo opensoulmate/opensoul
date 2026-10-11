@@ -305,7 +305,7 @@ export default function GenePage() {
       {error && (
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -349,35 +349,35 @@ export default function GenePage() {
             </div>
             {/* Quick actions (visible on hover) */}
             <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
+              <Button
                 onClick={(e) => { e.stopPropagation(); setSelectedTemplate(tpl); setCloneName(tpl.name + ' (副本)'); setCloneId(''); setShowCloneDialog(true); }}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded-lg hover:bg-muted"
+                variant="chip-xs" className="flex items-center gap-1 bg-muted hover:bg-muted"
                 title="克隆"
               >
                 <Copy className="w-3 h-3" />克隆
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={(e) => { e.stopPropagation(); setSelectedTemplate(tpl); setInstantiateVars({}); setInstantiateResult(null); setShowInstantiateDialog(true); }}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded-lg hover:bg-muted"
+                variant="chip-xs" className="flex items-center gap-1 bg-muted hover:bg-muted"
                 title="实例化"
               >
                 <Play className="w-3 h-3" />实例化
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={(e) => { e.stopPropagation(); handleExport(tpl.template_id); }}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-muted rounded-lg hover:bg-muted"
+                variant="chip-xs" className="flex items-center gap-1 bg-muted hover:bg-muted"
                 title="导出"
               >
                 <Download className="w-3 h-3" />
-              </button>
+              </Button>
               {!tpl.builtin && (
-                <button
+                <Button
                   onClick={(e) => { e.stopPropagation(); handleDelete(tpl.template_id); }}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto"
+                  variant="chip-xs" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20 ml-auto"
                   title="删除"
                 >
                   <Trash2 className="w-3 h-3" />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -397,7 +397,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-lg bg-background border-l border-border overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between z-10">
               <h2 className="text-sm font-medium">模板详情</h2>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-4">
               <div>
@@ -485,12 +485,12 @@ export default function GenePage() {
                   <Download className="w-3.5 h-3.5" />导出
                 </Button>
                 {!selectedTemplate.builtin && (
-                  <button
+                  <Button
                     onClick={() => { handleDelete(selectedTemplate.template_id); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20"
+                    variant="chip-sm" className="flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20"
                   >
                     <Trash2 className="w-3.5 h-3.5" />删除
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -505,7 +505,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-lg bg-background border border-border rounded-lg shadow-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between z-10">
               <h2 className="text-sm font-medium">新建模板</h2>
-              <button onClick={() => setShowCreateDialog(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreateDialog(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -565,7 +565,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-md bg-background border border-border rounded-lg shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-medium">克隆模板</h2>
-              <button onClick={() => setShowCloneDialog(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCloneDialog(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <p className="text-xs text-muted-foreground">源模板: <code className="font-mono">{selectedTemplate.template_id}</code></p>
@@ -593,7 +593,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-lg bg-background border border-border rounded-lg shadow-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between z-10">
               <h2 className="text-sm font-medium">实例化模板</h2>
-              <button onClick={() => setShowInstantiateDialog(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowInstantiateDialog(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <p className="text-xs text-muted-foreground">模板: <code className="font-mono">{selectedTemplate.template_id}</code></p>
@@ -644,7 +644,7 @@ export default function GenePage() {
           <div className="relative w-full max-w-lg bg-background border border-border rounded-lg shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-medium">导入模板</h2>
-              <button onClick={() => setShowImportDialog(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowImportDialog(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

@@ -113,9 +113,9 @@ function AgentCardView({ card }: { card: AgentCard }) {
 
   return (
     <div className="rounded-lg border border-border bg-card">
-      <button
+      <Button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full p-4 text-left hover:bg-muted/30 transition-colors"
+        variant="row" className="gap-2 p-4 hover:bg-muted/30 transition-colors"
       >
         <Globe className="w-4 h-4 text-primary" />
         <span className="text-sm font-medium flex-1">Agent Card</span>
@@ -123,7 +123,7 @@ function AgentCardView({ card }: { card: AgentCard }) {
           v{card.protocolVersion}
         </Badge>
         {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-      </button>
+      </Button>
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -209,9 +209,9 @@ function TaskDetail({ task, onCancel }: { task: Task; onCancel: (id: string) => 
 
   return (
     <div className="border border-border rounded-lg bg-card">
-      <button
+      <Button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/30 transition-colors"
+        variant="row" className="gap-3 p-3 hover:bg-muted/30 transition-colors"
       >
         <div className="w-8 h-8 rounded-full flex items-center justify-center bg-primary/10">
           <FileText className="w-4 h-4 text-primary" />
@@ -226,15 +226,15 @@ function TaskDetail({ task, onCancel }: { task: Task; onCancel: (id: string) => 
           </div>
         </div>
         {task.status.state === 'working' && (
-          <button
+          <Button
             onClick={(e) => { e.stopPropagation(); onCancel(task.id); }}
-            className="px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
+            variant="chip-xs" className="bg-red-500/10 text-red-500 hover:bg-red-500/20"
           >
             取消
-          </button>
+          </Button>
         )}
         {expanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
-      </button>
+      </Button>
       {expanded && (
         <div className="px-3 pb-3 border-t border-border pt-2 space-y-2">
           {/* Task Info */}
@@ -352,7 +352,7 @@ function RPCPanel({ onResult }: { onResult: (log: RPCLog) => void }) {
           <label className="text-xs text-muted-foreground">方法</label>
           <div className="flex gap-1.5 mt-1">
             {methods.map((m) => (
-              <button
+              <Button variant="bare"
                 key={m.value}
                 onClick={() => {
                   setMethod(m.value);
@@ -371,7 +371,7 @@ function RPCPanel({ onResult }: { onResult: (log: RPCLog) => void }) {
                 }`}
               >
                 {m.label}
-              </button>
+              </Button>
             ))}
           </div>
           <div className="text-[10px] text-muted-foreground mt-1">
@@ -412,9 +412,9 @@ function RPCLogPanel({ logs }: { logs: RPCLog[] }) {
       <div className="divide-y divide-border max-h-[400px] overflow-auto">
         {logs.slice().reverse().map((log) => (
           <div key={log.id}>
-            <button
+            <Button
               onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
-              className="flex items-center gap-2 w-full px-4 py-2 text-left hover:bg-muted/30 transition-colors"
+              variant="row" className="gap-2 px-4 py-2 hover:bg-muted/30 transition-colors"
             >
               {log.error ? (
                 <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
@@ -425,7 +425,7 @@ function RPCLogPanel({ logs }: { logs: RPCLog[] }) {
               <span className="text-[10px] text-muted-foreground">{log.duration}ms</span>
               <span className="text-[10px] text-muted-foreground ml-auto">{formatTime(log.time)}</span>
               {expandedId === log.id ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
-            </button>
+            </Button>
             {expandedId === log.id && (
               <div className="px-4 pb-3 space-y-2">
                 {log.request && (
@@ -552,7 +552,7 @@ export default function A2APage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -591,10 +591,10 @@ export default function A2APage() {
           { key: 'tasks', label: '任务管理', icon: FileText },
           { key: 'tester', label: 'RPC 测试', icon: Code },
         ] as { key: typeof tab; label: string; icon: any }[]).map((t) => (
-          <button
+          <Button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+            variant="tabline" className={`font-medium  ${
               tab === t.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -602,7 +602,7 @@ export default function A2APage() {
           >
             <t.icon className="w-3.5 h-3.5" />
             {t.label}
-          </button>
+          </Button>
         ))}
         <div className="flex-1" />
         <Button onClick={fetchData} variant="secondary" className="mb-1">
@@ -629,17 +629,17 @@ export default function A2APage() {
             </div>
             <div className="flex gap-1">
               {['all', 'working', 'completed', 'failed', 'canceled'].map((s) => (
-                <button
+                <Button
                   key={s}
                   onClick={() => setStateFilter(s)}
-                  className={`px-2 py-1 text-[10px] rounded-lg border transition-colors ${
+                  variant="chip-xs" className={`border transition-colors  ${
                     stateFilter === s
                       ? 'bg-primary/10 border-primary/30 text-primary'
                       : 'border-border text-muted-foreground hover:bg-muted/50'
                   }`}
                 >
                   {s === 'all' ? '全部' : STATE_CONFIG[s]?.label || s}
-                </button>
+                </Button>
               ))}
             </div>
           </div>

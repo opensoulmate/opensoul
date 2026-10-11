@@ -341,7 +341,7 @@ export default function MirrorPage() {
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="shrink-0"><X className="w-4 h-4" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="shrink-0"><X className="w-4 h-4" /></Button>
         </div>
       )}
 
@@ -372,7 +372,7 @@ export default function MirrorPage() {
           { key: 'sandboxes' as const, label: '沙箱', icon: <Layers className="w-4 h-4" /> },
           { key: 'templates' as const, label: '模板', icon: <FlaskConical className="w-4 h-4" /> },
         ].map(t => (
-          <button
+          <Button variant="bare"
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
@@ -386,7 +386,7 @@ export default function MirrorPage() {
             <Badge variant="muted" className="ml-1">
               {t.key === 'sandboxes' ? sandboxes.length : templates.length}
             </Badge>
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -419,9 +419,9 @@ export default function MirrorPage() {
             <Button onClick={() => fetchSandboxes()}  title="刷新" variant="secondary" className="p-2 bg-muted">
               <RefreshCw className="w-4 h-4" />
             </Button>
-            <button onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-orange-500/10 text-orange-400 hover:bg-amber-500/20 border border-orange-500/20" title="清理过期沙箱">
+            <Button variant="bare" onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-orange-500/10 text-orange-400 hover:bg-amber-500/20 border border-orange-500/20" title="清理过期沙箱">
               <Trash2 className="w-4 h-4" /> 清理过期
-            </button>
+            </Button>
             <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5 px-3 text-sm">
               <Plus className="w-4 h-4" /> 创建沙箱
             </Button>
@@ -471,21 +471,21 @@ export default function MirrorPage() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                       {sb.status === 'active' && (
-                        <button onClick={() => handlePause(sb.sandbox_id)} className="p-1.5 rounded-md hover:bg-yellow-400/10 text-yellow-400" title="暂停">
+                        <Button onClick={() => handlePause(sb.sandbox_id)} variant="icon-md" className="hover:bg-yellow-400/10 text-yellow-400" title="暂停">
                           <Pause className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                       {sb.status === 'paused' && (
-                        <button onClick={() => handleResume(sb.sandbox_id)} className="p-1.5 rounded-md hover:bg-green-400/10 text-green-400" title="恢复">
+                        <Button onClick={() => handleResume(sb.sandbox_id)} variant="icon-md" className="hover:bg-green-400/10 text-green-400" title="恢复">
                           <Play className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
-                      <button onClick={() => handleSnapshot(sb.sandbox_id)} className="p-1.5 rounded-md hover:bg-blue-400/10 text-blue-400" title="快照">
+                      <Button onClick={() => handleSnapshot(sb.sandbox_id)} variant="icon-md" className="hover:bg-blue-400/10 text-blue-400" title="快照">
                         <Camera className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDestroy(sb.sandbox_id)} className="p-1.5 rounded-md hover:bg-red-400/10 text-red-400" title="销毁">
+                      </Button>
+                      <Button onClick={() => handleDestroy(sb.sandbox_id)} variant="icon-md" className="hover:bg-red-400/10 text-red-400" title="销毁">
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -501,9 +501,9 @@ export default function MirrorPage() {
                   <Eye className="w-4 h-4 text-primary" />
                   {selected.name || selected.sandbox_id}
                 </h3>
-                <button onClick={() => setSelected(null)} className="p-1 rounded-md hover:bg-muted">
+                <Button onClick={() => setSelected(null)} variant="icon-sm" className="hover:bg-muted">
                   <X className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
@@ -578,9 +578,9 @@ export default function MirrorPage() {
                         <div className="text-xs text-muted-foreground">{tpl.category}</div>
                       </div>
                     </div>
-                    <button onClick={() => handleDeleteTemplate(tpl.template_id)} className="p-1 rounded-md hover:bg-red-400/10 text-red-400" title="删除">
+                    <Button onClick={() => handleDeleteTemplate(tpl.template_id)} variant="icon-sm" className="hover:bg-red-400/10 text-red-400" title="删除">
                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </div>
                   {tpl.description && <div className="text-xs text-muted-foreground line-clamp-2">{tpl.description}</div>}
                   {tpl.tags?.length > 0 && (
@@ -597,7 +597,7 @@ export default function MirrorPage() {
                   )}
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>使用 {tpl.usage_count} 次</span>
-                    <button
+                    <Button variant="bare"
                       onClick={() => {
                         setInstForm({
                           name: tpl.name,
@@ -608,7 +608,7 @@ export default function MirrorPage() {
                       className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary/20"
                     >
                       <Copy className="w-3 h-3" /> 从此模板创建
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -623,7 +623,7 @@ export default function MirrorPage() {
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">创建沙箱</h3>
-              <button onClick={() => setShowCreate(false)}><X className="w-4 h-4" /></button>
+              <Button variant="bare" onClick={() => setShowCreate(false)}><X className="w-4 h-4" /></Button>
             </div>
             <div className="space-y-3">
               <div>
@@ -660,7 +660,7 @@ export default function MirrorPage() {
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">创建模板</h3>
-              <button onClick={() => setShowCreateTpl(false)}><X className="w-4 h-4" /></button>
+              <Button variant="bare" onClick={() => setShowCreateTpl(false)}><X className="w-4 h-4" /></Button>
             </div>
             <div className="space-y-3">
               <div>
@@ -704,7 +704,7 @@ export default function MirrorPage() {
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">从模板创建沙箱</h3>
-              <button onClick={() => setShowInstantiate(null)}><X className="w-4 h-4" /></button>
+              <Button variant="bare" onClick={() => setShowInstantiate(null)}><X className="w-4 h-4" /></Button>
             </div>
             <div className="text-sm text-muted-foreground">
               模板: <span className="text-foreground">{showInstantiate.icon} {showInstantiate.name}</span>

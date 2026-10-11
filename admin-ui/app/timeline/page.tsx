@@ -180,7 +180,7 @@ export default function TimelinePage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
+          <Button onClick={() => setError('')} variant="icon-xs" className="hover:bg-red-500/20"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -240,9 +240,9 @@ export default function TimelinePage() {
         <Button onClick={() => setShowRecord(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />记录事件
         </Button>
-        <button onClick={() => setShowClear(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm text-red-500 bg-muted border border-border rounded-lg hover:bg-red-500/10">
+        <Button onClick={() => setShowClear(true)} variant="chip-sm" className="flex items-center gap-1.5 text-red-500 bg-muted border border-border hover:bg-red-500/10">
           <Trash2 className="w-3.5 h-3.5" />清理
-        </button>
+        </Button>
       </div>
 
       {/* Event List */}
@@ -285,13 +285,13 @@ export default function TimelinePage() {
               </div>
 
               {/* Delete button */}
-              <button
+              <Button
                 onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 rounded-md text-red-500 transition-opacity"
+                variant="icon-sm" className="opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-red-500 transition-opacity"
                 title="删除"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
@@ -302,12 +302,12 @@ export default function TimelinePage() {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>显示 {offset + 1}-{Math.min(offset + limit, totalCount)} / {totalCount}</span>
           <div className="flex items-center gap-1">
-            <button onClick={() => setOffset(Math.max(0, offset - limit))} disabled={offset === 0} className="p-1.5 hover:bg-muted rounded-md disabled:opacity-30">
+            <Button onClick={() => setOffset(Math.max(0, offset - limit))} disabled={offset === 0} variant="icon-md" className="hover:bg-muted disabled:opacity-30">
               <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button onClick={() => setOffset(offset + limit)} disabled={!hasMore} className="p-1.5 hover:bg-muted rounded-md disabled:opacity-30">
+            </Button>
+            <Button onClick={() => setOffset(offset + limit)} disabled={!hasMore} variant="icon-md" className="hover:bg-muted disabled:opacity-30">
               <ChevronRight className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -318,7 +318,7 @@ export default function TimelinePage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">记录事件</h2>
-              <button onClick={() => setShowRecord(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowRecord(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-[60px_1fr] gap-3">
@@ -369,7 +369,7 @@ export default function TimelinePage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">事件详情</h2>
-              <button onClick={() => setShowDetail(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div className="flex items-center gap-3">
@@ -397,9 +397,9 @@ export default function TimelinePage() {
               )}
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => { handleDeleteEvent(selectedEvent.id); setShowDetail(false); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm text-red-500 bg-muted border border-border rounded-lg hover:bg-red-500/10">
+              <Button onClick={() => { handleDeleteEvent(selectedEvent.id); setShowDetail(false); }} variant="chip-sm" className="flex items-center gap-1.5 text-red-500 bg-muted border border-border hover:bg-red-500/10">
                 <Trash2 className="w-3 h-3" />删除
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -411,7 +411,7 @@ export default function TimelinePage() {
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-semibold">清理事件</h2>
-              <button onClick={() => setShowClear(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowClear(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <p className="text-sm text-muted-foreground">清理超过指定天数的旧事件。</p>
@@ -423,9 +423,9 @@ export default function TimelinePage() {
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
               <Button onClick={() => setShowClear(false)} variant="secondary" className="px-4">取消</Button>
-              <button onClick={handleClear} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-red-500 text-white rounded-lg hover:bg-red-600">
+              <Button variant="bare" onClick={handleClear} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-red-500 text-white rounded-lg hover:bg-red-600">
                 <Trash2 className="w-3 h-3" />确认清理
-              </button>
+              </Button>
             </div>
           </div>
         </div>

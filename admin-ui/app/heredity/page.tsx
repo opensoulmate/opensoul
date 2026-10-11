@@ -122,9 +122,9 @@ function ComponentCard({ comp, expanded, onToggle, detail, loadingDetail }: {
   const deps = comp.dependencies ? Object.entries(comp.dependencies) : [];
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <button
+      <Button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors text-left"
+        variant="row" className="gap-3 p-4 hover:bg-muted/30 transition-colors"
       >
         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
           <Package className="w-4 h-4 text-primary" />
@@ -141,7 +141,7 @@ function ComponentCard({ comp, expanded, onToggle, detail, loadingDetail }: {
           </div>
         </div>
         {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="border-t border-border p-4 space-y-3">
@@ -241,23 +241,23 @@ function MigrationCard({ m, onExecute, onRollback, executing }: {
         </div>
         <div className="flex items-center gap-1">
           {(m.status === 'pending' || m.status === 'failed') && (
-            <button
+            <Button
               onClick={onExecute}
               disabled={executing}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
+              variant="chip-xs" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
             >
               {executing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
               执行
-            </button>
+            </Button>
           )}
           {m.status === 'completed' && (
-            <button
+            <Button
               onClick={onRollback}
               disabled={executing}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-amber-500/10 text-amber-600 rounded-lg hover:bg-amber-500/20 disabled:opacity-50"
+              variant="chip-xs" className="flex items-center gap-1 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 disabled:opacity-50"
             >
               <RotateCcw className="w-3 h-3" />回滚
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -323,7 +323,7 @@ function SchemaDiffView({ diff, onClose }: { diff: SchemaDiff; onClose: () => vo
             <Diff className="w-4 h-4" />
             Schema Diff: {diff.component_id} v{diff.from_version} → v{diff.to_version}
           </h2>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+          <Button onClick={onClose} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
         </div>
         <div className="p-4 space-y-3">
           {diff.added.length > 0 && (
@@ -538,20 +538,20 @@ export default function HeredityPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
         {([['components', '组件', Package], ['migrations', '迁移', GitBranch], ['graph', '依赖图', Layers], ['changelog', '变更日志', BookOpen]] as const).map(([key, label, Icon]) => (
-          <button
+          <Button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm border-b-2 transition-colors ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            variant="tabline" className={` ${tab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             <Icon className="w-3.5 h-3.5" />{label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -646,7 +646,7 @@ export default function HeredityPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">新建迁移</h2>
-              <button onClick={() => setShowNewMigration(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowNewMigration(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

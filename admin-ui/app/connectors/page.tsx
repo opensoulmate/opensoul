@@ -332,7 +332,7 @@ export default function ConnectorsPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -364,10 +364,10 @@ export default function ConnectorsPage() {
           { key: 'database', label: '数据库适配器', icon: Database },
           { key: 'filesystem', label: '文件系统适配器', icon: FolderOpen },
         ] as { key: Tab; label: string; icon: any }[]).map((t) => (
-          <button
+          <Button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+            variant="tabline" className={`font-medium  ${
               tab === t.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -375,7 +375,7 @@ export default function ConnectorsPage() {
           >
             <t.icon className="w-3.5 h-3.5" />
             {t.label}
-          </button>
+          </Button>
         ))}
         <div className="flex-1" />
         <Button onClick={handleScan}
@@ -509,10 +509,10 @@ export default function ConnectorsPage() {
               <Button onClick={handleRestConfigure} disabled={restLoading || !restConfig.base_url} variant="primary">
                 {restLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}配置
               </Button>
-              <button onClick={handleRestProbe} disabled={restLoading || !restConfig.base_url}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50">
+              <Button onClick={handleRestProbe} disabled={restLoading || !restConfig.base_url}
+                variant="chip-sm" className="flex items-center gap-1 bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20 disabled:opacity-50">
                 <Eye className="w-3 h-3" />探测OpenAPI
-              </button>
+              </Button>
             </div>
             {probeResult && (
               <div className="mt-3 p-2 rounded bg-muted text-xs font-mono max-h-[200px] overflow-auto">
@@ -600,10 +600,10 @@ export default function ConnectorsPage() {
                   {(Array.isArray(dbTables) ? dbTables : dbTables.tables || []).map((t: any) => {
                     const name = typeof t === 'string' ? t : t.name || t.table_name;
                     return (
-                      <button key={name} onClick={() => handleDbDescribe(name)}
-                        className="text-[10px] px-2 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary/20">
+                      <Button key={name} onClick={() => handleDbDescribe(name)}
+                        variant="chip-xs" className="bg-primary/10 text-primary hover:bg-primary/20">
                         {name}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -666,20 +666,20 @@ export default function ConnectorsPage() {
               <Button onClick={handleFsList} disabled={fsLoading} variant="primary">
                 <FolderOpen className="w-3 h-3" />列出
               </Button>
-              <button onClick={handleFsRead} disabled={fsLoading}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50">
+              <Button onClick={handleFsRead} disabled={fsLoading}
+                variant="chip-sm" className="flex items-center gap-1 bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20 disabled:opacity-50">
                 <FileText className="w-3 h-3" />读取
-              </button>
+              </Button>
             </div>
 
             {/* Search */}
             <div className="flex items-center gap-2 mb-3">
               <input className="flex-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md"
                 value={fsPattern} onChange={(e) => setFsPattern(e.target.value)} placeholder="搜索文件名模式 (*.txt)" />
-              <button onClick={handleFsSearch} disabled={fsLoading || !fsPattern}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-purple-500/20 rounded-lg hover:bg-violet-500/20 disabled:opacity-50">
+              <Button onClick={handleFsSearch} disabled={fsLoading || !fsPattern}
+                variant="chip-sm" className="flex items-center gap-1 bg-violet-500/10 text-violet-500 border border-purple-500/20 hover:bg-violet-500/20 disabled:opacity-50">
                 <Search className="w-3 h-3" />搜索
-              </button>
+              </Button>
             </div>
 
             {/* Results */}

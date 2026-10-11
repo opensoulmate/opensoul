@@ -17,6 +17,7 @@ import { apiFetch } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { LoginPage } from '@/app/login-page';
 import { ThemeSwitcher } from '@/app/theme-switcher';
+import { Button } from '../components/ui/button';
 
 // ── 一级导航（BottomBar）────────────────────────────────────────
 
@@ -143,7 +144,7 @@ function SectionNavList({ section, activePath, onNavigate }: { section: SectionI
       {items.map((item) => {
         const active = item.path === '/' ? activePath === '/' : activePath.startsWith(item.path);
         return (
-          <button
+          <Button variant="bare"
             key={item.path}
             onClick={() => onNavigate(item.path)}
             className={cn(
@@ -153,7 +154,7 @@ function SectionNavList({ section, activePath, onNavigate }: { section: SectionI
           >
             <span className="shrink-0">{item.icon}</span>
             <span className="truncate">{item.label}</span>
-          </button>
+          </Button>
         );
       })}
     </div>

@@ -116,7 +116,7 @@ export default function TopologyPage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-0.5 hover:bg-red-500/20 rounded-md"><X className="w-3.5 h-3.5" /></button>
+          <Button onClick={() => setError('')} variant="icon-xs" className="hover:bg-red-500/20"><X className="w-3.5 h-3.5" /></Button>
         </div>
       )}
 
@@ -149,12 +149,12 @@ export default function TopologyPage() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
-          <button onClick={() => setViewMode('graph')} className={`px-3 py-1.5 text-xs lg:text-sm rounded-lg border ${viewMode === 'graph' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
+          <Button onClick={() => setViewMode('graph')} variant="chip-sm" className={`border  ${viewMode === 'graph' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
             <Network className="w-3.5 h-3.5 inline mr-1" />拓扑图
-          </button>
-          <button onClick={() => setViewMode('clusters')} className={`px-3 py-1.5 text-xs lg:text-sm rounded-lg border ${viewMode === 'clusters' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
+          </Button>
+          <Button onClick={() => setViewMode('clusters')} variant="chip-sm" className={`border  ${viewMode === 'clusters' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
             <Layers className="w-3.5 h-3.5 inline mr-1" />集群视图
-          </button>
+          </Button>
         </div>
         <div className="flex-1" />
         <Button onClick={fetchGraph} variant="secondary">
@@ -247,7 +247,7 @@ export default function TopologyPage() {
                 <span className="text-xl">{selectedNode.emoji}</span>
                 <h2 className="text-sm font-semibold">{selectedNode.name}</h2>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">

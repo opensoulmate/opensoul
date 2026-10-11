@@ -131,15 +131,15 @@ function ChannelCard({ channel, health, onConfigure, onToggle }: {
           </div>
           <div className="text-[10px] text-muted-foreground font-mono">{channel.channel}</div>
         </div>
-        <button
+        <Button
           onClick={onToggle}
-          className={`p-1.5 rounded-md transition-colors ${
+          variant="icon-md" className={`transition-colors  ${
             channel.enabled ? 'text-green-500 hover:bg-emerald-500/10' : 'text-muted-foreground hover:bg-muted'
           }`}
           title={channel.enabled ? '禁用' : '启用'}
         >
           {channel.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
-        </button>
+        </Button>
       </div>
 
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-3">
@@ -179,9 +179,9 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
 }) {
   return (
     <div className="border border-border rounded-lg bg-card">
-      <button
+      <Button
         onClick={onToggle}
-        className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/30 transition-colors"
+        variant="row" className="gap-3 p-3 hover:bg-muted/30 transition-colors"
       >
         <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
           <span className="text-lg">{template.icon || '📨'}</span>
@@ -206,7 +206,7 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
           <div className="text-[10px] text-muted-foreground">{formatTime(template.created_at)}</div>
         </div>
         {expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="px-3 pb-3 border-t border-border pt-2 space-y-3">
@@ -239,12 +239,12 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
             <Button onClick={onEdit} variant="secondary">
               <Edit3 className="w-3 h-3" />编辑
             </Button>
-            <button
+            <Button
               onClick={onDelete}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20"
+              variant="chip-sm" className="flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20"
             >
               <Trash2 className="w-3 h-3" />删除
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -286,7 +286,7 @@ function ConfigureDialog({ channel, onClose, onSave }: {
         <div className="flex items-center gap-2 mb-4">
           <Settings className="w-4 h-4" />
           <span className="text-sm font-medium">配置 {CHANNEL_LABELS[channel] || channel}</span>
-          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+          <Button onClick={onClose} variant="icon-sm" className="ml-auto hover:bg-muted"><X className="w-4 h-4" /></Button>
         </div>
 
         <div className="space-y-3">
@@ -364,7 +364,7 @@ function SendDialog({ defaultChannel, onClose }: {
         <div className="flex items-center gap-2 mb-4">
           <Send className="w-4 h-4" />
           <span className="text-sm font-medium">发送消息</span>
-          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+          <Button onClick={onClose} variant="icon-sm" className="ml-auto hover:bg-muted"><X className="w-4 h-4" /></Button>
         </div>
 
         <div className="space-y-3">
@@ -544,7 +544,7 @@ export default function EchoPage() {
           { key: 'templates', label: '消息模板', icon: <FileText className="w-3.5 h-3.5" /> },
           { key: 'history', label: '发送历史', icon: <Clock className="w-3.5 h-3.5" /> },
         ] as const).map((t) => (
-          <button
+          <Button variant="bare"
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium rounded-t-md transition-colors ${
@@ -552,7 +552,7 @@ export default function EchoPage() {
             }`}
           >
             {t.icon}{t.label}
-          </button>
+          </Button>
         ))}
         <div className="ml-auto flex items-center gap-2">
           <Button onClick={() => { setSendChannel(undefined); setShowSend(true); }} variant="primary" className="gap-1.5">
@@ -722,9 +722,9 @@ export default function EchoPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto p-1 hover:bg-muted rounded-md">
+          <Button onClick={() => setError('')} variant="icon-sm" className="ml-auto hover:bg-muted">
             <X className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

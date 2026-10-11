@@ -183,7 +183,7 @@ export default function CronPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -211,24 +211,24 @@ export default function CronPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => handleShowHistory(job)} className="p-1.5 rounded-md hover:bg-muted" title="历史">
+                <Button onClick={() => handleShowHistory(job)} variant="icon-md" className="hover:bg-muted" title="历史">
                   <History className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
-                <button onClick={() => handleRun(job.id)} className="p-1.5 rounded-md hover:bg-blue-500/10" title="立即执行">
+                </Button>
+                <Button onClick={() => handleRun(job.id)} variant="icon-md" className="hover:bg-blue-500/10" title="立即执行">
                   <Play className="w-3.5 h-3.5 text-blue-500" />
-                </button>
+                </Button>
                 {job.status === 'active' ? (
-                  <button onClick={() => handlePause(job.id)} className="p-1.5 rounded-md hover:bg-amber-500/10" title="暂停">
+                  <Button onClick={() => handlePause(job.id)} variant="icon-md" className="hover:bg-amber-500/10" title="暂停">
                     <Pause className="w-3.5 h-3.5 text-orange-500" />
-                  </button>
+                  </Button>
                 ) : (
-                  <button onClick={() => handleResume(job.id)} className="p-1.5 rounded-md hover:bg-emerald-500/10" title="恢复">
+                  <Button onClick={() => handleResume(job.id)} variant="icon-md" className="hover:bg-emerald-500/10" title="恢复">
                     <Play className="w-3.5 h-3.5 text-green-500" />
-                  </button>
+                  </Button>
                 )}
-                <button onClick={() => handleDelete(job.id)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除">
+                <Button onClick={() => handleDelete(job.id)} variant="icon-md" className="hover:bg-red-500/10" title="删除">
                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -247,7 +247,7 @@ export default function CronPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">创建定时任务</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowCreate(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>
@@ -345,7 +345,7 @@ export default function CronPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">{selectedJob.name || selectedJob.id}</h2>
-              <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
@@ -363,21 +363,21 @@ export default function CronPage() {
                 </div>
               )}
               <div className="flex items-center gap-2 pt-2 border-t border-border">
-                <button onClick={() => handleRun(selectedJob.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20">
+                <Button onClick={() => handleRun(selectedJob.id)} variant="chip-sm" className="flex items-center gap-1 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20">
                   <Play className="w-3 h-3" />立即执行
-                </button>
+                </Button>
                 {selectedJob.status === 'active' ? (
-                  <button onClick={() => { handlePause(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
+                  <Button onClick={() => { handlePause(selectedJob.id); setShowDetail(false); }} variant="chip-sm" className="flex items-center gap-1 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20">
                     <Pause className="w-3 h-3" />暂停
-                  </button>
+                  </Button>
                 ) : (
-                  <button onClick={() => { handleResume(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
+                  <Button onClick={() => { handleResume(selectedJob.id); setShowDetail(false); }} variant="chip-sm" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
                     <Play className="w-3 h-3" />恢复
-                  </button>
+                  </Button>
                 )}
-                <button onClick={() => { handleDelete(selectedJob.id); setShowDetail(false); }} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto">
+                <Button onClick={() => { handleDelete(selectedJob.id); setShowDetail(false); }} variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20 ml-auto">
                   <Trash2 className="w-3 h-3" />删除
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -390,7 +390,7 @@ export default function CronPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h2 className="text-sm font-medium">执行历史 — {historyJob.name || historyJob.id}</h2>
-              <button onClick={() => setShowHistory(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowHistory(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="flex-1 overflow-auto p-4 min-h-0">
               {historyLoading ? (

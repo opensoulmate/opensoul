@@ -217,16 +217,16 @@ export default function EventsPage() {
       {/* Organ badges */}
       {organs.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          <button
+          <Button variant="bare"
             onClick={() => setOrganFilter('')}
             className={`px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
               !organFilter ? 'bg-primary/10 text-primary border-primary/30' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted/50'
             }`}
           >
             全部
-          </button>
+          </Button>
           {organs.map(([organ, count]) => (
-            <button
+            <Button variant="bare"
               key={organ}
               onClick={() => setOrganFilter(organFilter === organ ? '' : organ)}
               className={`px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
@@ -234,7 +234,7 @@ export default function EventsPage() {
               }`}
             >
               {organ} <span className="ml-0.5 opacity-60">{count}</span>
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -250,9 +250,9 @@ export default function EventsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
+        <Button
           onClick={toggleLive}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border rounded-lg transition-colors ${
+          variant="chip-sm" className={`flex items-center gap-1.5 border transition-colors  ${
             liveMode
               ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/20'
               : 'bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -260,7 +260,7 @@ export default function EventsPage() {
         >
           {liveMode ? <Pause className="w-3.5 h-3.5" /> : <Radio className="w-3.5 h-3.5" />}
           {liveMode ? '停止实时' : '实时模式'}
-        </button>
+        </Button>
         <Button onClick={handleRefresh} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
         </Button>
@@ -271,7 +271,7 @@ export default function EventsPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 

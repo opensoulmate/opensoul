@@ -9,6 +9,7 @@ import {
   MessageSquare, Shield, Timer, BarChart3, Layers, Gauge, Workflow,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '../components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -119,7 +120,7 @@ function StatCard({
   color?: string; onClick?: () => void;
 }) {
   return (
-    <button
+    <Button variant="bare"
       onClick={onClick}
       disabled={!onClick}
       className={`rounded-xl border border-border bg-card p-4 text-left transition-all ${onClick ? 'hover:border-primary/50 hover:shadow-md cursor-pointer' : ''}`}
@@ -130,7 +131,7 @@ function StatCard({
       </div>
       <div className={`text-2xl font-bold ${color}`}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
-    </button>
+    </Button>
   );
 }
 
@@ -238,12 +239,12 @@ function OrganHealthGrid({ organs }: { organs: OrganHealth }) {
         ))}
       </div>
       {sorted.length > 24 && (
-        <button
+        <Button variant="bare"
           onClick={() => setExpanded(!expanded)}
           className="mt-2 text-xs lg:text-sm text-primary hover:underline"
         >
           {expanded ? '收起' : `展开全部 ${sorted.length} 个`}
-        </button>
+        </Button>
       )}
       {organs.latency?.slowest?.length > 0 && (
         <div className="mt-3 pt-3 border-t border-border/50">
@@ -446,7 +447,7 @@ export default function DashboardPage() {
         <div className="text-center space-y-3">
           <AlertTriangle className="w-8 h-8 text-red-400 mx-auto" />
           <div className="text-sm text-red-400">{error}</div>
-          <button onClick={fetchData} className="text-xs lg:text-sm text-primary hover:underline">重试</button>
+          <Button variant="bare" onClick={fetchData} className="text-xs lg:text-sm text-primary hover:underline">重试</Button>
         </div>
       </div>
     );
@@ -473,14 +474,14 @@ export default function DashboardPage() {
             <Clock className="w-3 h-3 inline mr-1" />
             {lastRefresh.toLocaleTimeString('zh-CN')}
           </span>
-          <button
+          <Button
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs lg:text-sm bg-muted/50 hover:bg-muted transition-colors"
+            variant="chip-sm" className="flex items-center gap-1.5 bg-muted/50 hover:bg-muted transition-colors"
           >
             <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
             刷新
-          </button>
+          </Button>
         </div>
       </div>
 

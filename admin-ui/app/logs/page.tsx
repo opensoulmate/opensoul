@@ -268,9 +268,9 @@ export default function LogsPage() {
           <option value="">全部器官</option>
           {organs.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
-        <button
+        <Button
           onClick={() => setUseSse(!useSse)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border rounded-lg transition-colors ${useSse ? 'bg-emerald-500/10 text-emerald-500 border-green-500/20' : 'bg-muted border-border hover:bg-muted'}`}
+          variant="chip-sm" className={`flex items-center gap-1.5 border transition-colors  ${useSse ? 'bg-emerald-500/10 text-emerald-500 border-green-500/20' : 'bg-muted border-border hover:bg-muted'}`}
         >
           {useSse ? (
             sseConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />
@@ -278,7 +278,7 @@ export default function LogsPage() {
             <Radio className="w-3.5 h-3.5" />
           )}
           {useSse ? (sseConnected ? 'SSE实时' : 'SSE连接中...') : 'SSE模式'}
-        </button>
+        </Button>
         {!useSse && (
           <label className="flex items-center gap-1.5 text-xs cursor-pointer">
             <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} className="rounded" />
@@ -298,7 +298,7 @@ export default function LogsPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 

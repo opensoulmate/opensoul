@@ -126,7 +126,7 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
 
   return (
     <div className="border border-border rounded-lg bg-card">
-      <button onClick={onToggle} className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/30 transition-colors">
+      <Button onClick={onToggle} variant="row" className="gap-3 p-3 hover:bg-muted/30 transition-colors">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
           wf.status === 'active' ? 'bg-green-500/10' : wf.status === 'paused' ? 'bg-amber-500/10' : 'bg-muted'
         }`}>
@@ -155,7 +155,7 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
           <div className="text-[10px] text-muted-foreground">{formatTime(wf.updated_at)}</div>
         </div>
         {expanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="px-3 pb-3 border-t border-border pt-2 space-y-3">
@@ -218,13 +218,13 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
           {/* Actions */}
           <div className="flex items-center gap-2 pt-2 border-t border-border">
             {wf.status === 'active' && (
-              <button onClick={onExecute} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20">
+              <Button onClick={onExecute} variant="chip-xs" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
                 <Play className="w-3 h-3" />执行
-              </button>
+              </Button>
             )}
-            <button onClick={onDelete} className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
+            <Button onClick={onDelete} variant="chip-xs" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20">
               <Trash2 className="w-3 h-3" />删除
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -296,7 +296,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
       <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-medium">创建工作流</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded-md"><X className="w-4 h-4" /></button>
+          <Button onClick={onClose} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
         </div>
         <div className="p-4 space-y-3">
           <div>
@@ -424,12 +424,12 @@ export default function WillPage() {
           ].map(t => {
             const Icon = t.icon;
             return (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm rounded-lg transition-colors ${
+              <Button key={t.id} onClick={() => setTab(t.id)}
+                variant="chip-sm" className={`flex items-center gap-1.5 transition-colors  ${
                   tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}>
                 <Icon className="w-3.5 h-3.5" />{t.label}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -456,7 +456,7 @@ export default function WillPage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500" />
           <span className="text-xs text-red-500">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto"><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')} className="ml-auto"><X className="w-3 h-3" /></Button>
         </div>
       )}
 

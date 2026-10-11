@@ -206,9 +206,9 @@ export default function CapturePage() {
       <div className="space-y-2">
         {filtered.map((capture) => (
           <div key={capture.id} className="border border-border rounded-lg bg-card hover:bg-muted/20 transition-colors">
-            <button
+            <Button
               onClick={() => setExpandedId(expandedId === capture.id ? null : capture.id)}
-              className="flex items-center gap-3 w-full p-3 text-left"
+              variant="row" className="gap-3 p-3"
             >
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
                 capture.capture_type === 'page' ? 'bg-blue-500/10' : 'bg-purple-500/10'
@@ -245,7 +245,7 @@ export default function CapturePage() {
                 <div className="text-[10px] text-muted-foreground">{formatTime(capture.created_at)}</div>
               </div>
               {expandedId === capture.id ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
-            </button>
+            </Button>
 
             {expandedId === capture.id && (
               <div className="px-3 pb-3 border-t border-border pt-3 space-y-3">
@@ -269,14 +269,14 @@ export default function CapturePage() {
                 {/* Actions */}
                 <div className="flex items-center gap-2 pt-2 border-t border-border">
                   {capture.status !== 'promoted' && (
-                    <button
+                    <Button variant="bare"
                       onClick={() => handlePromote(capture.id)}
                       disabled={promoting === capture.id}
                       className="flex items-center gap-1 px-2.5 py-1 text-[10px] bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500/20 disabled:opacity-50"
                     >
                       {promoting === capture.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowUpCircle className="w-3 h-3" />}
                       提升为知识
-                    </button>
+                    </Button>
                   )}
                   {capture.status === 'promoted' && (
                     <span className="flex items-center gap-1 text-[10px] text-green-500">
@@ -293,12 +293,12 @@ export default function CapturePage() {
                       <ExternalLink className="w-3 h-3" />打开原文
                     </a>
                   )}
-                  <button
+                  <Button variant="bare"
                     onClick={() => handleDelete(capture.id)}
                     className="flex items-center gap-1 px-2.5 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto"
                   >
                     <Trash2 className="w-3 h-3" />删除
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -330,7 +330,7 @@ export default function CapturePage() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-xs text-red-500 flex-1">{error}</span>
-          <button onClick={() => setError('')} className="p-1 hover:bg-muted rounded-md"><X className="w-3 h-3" /></button>
+          <Button onClick={() => setError('')} variant="icon-sm" className="hover:bg-muted"><X className="w-3 h-3" /></Button>
         </div>
       )}
     </div>

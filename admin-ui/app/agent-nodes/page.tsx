@@ -253,7 +253,7 @@ export default function AgentNodesPage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -284,10 +284,10 @@ export default function AgentNodesPage() {
           { key: 'memory', label: 'Agent记忆', icon: Brain },
           { key: 'register', label: '注册节点', icon: Plus },
         ] as { key: Tab; label: string; icon: any }[]).map((t) => (
-          <button
+          <Button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors ${
+            variant="tabline" className={`font-medium  ${
               tab === t.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -295,7 +295,7 @@ export default function AgentNodesPage() {
           >
             <t.icon className="w-3.5 h-3.5" />
             {t.label}
-          </button>
+          </Button>
         ))}
         <div className="flex-1" />
         <Button onClick={fetchData} variant="secondary" className="mb-1">
@@ -327,12 +327,12 @@ export default function AgentNodesPage() {
               <option value="inactive">不活跃</option>
               <option value="error">错误</option>
             </select>
-            <button
+            <Button
               onClick={() => { setShowReport(true); }}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20"
+              variant="chip-sm" className="flex items-center gap-1 bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20"
             >
               <Send className="w-3 h-3" />提交报告
-            </button>
+            </Button>
           </div>
 
           {/* Node List */}
@@ -402,18 +402,18 @@ export default function AgentNodesPage() {
                         </div>
                       )}
                       <div className="flex items-center gap-2 pt-1">
-                        <button
+                        <Button
                           onClick={() => { setReportForm({ ...reportForm, agent_id: node.id }); setShowReport(true); }}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20"
+                          variant="chip-xs" className="flex items-center gap-1 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
                         >
                           <Send className="w-3 h-3" />提交报告
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleDelete(node.id, node.name)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
+                          variant="chip-xs" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20"
                         >
                           <Trash2 className="w-3 h-3" />删除节点
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -476,14 +476,14 @@ export default function AgentNodesPage() {
                   placeholder="tag1, tag2, ..."
                 />
               </div>
-              <button
+              <Button
                 onClick={handleRemember}
                 disabled={remembering || !rememberTitle || !rememberContent}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-purple-500/20 rounded-lg hover:bg-violet-500/20 disabled:opacity-50"
+                variant="chip-sm" className="flex items-center gap-1.5 bg-violet-500/10 text-violet-500 border border-purple-500/20 hover:bg-violet-500/20 disabled:opacity-50"
               >
                 {remembering ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
                 {remembering ? '存储中...' : '存储记忆'}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -624,7 +624,7 @@ export default function AgentNodesPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-sm font-medium">提交Agent报告</h2>
-              <button onClick={() => setShowReport(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+              <Button onClick={() => setShowReport(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
               <div>

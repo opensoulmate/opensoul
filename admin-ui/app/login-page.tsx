@@ -47,10 +47,10 @@ export function LoginPage() {
               <input type={showPwd ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 pr-10 bg-background border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                 placeholder="请输入密码" autoComplete="current-password" />
-              <button type="button" onClick={() => setShowPwd(!showPwd)}
+              <Button variant="bare" type="button" onClick={() => setShowPwd(!showPwd)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                 {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+              </Button>
             </div>
           </div>
           {error && <p className="text-sm text-red-500">{error}</p>}

@@ -243,18 +243,18 @@ export default function MarketplacePage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 p-0.5 bg-muted rounded-lg w-fit">
-        <button
+        <Button variant="bare"
           onClick={() => setTab('skills')}
           className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors ${tab === 'skills' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
         >
           <Zap className="w-3.5 h-3.5" />技能数据源
-        </button>
-        <button
+        </Button>
+        <Button variant="bare"
           onClick={() => setTab('agents')}
           className={`flex items-center gap-1.5 px-3 py-2 text-xs lg:text-sm rounded-lg transition-colors ${tab === 'agents' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
         >
           <Package className="w-3.5 h-3.5" />Agent数据源
-        </button>
+        </Button>
       </div>
 
       {/* Toolbar */}
@@ -281,7 +281,7 @@ export default function MarketplacePage() {
         <div className="flex items-center gap-2 p-2 text-xs text-red-500 bg-red-500/5 rounded-md border border-red-500/20">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')}><X className="w-3 h-3" /></button>
+          <Button variant="bare" onClick={() => setError('')}><X className="w-3 h-3" /></Button>
         </div>
       )}
 
@@ -326,7 +326,7 @@ export default function MarketplacePage() {
             <span className="text-[10px] text-muted-foreground">{formatTime(src.last_sync)}</span>
             <span className="text-xs font-medium">{src.skill_count ?? src.agent_count ?? 0}</span>
             <div>
-              <button
+              <Button variant="bare"
                 onClick={() => handleToggle(src)}
                 className="flex items-center gap-1"
                 title={src.enabled ? '点击禁用' : '点击启用'}
@@ -336,26 +336,26 @@ export default function MarketplacePage() {
                 ) : (
                   <ToggleLeft className="w-5 h-5 text-muted-foreground" />
                 )}
-              </button>
+              </Button>
             </div>
             <div className="flex items-center justify-end gap-1">
               {tab === 'skills' && (
-                <button
+                <Button
                   onClick={() => handleSync(src)}
                   disabled={syncing.has(src.id)}
-                  className="p-1.5 rounded-md hover:bg-muted disabled:opacity-50"
+                  variant="icon-md" className="hover:bg-muted disabled:opacity-50"
                   title="同步"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${syncing.has(src.id) ? 'animate-spin' : ''}`} />
-                </button>
+                </Button>
               )}
-              <button onClick={() => openEdit(src)} className="p-1.5 rounded-md hover:bg-muted" title="编辑">
+              <Button onClick={() => openEdit(src)} variant="icon-md" className="hover:bg-muted" title="编辑">
                 <Edit2 className="w-3.5 h-3.5" />
-              </button>
+              </Button>
               {!src.builtin && (
-                <button onClick={() => handleDelete(src)} className="p-1.5 rounded-md hover:bg-red-500/10" title="删除">
+                <Button onClick={() => handleDelete(src)} variant="icon-md" className="hover:bg-red-500/10" title="删除">
                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -379,9 +379,9 @@ export default function MarketplacePage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-base font-medium">{editSource ? '编辑数据源' : '添加数据源'}</h2>
-              <button onClick={() => resetForm()} className="p-1 rounded-md hover:bg-muted">
+              <Button onClick={() => resetForm()} variant="icon-sm" className="hover:bg-muted">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div className="p-4 space-y-4">
               <div>
