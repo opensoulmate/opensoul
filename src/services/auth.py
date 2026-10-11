@@ -7,6 +7,11 @@ from jose import JWTError, jwt
 
 from src.config import settings
 from src.database.postgres import db_pool
+from src.services.tenant_binding import (
+    ensure_user_tenant_columns,
+    users_db_path,
+    validate_tenant,
+)
 
 
 def hash_password(password: str) -> str:
@@ -112,18 +117,29 @@ async def get_user_by_id(user_id: UUID) -> dict | None:
     return dict(row) if row else None
 
 
-async def register_user(username: str, email: str, password: str, role: str = "user") -> dict:
+async def register_user(
+    username: str,
+    email: str,
+    password: str,
+    role: str = "user",
+    tenant_id: str = "default",
+) -> dict:
     import uuid
 
     user_id = str(uuid.uuid4())
     hashed = hash_password(password)
+    # F3b-② 认证→租户绑定：用户行携带租户绑定（token 身份派生单一真源），
+    # 未知租户 ValueError→API 层 400（禁悬空绑定）
+    tenant_id = validate_tenant(tenant_id)
+    ensure_user_tenant_columns(users_db_path())
     await db_pool.execute(
-        "INSERT INTO users (id, username, email, password_hash, role) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO users (id, username, email, password_hash, role, tenant_id) VALUES ($1, $2, $3, $4, $5, $6)",
         user_id,
         username,
         email,
         hashed,
         role,
+        tenant_id,
     )
     row = await db_pool.fetchrow(
         "SELECT id, username, email, role, is_active, created_at, updated_at FROM users WHERE id = $1",

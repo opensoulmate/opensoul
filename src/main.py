@@ -244,6 +244,12 @@ async def lifespan(app: FastAPI):
     # Startup
     await db_pool.connect()
 
+    # F3b-② users.tenant_id 缺列自愈（双身份库启动即补齐：lazy 路径之外保证
+    # 生产库列集与认证→租户绑定契约一致，补列留痕 journal）
+    from src.services.tenant_binding import ensure_user_tenant_columns
+
+    ensure_user_tenant_columns()
+
     # Ensure kb_sharing_requests and knowledge_requests tables exist
     # Ensure workflow_tasks table exists with all columns
     await db_pool.execute("""CREATE TABLE IF NOT EXISTS workflow_tasks (

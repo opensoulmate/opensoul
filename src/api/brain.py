@@ -13,8 +13,10 @@
 import os
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
+
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -58,8 +60,11 @@ sessions = SessionManager()
 
 
 @router.post("/think")
-async def think(req: ThinkRequest):
+async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     """认知思考：调用已有模块完成意图理解+风险评估+策略决策"""
+    # F3b-② 身份派生收口：tenant 声明只可确认绑定、不得矛盾（本端点不消费
+    # tenant，收口在声明面；进程内直调不带 authorization=匿名语义，A1 接线不变）
+    bind_identity(authorization, req.tenant_id)
     from src.cortex.project_memory import ProjectMemory
     from src.cortex.reflector import Reflector
     from src.cortex.risk_assessor import RiskAssessor
@@ -178,8 +183,10 @@ async def think(req: ThinkRequest):
 
 
 @router.post("/verify")
-async def verify(req: VerifyRequest):
+async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
     """执行验证：反思+记忆+事件"""
+    # F3b-② 身份派生收口（同 think：声明面收口，本端点不消费 tenant）
+    bind_identity(authorization, req.tenant_id)
     # 1. 存入短期记忆
     store.add(
         session_id=req.task_id,
@@ -254,7 +261,7 @@ async def refresh(repo_root: str = ""):
 
 
 @router.post("/feedback")
-async def feedback(req: FeedbackRequest):
+async def feedback(req: FeedbackRequest, authorization: str | None = Header(None)):
     """用户反馈：短期记忆 + user_feedback表（P0-7进化数据层闭环）。
 
     22:05轮遗留#3销账：此前反馈只进MemoryStore（"[feedback] ..."记忆行，
@@ -264,6 +271,10 @@ async def feedback(req: FeedbackRequest):
     表供进化分析；响应携带evolution_facing=进化引擎同源统计
     （SelfEvolution.feedback_stats，非独立镜像数字）。
     """
+    # F3b-② 身份派生收口：tenant/user 从 token 身份派生（单一真源=users 行），
+    # 自报只可确认绑定不得矛盾——矛盾=403 冒读面收口
+    identity = bind_identity(authorization, req.tenant_id, req.user_id)
+    tenant_id, user_id = identity.tenant_id, identity.user_id
     action = (req.action or "").strip()
     if not action:
         raise HTTPException(status_code=400, detail="action is required")
@@ -271,7 +282,7 @@ async def feedback(req: FeedbackRequest):
         raise HTTPException(status_code=400, detail="rating is required and must be an integer 1-5")
 
     store.add(
-        session_id=f"user:{req.user_id}",
+        session_id=f"user:{user_id}",
         content=f"[feedback] {req.action}: {req.feedback} (rating={req.rating})",
         importance=0.8,
         tags=["feedback", str(req.rating)],
@@ -281,15 +292,22 @@ async def feedback(req: FeedbackRequest):
     from src.heredity.self_evolution import SelfEvolution
     from src.mind.user_memory import UserMemory
 
-    um = UserMemory(db_pool, req.tenant_id, req.user_id)
+    um = UserMemory(db_pool, tenant_id, user_id)
     await um.record_feedback(action, req.feedback or "", int(req.rating))
-    evo_stats = await SelfEvolution(db_pool, req.tenant_id, req.user_id).feedback_stats()
+    evo_stats = await SelfEvolution(db_pool, tenant_id, user_id).feedback_stats()
     return {"status": "recorded", "memorized": True, "evolution_facing": evo_stats}
 
 
 @router.get("/feedback")
-async def get_feedback(tenant_id: str = "default", user_id: str = "default", limit: int = 20):
+async def get_feedback(
+    tenant_id: str = "default",
+    user_id: str = "default",
+    limit: int = 20,
+    authorization: str | None = Header(None),
+):
     """查看用户反馈（Khoj信任设计：用户可看AI记录了什么）+ 进化引擎同源统计。"""
+    identity = bind_identity(authorization, tenant_id, user_id)
+    tenant_id, user_id = identity.tenant_id, identity.user_id
     from src.database.postgres import db_pool
     from src.heredity.self_evolution import SelfEvolution
     from src.mind.user_memory import UserMemory
@@ -309,9 +327,14 @@ async def get_feedback(tenant_id: str = "default", user_id: str = "default", lim
 
 
 @router.post("/learn")
-async def learn_endpoint(tenant_id: str = "default", agent_id: str = "default"):
+async def learn_endpoint(
+    tenant_id: str = "default",
+    agent_id: str = "default",
+    authorization: str | None = Header(None),
+):
     """从经验中学习（extraction统计=准入门可观测面：pruned存量自愈
     + skipped按原因码计数——被拒的噪声不再静默消失）。"""
+    tenant_id = bind_identity(authorization, tenant_id).tenant_id
     from src.database.postgres import db_pool
     from src.learn.long_term import LongTermLearning
 
@@ -321,8 +344,14 @@ async def learn_endpoint(tenant_id: str = "default", agent_id: str = "default"):
 
 
 @router.get("/recommendations")
-async def recommendations(tenant_id: str = "default", agent_id: str = "default", intent: str = ""):
+async def recommendations(
+    tenant_id: str = "default",
+    agent_id: str = "default",
+    intent: str = "",
+    authorization: str | None = Header(None),
+):
     """学习推荐"""
+    tenant_id = bind_identity(authorization, tenant_id).tenant_id
     from src.database.postgres import db_pool
     from src.learn.long_term import LongTermLearning
 
@@ -332,13 +361,18 @@ async def recommendations(tenant_id: str = "default", agent_id: str = "default",
 
 
 @router.post("/evolve")
-async def evolve(tenant_id: str = "default", agent_id: str = "default"):
+async def evolve(
+    tenant_id: str = "default",
+    agent_id: str = "default",
+    authorization: str | None = Header(None),
+):
     """自我进化 — 分析结果转入进化闭环管线（声明式提案，审批后才落盘）。
 
     P0-7接线：SelfEvolution.analyze_and_evolve() 的每条发现不再只写日志，
     而是作为声明式提案进入 /api/heredity/evolution/* 审批管线
     （LobeChat范式：声明≠执行，reviewer审批人≠发起人）。
     """
+    tenant_id = bind_identity(authorization, tenant_id).tenant_id
     from src.database.postgres import db_pool
     from src.heredity.self_evolution import SelfEvolution
     from src.learn.experience_collector import ExperienceCollector
@@ -418,8 +452,13 @@ async def evolve(tenant_id: str = "default", agent_id: str = "default"):
 
 
 @router.get("/metacognition")
-async def metacognition(tenant_id: str = "default", agent_id: str = "default"):
+async def metacognition(
+    tenant_id: str = "default",
+    agent_id: str = "default",
+    authorization: str | None = Header(None),
+):
     """元认知"""
+    tenant_id = bind_identity(authorization, tenant_id).tenant_id
     from src.database.postgres import db_pool
     from src.mirror.metacognition import Metacognition
 
@@ -432,8 +471,9 @@ async def metacognition(tenant_id: str = "default", agent_id: str = "default"):
 
 
 @router.get("/agents")
-async def agents(tenant_id: str = "default"):
+async def agents(tenant_id: str = "default", authorization: str | None = Header(None)):
     """多Agent协调"""
+    tenant_id = bind_identity(authorization, tenant_id).tenant_id
     from src.cortex.multi_agent_coord import MultiAgentCoordinator
     from src.database.postgres import db_pool
 

@@ -360,7 +360,10 @@ class TestWiring:
         text = Path("src/api/brain.py").read_text()
         assert "from src.mind.user_memory import UserMemory" in text
         assert "await um.record_feedback(action" in text
-        assert "SelfEvolution(db_pool, req.tenant_id, req.user_id).feedback_stats()" in text
+        # F3b-②后契约字面量：tenant/user 为 bind_identity 派生值（自报被收口），
+        # UserMemory 与 SelfEvolution 必须同源同 scope
+        assert "identity = bind_identity(authorization, req.tenant_id, req.user_id)" in text
+        assert "SelfEvolution(db_pool, tenant_id, user_id).feedback_stats()" in text
 
     def test_brain_get_feedback_endpoint_exists(self):
         text = Path("src/api/brain.py").read_text()

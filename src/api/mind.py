@@ -1,11 +1,12 @@
 """OpenMind API — 心智中心：情绪识别、人格调节。"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from src.mind.emotion import EmotionAnalyzer
 from src.mind.personality import PersonalityManager
 from src.mind.preference_learner import PreferenceLearner
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -230,8 +231,12 @@ class LearnPreferencesRequest(BaseModel):
 
 
 @router.post("/preference/learn")
-async def learn_preferences(req: LearnPreferencesRequest):
+async def learn_preferences(req: LearnPreferencesRequest, authorization: str | None = Header(None)):
     """Learn user preferences from conversation messages."""
+    # F3b-② 身份派生收口：tenant/user 声明只可确认绑定不得矛盾（冒读面收口）。
+    # 诚实边界：本 handler 的偏好学习是全局面（preference_learner 单例不分域），
+    # 两字段目前不消费数据面——收口在声明面，数据面隔离=F3b-③ 另拍。
+    bind_identity(authorization, req.tenant_id, req.user_id)
     all_learned = []
     for msg in req.messages:
         content = msg.get("content", "")

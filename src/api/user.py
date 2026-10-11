@@ -35,7 +35,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UUID:
 @router.post("/register", response_model=UserResponse)
 async def register(data: UserCreate):
     try:
-        user = await register_user(data.username, data.email, data.password)
+        user = await register_user(
+            data.username, data.email, data.password, tenant_id=data.tenant_id
+        )
         add_role(data.username, "user")
         return user
     except Exception as e:

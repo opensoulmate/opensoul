@@ -11,6 +11,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    tenant_id: str = "default"
 
 
 class UserUpdate(BaseModel):

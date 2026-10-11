@@ -18,6 +18,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from src.config import settings
+from src.services.tenant_binding import ensure_user_tenant_columns, validate_tenant
 
 router = APIRouter(prefix="/api/enterprise", tags=["enterprise"])
 
@@ -32,7 +33,10 @@ security = HTTPBearer()
 
 # ── SQLite database ─────────────────────────────────────────────────────
 
-_DB_PATH = Path(__file__).parent.parent.parent / "data" / "enterprise.db"
+_DB_PATH = Path(
+    os.environ.get("ENTERPRISE_DB")
+    or Path(__file__).parent.parent.parent / "data" / "enterprise.db"
+)
 _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -170,6 +174,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(LoginRequest):
+    """注册扩展（F3b-② 认证→租户绑定）：用户行携带租户绑定，
+    token 身份派生的单一真源就是 users.tenant_id。"""
+
+    tenant_id: str = "default"
+
+
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -284,19 +295,34 @@ async def login(body: LoginRequest, request: Request):
 
 
 @router.post("/auth/register")
-async def register(body: LoginRequest, request: Request):
-    """Register a new enterprise user (for bootstrap; disable in production)."""
+async def register(body: RegisterRequest, request: Request):
+    """Register a new enterprise user (for bootstrap; disable in production).
+
+    tenant_id（F3b-②）：写入 users.tenant_id 绑定（认证身份派生真源），必须是
+    已在 /api/nest/tenants 登记的租户（'default' 恒可用）——禁悬空绑定。
+    """
+    try:
+        tenant_id = validate_tenant(body.tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    ensure_user_tenant_columns(str(_DB_PATH))
     with _db() as conn:
         try:
             conn.execute(
-                "INSERT INTO users (username, password) VALUES (?, ?)",
-                (body.username, _hash_password(body.password)),
+                "INSERT INTO users (username, password, tenant_id) VALUES (?, ?, ?)",
+                (body.username, _hash_password(body.password), tenant_id),
             )
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=409, detail="Username already exists")
         user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    _record_audit(user_id, "register", "auth", "", request.client.host)
-    return {"ok": True, "user_id": user_id}
+    _record_audit(
+        user_id,
+        "register",
+        "auth",
+        f"tenant={tenant_id}",
+        request.client.host if request.client else "",
+    )
+    return {"ok": True, "user_id": user_id, "tenant_id": tenant_id}
 
 
 # ── Routes: RBAC ────────────────────────────────────────────────────────
