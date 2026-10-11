@@ -234,7 +234,7 @@ export default function DedupPage() {
           <div className="text-xs text-muted-foreground">中度重复（70-90%）</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{lowSim}</div>
+          <div className="text-2xl font-bold text-emerald-500">{lowSim}</div>
           <div className="text-xs text-muted-foreground">低度重复（&lt;70%）</div>
         </div>
       </div>
@@ -283,7 +283,7 @@ export default function DedupPage() {
               <div className="text-[10px] text-muted-foreground">发现重复</div>
             </div>
             <div>
-              <div className="text-lg font-bold text-green-500">{dedupResult.duplicates_removed}</div>
+              <div className="text-lg font-bold text-emerald-500">{dedupResult.duplicates_removed}</div>
               <div className="text-[10px] text-muted-foreground">已删除</div>
             </div>
             <div>

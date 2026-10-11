@@ -268,7 +268,7 @@ export default function PatternsPage() {
           <div className="text-xs text-muted-foreground">已发现模式</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{highConf}</div>
+          <div className="text-2xl font-bold text-emerald-500">{highConf}</div>
           <div className="text-xs text-muted-foreground">高置信度</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

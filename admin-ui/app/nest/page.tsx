@@ -346,11 +346,11 @@ export default function NestPage() {
           <div className="text-xs text-muted-foreground">总租户数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{stats.active_tenants ?? '-'}</div>
+          <div className="text-2xl font-bold text-emerald-600">{stats.active_tenants ?? '-'}</div>
           <div className="text-xs text-muted-foreground">活跃租户</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{stats.suspended_tenants ?? '-'}</div>
+          <div className="text-2xl font-bold text-amber-500">{stats.suspended_tenants ?? '-'}</div>
           <div className="text-xs text-muted-foreground">已暂停</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

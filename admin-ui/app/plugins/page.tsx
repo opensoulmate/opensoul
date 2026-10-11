@@ -155,7 +155,7 @@ export default function PluginsPage() {
           <div className="text-xs text-muted-foreground">已安装插件</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{enabledCount}</div>
+          <div className="text-2xl font-bold text-emerald-600">{enabledCount}</div>
           <div className="text-xs text-muted-foreground">已启用</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
@@ -335,7 +335,7 @@ export default function PluginsPage() {
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3 min-h-0">
               <div className="grid grid-cols-2 gap-3 text-xs">
-                <div><span className="text-muted-foreground">状态:</span> <span className={selectedPlugin.status === 'enabled' ? 'text-green-600' : 'text-muted-foreground'}>{selectedPlugin.status === 'enabled' ? '已启用' : '已禁用'}</span></div>
+                <div><span className="text-muted-foreground">状态:</span> <span className={selectedPlugin.status === 'enabled' ? 'text-emerald-600' : 'text-muted-foreground'}>{selectedPlugin.status === 'enabled' ? '已启用' : '已禁用'}</span></div>
                 <div><span className="text-muted-foreground">类型:</span> {selectedPlugin.type}</div>
                 <div><span className="text-muted-foreground">安装时间:</span> {selectedPlugin.installed_at}</div>
                 <div><span className="text-muted-foreground">更新时间:</span> {selectedPlugin.updated_at}</div>

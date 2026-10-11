@@ -246,7 +246,7 @@ function ExecutionCard({ exec }: { exec: Execution }) {
   return (
     <div className="flex items-center gap-3 py-2 px-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
       <Icon className={`w-4 h-4 shrink-0 ${
-        exec.status === 'completed' ? 'text-green-500' :
+        exec.status === 'completed' ? 'text-emerald-500' :
         exec.status === 'failed' ? 'text-red-500' :
         exec.status === 'running' ? 'text-blue-500 animate-spin' :
         'text-muted-foreground'
@@ -401,7 +401,7 @@ export default function WillPage() {
           <div className="text-xs text-muted-foreground">工作流总数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{stats?.active_workflows ?? workflows.filter(w => w.status === 'active').length}</div>
+          <div className="text-2xl font-bold text-emerald-500">{stats?.active_workflows ?? workflows.filter(w => w.status === 'active').length}</div>
           <div className="text-xs text-muted-foreground">活跃中</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

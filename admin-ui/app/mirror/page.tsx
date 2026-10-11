@@ -350,10 +350,10 @@ export default function MirrorPage() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[
             { label: '总沙箱', value: stats.total_sandboxes ?? 0, icon: <Layers className="w-4 h-4" />, color: 'text-blue-400' },
-            { label: '运行中', value: stats.active_sandboxes ?? 0, icon: <Activity className="w-4 h-4" />, color: 'text-green-400' },
-            { label: '已暂停', value: stats.paused_sandboxes ?? 0, icon: <Pause className="w-4 h-4" />, color: 'text-yellow-400' },
+            { label: '运行中', value: stats.active_sandboxes ?? 0, icon: <Activity className="w-4 h-4" />, color: 'text-emerald-400' },
+            { label: '已暂停', value: stats.paused_sandboxes ?? 0, icon: <Pause className="w-4 h-4" />, color: 'text-amber-400' },
             { label: '已销毁', value: stats.destroyed_sandboxes ?? 0, icon: <Trash2 className="w-4 h-4" />, color: 'text-red-400' },
-            { label: '模板', value: stats.templates?.total ?? 0, icon: <FlaskConical className="w-4 h-4" />, color: 'text-purple-400' },
+            { label: '模板', value: stats.templates?.total ?? 0, icon: <FlaskConical className="w-4 h-4" />, color: 'text-violet-400' },
           ].map((c, i) => (
             <div key={i} className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">

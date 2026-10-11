@@ -452,7 +452,7 @@ export default function KnowledgeGraphPage() {
           <div className="text-xs text-muted-foreground">关系总数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{entityTypes.length}</div>
+          <div className="text-2xl font-bold text-emerald-600">{entityTypes.length}</div>
           <div className="text-xs text-muted-foreground">实体类型</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

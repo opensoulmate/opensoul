@@ -128,7 +128,7 @@ export default function TopologyPage() {
             <div className="text-xs text-muted-foreground">组件总数</div>
           </div>
           <div className="rounded-lg border border-border bg-card p-3">
-            <div className="text-2xl font-bold text-green-500">{graph.stats.healthy}</div>
+            <div className="text-2xl font-bold text-emerald-500">{graph.stats.healthy}</div>
             <div className="text-xs text-muted-foreground">健康</div>
           </div>
           <div className="rounded-lg border border-border bg-card p-3">
@@ -261,7 +261,7 @@ export default function TopologyPage() {
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">健康状态</span>
-                  <div className={`text-sm font-medium ${selectedNode.health === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                  <div className={`text-sm font-medium ${selectedNode.health === 'ok' ? 'text-emerald-500' : 'text-red-500'}`}>
                     {selectedNode.health === 'ok' ? '健康' : selectedNode.health === 'unknown' ? '未知' : '异常'}
                   </div>
                 </div>

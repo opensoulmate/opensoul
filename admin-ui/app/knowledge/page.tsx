@@ -200,7 +200,7 @@ export default function KnowledgePage() {
           <div className="text-xs text-muted-foreground">总条目</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-yellow-500">{entries.filter((e) => e.starred).length}</div>
+          <div className="text-2xl font-bold text-amber-500">{entries.filter((e) => e.starred).length}</div>
           <div className="text-xs text-muted-foreground">已收藏</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
@@ -208,7 +208,7 @@ export default function KnowledgePage() {
           <div className="text-xs text-muted-foreground">已置顶</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{types.length}</div>
+          <div className="text-2xl font-bold text-emerald-600">{types.length}</div>
           <div className="text-xs text-muted-foreground">内容类型</div>
         </div>
       </div>

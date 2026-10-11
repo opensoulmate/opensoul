@@ -241,7 +241,7 @@ export default function MonitoringPage() {
             <Activity className="w-4 h-4 text-primary" />
             <span className="text-xs text-muted-foreground">总体状态</span>
           </div>
-          <div className={`text-lg font-bold mt-1 ${data?.summary?.overall === 'ok' ? 'text-green-600' : 'text-orange-500'}`}>
+          <div className={`text-lg font-bold mt-1 ${data?.summary?.overall === 'ok' ? 'text-emerald-600' : 'text-amber-500'}`}>
             {data?.summary?.overall === 'ok' ? '正常' : '降级'}
           </div>
         </div>

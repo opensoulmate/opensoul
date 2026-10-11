@@ -167,11 +167,11 @@ export default function BenchmarkPage() {
           <div className="text-xs text-muted-foreground">已测试</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{runs.length}</div>
+          <div className="text-2xl font-bold text-emerald-500">{runs.length}</div>
           <div className="text-xs text-muted-foreground">历史运行</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{latestEntries.length > 0 ? formatMs(bestAvg) : '-'}</div>
+          <div className="text-2xl font-bold text-amber-500">{latestEntries.length > 0 ? formatMs(bestAvg) : '-'}</div>
           <div className="text-xs text-muted-foreground">最佳平均延迟</div>
         </div>
       </div>
@@ -317,7 +317,7 @@ export default function BenchmarkPage() {
                   <span>{run.iterations}</span>
                   <span>{run.concurrency}</span>
                   <span className="text-muted-foreground">{formatTs(run.started_at)}</span>
-                  <span className={run.status === 'completed' ? 'text-green-500' : run.status === 'running' ? 'text-blue-500' : 'text-muted-foreground'}>{run.status}</span>
+                  <span className={run.status === 'completed' ? 'text-emerald-500' : run.status === 'running' ? 'text-blue-500' : 'text-muted-foreground'}>{run.status}</span>
                 </div>
               ))}
             </div>

@@ -112,7 +112,7 @@ function OverviewCards({ data }: { data: ScanResult }) {
             <span className="text-xs text-muted-foreground">网络服务</span>
           </div>
           <div className="text-2xl font-bold">{data.services.length}</div>
-          <div className="text-[10px] text-green-500 mt-0.5">{listeningServices} 监听中</div>
+          <div className="text-[10px] text-emerald-500 mt-0.5">{listeningServices} 监听中</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
@@ -144,7 +144,7 @@ function OverviewCards({ data }: { data: ScanResult }) {
           </div>
           <div className="rounded bg-muted/50 p-2.5">
             <div className="text-muted-foreground text-[10px]">版本化工具</div>
-            <div className="text-lg font-bold text-green-500">
+            <div className="text-lg font-bold text-emerald-500">
               {data.cli_tools.filter(t => t.version).length}
             </div>
           </div>

@@ -337,8 +337,8 @@ export default function KbRequestsPage() {
           <div className="text-2xl font-bold text-amber-500">{pendingCreate + pendingSharing}</div>
           <div className="text-xs text-muted-foreground">待审批</div>
         </div>
-        <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
-          <div className="text-2xl font-bold text-green-600">{approvedCreate + approvedSharing}</div>
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+          <div className="text-2xl font-bold text-emerald-600">{approvedCreate + approvedSharing}</div>
           <div className="text-xs text-muted-foreground">已通过</div>
         </div>
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">

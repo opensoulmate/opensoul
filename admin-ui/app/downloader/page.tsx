@@ -346,7 +346,7 @@ export default function DownloaderPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><Activity className="w-3.5 h-3.5" />活跃下载</div>
-          <div className="text-lg font-bold text-green-600">{activeTasks.length}</div>
+          <div className="text-lg font-bold text-emerald-600">{activeTasks.length}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><CheckCircle className="w-3.5 h-3.5" />已完成</div>
@@ -446,7 +446,7 @@ export default function DownloaderPage() {
                     )}
 
                     {task.status === 'done' && (
-                      <div className="mt-1 text-[10px] text-green-600">
+                      <div className="mt-1 text-[10px] text-emerald-600">
                         <CheckCircle className="w-3 h-3 inline mr-1" />
                         {formatBytes(task.total_bytes)} · 完成于 {task.completed_at ? new Date(task.completed_at).toLocaleString('zh-CN') : '—'}
                       </div>

@@ -602,7 +602,7 @@ export default function AIGroupsPage() {
           <div className="text-xs text-muted-foreground">总Agent数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{totalTasks}</div>
+          <div className="text-2xl font-bold text-emerald-600">{totalTasks}</div>
           <div className="text-xs text-muted-foreground">总任务数</div>
         </div>
       </div>

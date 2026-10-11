@@ -105,7 +105,7 @@ export default function GitPage() {
           <div className="text-xs text-muted-foreground">已修改</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{status?.staged || 0}</div>
+          <div className="text-2xl font-bold text-emerald-500">{status?.staged || 0}</div>
           <div className="text-xs text-muted-foreground">已暂存</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
@@ -125,7 +125,7 @@ export default function GitPage() {
               </span>
             )}
             {isSynced && (
-              <span className="text-green-500 text-sm">已同步</span>
+              <span className="text-emerald-500 text-sm">已同步</span>
             )}
           </div>
           <div className="text-xs text-muted-foreground">远程状态</div>
@@ -202,7 +202,7 @@ export default function GitPage() {
             {/* Change counts */}
             <div className="grid grid-cols-3 gap-3">
               <div className={`rounded-lg border p-3 text-center ${status.staged > 0 ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-muted/30'}`}>
-                <div className={`text-xl font-bold ${status.staged > 0 ? 'text-green-500' : 'text-muted-foreground'}`}>{status.staged}</div>
+                <div className={`text-xl font-bold ${status.staged > 0 ? 'text-emerald-500' : 'text-muted-foreground'}`}>{status.staged}</div>
                 <div className="text-[10px] text-muted-foreground">已暂存</div>
               </div>
               <div className={`rounded-lg border p-3 text-center ${status.modified > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-border bg-muted/30'}`}>

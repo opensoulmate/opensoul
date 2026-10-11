@@ -616,7 +616,7 @@ export default function TrajectoryPage() {
           <div className="text-xs text-muted-foreground">总事件</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{statsData?.running_sessions ?? '—'}</div>
+          <div className="text-2xl font-bold text-emerald-500">{statsData?.running_sessions ?? '—'}</div>
           <div className="text-xs text-muted-foreground">运行中</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

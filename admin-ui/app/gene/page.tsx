@@ -244,15 +244,15 @@ export default function GenePage() {
           <div className="text-xs text-muted-foreground">内置模板</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{stats?.user_count ?? 0}</div>
+          <div className="text-2xl font-bold text-emerald-500">{stats?.user_count ?? 0}</div>
           <div className="text-xs text-muted-foreground">用户模板</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-purple-500">{categories.length}</div>
+          <div className="text-2xl font-bold text-violet-500">{categories.length}</div>
           <div className="text-xs text-muted-foreground">分类数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{stats?.total_usage_count ?? 0}</div>
+          <div className="text-2xl font-bold text-amber-500">{stats?.total_usage_count ?? 0}</div>
           <div className="text-xs text-muted-foreground">总使用次数</div>
         </div>
       </div>

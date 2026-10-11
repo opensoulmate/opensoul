@@ -230,11 +230,11 @@ export default function EntityPage() {
           <div className="text-xs text-muted-foreground">实体类型</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{tags.length}</div>
+          <div className="text-2xl font-bold text-emerald-600">{tags.length}</div>
           <div className="text-xs text-muted-foreground">标签数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-purple-500">{tags.reduce((s, t) => s + t.usage_count, 0)}</div>
+          <div className="text-2xl font-bold text-violet-500">{tags.reduce((s, t) => s + t.usage_count, 0)}</div>
           <div className="text-xs text-muted-foreground">标签使用次数</div>
         </div>
       </div>

@@ -151,7 +151,7 @@ export default function CronPage() {
           <div className="text-xs text-muted-foreground">总任务数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{jobs.filter((j) => j.status === 'active').length}</div>
+          <div className="text-2xl font-bold text-emerald-600">{jobs.filter((j) => j.status === 'active').length}</div>
           <div className="text-xs text-muted-foreground">运行中</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
@@ -351,7 +351,7 @@ export default function CronPage() {
             <div className="p-4 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div><span className="text-muted-foreground">ID:</span> <span className="font-mono">{selectedJob.id}</span></div>
-                <div><span className="text-muted-foreground">状态:</span> <span className={selectedJob.status === 'active' ? 'text-green-600' : 'text-muted-foreground'}>{selectedJob.status === 'active' ? '运行中' : '已暂停'}</span></div>
+                <div><span className="text-muted-foreground">状态:</span> <span className={selectedJob.status === 'active' ? 'text-emerald-600' : 'text-muted-foreground'}>{selectedJob.status === 'active' ? '运行中' : '已暂停'}</span></div>
                 <div><span className="text-muted-foreground">调度:</span> <span className="font-mono">{selectedJob.schedule}</span></div>
                 <div><span className="text-muted-foreground">投递:</span> {selectedJob.deliver || '-'}</div>
                 <div><span className="text-muted-foreground">下次执行:</span> {selectedJob.next_run || '-'}</div>

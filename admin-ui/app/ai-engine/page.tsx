@@ -181,9 +181,9 @@ export default function AIEnginePage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: '总任务', value: status.total_tasks, icon: <Target className="w-4 h-4" />, color: 'text-blue-400' },
-            { label: '成功率', value: `${((status.success_rate || 0) * 100).toFixed(0)}%`, icon: <CheckCircle className="w-4 h-4" />, color: 'text-green-400' },
-            { label: '平均响应', value: status.avg_response_time, icon: <Zap className="w-4 h-4" />, color: 'text-yellow-400' },
-            { label: '活跃层', value: Object.values(status.layers || {}).filter(l => l.status === 'active').length + '/5', icon: <Layers className="w-4 h-4" />, color: 'text-purple-400' },
+            { label: '成功率', value: `${((status.success_rate || 0) * 100).toFixed(0)}%`, icon: <CheckCircle className="w-4 h-4" />, color: 'text-emerald-400' },
+            { label: '平均响应', value: status.avg_response_time, icon: <Zap className="w-4 h-4" />, color: 'text-amber-400' },
+            { label: '活跃层', value: Object.values(status.layers || {}).filter(l => l.status === 'active').length + '/5', icon: <Layers className="w-4 h-4" />, color: 'text-violet-400' },
           ].map((c, i) => (
             <div key={i} className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
@@ -209,7 +209,7 @@ export default function AIEnginePage() {
                 <div className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border min-w-[140px] ${active ? `${layer.bg} ${layer.border}` : 'bg-muted/30 border-border opacity-50'}`}>
                   <div className={`${active ? layer.color : 'text-muted-foreground'}`}>{layer.icon}</div>
                   <div className="text-xs font-medium">{layer.label}</div>
-                  <div className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${active ? 'bg-green-400/20 text-green-400' : 'bg-muted text-muted-foreground'}`}>
+                  <div className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${active ? 'bg-emerald-400/20 text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
                     {active ? '活跃' : '未激活'}
                   </div>
                 </div>
@@ -362,7 +362,7 @@ export default function AIEnginePage() {
               {context.used_tokens.toLocaleString()} / {context.total_tokens.toLocaleString()} tokens
             </div>
             {context.compression_needed && (
-              <div className="mt-2 text-xs text-yellow-400 flex items-center gap-1">
+              <div className="mt-2 text-xs text-amber-400 flex items-center gap-1">
                 <Zap className="w-3 h-3" /> 建议压缩上下文
               </div>
             )}
@@ -421,9 +421,9 @@ export default function AIEnginePage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 { label: '活跃群组', value: graphStatus.active_groups, color: 'text-blue-400' },
-                { label: '总Agent', value: graphStatus.total_agents, color: 'text-green-400' },
-                { label: '运行中任务', value: graphStatus.running_tasks, color: 'text-yellow-400' },
-                { label: '已完成', value: graphStatus.completed_tasks, color: 'text-purple-400' },
+                { label: '总Agent', value: graphStatus.total_agents, color: 'text-emerald-400' },
+                { label: '运行中任务', value: graphStatus.running_tasks, color: 'text-amber-400' },
+                { label: '已完成', value: graphStatus.completed_tasks, color: 'text-violet-400' },
               ].map((c, i) => (
                 <div key={i} className="rounded-xl border border-border bg-card p-4">
                   <div className="text-xs text-muted-foreground mb-1">{c.label}</div>
@@ -442,7 +442,7 @@ export default function AIEnginePage() {
                     <span className="text-sm font-medium capitalize">{role}</span>
                     <div className="flex-1" />
                     <span className="text-xs text-muted-foreground">总数 {info.count}</span>
-                    <span className={`text-xs ${info.busy > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+                    <span className={`text-xs ${info.busy > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
                       忙碌 {info.busy}
                     </span>
                   </div>

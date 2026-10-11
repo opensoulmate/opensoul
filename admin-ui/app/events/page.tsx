@@ -202,12 +202,12 @@ export default function EventsPage() {
           <div className="text-xs text-muted-foreground">活跃器官</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{health?.probes_configured || 0}</div>
+          <div className="text-2xl font-bold text-emerald-500">{health?.probes_configured || 0}</div>
           <div className="text-xs text-muted-foreground">探测器</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
-            <div className="text-2xl font-bold text-purple-500">{health?.sse_subscribers || 0}</div>
+            <div className="text-2xl font-bold text-violet-500">{health?.sse_subscribers || 0}</div>
             {sseConnected && <Wifi className="w-4 h-4 text-emerald-500 animate-pulse" />}
           </div>
           <div className="text-xs text-muted-foreground">SSE连接</div>

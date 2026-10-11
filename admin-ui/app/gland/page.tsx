@@ -240,7 +240,7 @@ export default function GlandPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="text-2xl font-bold">{providers.length}</div>
           <div className="text-xs text-muted-foreground">Provider总数</div>
-          <div className="text-[10px] text-green-500">{providers.filter(p => p.enabled).length} 可用</div>
+          <div className="text-[10px] text-emerald-500">{providers.filter(p => p.enabled).length} 可用</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="text-2xl font-bold">{keys.length}</div>

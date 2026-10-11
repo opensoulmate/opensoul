@@ -228,11 +228,11 @@ export default function MindPage() {
           <div className="text-xs text-muted-foreground">内置人格</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{customCount}</div>
+          <div className="text-2xl font-bold text-emerald-600">{customCount}</div>
           <div className="text-xs text-muted-foreground">自定义人格</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-purple-500">{activeId ? '✓' : '—'}</div>
+          <div className="text-2xl font-bold text-violet-500">{activeId ? '✓' : '—'}</div>
           <div className="text-xs text-muted-foreground">当前激活</div>
         </div>
       </div>

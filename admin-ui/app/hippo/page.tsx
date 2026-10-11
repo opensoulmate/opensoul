@@ -256,11 +256,11 @@ export default function HippoPage() {
           <div className="text-xs text-muted-foreground">记忆总数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{stats?.memory?.active ?? memories.filter(m => !m.archived).length}</div>
+          <div className="text-2xl font-bold text-emerald-600">{stats?.memory?.active ?? memories.filter(m => !m.archived).length}</div>
           <div className="text-xs text-muted-foreground">活跃记忆</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{stats?.memory?.archived ?? memories.filter(m => m.archived).length}</div>
+          <div className="text-2xl font-bold text-amber-500">{stats?.memory?.archived ?? memories.filter(m => m.archived).length}</div>
           <div className="text-xs text-muted-foreground">已归档</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

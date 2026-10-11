@@ -321,7 +321,7 @@ export default function CortexPage() {
               </div>
               {agentResult && (
                 <div className="space-y-2">
-                  <div className="text-xs font-medium text-purple-500">主题: {agentResult.topic}</div>
+                  <div className="text-xs font-medium text-violet-500">主题: {agentResult.topic}</div>
                   {Object.entries(agentResult).filter(([k]) => k !== 'topic').map(([key, value]) => (
                     <div key={key} className="rounded-lg border border-border bg-muted/30 p-3">
                       <div className="text-[10px] font-medium text-muted-foreground mb-1 uppercase">{key}</div>

@@ -223,7 +223,7 @@ export default function NervePage() {
             <Server className="w-3.5 h-3.5 text-blue-500" />
             <span className="text-xs text-muted-foreground">节点</span>
           </div>
-          <div className="text-2xl font-bold text-green-600">{stats?.online_nodes || 0}<span className="text-sm text-muted-foreground">/{stats?.total_nodes || 0}</span></div>
+          <div className="text-2xl font-bold text-emerald-600">{stats?.online_nodes || 0}<span className="text-sm text-muted-foreground">/{stats?.total_nodes || 0}</span></div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">

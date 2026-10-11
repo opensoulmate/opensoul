@@ -328,9 +328,9 @@ function SchemaDiffView({ diff, onClose }: { diff: SchemaDiff; onClose: () => vo
         <div className="p-4 space-y-3">
           {diff.added.length > 0 && (
             <div>
-              <div className="text-xs font-medium text-green-500 mb-1">新增字段</div>
+              <div className="text-xs font-medium text-emerald-500 mb-1">新增字段</div>
               {diff.added.map((f) => (
-                <div key={f.name} className="text-xs text-green-400 bg-green-500/5 rounded px-2 py-1 mb-1">+ {f.name} ({f.field_type})</div>
+                <div key={f.name} className="text-xs text-emerald-400 bg-emerald-500/5 rounded px-2 py-1 mb-1">+ {f.name} ({f.field_type})</div>
               ))}
             </div>
           )}
@@ -495,12 +495,12 @@ export default function HeredityPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><Package className="w-3.5 h-3.5" />组件</div>
           <div className="text-2xl font-bold">{components.length}</div>
-          <div className="text-[10px] text-green-500">{activeCount} 活跃</div>
+          <div className="text-[10px] text-emerald-500">{activeCount} 活跃</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><GitBranch className="w-3.5 h-3.5" />迁移</div>
           <div className="text-2xl font-bold">{migrations.length}</div>
-          <div className="text-[10px] text-green-500">{completedMigs} 完成</div>
+          <div className="text-[10px] text-emerald-500">{completedMigs} 完成</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1"><Layers className="w-3.5 h-3.5" />依赖</div>

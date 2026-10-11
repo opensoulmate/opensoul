@@ -520,11 +520,11 @@ export default function EchoPage() {
           <div className="text-xs text-muted-foreground">通道数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{channelHealth.filter((h) => h.status === 'ok').length}</div>
+          <div className="text-2xl font-bold text-emerald-500">{channelHealth.filter((h) => h.status === 'ok').length}</div>
           <div className="text-xs text-muted-foreground">健康通道</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-purple-500">{templates.length}</div>
+          <div className="text-2xl font-bold text-violet-500">{templates.length}</div>
           <div className="text-xs text-muted-foreground">消息模板</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

@@ -183,7 +183,7 @@ export default function PermissionsPage() {
           <div className="text-xs text-muted-foreground">权限策略</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">
+          <div className="text-2xl font-bold text-emerald-600">
             {new Set(policies.map((p) => p.role)).size}
           </div>
           <div className="text-xs text-muted-foreground">已授权角色</div>

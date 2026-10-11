@@ -197,7 +197,7 @@ export default function WorkflowPage() {
           <div className="text-xs text-muted-foreground">活跃任务</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{tasks.filter((t) => t.status === 'paused').length}</div>
+          <div className="text-2xl font-bold text-amber-500">{tasks.filter((t) => t.status === 'paused').length}</div>
           <div className="text-xs text-muted-foreground">已暂停</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

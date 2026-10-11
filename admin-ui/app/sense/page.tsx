@@ -71,7 +71,7 @@ function EngineCard({ name, icon: Icon, engine, color }: {
       <div className="space-y-1.5 text-xs">
         <div className="flex justify-between">
           <span className="text-muted-foreground">状态</span>
-          <span className={engine.available ? 'text-green-500' : 'text-red-500'}>
+          <span className={engine.available ? 'text-emerald-500' : 'text-red-500'}>
             {engine.available ? '可用' : '不可用'}
           </span>
         </div>

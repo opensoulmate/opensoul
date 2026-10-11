@@ -176,7 +176,7 @@ export default function McpPage() {
           <div className="text-xs text-muted-foreground">MCP服务器</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{servers.filter((s) => s.connected).length}</div>
+          <div className="text-2xl font-bold text-emerald-600">{servers.filter((s) => s.connected).length}</div>
           <div className="text-xs text-muted-foreground">已连接</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

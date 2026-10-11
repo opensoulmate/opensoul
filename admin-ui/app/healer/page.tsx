@@ -267,7 +267,7 @@ export default function HealerPage() {
             <h3 className="text-xs font-medium">诊断结果</h3>
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
               <span>总计: {lastCycle.total_organs}</span>
-              <span className="text-green-600">健康: {lastCycle.healthy}</span>
+              <span className="text-emerald-600">健康: {lastCycle.healthy}</span>
               <span className="text-red-600">异常: {lastCycle.unhealthy}</span>
               {lastCycle.healed > 0 && <span className="text-blue-600">已修复: {lastCycle.healed}</span>}
               {lastCycle.elapsed_seconds > 0 && <span>耗时: {lastCycle.elapsed_seconds}s</span>}
@@ -355,13 +355,13 @@ export default function HealerPage() {
                       {organ.recommended_action && organ.recommended_action !== 'none' && (
                         <div>
                           <span className="text-[10px] font-medium text-muted-foreground">建议操作</span>
-                          <div className="text-[10px] text-orange-600">{organ.recommended_action}</div>
+                          <div className="text-[10px] text-amber-600">{organ.recommended_action}</div>
                         </div>
                       )}
                       {organ.action_taken && organ.action_taken !== 'none' && (
                         <div>
                           <span className="text-[10px] font-medium text-muted-foreground">已执行</span>
-                          <div className={`text-[10px] ${organ.action_success ? 'text-green-600' : 'text-red-600'}`}>
+                          <div className={`text-[10px] ${organ.action_success ? 'text-emerald-600' : 'text-red-600'}`}>
                             {organ.action_taken} → {organ.action_success ? '成功' : '失败'}
                           </div>
                         </div>
@@ -399,7 +399,7 @@ export default function HealerPage() {
                     <Badge variant="bare" className={`${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</Badge>
                     <span className="text-muted-foreground truncate flex-1">{item.root_cause || item.symptoms?.join(', ') || '-'}</span>
                     {item.action_taken && item.action_taken !== 'none' && (
-                      <span className={`text-[10px] ${item.action_success ? 'text-green-600' : 'text-red-600'}`}>{item.action_taken}</span>
+                      <span className={`text-[10px] ${item.action_success ? 'text-emerald-600' : 'text-red-600'}`}>{item.action_taken}</span>
                     )}
                     <span className="text-[10px] text-muted-foreground shrink-0">{formatTime(item.timestamp)}</span>
                   </div>

@@ -195,7 +195,7 @@ function IterationRow({ cycle, expanded, onToggle }: {
   onToggle: () => void;
 }) {
   const score = cycle.stages.validation.score;
-  const statusColor = cycle.overallStatus === 'completed' ? 'text-green-500' :
+  const statusColor = cycle.overallStatus === 'completed' ? 'text-emerald-500' :
     cycle.overallStatus === 'running' ? 'text-primary' :
     cycle.overallStatus === 'error' ? 'text-red-500' : 'text-muted-foreground';
 
@@ -418,7 +418,7 @@ export default function EvolutionPage() {
           <div className="text-xs text-muted-foreground">总迭代次数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{completedCycles}</div>
+          <div className="text-2xl font-bold text-emerald-600">{completedCycles}</div>
           <div className="text-xs text-muted-foreground">已完成</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

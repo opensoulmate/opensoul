@@ -323,7 +323,7 @@ export default function AgentProxyPage() {
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1">
             <CheckCircle className="w-3.5 h-3.5" />可用
           </div>
-          <div className="text-sm font-medium text-green-600">{availableCount}</div>
+          <div className="text-sm font-medium text-emerald-600">{availableCount}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1">

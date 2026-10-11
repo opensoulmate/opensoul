@@ -232,11 +232,11 @@ export default function MarketplacePage() {
           <div className="text-xs text-muted-foreground">Agent数据源</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{stats?.total_skills ?? '-'}</div>
+          <div className="text-2xl font-bold text-emerald-500">{stats?.total_skills ?? '-'}</div>
           <div className="text-xs text-muted-foreground">可用技能</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-purple-500">{stats?.total_agents ?? '-'}</div>
+          <div className="text-2xl font-bold text-violet-500">{stats?.total_agents ?? '-'}</div>
           <div className="text-xs text-muted-foreground">可用Agent</div>
         </div>
       </div>

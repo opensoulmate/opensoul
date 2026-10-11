@@ -157,11 +157,11 @@ export default function FeedbackPage() {
           <div className="text-xs text-muted-foreground">知识</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{stats?.by_type?.pattern ?? 0}</div>
+          <div className="text-2xl font-bold text-emerald-600">{stats?.by_type?.pattern ?? 0}</div>
           <div className="text-xs text-muted-foreground">模式</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-purple-500">{stats?.by_type?.decision ?? 0}</div>
+          <div className="text-2xl font-bold text-violet-500">{stats?.by_type?.decision ?? 0}</div>
           <div className="text-xs text-muted-foreground">决策</div>
         </div>
       </div>
@@ -296,7 +296,7 @@ export default function FeedbackPage() {
               {extractResult && (
                 <div className="mt-4 space-y-3">
                   <div className="flex items-center gap-3 text-xs">
-                    <span className="text-green-600">存储: {extractResult.stored_count}</span>
+                    <span className="text-emerald-600">存储: {extractResult.stored_count}</span>
                     <span className="text-muted-foreground">跳过: {extractResult.skipped_count}</span>
                     <span className="text-muted-foreground">提取: {extractResult.entries.length}</span>
                   </div>

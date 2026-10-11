@@ -241,15 +241,15 @@ export default function ImmunePage() {
           <div className="text-xs text-muted-foreground">审计记录</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{ipLists.blacklist.length}</div>
+          <div className="text-2xl font-bold text-amber-500">{ipLists.blacklist.length}</div>
           <div className="text-xs text-muted-foreground">黑名单IP</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{ipLists.whitelist.length}</div>
+          <div className="text-2xl font-bold text-emerald-600">{ipLists.whitelist.length}</div>
           <div className="text-xs text-muted-foreground">白名单IP</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-purple-500">{threats.length}</div>
+          <div className="text-2xl font-bold text-violet-500">{threats.length}</div>
           <div className="text-xs text-muted-foreground">威胁记录</div>
         </div>
       </div>

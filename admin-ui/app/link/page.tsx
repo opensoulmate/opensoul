@@ -233,7 +233,7 @@ export default function LinkPage() {
           <div className="text-xs text-muted-foreground">连接器总数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{activeCount}</div>
+          <div className="text-2xl font-bold text-emerald-600">{activeCount}</div>
           <div className="text-xs text-muted-foreground">活跃连接</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

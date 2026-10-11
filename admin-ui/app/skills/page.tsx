@@ -600,7 +600,7 @@ export default function SkillsPage() {
           <div className="text-xs text-muted-foreground">总技能数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{installedCount}</div>
+          <div className="text-2xl font-bold text-emerald-600">{installedCount}</div>
           <div className="text-xs text-muted-foreground">已安装</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
@@ -786,7 +786,7 @@ export default function SkillsPage() {
               </div>
               <p className="text-[10px] text-muted-foreground">输入技能名称通过 hermes CLI 安装，或输入 GitHub 仓库路径（user/repo）直接克隆。</p>
               {installResult && (
-                <div className={`p-2 rounded text-xs ${installResult.success ? 'bg-green-500/5 text-green-600 border border-green-500/20' : 'bg-red-500/5 text-red-500 border border-red-500/20'}`}>
+                <div className={`p-2 rounded text-xs ${installResult.success ? 'bg-emerald-500/5 text-emerald-600 border border-emerald-500/20' : 'bg-red-500/5 text-red-500 border border-red-500/20'}`}>
                   {installResult.message}
                 </div>
               )}

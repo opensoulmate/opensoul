@@ -279,7 +279,7 @@ export default function CapturePage() {
                     </Button>
                   )}
                   {capture.status === 'promoted' && (
-                    <span className="flex items-center gap-1 text-[10px] text-green-500">
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-500">
                       <CheckCircle className="w-3 h-3" />已提升至知识库
                     </span>
                   )}

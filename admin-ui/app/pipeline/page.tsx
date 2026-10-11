@@ -261,7 +261,7 @@ export default function PipelinePage() {
           <div className="text-xs text-muted-foreground">总执行次数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{completedCount}</div>
+          <div className="text-2xl font-bold text-emerald-600">{completedCount}</div>
           <div className="text-xs text-muted-foreground">成功完成</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

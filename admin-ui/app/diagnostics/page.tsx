@@ -154,7 +154,7 @@ export default function DiagnosticsPage() {
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className={`text-2xl font-bold ${summary?.overall === 'ok' ? 'text-green-600' : 'text-orange-500'}`}>
+          <div className={`text-2xl font-bold ${summary?.overall === 'ok' ? 'text-emerald-600' : 'text-amber-500'}`}>
             {summary?.overall === 'ok' ? '健康' : '降级'}
           </div>
           <div className="text-xs text-muted-foreground">系统状态</div>
@@ -164,7 +164,7 @@ export default function DiagnosticsPage() {
           <div className="text-xs text-muted-foreground">器官总数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{summary?.healthy ?? 0}</div>
+          <div className="text-2xl font-bold text-emerald-600">{summary?.healthy ?? 0}</div>
           <div className="text-xs text-muted-foreground">正常</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
@@ -176,7 +176,7 @@ export default function DiagnosticsPage() {
           <div className="text-xs text-muted-foreground">平均响应</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{summary?.max_response_ms ?? 0}<span className="text-xs ml-0.5">ms</span></div>
+          <div className="text-2xl font-bold text-amber-500">{summary?.max_response_ms ?? 0}<span className="text-xs ml-0.5">ms</span></div>
           <div className="text-xs text-muted-foreground">最大响应</div>
         </div>
       </div>

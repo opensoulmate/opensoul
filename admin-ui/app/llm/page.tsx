@@ -212,7 +212,7 @@ export default function LlmPage() {
           </Button>
         </div>
         {testResult && (
-          <div className={`mt-3 p-2 rounded text-xs ${testResult.status === 'ok' ? 'bg-green-500/5 text-green-600 border border-green-500/20' : 'bg-red-500/5 text-red-500 border border-red-500/20'}`}>
+          <div className={`mt-3 p-2 rounded text-xs ${testResult.status === 'ok' ? 'bg-emerald-500/5 text-emerald-600 border border-emerald-500/20' : 'bg-red-500/5 text-red-500 border border-red-500/20'}`}>
             {testResult.status === 'ok' ? (
               <div><CheckCircle className="w-3 h-3 inline mr-1" />连接成功: {testResult.reply}</div>
             ) : (

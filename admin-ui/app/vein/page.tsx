@@ -309,7 +309,7 @@ export default function VeinPage() {
                 <div className="text-[10px] text-muted-foreground">大小</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-bold text-green-500">{stats?.cache?.hit_count || 0}</div>
+                <div className="text-lg font-bold text-emerald-500">{stats?.cache?.hit_count || 0}</div>
                 <div className="text-[10px] text-muted-foreground">命中</div>
               </div>
               <div className="text-center">

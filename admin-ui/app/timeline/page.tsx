@@ -195,11 +195,11 @@ export default function TimelinePage() {
           <div className="text-xs text-muted-foreground">近24小时</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{organs.length}</div>
+          <div className="text-2xl font-bold text-emerald-500">{organs.length}</div>
           <div className="text-xs text-muted-foreground">事件来源</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{types.length}</div>
+          <div className="text-2xl font-bold text-amber-500">{types.length}</div>
           <div className="text-xs text-muted-foreground">事件类型</div>
         </div>
       </div>

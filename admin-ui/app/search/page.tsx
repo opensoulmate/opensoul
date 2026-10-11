@@ -36,11 +36,11 @@ interface KnowledgeResult {
 
 const SOURCES = [
   { key: 'knowledge', label: '知识库', icon: <BookOpen className="w-4 h-4" />, color: 'text-blue-400' },
-  { key: 'files', label: '文件', icon: <FileText className="w-4 h-4" />, color: 'text-green-400' },
-  { key: 'events', label: '事件', icon: <Radio className="w-4 h-4" />, color: 'text-yellow-400' },
-  { key: 'agents', label: 'Agent', icon: <Bot className="w-4 h-4" />, color: 'text-purple-400' },
+  { key: 'files', label: '文件', icon: <FileText className="w-4 h-4" />, color: 'text-emerald-400' },
+  { key: 'events', label: '事件', icon: <Radio className="w-4 h-4" />, color: 'text-amber-400' },
+  { key: 'agents', label: 'Agent', icon: <Bot className="w-4 h-4" />, color: 'text-violet-400' },
   { key: 'courses', label: '课程', icon: <GraduationCap className="w-4 h-4" />, color: 'text-pink-400' },
-  { key: 'trajectory', label: '轨迹', icon: <BarChart3 className="w-4 h-4" />, color: 'text-orange-400' },
+  { key: 'trajectory', label: '轨迹', icon: <BarChart3 className="w-4 h-4" />, color: 'text-amber-400' },
   { key: 'cron', label: '定时任务', icon: <Timer className="w-4 h-4" />, color: 'text-cyan-400' },
   { key: 'gene', label: '基因模板', icon: <Dna className="w-4 h-4" />, color: 'text-red-400' },
   { key: 'echo', label: '消息', icon: <Volume2 className="w-4 h-4" />, color: 'text-teal-400' },

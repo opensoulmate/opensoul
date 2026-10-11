@@ -171,8 +171,8 @@ function RegisterDialog({ onClose, onRegistered }: { onClose: () => void; onRegi
           </div>
 
           {result && (
-            <div className="p-2 rounded bg-green-500/5 border border-green-500/20 text-xs">
-              <div className="text-green-500 font-medium">注册成功！</div>
+            <div className="p-2 rounded bg-emerald-500/5 border border-emerald-500/20 text-xs">
+              <div className="text-emerald-500 font-medium">注册成功！</div>
               <div className="text-[10px] text-muted-foreground mt-1">Token: <span className="font-mono text-primary">{result.token}</span></div>
               <div className="text-[10px] text-muted-foreground">请保存此Token，后续通信需要使用。</div>
             </div>
@@ -315,7 +315,7 @@ export default function CollabPage() {
           <div className="text-xs text-muted-foreground">注册Agent</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-500">{onlineCount}</div>
+          <div className="text-2xl font-bold text-emerald-500">{onlineCount}</div>
           <div className="text-xs text-muted-foreground">在线</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">

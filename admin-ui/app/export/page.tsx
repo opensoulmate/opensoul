@@ -226,7 +226,7 @@ export default function ExportPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{format.description}</p>
                   {result && (
-                    <div className={`mt-1 flex items-center gap-1 text-[10px] ${result.ok ? 'text-green-500' : 'text-red-500'}`}>
+                    <div className={`mt-1 flex items-center gap-1 text-[10px] ${result.ok ? 'text-emerald-500' : 'text-red-500'}`}>
                       {result.ok ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
                       {result.msg}
                     </div>

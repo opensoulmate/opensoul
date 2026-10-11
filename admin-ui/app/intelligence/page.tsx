@@ -216,7 +216,7 @@ export default function IntelligencePage() {
                   <div className={`w-2 h-2 rounded-full ${c.health === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
                   <span className="text-xs font-medium flex-1">{c.name}</span>
                   <span className="text-[10px] text-muted-foreground">{c.response_time_ms?.toFixed(0) ?? '-'}ms</span>
-                  <span className={`text-[10px] ${c.health === 'ok' ? 'text-green-500' : 'text-red-500'}`}>{c.health}</span>
+                  <span className={`text-[10px] ${c.health === 'ok' ? 'text-emerald-500' : 'text-red-500'}`}>{c.health}</span>
                 </div>
               ))}
               {components.length === 0 && <div className="px-4 py-6 text-xs text-muted-foreground text-center">暂无组件数据，请先「采集指标」</div>}
@@ -292,7 +292,7 @@ export default function IntelligencePage() {
               {components.sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
                 <div key={c.name} className="grid grid-cols-[1fr_80px_80px_80px_80px] gap-2 items-center px-4 py-2.5 border-b border-border last:border-b-0 hover:bg-muted/20 text-xs">
                   <span className="font-medium">{c.name}</span>
-                  <span className={c.health === 'ok' ? 'text-green-500' : 'text-red-500'}>{c.health}</span>
+                  <span className={c.health === 'ok' ? 'text-emerald-500' : 'text-red-500'}>{c.health}</span>
                   <span className="text-muted-foreground">{c.response_time_ms?.toFixed(1) ?? '-'}ms</span>
                   <span className="text-muted-foreground">{c.request_count ?? 0}</span>
                   <span className={c.error_count > 0 ? 'text-red-500' : 'text-muted-foreground'}>{c.error_count ?? 0}</span>

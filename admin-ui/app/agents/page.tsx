@@ -173,11 +173,11 @@ export default function AgentsPage() {
           <div className="text-xs text-muted-foreground">注册Agent</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{installedCount}</div>
+          <div className="text-2xl font-bold text-emerald-600">{installedCount}</div>
           <div className="text-xs text-muted-foreground">已安装</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-orange-500">{totalCount - installedCount}</div>
+          <div className="text-2xl font-bold text-amber-500">{totalCount - installedCount}</div>
           <div className="text-xs text-muted-foreground">可安装</div>
         </div>
       </div>
@@ -330,7 +330,7 @@ export default function AgentsPage() {
                   <div className="text-xs text-muted-foreground">状态</div>
                   <div className="text-sm mt-0.5">
                     {selectedAgent.available ? (
-                      <span className="text-green-600">已安装</span>
+                      <span className="text-emerald-600">已安装</span>
                     ) : (
                       <span className="text-muted-foreground">未安装</span>
                     )}
@@ -356,7 +356,7 @@ export default function AgentsPage() {
                   <div className="text-xs text-muted-foreground">安装进度</div>
                   <div className="mt-1">
                     <div className="flex items-center gap-2 text-xs">
-                      <span className={`font-medium ${installStatuses[selectedAgent.id].status === 'done' ? 'text-green-600' : installStatuses[selectedAgent.id].status === 'error' ? 'text-red-500' : 'text-primary'}`}>
+                      <span className={`font-medium ${installStatuses[selectedAgent.id].status === 'done' ? 'text-emerald-600' : installStatuses[selectedAgent.id].status === 'error' ? 'text-red-500' : 'text-primary'}`}>
                         {installStatuses[selectedAgent.id].status === 'done' ? '已完成' : installStatuses[selectedAgent.id].status === 'error' ? '失败' : '进行中'}
                       </span>
                       <span className="text-muted-foreground">{installStatuses[selectedAgent.id].progress}%</span>

@@ -195,7 +195,7 @@ export default function PulsePage() {
           <div className="text-xs text-muted-foreground">信号总数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-green-600">{stats?.active_signals ?? signals.filter(s => s.status === 'active').length}</div>
+          <div className="text-2xl font-bold text-emerald-600">{stats?.active_signals ?? signals.filter(s => s.status === 'active').length}</div>
           <div className="text-xs text-muted-foreground">活跃信号</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
@@ -203,7 +203,7 @@ export default function PulsePage() {
           <div className="text-xs text-muted-foreground">总触发次数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-purple-500">{stats?.avg_drift_ms ? `${stats.avg_drift_ms.toFixed(1)}ms` : '—'}</div>
+          <div className="text-2xl font-bold text-violet-500">{stats?.avg_drift_ms ? `${stats.avg_drift_ms.toFixed(1)}ms` : '—'}</div>
           <div className="text-xs text-muted-foreground">平均漂移</div>
         </div>
       </div>
