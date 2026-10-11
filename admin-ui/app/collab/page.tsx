@@ -67,11 +67,11 @@ function AgentCard({ agent }: { agent: AgentStatus }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{agent.name}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            isOnline ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
-          }`}>
+          <Badge variant="bare" className={`${
+ isOnline ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
+ }`}>
             {isOnline ? '在线' : agent.status}
-          </span>
+          </Badge>
         </div>
         {agent.role && <p className="text-[10px] text-muted-foreground truncate">{agent.role}</p>}
         <div className="flex items-center gap-2 mt-1">

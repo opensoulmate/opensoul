@@ -115,19 +115,19 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_COLORS[status] || 'bg-muted text-muted-foreground border-border';
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${cls}`}>{status}</span>;
+  return <Badge variant="bare" className={`border ${cls}`}>{status}</Badge>;
 }
 
 function EventTypeBadge({ type }: { type: string }) {
   const color = EVENT_TYPE_COLORS[type] || '#6b7280';
   const label = EVENT_TYPE_LABELS[type] || type;
   return (
-    <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border"
+    <Badge variant="bare"
+      className="border"
       style={{ backgroundColor: color + '1a', color, borderColor: color + '4d' }}
     >
       {label}
-    </span>
+    </Badge>
   );
 }
 

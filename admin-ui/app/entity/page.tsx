@@ -287,7 +287,7 @@ export default function EntityPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium">{e.name}</h3>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${typeColor(e.entity_type)}`}>{e.entity_type}</span>
+                    <Badge variant="bare" className={`${typeColor(e.entity_type)}`}>{e.entity_type}</Badge>
                   </div>
                   <div className="flex items-center gap-1" onClick={ev => ev.stopPropagation()}>
                     <Button onClick={() => openEditEntity(e.id)} variant="icon-sm" className="text-muted-foreground hover:text-foreground"><Edit3 className="w-3.5 h-3.5" /></Button>

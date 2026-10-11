@@ -348,9 +348,9 @@ export default function LimbPage() {
               <div key={task.task_id} className="rounded-lg border border-border bg-card p-4 hover:bg-muted/30 transition-colors cursor-pointer"
                 onClick={() => setSelectedTask(task)}>
                 <div className="flex items-center gap-2">
-                  <span className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${st.color}`}>
+                  <Badge variant="bare" className={`flex gap-0.5 ${st.color}`}>
                     <StIcon className={`w-2.5 h-2.5 ${task.status === 'running' ? 'animate-spin' : ''}`} />{st.label}
-                  </span>
+                  </Badge>
                   <span className="text-sm font-medium">{task.name}</span>
                   <Badge variant="muted">优先级 {task.priority}</Badge>
                   {task.tags?.map(tag => <Badge variant="info" key={tag}>{tag}</Badge>)}
@@ -435,7 +435,7 @@ export default function LimbPage() {
             const st = STATUS_MAP[h.status] || STATUS_MAP.queued;
             return (
               <div key={`${h.task_id}-${i}`} className="rounded-lg border border-border bg-card p-3 flex items-center gap-3">
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${st.color}`}>{st.label}</span>
+                <Badge variant="bare" className={`${st.color}`}>{st.label}</Badge>
                 <span className="text-xs font-medium flex-1">{h.name}</span>
                 {h.duration_ms !== undefined && <span className="text-[10px] text-muted-foreground">{h.duration_ms}ms</span>}
                 <span className="text-[10px] text-muted-foreground">{new Date(h.started_at).toLocaleString('zh-CN')}</span>

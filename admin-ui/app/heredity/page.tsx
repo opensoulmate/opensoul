@@ -103,10 +103,10 @@ function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] || { icon: Clock, color: 'text-muted-foreground', label: status };
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border border-current/20 ${cfg.color}`}>
+    <Badge variant="bare" className={`gap-1 border border-current/20 ${cfg.color}`}>
       <Icon className={`w-3 h-3 ${status === 'executing' ? 'animate-spin' : ''}`} />
       {cfg.label}
-    </span>
+    </Badge>
   );
 }
 
@@ -155,9 +155,9 @@ function ComponentCard({ comp, expanded, onToggle, detail, loadingDetail }: {
                   <div className="text-xs font-medium text-muted-foreground mb-2">版本历史</div>
                   <div className="flex flex-wrap gap-1.5">
                     {detail.versions.map((v, i) => (
-                      <span key={v.version} className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${i === 0 ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'}`}>
+                      <Badge variant="bare" key={v.version} className={`border ${i === 0 ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'}`}>
                         v{v.version} <StatusBadge status={v.status} />
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                 </div>
@@ -298,10 +298,10 @@ function DependencyGraphView({ graph }: { graph: DepGraph }) {
             {deps.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2 pl-5">
                 {deps.map(([dep, ver]) => (
-                  <span key={dep} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                  <Badge variant="bare" key={dep} className="gap-1 bg-blue-500/10 text-blue-500 border border-blue-500/20">
                     <ArrowUpRight className="w-2.5 h-2.5" />
                     {dep} {ver}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             )}

@@ -281,9 +281,9 @@ export default function AIGroupsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-medium">{selectedTask.goal}</h2>
-                <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${sts.color}`}>
+                <Badge variant="bare" className={`flex gap-1 ${sts.color}`}>
                   <StsIcon className="w-3 h-3" />{sts.label}
-                </span>
+                </Badge>
               </div>
               <div className="text-xs text-muted-foreground mt-1">
                 任务ID: {selectedTask.id} · 迭代: {selectedTask.iteration}/{selectedTask.max_iterations} · 质量分: {selectedTask.quality_score || '-'}
@@ -342,9 +342,9 @@ export default function AIGroupsPage() {
                         分数: {st.quality_score || '-'}
                       </div>
                     </div>
-                    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${sInfo.color}`}>
+                    <Badge variant="bare" className={`flex gap-1 ${sInfo.color}`}>
                       <SIcon className="w-3 h-3" />{sInfo.label}
-                    </span>
+                    </Badge>
                   </div>
                 );
               })}
@@ -444,12 +444,12 @@ export default function AIGroupsPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium">{agent.name}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getRoleColor(agent.role)}`}>
+                        <Badge variant="bare" className={`${getRoleColor(agent.role)}`}>
                           {getRoleLabel(agent.role)}
-                        </span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${agent.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                        </Badge>
+                        <Badge variant="bare" className={`${agent.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                           {agent.status}
-                        </span>
+                        </Badge>
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">
                         ID: <span className="font-mono">{agent.agent_id}</span>
@@ -491,9 +491,9 @@ export default function AIGroupsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-3">
-                    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${tInfo.color}`}>
+                    <Badge variant="bare" className={`flex gap-1 ${tInfo.color}`}>
                       <TIcon className="w-3 h-3" />{tInfo.label}
-                    </span>
+                    </Badge>
                     <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   </div>
                 </div>
@@ -639,9 +639,9 @@ export default function AIGroupsPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium">{group.name}</h3>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${group.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                  <Badge variant="bare" className={`${group.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                     {group.status}
-                  </span>
+                  </Badge>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -658,9 +658,9 @@ export default function AIGroupsPage() {
             {group.agents && group.agents.length > 0 && (
               <div className="flex items-center gap-1 mt-2">
                 {group.agents.slice(0, 5).map((a) => (
-                  <span key={a.id} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getRoleColor(a.role)}`}>
+                  <Badge variant="bare" key={a.id} className={`${getRoleColor(a.role)}`}>
                     {getRoleLabel(a.role)}
-                  </span>
+                  </Badge>
                 ))}
                 {group.agents.length > 5 && <span className="text-[10px] text-muted-foreground">+{group.agents.length - 5}</span>}
               </div>

@@ -101,13 +101,13 @@ function StatusBadge({ status }: { status: string }) {
     partial: '部分完成', failed: '失败', error: '错误', skipped: '已跳过',
   };
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_BG[status] || 'bg-muted'} ${STATUS_COLORS[status] || 'text-muted-foreground'}`}>
+    <Badge variant="bare" className={`gap-1 ${STATUS_BG[status] || 'bg-muted'} ${STATUS_COLORS[status] || 'text-muted-foreground'}`}>
       {status === 'completed' || status === 'ok' ? <CheckCircle className="w-2.5 h-2.5" /> :
        status === 'running' ? <Clock className="w-2.5 h-2.5 animate-spin" /> :
        status === 'failed' || status === 'error' ? <XCircle className="w-2.5 h-2.5" /> :
        status === 'blocked' ? <AlertTriangle className="w-2.5 h-2.5" /> : null}
       {label[status] || status}
-    </span>
+    </Badge>
   );
 }
 

@@ -7,10 +7,13 @@ import { cn } from '@opensoulmate/openface';
 // variant 命名对齐 ~/openmate/src/components/ui/badge.tsx（default/success/warning/destructive 同名）；
 // 色值以本仓实测正典为准（OM ui/badge.tsx 是 text-[11px]·/15 旧配色，正典取 hippo 平行页实测的 text-[10px]·/10）。
 // 动态色（config 映射表）走 className 透传，twMerge 后写胜出。改徽章观感只改这里。
+// bare = 零色注入（C3-⑨，2026-10-11）：只注解剖（BADGE_BASE），色全量留调用点——
+//   动态模板 pill（${statusColor(...)} 等 helper 色表驱动）专用，与 button.tsx TIER2 bare 同纪律。
 
 const BADGE_BASE = 'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium';
 
 const BADGE_VARIANTS: Record<string, string> = {
+  bare: '',
   default: 'bg-primary/10 text-primary',
   subtle: 'bg-primary/5 text-primary/70',
   muted: 'bg-muted text-muted-foreground',

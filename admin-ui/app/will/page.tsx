@@ -137,7 +137,7 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium truncate">{wf.name}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusClass}`}>{wf.status}</span>
+            <Badge variant="bare" className={`border ${statusClass}`}>{wf.status}</Badge>
             <Badge variant="muted">
               {TRIGGER_LABELS[wf.trigger] || wf.trigger}
             </Badge>
@@ -254,7 +254,7 @@ function ExecutionCard({ exec }: { exec: Execution }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium truncate">{exec.workflow_name || exec.workflow_id.slice(0, 12)}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusClass}`}>{exec.status}</span>
+          <Badge variant="bare" className={`border ${statusClass}`}>{exec.status}</Badge>
         </div>
         {exec.error && <p className="text-[10px] text-red-500 truncate mt-0.5">{exec.error}</p>}
       </div>

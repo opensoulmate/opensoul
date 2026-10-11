@@ -357,12 +357,12 @@ export default function AgentNodesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">{node.name}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${TYPE_COLORS[node.agent_type] || TYPE_COLORS.generic}`}>
+                        <Badge variant="bare" className={`border ${TYPE_COLORS[node.agent_type] || TYPE_COLORS.generic}`}>
                           {node.agent_type}
-                        </span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${node.online ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                        </Badge>
+                        <Badge variant="bare" className={`${node.online ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                           {node.online ? '在线' : '离线'}
-                        </span>
+                        </Badge>
                         {node.status !== 'active' && (
                           <Badge variant="destructive">{node.status}</Badge>
                         )}
@@ -429,7 +429,7 @@ export default function AgentNodesPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {Object.entries(stats.by_type).map(([type, count]) => (
                   <div key={type} className="flex items-center justify-between rounded border border-border p-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${TYPE_COLORS[type] || TYPE_COLORS.generic}`}>{type}</span>
+                    <Badge variant="bare" className={`border ${TYPE_COLORS[type] || TYPE_COLORS.generic}`}>{type}</Badge>
                     <span className="text-sm font-bold">{count}</span>
                   </div>
                 ))}

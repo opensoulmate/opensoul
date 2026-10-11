@@ -332,7 +332,7 @@ export default function NotificationsPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-xs font-medium truncate">{notif.emoji} {notif.title}</h3>
                     {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${config.bg} ${config.color}`}>{config.label}</span>
+                    <Badge variant="bare" className={`${config.bg} ${config.color}`}>{config.label}</Badge>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{notif.body}</p>
                   <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
@@ -467,7 +467,7 @@ export default function NotificationsPage() {
                     const config = LEVEL_CONFIG[level] || LEVEL_CONFIG.info;
                     return (
                       <div key={level} className="flex items-center gap-2 p-2 rounded border border-border">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${config.bg} ${config.color}`}>{config.label}</span>
+                        <Badge variant="bare" className={`${config.bg} ${config.color}`}>{config.label}</Badge>
                         <span className="text-[10px] text-muted-foreground">→</span>
                         <div className="flex gap-1 flex-wrap">
                           {channels.map((ch) => (
@@ -509,7 +509,7 @@ export default function NotificationsPage() {
                     const pct = stats.total > 0 ? (count / stats.total) * 100 : 0;
                     return (
                       <div key={level} className="flex items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${config.bg} ${config.color} w-12 text-center`}>{config.label}</span>
+                        <Badge variant="bare" className={`${config.bg} ${config.color} w-12 text-center`}>{config.label}</Badge>
                         <div className="flex-1 bg-muted rounded-full h-2">
                           <div className={`h-2 rounded-full ${config.color.replace('text-', 'bg-')}`} style={{ width: `${pct}%` }} />
                         </div>

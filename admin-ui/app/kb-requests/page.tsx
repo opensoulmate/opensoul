@@ -70,9 +70,9 @@ function StatusBadge({ status }: { status: string }) {
   const c = config[status] || config.pending;
   const Icon = c.icon;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${c.bg} ${c.text}`}>
+    <Badge variant="bare" className={`gap-1 ${c.bg} ${c.text}`}>
       <Icon className="w-2.5 h-2.5" />{c.label}
-    </span>
+    </Badge>
   );
 }
 

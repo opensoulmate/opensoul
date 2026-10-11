@@ -328,12 +328,12 @@ export default function SessionsPage() {
             <div className="px-4 py-2 border-b border-border flex items-center gap-2 shrink-0">
               <Tag className="w-3 h-3 text-muted-foreground" />
               {selectedSession.tags?.map((t) => (
-                <span key={t} className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
+                <Badge variant="bare" key={t} className="flex gap-0.5 bg-primary/10 text-primary">
                   {t}
                   <Button variant="bare" onClick={() => handleRemoveTag(selectedSession.id, t)} className="hover:text-red-500">
                     <X className="w-2.5 h-2.5" />
                   </Button>
-                </span>
+                </Badge>
               ))}
               <input
                 className="flex-1 min-w-[80px] px-2 py-0.5 text-[10px] bg-muted border border-border rounded"

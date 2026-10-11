@@ -408,9 +408,9 @@ export default function ReflexPage() {
                           {entry.tags.map((t) => (
                             <Badge variant="muted" key={t}>#{t}</Badge>
                           ))}
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${importanceColor(entry.importance)}`}>
+                          <Badge variant="bare" className={`${importanceColor(entry.importance)}`}>
                             重要性: {importanceLabel(entry.importance)}
-                          </span>
+                          </Badge>
                           <span className="text-[10px] text-muted-foreground">命中 {entry.hit_count} 次</span>
                           <span className="text-[10px] text-muted-foreground">{formatRelative(entry.created_at)}</span>
                           {entry.ttl_seconds && (
@@ -488,9 +488,9 @@ export default function ReflexPage() {
                   <div className="flex items-center gap-2">
                     {lookupResult.category && <Badge variant="default">{lookupResult.category}</Badge>}
                     {lookupResult.importance !== undefined && (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${importanceColor(lookupResult.importance)}`}>
+                      <Badge variant="bare" className={`${importanceColor(lookupResult.importance)}`}>
                         重要性: {importanceLabel(lookupResult.importance)}
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 </div>

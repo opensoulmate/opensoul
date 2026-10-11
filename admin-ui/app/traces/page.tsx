@@ -92,9 +92,9 @@ function EventTypeBadge({ type }: { type: string }) {
   const colorClass = EVENT_TYPE_COLORS[type] || 'bg-muted text-muted-foreground border-border';
   const label = EVENT_TYPE_LABELS[type] || type;
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${colorClass}`}>
+    <Badge variant="bare" className={`border ${colorClass}`}>
       {label}
-    </span>
+    </Badge>
   );
 }
 

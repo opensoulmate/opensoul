@@ -345,9 +345,9 @@ export default function VeinPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium">{u.filename}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${u.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : u.status === 'uploading' ? 'bg-blue-500/10 text-blue-500' : 'bg-muted text-muted-foreground'}`}>
+                      <Badge variant="bare" className={`${u.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : u.status === 'uploading' ? 'bg-blue-500/10 text-blue-500' : 'bg-muted text-muted-foreground'}`}>
                         {u.status}
-                      </span>
+                      </Badge>
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
                       <span>{formatBytes(u.total_size)}</span>

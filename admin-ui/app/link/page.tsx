@@ -311,9 +311,9 @@ export default function LinkPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-medium truncate">{c.name}</h3>
-                      <span className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${st.color}`}>
+                      <Badge variant="bare" className={`flex gap-0.5 ${st.color}`}>
                         <StIcon className="w-2.5 h-2.5" />{st.label}
-                      </span>
+                      </Badge>
                       <Badge variant="muted">
                         {CONNECTOR_TYPES.find(t => t.value === c.type)?.label || c.type}
                       </Badge>

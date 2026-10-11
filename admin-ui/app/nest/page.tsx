@@ -445,14 +445,14 @@ export default function NestPage() {
                       )}
                     </td>
                     <td className="px-2 lg:px-4 py-2.5">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TIER_COLORS[t.tier] || TIER_COLORS.free}`}>
+                      <Badge variant="bare" className={`${TIER_COLORS[t.tier] || TIER_COLORS.free}`}>
                         {TIERS.find(tier => tier.value === t.tier)?.label || t.tier}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-2 lg:px-4 py-2.5">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[t.status] || STATUS_COLORS.active}`}>
+                      <Badge variant="bare" className={`${STATUS_COLORS[t.status] || STATUS_COLORS.active}`}>
                         {STATUS_OPTIONS.find(s => s.value === t.status)?.label || t.status}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-2 lg:px-4 py-2.5">
                       <span className="text-[10px] font-mono text-muted-foreground">{t.namespace}</span>

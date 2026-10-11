@@ -396,9 +396,9 @@ export default function ConnectorsPage() {
                 <div key={adapter.name} className="rounded border border-border p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-medium">{adapter.name}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${adapter.configured ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                    <Badge variant="bare" className={`${adapter.configured ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                       {adapter.configured ? '已配置' : '未配置'}
-                    </span>
+                    </Badge>
                   </div>
                   <p className="text-[10px] text-muted-foreground">{adapter.description}</p>
                   {adapter.capabilities.length > 0 && (

@@ -243,7 +243,7 @@ export default function PulsePage() {
                 {typeIcon(s.signal_type)}
                 <h3 className="text-sm font-medium">{s.name}</h3>
               </div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColor(s.status)}`}>{s.status}</span>
+              <Badge variant="bare" className={`${statusColor(s.status)}`}>{s.status}</Badge>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-muted-foreground">
               <div>类型: <span className="font-medium text-foreground">{s.signal_type}</span></div>

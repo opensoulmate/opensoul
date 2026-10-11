@@ -208,7 +208,7 @@ export default function FeedbackPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-medium">{e.title}</h3>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${typeColor(e.feedback_type)}`}>{typeLabel(e.feedback_type)}</span>
+                  <Badge variant="bare" className={`${typeColor(e.feedback_type)}`}>{typeLabel(e.feedback_type)}</Badge>
                   <span className={`text-[10px] ${confidenceColor(e.confidence)}`}>● {e.confidence}</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{e.content}</p>

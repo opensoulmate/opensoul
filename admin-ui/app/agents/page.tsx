@@ -233,9 +233,9 @@ export default function AgentsPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{agent.name}</h3>
                     {agent.available ? (
-                      <span className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">
+                      <Badge variant="bare" className="flex gap-0.5 bg-emerald-500/10 text-emerald-500">
                         <CheckCircle className="w-2.5 h-2.5" />已安装
-                      </span>
+                      </Badge>
                     ) : (
                       <Badge variant="muted">未安装</Badge>
                     )}

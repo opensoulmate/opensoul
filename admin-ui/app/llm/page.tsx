@@ -247,9 +247,9 @@ export default function LlmPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="text-xs font-medium">{p.name}</h3>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${p.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                      <Badge variant="bare" className={`${p.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                         {p.enabled ? '已启用' : '已禁用'}
-                      </span>
+                      </Badge>
                       <Badge variant="default">优先级: {p.priority}</Badge>
                       {p.consecutive_failures > 0 && (
                         <Badge variant="destructive">失败: {p.consecutive_failures}</Badge>

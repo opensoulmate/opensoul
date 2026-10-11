@@ -7,6 +7,7 @@ import {
   History, Loader2, AlertCircle, CheckCircle, Timer
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface CronJob {
   id: string;
@@ -195,9 +196,9 @@ export default function CronPage() {
               <div className="min-w-0 flex-1 cursor-pointer" onClick={() => { setSelectedJob(job); setShowDetail(true); }}>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-medium truncate">{job.name || job.id}</h3>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${job.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                  <Badge variant="bare" className={`${job.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                     {job.status === 'active' ? '运行中' : '已暂停'}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
                   <span className="font-mono">ID: {job.id}</span>
@@ -400,9 +401,9 @@ export default function CronPage() {
                   {historyRuns.map((run, i) => (
                     <div key={i} className="p-2 rounded border border-border bg-muted/30">
                       <div className="flex items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${run.status === 'success' ? 'bg-emerald-500/10 text-emerald-500' : run.status === 'failed' ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'}`}>
+                        <Badge variant="bare" className={`${run.status === 'success' ? 'bg-emerald-500/10 text-emerald-500' : run.status === 'failed' ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'}`}>
                           {run.status}
-                        </span>
+                        </Badge>
                       </div>
                       <pre className="text-[10px] mt-1 whitespace-pre-wrap text-muted-foreground">{run.raw}</pre>
                     </div>

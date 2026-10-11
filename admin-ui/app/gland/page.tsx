@@ -354,11 +354,11 @@ export default function GlandPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{p.name}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        p.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
-                      }`}>
+                      <Badge variant="bare" className={`${
+ p.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+ }`}>
                         {p.enabled ? '可用' : '不可用'}
-                      </span>
+                      </Badge>
                       <Badge variant="muted">
                         优先级: {p.priority}
                       </Badge>
@@ -427,11 +427,11 @@ export default function GlandPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{k.provider || 'unknown'}</span>
                       {k.active !== undefined && (
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          k.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
-                        }`}>
+                        <Badge variant="bare" className={`${
+ k.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
+ }`}>
                           {k.active ? '活跃' : '闲置'}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     <span className="text-[10px] font-mono text-muted-foreground">{k.masked_key || '****'}</span>

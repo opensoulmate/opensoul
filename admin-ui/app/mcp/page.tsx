@@ -227,9 +227,9 @@ export default function McpPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{srv.name}</h3>
                     {srv.connected ? (
-                      <span className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">
+                      <Badge variant="bare" className="flex gap-0.5 bg-emerald-500/10 text-emerald-500">
                         <CheckCircle className="w-2.5 h-2.5" />已连接
-                      </span>
+                      </Badge>
                     ) : (
                       <Badge variant="muted">未连接</Badge>
                     )}
@@ -351,9 +351,9 @@ export default function McpPage() {
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-medium">{selectedServer.name}</h2>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${selectedServer.connected ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                <Badge variant="bare" className={`${selectedServer.connected ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                   {selectedServer.connected ? '已连接' : '未连接'}
-                </span>
+                </Badge>
               </div>
               <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>

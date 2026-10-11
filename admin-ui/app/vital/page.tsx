@@ -327,11 +327,11 @@ export default function VitalPage() {
           <h2 className="text-sm font-medium">生命体征</h2>
           <Badge variant="muted">OpenVital</Badge>
           {stats && (
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              stats.health.status === 'ok' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-600'
-            }`}>
+            <Badge variant="bare" className={`${
+ stats.health.status === 'ok' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-600'
+ }`}>
               {stats.health.status === 'ok' ? '健康' : '降级'}
-            </span>
+            </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -500,9 +500,9 @@ export default function VitalPage() {
                 onClick={() => setExpandedAlert(expandedAlert === i ? null : i)}
               >
                 <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${severityColor(alert.severity)}`}>
+                  <Badge variant="bare" className={`border ${severityColor(alert.severity)}`}>
                     {alert.severity}
-                  </span>
+                  </Badge>
                   <span className="text-xs font-medium">{alert.rule}</span>
                   {alert.resolved && (
                     <Badge variant="success">已解决</Badge>

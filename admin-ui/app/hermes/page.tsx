@@ -8,6 +8,7 @@ import {
   Loader2, Eye, ArrowRight, Filter,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ function SessionCard({ session, onSend, onDelete }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">{session.name}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${pc.color}`}>{pc.label}</span>
+          <Badge variant="bare" className={`${pc.color}`}>{pc.label}</Badge>
         </div>
         {session.last_message && (
           <p className="text-[10px] text-muted-foreground truncate mt-0.5">{session.last_message}</p>

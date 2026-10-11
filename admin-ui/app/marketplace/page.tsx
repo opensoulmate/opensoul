@@ -320,9 +320,9 @@ export default function MarketplacePage() {
                 </a>
               )}
             </div>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium w-fit ${TYPE_COLORS[src.type] || TYPE_COLORS.custom}`}>
+            <Badge variant="bare" className={`w-fit ${TYPE_COLORS[src.type] || TYPE_COLORS.custom}`}>
               {src.type}
-            </span>
+            </Badge>
             <span className="text-[10px] text-muted-foreground">{formatTime(src.last_sync)}</span>
             <span className="text-xs font-medium">{src.skill_count ?? src.agent_count ?? 0}</span>
             <div>

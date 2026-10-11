@@ -256,7 +256,7 @@ export default function IntelligencePage() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium">{insight.title}</span>
                         <Badge variant="muted">{TYPE_LABELS[insight.insight_type] || insight.insight_type}</Badge>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sc.bg} ${sc.color}`}>{insight.severity}</span>
+                        <Badge variant="bare" className={`${sc.bg} ${sc.color}`}>{insight.severity}</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{insight.description}</p>
                       {insight.recommendation && (
@@ -324,7 +324,7 @@ export default function IntelligencePage() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium">{rec.title}</span>
                         <Badge variant="muted">{rec.component}</Badge>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${rec.priority === 'high' ? 'bg-red-500/10 text-red-500' : rec.priority === 'medium' ? 'bg-amber-500/10 text-amber-500' : 'bg-blue-500/10 text-blue-500'}`}>{rec.priority}</span>
+                        <Badge variant="bare" className={`${rec.priority === 'high' ? 'bg-red-500/10 text-red-500' : rec.priority === 'medium' ? 'bg-amber-500/10 text-amber-500' : 'bg-blue-500/10 text-blue-500'}`}>{rec.priority}</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{rec.description}</p>
                       {rec.action && (

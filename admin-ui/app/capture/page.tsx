@@ -54,9 +54,9 @@ function StatusBadge({ status }: { status: string }) {
   };
   const c = config[status] || { color: 'bg-muted text-muted-foreground border-border', label: status };
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${c.color}`}>
+    <Badge variant="bare" className={`border ${c.color}`}>
       {c.label}
-    </span>
+    </Badge>
   );
 }
 
@@ -223,11 +223,11 @@ export default function CapturePage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium truncate">{capture.title || '无标题'}</span>
                   <StatusBadge status={capture.status} />
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    capture.capture_type === 'page' ? 'bg-blue-500/10 text-blue-500' : 'bg-violet-500/10 text-violet-500'
-                  }`}>
+                  <Badge variant="bare" className={`${
+ capture.capture_type === 'page' ? 'bg-blue-500/10 text-blue-500' : 'bg-violet-500/10 text-violet-500'
+ }`}>
                     {capture.capture_type === 'page' ? '整页' : '选区'}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
                   {capture.url && (

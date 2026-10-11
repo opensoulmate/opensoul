@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronRight, Stethoscope
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface DiagnosisResult {
   organ: string;
@@ -301,7 +302,7 @@ export default function HealerPage() {
                         <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                       )}
                       <span className="text-xs font-medium truncate">{organ.organ}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</span>
+                      <Badge variant="bare" className={`${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</Badge>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-[10px] text-muted-foreground font-mono">{organ.response_time_ms}ms</span>
@@ -395,7 +396,7 @@ export default function HealerPage() {
                       <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                     )}
                     <span className="font-medium w-20 shrink-0">{item.organ}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</span>
+                    <Badge variant="bare" className={`${sevConfig.bg} ${sevConfig.color}`}>{sevConfig.label}</Badge>
                     <span className="text-muted-foreground truncate flex-1">{item.root_cause || item.symptoms?.join(', ') || '-'}</span>
                     {item.action_taken && item.action_taken !== 'none' && (
                       <span className={`text-[10px] ${item.action_success ? 'text-green-600' : 'text-red-600'}`}>{item.action_taken}</span>

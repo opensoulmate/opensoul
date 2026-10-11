@@ -412,9 +412,9 @@ export default function LearnPage() {
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5 text-primary" />
                 <h2 className="text-base font-medium">{selectedCourse.title}</h2>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(selectedCourse.status)}`}>
+                <Badge variant="bare" className={`${getStatusColor(selectedCourse.status)}`}>
                   {getStatusLabel(selectedCourse.status)}
-                </span>
+                </Badge>
                 {selectedCourse.generated_by === 'ai' && (
                   <Badge variant="accent">AI生成</Badge>
                 )}
@@ -679,9 +679,9 @@ export default function LearnPage() {
                   </div>
                   {course.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{course.description}</p>}
                   <div className="flex items-center gap-2 mt-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(course.status)}`}>
+                    <Badge variant="bare" className={`${getStatusColor(course.status)}`}>
                       {getStatusLabel(course.status)}
-                    </span>
+                    </Badge>
                     {course.generated_by === 'ai' && (
                       <Badge variant="accent">AI</Badge>
                     )}

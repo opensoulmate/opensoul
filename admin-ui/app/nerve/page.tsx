@@ -313,7 +313,7 @@ export default function NervePage() {
               >
                 <div className="flex items-center gap-3 p-2.5">
                   <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${topicColor(evt.topic)}`}>{evt.topic}</span>
+                  <Badge variant="bare" className={`border ${topicColor(evt.topic)}`}>{evt.topic}</Badge>
                   {evt.source && <span className="text-[10px] text-muted-foreground font-mono">{evt.source}</span>}
                   <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{formatRelative(evt.timestamp)}</span>
                   {expandedEvent === evt.id ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
@@ -356,7 +356,7 @@ export default function NervePage() {
                     <div className="flex items-center gap-2">
                       <Radio className="w-3.5 h-3.5 text-purple-500 shrink-0" />
                       <span className="text-xs font-medium font-mono">{sub.id}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${topicColor(sub.topic_pattern)}`}>{sub.topic_pattern}</span>
+                      <Badge variant="bare" className={`border ${topicColor(sub.topic_pattern)}`}>{sub.topic_pattern}</Badge>
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground ml-5">
                       <span>投递: {sub.delivery_count} 次</span>
@@ -398,9 +398,9 @@ export default function NervePage() {
                       )}
                       <span className="text-xs font-medium font-mono">{node.node_id}</span>
                       <Badge variant="default">{node.node_type}</Badge>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${node.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                      <Badge variant="bare" className={`${node.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
                         {node.status}
-                      </span>
+                      </Badge>
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground ml-5">
                       <span>事件: {node.event_count}</span>

@@ -444,7 +444,7 @@ export default function BrainPage() {
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2">{entry.content.slice(0, 120)}</p>
                       <div className="flex items-center gap-2 mt-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+                        <Badge variant="bare" className={`${cfg.bg} ${cfg.color}`}>{cfg.label}</Badge>
                         {entry.source && <span className="text-[10px] text-muted-foreground">{entry.source}</span>}
                         {(entry.tags || []).slice(0, 3).map((t) => (
                           <Badge variant="muted" key={t}>{t}</Badge>

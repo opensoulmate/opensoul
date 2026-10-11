@@ -398,9 +398,9 @@ export default function MarrowPage() {
                     <div className="flex items-center gap-2">
                       <Clock className={`w-4 h-4 ${sch.enabled ? 'text-green-500' : 'text-muted-foreground'} shrink-0`} />
                       <h3 className="text-sm font-medium truncate">{sch.name}</h3>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sch.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                      <Badge variant="bare" className={`${sch.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                         {sch.enabled ? '已启用' : '已禁用'}
-                      </span>
+                      </Badge>
                       <Badge variant="default" className="font-mono">{sch.cron_expr}</Badge>
                     </div>
                     {sch.description && <p className="text-xs text-muted-foreground mt-0.5 ml-6">{sch.description}</p>}

@@ -82,7 +82,7 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sev.badge}`}>{sev.label}</span>
+            <Badge variant="bare" className={`${sev.badge}`}>{sev.label}</Badge>
             <Badge variant="muted">
               {pair.content_type || 'unknown'}
             </Badge>

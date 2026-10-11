@@ -76,9 +76,9 @@ function ConfidenceBadge({ level }: { level?: string }) {
   };
   const c = config[level || ''] || { color: 'bg-muted text-muted-foreground border-border', label: level || '未知' };
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${c.color}`}>
+    <Badge variant="bare" className={`border ${c.color}`}>
       {c.label}
-    </span>
+    </Badge>
   );
 }
 

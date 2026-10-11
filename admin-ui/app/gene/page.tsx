@@ -335,9 +335,9 @@ export default function GenePage() {
               <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{tpl.description}</p>
             )}
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${CATEGORY_COLORS[tpl.category] || 'bg-muted text-muted-foreground border-border'}`}>
+              <Badge variant="bare" className={`border ${CATEGORY_COLORS[tpl.category] || 'bg-muted text-muted-foreground border-border'}`}>
                 {CATEGORY_LABELS[tpl.category] || tpl.category}
-              </span>
+              </Badge>
               {tpl.tags.slice(0, 3).map((tag) => (
                 <Badge variant="muted" key={tag}>#{tag}</Badge>
               ))}

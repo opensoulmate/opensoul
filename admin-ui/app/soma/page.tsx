@@ -187,9 +187,9 @@ function OverviewCards({ data }: { data: ScanResult }) {
         <div className="space-y-1">
           {data.services.filter(s => s.state === 'LISTEN').sort((a, b) => a.local_port - b.local_port).slice(0, 12).map((s, i) => (
             <div key={i} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-muted/30">
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.protocol === 'tcp' ? 'bg-blue-500/10 text-blue-500' : 'bg-violet-500/10 text-violet-500'}`}>
+              <Badge variant="bare" className={`${s.protocol === 'tcp' ? 'bg-blue-500/10 text-blue-500' : 'bg-violet-500/10 text-violet-500'}`}>
                 {s.protocol.toUpperCase()}
-              </span>
+              </Badge>
               <span className="text-xs font-mono">{s.local_address}:{s.local_port}</span>
               {s.process_name && (
                 <span className="text-[10px] text-muted-foreground truncate flex-1">{s.process_name}</span>
@@ -402,22 +402,22 @@ function ServicesTab({ services }: { services: ServiceInfo[] }) {
       <div className="space-y-1">
         {filtered.map((s, i) => (
           <div key={`${s.local_address}-${s.local_port}-${i}`} className="flex items-center gap-3 py-2 px-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium font-medium ${
-              s.protocol === 'tcp' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/30' :
-              'bg-violet-500/10 text-violet-500 border border-violet-500/30'
-            }`}>
+            <Badge variant="bare" className={`${
+ s.protocol === 'tcp' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/30' :
+ 'bg-violet-500/10 text-violet-500 border border-violet-500/30'
+ }`}>
               {s.protocol.toUpperCase()}
-            </span>
+            </Badge>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-mono">{s.local_address}:{s.local_port}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                  s.state === 'LISTEN' ? 'bg-emerald-500/10 text-emerald-500' :
-                  s.state === 'ESTAB' ? 'bg-blue-500/10 text-blue-500' :
-                  'bg-muted text-muted-foreground'
-                }`}>
+                <Badge variant="bare" className={`${
+ s.state === 'LISTEN' ? 'bg-emerald-500/10 text-emerald-500' :
+ s.state === 'ESTAB' ? 'bg-blue-500/10 text-blue-500' :
+ 'bg-muted text-muted-foreground'
+ }`}>
                   {s.state}
-                </span>
+                </Badge>
               </div>
               {s.description && <p className="text-[10px] text-muted-foreground mt-0.5">{s.description}</p>}
             </div>

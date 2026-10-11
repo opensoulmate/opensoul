@@ -458,10 +458,10 @@ export default function KnowledgeGraphPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex gap-1 flex-wrap mt-1">
             {entityTypes.slice(0, 4).map(([type, cnt]) => (
-              <span key={type} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${getColor(type)}20`, color: getColor(type) }}>
+              <Badge variant="bare" key={type} className="gap-1" style={{ backgroundColor: `${getColor(type)}20`, color: getColor(type) }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getColor(type) }} />
                 {type} ({cnt})
-              </span>
+              </Badge>
             ))}
           </div>
           <div className="text-xs text-muted-foreground mt-1">类型分布</div>
@@ -619,9 +619,9 @@ export default function KnowledgeGraphPage() {
                       return (
                         <div key={rel.id} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/50">
                           <GitBranch className="w-3 h-3 text-muted-foreground shrink-0" />
-                          <span className="font-mono rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
+                          <Badge variant="bare" className="font-mono bg-primary/10 text-primary">
                             {rel.relation_type}
-                          </span>
+                          </Badge>
                           <span className="text-muted-foreground">
                             {isSource ? '→' : '←'} {isSource ? rel.target_entity_id.slice(0, 8) : rel.source_entity_id.slice(0, 8)}...
                           </span>

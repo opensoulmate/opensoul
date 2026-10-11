@@ -374,9 +374,9 @@ export default function HippoPage() {
                     <h3 className="text-sm font-medium">{s.title || s.session_id}</h3>
                     <p className="text-xs text-muted-foreground font-mono mt-0.5">{s.session_id}</p>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : s.status === 'archived' ? 'bg-amber-500/10 text-amber-500' : 'bg-muted text-muted-foreground'}`}>
+                  <Badge variant="bare" className={`${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : s.status === 'archived' ? 'bg-amber-500/10 text-amber-500' : 'bg-muted text-muted-foreground'}`}>
                     {s.status}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-muted-foreground">
                   <div>记忆数: <span className="font-medium text-foreground">{s.memory_count}</span></div>

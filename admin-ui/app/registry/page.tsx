@@ -247,8 +247,8 @@ export default function RegistryPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-1 mt-0.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${catColor.bg} ${catColor.text}`}>{comp.category}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${PHASE_COLORS[comp.phase] || 'bg-muted text-muted-foreground'}`}>{comp.phase}</span>
+                        <Badge variant="bare" className={`${catColor.bg} ${catColor.text}`}>{comp.category}</Badge>
+                        <Badge variant="bare" className={`${PHASE_COLORS[comp.phase] || 'bg-muted text-muted-foreground'}`}>{comp.phase}</Badge>
                       </div>
                     </div>
                   </div>

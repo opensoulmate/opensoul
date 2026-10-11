@@ -209,9 +209,9 @@ export default function PluginsPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{plugin.name}</h3>
                     <Badge variant="muted">v{plugin.version}</Badge>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${plugin.status === 'enabled' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+                    <Badge variant="bare" className={`${plugin.status === 'enabled' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                       {plugin.status === 'enabled' ? '已启用' : '已禁用'}
-                    </span>
+                    </Badge>
                     <Badge variant="subtle">{plugin.type}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{plugin.description || '暂无描述'}</p>

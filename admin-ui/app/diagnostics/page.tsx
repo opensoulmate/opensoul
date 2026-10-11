@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronRight, Zap, Layers, Wifi
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface OrganCheck {
   key: string;
@@ -271,9 +272,9 @@ export default function DiagnosticsPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm">{organ.label.split(' ')[0]}</span>
                   <span className="text-xs font-medium flex-1">{organ.label.split(' ').slice(1).join(' ')}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${CATEGORY_COLORS[organ.category] || 'bg-muted text-muted-foreground'}`}>
+                  <Badge variant="bare" className={`${CATEGORY_COLORS[organ.category] || 'bg-muted text-muted-foreground'}`}>
                     {CATEGORY_LABELS[organ.category] || organ.category}
-                  </span>
+                  </Badge>
                   {isOk ? (
                     <CheckCircle className="w-3.5 h-3.5 text-green-600" />
                   ) : (

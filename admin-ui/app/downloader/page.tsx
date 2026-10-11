@@ -410,9 +410,9 @@ export default function DownloaderPage() {
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground'}`}>
+                      <Badge variant="bare" className={`${STATUS_COLORS[task.status] || 'bg-muted text-muted-foreground'}`}>
                         {task.status}
-                      </span>
+                      </Badge>
                       {task.plugin && (
                         <Badge variant="muted">{task.plugin}</Badge>
                       )}
@@ -512,9 +512,9 @@ export default function DownloaderPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-medium">{plugin.name}</h3>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[plugin.status] || 'bg-muted text-muted-foreground'}`}>
+                        <Badge variant="bare" className={`${STATUS_COLORS[plugin.status] || 'bg-muted text-muted-foreground'}`}>
                           {plugin.status}
-                        </span>
+                        </Badge>
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-1">{plugin.description}</p>
                       <div className="flex items-center gap-2 mt-2">

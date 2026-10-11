@@ -82,9 +82,9 @@ function ConfidenceBadge({ level }: { level: string }) {
   };
   const c = config[level] || { color: 'bg-muted text-muted-foreground border-border', label: level };
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${c.color}`}>
+    <Badge variant="bare" className={`border ${c.color}`}>
       {c.label}
-    </span>
+    </Badge>
   );
 }
 
@@ -97,9 +97,9 @@ function StatusBadge({ status }: { status: string }) {
   };
   const c = config[status] || { color: 'bg-muted text-muted-foreground border-border', label: status };
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${c.color}`}>
+    <Badge variant="bare" className={`border ${c.color}`}>
       {c.label}
-    </span>
+    </Badge>
   );
 }
 
@@ -259,13 +259,13 @@ function SkillCard({
               </Badge>
             )}
             {gating && (
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium font-mono ${
-                gating.score >= 8 ? 'bg-emerald-500/10 text-emerald-500' :
-                gating.score >= 6 ? 'bg-amber-500/10 text-amber-500' :
-                'bg-red-500/10 text-red-500'
-              }`}>
+              <Badge variant="bare" className={`font-mono ${
+ gating.score >= 8 ? 'bg-emerald-500/10 text-emerald-500' :
+ gating.score >= 6 ? 'bg-amber-500/10 text-amber-500' :
+ 'bg-red-500/10 text-red-500'
+ }`}>
                 门控 {gating.score.toFixed(1)}
-              </span>
+              </Badge>
             )}
             {skillProposals.length > 0 && (
               <Badge variant="accent">
