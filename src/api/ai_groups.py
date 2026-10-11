@@ -160,6 +160,7 @@ def init_db():
             content TEXT NOT NULL,
             metadata TEXT DEFAULT '{}',
             round_num INTEGER DEFAULT 1,
+            tenant_id TEXT NOT NULL DEFAULT 'default',
             created_at TEXT NOT NULL,
             FOREIGN KEY (group_id) REFERENCES ai_groups(id)
         );
@@ -175,11 +176,27 @@ def init_db():
             agent_id TEXT DEFAULT '',
             event_type TEXT NOT NULL,
             content TEXT DEFAULT '',
+            tenant_id TEXT NOT NULL DEFAULT 'default',
             created_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_tee_task ON task_execution_events(task_id, id);
         CREATE INDEX IF NOT EXISTS idx_tee_group ON task_execution_events(group_id, id);
     """)
+    conn.commit()
+
+    # F3b-③b-2 数据面隔离键：消息/事件归属租户（DDL+ALTER 双轨幂等；存量行随
+    # NOT NULL DEFAULT 'default' 回填，与 F3 实测数据分布一致）。行键语义=父任务行
+    # 继承（_task_tenant 单一权威=ai_group_tasks.tenant_id）；外部共享写方
+    # （acp-proxy ws_group._persist_message 显式列清单不含 tenant_id）落 'default'
+    # 是已知边界——消息读取不按行键过滤（父任务闸门=权威，见 get_discussion_messages）。
+    for _tbl in ("discussion_messages", "task_execution_events"):
+        try:
+            conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # 列已存在
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dm_tenant ON discussion_messages(tenant_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tee_tenant ON task_execution_events(tenant_id)")
     conn.commit()
     conn.close()
 
@@ -281,13 +298,61 @@ def _gate_existing_task(conn, tenant_id: str, group_id: str, task_id: str, actio
     return row
 
 
+# ── F3b-③b-2 消息/事件面数据面隔离（discussion_messages / task_execution_events）──
+# 行键语义：消息/事件归属租户=父任务行继承（_task_tenant 单一权威=
+# ai_group_tasks.tenant_id）。跨租户拒绝由父任务闸门承担（③b-1 by-ID 真执行，
+# 消息/事件端点均先过 _load_gated_task/_gate_existing_task）；本面新增=行键落盘
+# +事件查询过滤+引擎 bulk 审计（audit_access="Log all access attempts"）。
+
+
+def _task_tenant(conn, task_id: str) -> str:
+    """消息/事件行租户键取父任务行（ai_group_tasks.tenant_id）。
+
+    伪任务（ws_ 前缀群聊/空 task_id）、任务行缺失或父表不可查（共享库存储形态，
+    只有两张共享表）→DEFAULT_TENANT 兜底（与匿名契约一致）——兜底只影响行键
+    派生，绝不让键派生故障吃掉消息/事件落库（旁路纪律同写入方）。外部共享写方
+    （acp-proxy _persist_message）不带列落 'default' 同此兜底——读取权威在父任务
+    闸门，行键只作分区/审计键。"""
+    if not task_id:
+        return DEFAULT_TENANT
+    try:
+        row = conn.execute("SELECT tenant_id FROM ai_group_tasks WHERE id=?", (task_id,)).fetchone()
+    except sqlite3.Error:
+        return DEFAULT_TENANT  # 键派生失败不阻断落库
+    return (row["tenant_id"] if row else DEFAULT_TENANT) or DEFAULT_TENANT
+
+
+def _gate_face_bulk(tenant_id: str, resource_type: ResourceType, action: str) -> None:
+    """消息/事件面 bulk 闸门：只审计留痕不拦（audit_access="Log all access attempts"）。
+
+    与 _gate_task_bulk（③b-1 list/govern）同语义：跨租户拒绝在 by-ID 父任务闸门，
+    此处把消息/事件面的访问按各自资源型留痕进 NestStore 审计。"""
+    iso = _iso()
+    iso.check_access(
+        tenant_namespace=tenant_namespace(tenant_id),
+        resource_type=resource_type,
+        resource_id=iso.namespaced_id(tenant_namespace(tenant_id), "*"),
+        action=action,
+    )
+
+
 def _emit_exec_event(group_id: str, task_id: str, agent_id: str, event_type: str, content: str):
-    """写入一条执行过程事件（独立短连接，立即提交，供ws_group尾随广播+回放）"""
+    """写入一条执行过程事件（独立短连接，立即提交，供ws_group尾随广播+回放）
+    F3b-③b-2：租户键=父任务行继承（_task_tenant，伪任务/缺行兜底 'default'）。"""
     try:
         c = get_db()
+        tenant = _task_tenant(c, task_id)
         c.execute(
-            "INSERT INTO task_execution_events (group_id, task_id, agent_id, event_type, content, created_at) VALUES (?,?,?,?,?,?)",
-            (group_id, task_id, agent_id, event_type, content[:2000], datetime.now().isoformat()),
+            "INSERT INTO task_execution_events (group_id, task_id, agent_id, event_type, content, created_at, tenant_id) VALUES (?,?,?,?,?,?,?)",
+            (
+                group_id,
+                task_id,
+                agent_id,
+                event_type,
+                content[:2000],
+                datetime.now().isoformat(),
+                tenant,
+            ),
         )
         c.commit()
         c.close()
@@ -311,10 +376,14 @@ def _parse_ts(value) -> datetime | None:
         return None
 
 
-def _finished_duration_history(conn, agent_id: str, limit: int = 20) -> list[float]:
+def _finished_duration_history(
+    conn, agent_id: str, limit: int = 20, tenant_id: str = DEFAULT_TENANT
+) -> list[float]:
     """历史基准数据：finished事件对应任务的实际耗时（秒），按agent_id分组取最近limit条。
     优先 started→finished 事件时间差，缺失时回退 tasks.updated_at-created_at 近似。
-    指定agent无历史时回退到全局历史。"""
+    指定agent无历史时回退到全局历史。
+    F3b-③b-2：历史基准恒限派生租户名下（e.tenant_id=?）——跨租户任务耗时不进
+    他租户 ETA（事件键=父任务行继承，单一写方键可靠）。"""
     rows = conn.execute(
         """SELECT e.agent_id, e.created_at AS finished_at,
                   (SELECT MIN(s.created_at) FROM task_execution_events s
@@ -322,8 +391,9 @@ def _finished_duration_history(conn, agent_id: str, limit: int = 20) -> list[flo
                   t.created_at AS task_created_at, t.updated_at AS task_updated_at
              FROM task_execution_events e
              LEFT JOIN ai_group_tasks t ON t.id = e.task_id
-            WHERE e.event_type = 'finished'
-            ORDER BY e.id DESC LIMIT 400"""
+            WHERE e.event_type='finished' AND e.tenant_id=?
+            ORDER BY e.id DESC LIMIT 400""",
+        (tenant_id,),
     ).fetchall()
     per_agent: dict[str, list[float]] = {}
     global_hist: list[float] = []
@@ -722,10 +792,19 @@ def _as_naive_local(dt: datetime | None) -> datetime | None:
 
 
 def _insert_govern_event(conn, group_id: str, task_id: str, content: str):
-    """治理留痕——必须走同一连接：外层事务未提交时另开连接写库必死锁（SQLite教训）"""
+    """治理留痕——必须走同一连接：外层事务未提交时另开连接写库必死锁（SQLite教训）
+    F3b-③b-2：租户键=父任务行继承（_task_tenant）。"""
     conn.execute(
-        "INSERT INTO task_execution_events (group_id, task_id, agent_id, event_type, content, created_at) VALUES (?,?,?,?,?,?)",
-        (group_id, task_id, "governor", "governed", content[:2000], datetime.now().isoformat()),
+        "INSERT INTO task_execution_events (group_id, task_id, agent_id, event_type, content, created_at, tenant_id) VALUES (?,?,?,?,?,?,?)",
+        (
+            group_id,
+            task_id,
+            "governor",
+            "governed",
+            content[:2000],
+            datetime.now().isoformat(),
+            _task_tenant(conn, task_id),
+        ),
     )
 
 
@@ -867,8 +946,8 @@ def list_tasks(group_id: str, authorization: str | None = Header(None)):
         last_events = {
             r["task_id"]: r["last_at"]
             for r in conn.execute(
-                "SELECT task_id, MAX(created_at) AS last_at FROM task_execution_events WHERE group_id=? GROUP BY task_id",
-                (group_id,),
+                "SELECT task_id, MAX(created_at) AS last_at FROM task_execution_events WHERE group_id=? AND tenant_id=? GROUP BY task_id",
+                (group_id, identity.tenant_id),
             ).fetchall()
         }
         hist_cache: dict[str, list[float]] = {}
@@ -876,7 +955,9 @@ def list_tasks(group_id: str, authorization: str | None = Header(None)):
         def _hist_for(agent_id: str) -> list[float]:
             key = agent_id or ""
             if key not in hist_cache:
-                hist_cache[key] = _finished_duration_history(conn, key)
+                hist_cache[key] = _finished_duration_history(
+                    conn, key, tenant_id=identity.tenant_id
+                )
             return hist_cache[key]
 
         def _annotate(t: dict):
@@ -1084,12 +1165,13 @@ async def _notify_group_chat(
     try:
         conn = get_db()
         try:
+            msg_task_id = task_id or f"ws_{group_id}"
             conn.execute(
-                "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, round_num, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, round_num, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     str(uuid.uuid4())[:8],
                     group_id,
-                    task_id or f"ws_{group_id}",
+                    msg_task_id,
                     agent_id or "soulmate",
                     agent_name or agent_id or "SoulMate",
                     "agent_reply",
@@ -1097,6 +1179,7 @@ async def _notify_group_chat(
                     json.dumps({"source": "task_chain"}, ensure_ascii=False),
                     1,
                     datetime.now().isoformat(),
+                    _task_tenant(conn, msg_task_id),  # F3b-③b-2：父任务行继承
                 ),
             )
             conn.commit()
@@ -1451,7 +1534,7 @@ def _start_post_task_discussion(
             ),
         )
         conn.execute(
-            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, round_num, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, round_num, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -1466,6 +1549,7 @@ def _start_post_task_discussion(
                 ),
                 1,
                 now,
+                src["tenant_id"],  # F3b-③b-2：消息租户从源任务行继承（与讨论任务行同源）
             ),
         )
         conn.commit()
@@ -1746,7 +1830,7 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
 
         # 记录执行消息到讨论
         conn.execute(
-            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -1760,6 +1844,7 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
                     ensure_ascii=False,
                 ),
                 result_now,
+                task["tenant_id"],  # F3b-③b-2：消息租户从父任务行继承
             ),
         )
 
@@ -1960,25 +2045,28 @@ def get_task_events(
     group_id: str, task_id: str, after_id: int = 0, authorization: str | None = Header(None)
 ):
     """执行过程事件回放（after_id增量拉取，供时间线面板回看）
-    F3b-③b-1：行存在走读闸门（跨租户 403 禁回放他租户任务事件）。"""
+    F3b-③b-1：行存在走读闸门（跨租户 403 禁回放他租户任务事件）。
+    F3b-③b-2：bulk 审计留痕（ai_group_event 资源型）+ 事件查询恒带租户键
+    （e.tenant_id=?，事件键=父任务行继承单一写方键可靠）。"""
     identity = bind_identity(authorization)
+    _gate_face_bulk(identity.tenant_id, ResourceType.AI_GROUP_EVENT, "list")
     conn = get_db()
     try:
         _gate_existing_task(conn, identity.tenant_id, group_id, task_id, "read")
         rows = rows_to_list(
             conn.execute(
-                "SELECT * FROM task_execution_events WHERE task_id=? AND id>? ORDER BY id LIMIT 500",
-                (task_id, after_id),
+                "SELECT * FROM task_execution_events WHERE task_id=? AND tenant_id=? AND id>? ORDER BY id LIMIT 500",
+                (task_id, identity.tenant_id, after_id),
             ).fetchall()
         )
         # computed: 首个started事件 → finished/failed（未结束则到当前）的耗时秒数
         started = conn.execute(
-            "SELECT created_at FROM task_execution_events WHERE task_id=? AND event_type='started' ORDER BY id LIMIT 1",
-            (task_id,),
+            "SELECT created_at FROM task_execution_events WHERE task_id=? AND tenant_id=? AND event_type='started' ORDER BY id LIMIT 1",
+            (task_id, identity.tenant_id),
         ).fetchone()
         ended = conn.execute(
-            "SELECT created_at FROM task_execution_events WHERE task_id=? AND event_type IN ('finished','failed') ORDER BY id LIMIT 1",
-            (task_id,),
+            "SELECT created_at FROM task_execution_events WHERE task_id=? AND tenant_id=? AND event_type IN ('finished','failed') ORDER BY id LIMIT 1",
+            (task_id, identity.tenant_id),
         ).fetchone()
         elapsed_seconds = None
         start_ts = _parse_ts(started["created_at"]) if started else None
@@ -2208,7 +2296,7 @@ def start_discussion(
 
         # 创建系统消息
         conn.execute(
-            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -2218,6 +2306,7 @@ def start_discussion(
                 "comment",
                 f"新任务已发布：{req.goal}。请各Agent讨论并认领子任务。",
                 now,
+                identity.tenant_id,  # F3b-③b-2：消息租户与讨论任务行同源（身份派生）
             ),
         )
 
@@ -2269,7 +2358,7 @@ def discussion_respond(
         current_round = (last["r"] or 1) if last else 1
 
         conn.execute(
-            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, round_num, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, round_num, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -2280,6 +2369,7 @@ def discussion_respond(
                 req.content,
                 current_round,
                 now,
+                task["tenant_id"],  # F3b-③b-2：消息租户从父任务行继承
             ),
         )
         conn.commit()
@@ -2306,7 +2396,7 @@ def decide_discussion(
 
         # 创建系统消息标记讨论结束
         conn.execute(
-            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -2316,6 +2406,7 @@ def decide_discussion(
                 "comment",
                 f"讨论结束，共分配 {len(req.assignments)} 个子任务。",
                 now,
+                task["tenant_id"],  # F3b-③b-2：消息租户从父任务行继承
             ),
         )
 
@@ -2350,8 +2441,12 @@ def decide_discussion(
 @router.get("/{group_id}/discuss/{task_id}/messages")
 def get_discussion_messages(group_id: str, task_id: str, authorization: str | None = Header(None)):
     """获取任务讨论消息列表
-    F3b-③b-1：讨论任务走读闸门（跨租户 403 禁读他租户讨论消息）。"""
+    F3b-③b-1：讨论任务走读闸门（跨租户 403 禁读他租户讨论消息）。
+    F3b-③b-2：bulk 审计留痕（ai_group_message 资源型）。读取不按消息行键过滤——
+    消息键=写入时尽力继承（外部共享写方 acp-proxy _persist_message 不带列落
+    'default'），父任务行=租户权威；行过滤会吞掉共享聊天行（agent 回帖）=真回归。"""
     identity = bind_identity(authorization)
+    _gate_face_bulk(identity.tenant_id, ResourceType.AI_GROUP_MESSAGE, "list")
     conn = get_db()
     try:
         _load_gated_task(conn, identity.tenant_id, group_id, task_id, "read")
@@ -2386,7 +2481,7 @@ def review_task(
 
         # 创建系统消息通知各Agent评分
         conn.execute(
-            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -2396,6 +2491,7 @@ def review_task(
                 "comment",
                 f"任务「{task['goal']}」已完成，请各Agent对结果进行评分。",
                 now,
+                task["tenant_id"],  # F3b-③b-2：消息租户从父任务行继承
             ),
         )
 
@@ -2439,7 +2535,7 @@ def score_task(
 
         # 在讨论中记录评分消息
         conn.execute(
-            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -2452,6 +2548,7 @@ def score_task(
                     {"score": req.score, "target_agent_id": assigned_agent}, ensure_ascii=False
                 ),
                 now,
+                task["tenant_id"],  # F3b-③b-2：消息租户从父任务行继承
             ),
         )
 
@@ -2917,7 +3014,7 @@ async def auto_evaluate_task(
 
         # Record auto-evaluate message in discussion
         conn.execute(
-            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO discussion_messages (id, group_id, task_id, agent_id, agent_name, intent, content, metadata, created_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 str(uuid.uuid4())[:8],
                 group_id,
@@ -2930,6 +3027,7 @@ async def auto_evaluate_task(
                     {"auto": True, "score": score, "capability": capability}, ensure_ascii=False
                 ),
                 now,
+                task["tenant_id"],  # F3b-③b-2：消息租户从父任务行继承
             ),
         )
 

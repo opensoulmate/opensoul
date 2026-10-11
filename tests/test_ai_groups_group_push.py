@@ -43,12 +43,14 @@ def group_env(monkeypatch, tmp_path):
     conn.execute(
         """CREATE TABLE discussion_messages (
             id TEXT, group_id TEXT, task_id TEXT, agent_id TEXT, agent_name TEXT,
-            intent TEXT, content TEXT, metadata TEXT, round_num INTEGER, created_at TEXT)"""
+            intent TEXT, content TEXT, metadata TEXT, round_num INTEGER, created_at TEXT,
+            tenant_id TEXT)"""  # F3b-③b-2 行形随契约更新（写点带 tenant_id 列）
     )
     conn.execute(
         """CREATE TABLE task_execution_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT, group_id TEXT, task_id TEXT,
-            agent_id TEXT, event_type TEXT, content TEXT, created_at TEXT)"""
+            agent_id TEXT, event_type TEXT, content TEXT, created_at TEXT,
+            tenant_id TEXT)"""  # F3b-③b-2 同上
     )
     conn.commit()
     conn.close()
