@@ -7,6 +7,7 @@ import {
   Loader2, Plus, Trash2, Server, Key, Cpu, Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface LLMConfig {
   base_url: string;
@@ -163,7 +164,7 @@ export default function LlmPage() {
         <div className="flex items-center gap-2 mb-4">
           <Cpu className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-medium">LLM 配置</h2>
-          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">主模型</span>
+          <Badge variant="muted">主模型</Badge>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
@@ -227,7 +228,7 @@ export default function LlmPage() {
           <div className="flex items-center gap-2">
             <Server className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-medium">Provider 管理</h2>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{providers.length} 个</span>
+            <Badge variant="muted">{providers.length} 个</Badge>
           </div>
           <Button onClick={() => setShowAddProvider(true)} variant="primary">
             <Plus className="w-3 h-3" />添加Provider
@@ -249,18 +250,18 @@ export default function LlmPage() {
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${p.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                         {p.enabled ? '已启用' : '已禁用'}
                       </span>
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">优先级: {p.priority}</span>
+                      <Badge variant="default">优先级: {p.priority}</Badge>
                       {p.consecutive_failures > 0 && (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">失败: {p.consecutive_failures}</span>
+                        <Badge variant="destructive">失败: {p.consecutive_failures}</Badge>
                       )}
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-1 font-mono">{p.base_url}</div>
                     {Object.keys(p.models).length > 0 && (
                       <div className="flex items-center gap-2 mt-1">
                         {Object.entries(p.models).map(([task, model]) => (
-                          <span key={task} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+                          <Badge variant="muted" key={task}>
                             {task}: {model}
-                          </span>
+                          </Badge>
                         ))}
                       </div>
                     )}

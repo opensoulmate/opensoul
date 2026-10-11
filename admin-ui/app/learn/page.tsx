@@ -322,7 +322,7 @@ export default function LearnPage() {
           <div className="flex items-center gap-2 mb-4">
             <HelpCircle className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-medium">测验 — {quizChapter.title}</h2>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{quizChapter.quiz.length} 题</span>
+            <Badge variant="muted">{quizChapter.quiz.length} 题</Badge>
           </div>
           {quizChapter.quiz.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -416,7 +416,7 @@ export default function LearnPage() {
                   {getStatusLabel(selectedCourse.status)}
                 </span>
                 {selectedCourse.generated_by === 'ai' && (
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">AI生成</span>
+                  <Badge variant="accent">AI生成</Badge>
                 )}
               </div>
               {selectedCourse.description && <p className="text-xs text-muted-foreground mt-1">{selectedCourse.description}</p>}
@@ -427,7 +427,7 @@ export default function LearnPage() {
               </div>
               {selectedCourse.tags.length > 0 && (
                 <div className="flex items-center gap-1 mt-2">
-                  {selectedCourse.tags.map(t => <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/5 text-primary/70">{t}</span>)}
+                  {selectedCourse.tags.map(t => <Badge variant="subtle" key={t}>{t}</Badge>)}
                 </div>
               )}
             </div>
@@ -463,7 +463,7 @@ export default function LearnPage() {
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-medium">章节列表</span>
-          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{chapters.length}</span>
+          <Badge variant="muted">{chapters.length}</Badge>
           <Button onClick={() => setShowAddChapter(true)} variant="primary" className="ml-auto">
             <Plus className="w-3 h-3" />添加章节
           </Button>
@@ -683,7 +683,7 @@ export default function LearnPage() {
                       {getStatusLabel(course.status)}
                     </span>
                     {course.generated_by === 'ai' && (
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">AI</span>
+                      <Badge variant="accent">AI</Badge>
                     )}
                     {course.domain && <span className="text-[10px] text-muted-foreground">{course.domain}</span>}
                   </div>

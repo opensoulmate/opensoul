@@ -8,6 +8,7 @@ import {
   Loader2, AlertCircle, Eye, EyeOff, Copy, Settings, Wifi, WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Connector {
   connector_id: string;
@@ -313,11 +314,11 @@ export default function LinkPage() {
                       <span className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${st.color}`}>
                         <StIcon className="w-2.5 h-2.5" />{st.label}
                       </span>
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+                      <Badge variant="muted">
                         {CONNECTOR_TYPES.find(t => t.value === c.type)?.label || c.type}
-                      </span>
+                      </Badge>
                       {c.tags?.map((tag) => (
-                        <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500">{tag}</span>
+                        <Badge variant="info" key={tag}>{tag}</Badge>
                       ))}
                     </div>
                     {c.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{c.description}</p>}
@@ -380,7 +381,7 @@ export default function LinkPage() {
           }).map((e) => (
             <div key={e.event_id} className="rounded-lg border border-border bg-card p-3 hover:bg-muted/30 transition-colors">
               <div className="flex items-center gap-2">
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 font-mono">{e.method}</span>
+                <Badge variant="info" className="font-mono">{e.method}</Badge>
                 <span className="text-xs font-medium">{e.connector_id.slice(0, 12)}...</span>
                 <span className="text-[10px] text-muted-foreground">来自 {e.source_ip}</span>
                 <span className="text-[10px] text-muted-foreground ml-auto">{new Date(e.created_at).toLocaleString('zh-CN')}</span>
@@ -530,7 +531,7 @@ export default function LinkPage() {
                 <div>
                   <span className="text-muted-foreground">标签: </span>
                   {detailConnector.tags.map((tag) => (
-                    <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 mr-1">{tag}</span>
+                    <Badge variant="info" key={tag} className="mr-1">{tag}</Badge>
                   ))}
                 </div>
               )}

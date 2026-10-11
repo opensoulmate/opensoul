@@ -8,6 +8,7 @@ import {
   Activity, Layers, Target, Edit3, Save, Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -402,10 +403,10 @@ export default function ReflexPage() {
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{entry.response}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-2">
                           {entry.category && (
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{entry.category}</span>
+                            <Badge variant="default">{entry.category}</Badge>
                           )}
                           {entry.tags.map((t) => (
-                            <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">#{t}</span>
+                            <Badge variant="muted" key={t}>#{t}</Badge>
                           ))}
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${importanceColor(entry.importance)}`}>
                             重要性: {importanceLabel(entry.importance)}
@@ -485,7 +486,7 @@ export default function ReflexPage() {
                     <div className="text-xs text-muted-foreground whitespace-pre-wrap">{lookupResult.response}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {lookupResult.category && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{lookupResult.category}</span>}
+                    {lookupResult.category && <Badge variant="default">{lookupResult.category}</Badge>}
                     {lookupResult.importance !== undefined && (
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${importanceColor(lookupResult.importance)}`}>
                         重要性: {importanceLabel(lookupResult.importance)}

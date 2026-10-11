@@ -8,6 +8,7 @@ import {
   AlertCircle, CheckCircle, Loader2, Filter, Camera,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -260,7 +261,7 @@ export default function CapturePage() {
                 {capture.keywords && capture.keywords.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {capture.keywords.map((kw, i) => (
-                      <span key={i} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{kw}</span>
+                      <Badge variant="default" key={i}>{kw}</Badge>
                     ))}
                   </div>
                 )}

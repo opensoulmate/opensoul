@@ -7,6 +7,7 @@ import {
   ChevronRight, RefreshCw, Clock, Hash, User, Bot, Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Session {
   id: string;
@@ -242,7 +243,7 @@ export default function SessionsPage() {
                       {s.tags && s.tags.length > 0 && (
                         <div className="flex items-center gap-1 mt-1">
                           {s.tags.map((t) => (
-                            <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{t}</span>
+                            <Badge variant="default" key={t}>{t}</Badge>
                           ))}
                         </div>
                       )}
@@ -250,7 +251,7 @@ export default function SessionsPage() {
                   )}
                 </td>
                 <td className="px-2 lg:px-4 py-2.5">
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{s.source || '-'}</span>
+                  <Badge variant="muted">{s.source || '-'}</Badge>
                 </td>
                 <td className="px-2 lg:px-4 py-2.5 text-center text-xs">{s.message_count}</td>
                 <td className="px-2 lg:px-4 py-2.5 text-right text-xs text-muted-foreground">

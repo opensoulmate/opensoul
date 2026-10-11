@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Tab, TabBar } from '@/components/ui/tab';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface McpServer {
   id: string;
@@ -230,10 +231,10 @@ export default function McpPage() {
                         <CheckCircle className="w-2.5 h-2.5" />已连接
                       </span>
                     ) : (
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">未连接</span>
+                      <Badge variant="muted">未连接</Badge>
                     )}
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{srv.transport}</span>
-                    {!srv.enabled && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500">已禁用</span>}
+                    <Badge variant="default">{srv.transport}</Badge>
+                    {!srv.enabled && <Badge variant="warning">已禁用</Badge>}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{srv.description || srv.url}</p>
                   <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
@@ -282,7 +283,7 @@ export default function McpPage() {
                 <div className="min-w-0 flex-1">
                   <h4 className="text-xs font-medium truncate">{tool.name}</h4>
                   <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{tool.description || '暂无描述'}</p>
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground mt-1 inline-block">{tool.server_name}</span>
+                  <Badge variant="muted" className="mt-1 inline-block">{tool.server_name}</Badge>
                 </div>
               </div>
             </div>

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Search, Bot, Download, Trash2, RefreshCw, X, CheckCircle, XCircle, Clock, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Agent {
   id: string;
@@ -236,7 +237,7 @@ export default function AgentsPage() {
                         <CheckCircle className="w-2.5 h-2.5" />已安装
                       </span>
                     ) : (
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">未安装</span>
+                      <Badge variant="muted">未安装</Badge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{agent.description}</p>

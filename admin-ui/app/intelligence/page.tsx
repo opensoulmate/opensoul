@@ -7,6 +7,7 @@ import {
   Lightbulb, AlertTriangle, Info, Activity, Zap, BarChart3, ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface SystemSummary {
   health_score: number;
@@ -254,7 +255,7 @@ export default function IntelligencePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium">{insight.title}</span>
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{TYPE_LABELS[insight.insight_type] || insight.insight_type}</span>
+                        <Badge variant="muted">{TYPE_LABELS[insight.insight_type] || insight.insight_type}</Badge>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sc.bg} ${sc.color}`}>{insight.severity}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{insight.description}</p>
@@ -322,7 +323,7 @@ export default function IntelligencePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium">{rec.title}</span>
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{rec.component}</span>
+                        <Badge variant="muted">{rec.component}</Badge>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${rec.priority === 'high' ? 'bg-red-500/10 text-red-500' : rec.priority === 'medium' ? 'bg-amber-500/10 text-amber-500' : 'bg-blue-500/10 text-blue-500'}`}>{rec.priority}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{rec.description}</p>

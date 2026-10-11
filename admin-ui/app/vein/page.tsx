@@ -252,9 +252,9 @@ export default function VeinPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium truncate">{file.name}</span>
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{file.mime_type}</span>
+                      <Badge variant="muted">{file.mime_type}</Badge>
                       {file.version_count > 1 && (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500">v{file.version_count}</span>
+                        <Badge variant="info">v{file.version_count}</Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">

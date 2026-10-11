@@ -9,6 +9,7 @@ import {
   Eye, EyeOff, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -324,7 +325,7 @@ export default function VitalPage() {
         <div className="flex items-center gap-2">
           <Heart className="w-5 h-5 text-red-500" />
           <h2 className="text-sm font-medium">生命体征</h2>
-          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">OpenVital</span>
+          <Badge variant="muted">OpenVital</Badge>
           {stats && (
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               stats.health.status === 'ok' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-600'
@@ -477,7 +478,7 @@ export default function VitalPage() {
           <Bell className="w-4 h-4 text-amber-500" />
           <span className="text-sm font-medium">告警</span>
           {activeAlerts.length > 0 && (
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">{activeAlerts.length} 活跃</span>
+            <Badge variant="destructive">{activeAlerts.length} 活跃</Badge>
           )}
           <label className="flex items-center gap-1 text-[10px] text-muted-foreground ml-auto cursor-pointer">
             <input type="checkbox" checked={showResolvedAlerts} onChange={(e) => setShowResolvedAlerts(e.target.checked)} className="rounded" />
@@ -504,7 +505,7 @@ export default function VitalPage() {
                   </span>
                   <span className="text-xs font-medium">{alert.rule}</span>
                   {alert.resolved && (
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">已解决</span>
+                    <Badge variant="success">已解决</Badge>
                   )}
                   <span className="text-[10px] text-muted-foreground ml-auto">{formatTime(alert.ts)}</span>
                   {expandedAlert === i ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}

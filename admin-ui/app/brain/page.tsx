@@ -438,15 +438,15 @@ export default function BrainPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium truncate">{entry.title}</span>
-                        {entry.pinned && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">置顶</span>}
-                        {entry.starred && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400">收藏</span>}
+                        {entry.pinned && <Badge variant="default">置顶</Badge>}
+                        {entry.starred && <Badge variant="warning" className="text-amber-400">收藏</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2">{entry.content.slice(0, 120)}</p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
                         {entry.source && <span className="text-[10px] text-muted-foreground">{entry.source}</span>}
                         {(entry.tags || []).slice(0, 3).map((t) => (
-                          <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{t}</span>
+                          <Badge variant="muted" key={t}>{t}</Badge>
                         ))}
                         <span className="text-[10px] text-muted-foreground ml-auto">{new Date(entry.created_at).toLocaleDateString('zh-CN')}</span>
                       </div>

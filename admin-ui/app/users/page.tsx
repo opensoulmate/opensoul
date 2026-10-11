@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Search, UserPlus, Trash2, X, Shield, RefreshCw, Users as UsersIcon, UserCheck, UserX, Edit2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface User {
   id: number;
@@ -188,7 +189,7 @@ export default function UsersPage() {
                 <td className="px-2 lg:px-4 py-2.5 text-xs">
                   <div className="flex flex-wrap gap-1">
                     {u.roles?.length > 0 ? u.roles.map((r) => (
-                      <span key={r} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{r}</span>
+                      <Badge variant="default" key={r}>{r}</Badge>
                     )) : <span className="text-muted-foreground text-[10px]">无角色</span>}
                   </div>
                 </td>

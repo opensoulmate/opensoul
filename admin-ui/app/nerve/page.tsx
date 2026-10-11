@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Tab, TabBar } from '@/components/ui/tab';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -396,7 +397,7 @@ export default function NervePage() {
                         <WifiOff className="w-3.5 h-3.5 text-red-500 shrink-0" />
                       )}
                       <span className="text-xs font-medium font-mono">{node.node_id}</span>
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{node.node_type}</span>
+                      <Badge variant="default">{node.node_type}</Badge>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${node.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
                         {node.status}
                       </span>

@@ -251,8 +251,8 @@ export default function VoicePage() {
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{p.description || p.voice_id}</p>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{p.engine}</span>
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{p.language}</span>
+                    <Badge variant="muted">{p.engine}</Badge>
+                    <Badge variant="muted">{p.language}</Badge>
                     <span className="text-[10px] text-muted-foreground">使用: {p.usage_count}</span>
                   </div>
                   {p.tags.length > 0 && (

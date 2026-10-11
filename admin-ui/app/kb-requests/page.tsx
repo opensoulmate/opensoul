@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Tab, TabBar } from '@/components/ui/tab';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -116,9 +117,9 @@ function RequestCard({
               {type === 'create' ? (request as KnowledgeRequest).kb_name : (request as SharingRequest).kb_name}
             </span>
             <StatusBadge status={request.status} />
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+            <Badge variant="muted">
               {type === 'create' ? '创建申请' : '共享申请'}
-            </span>
+            </Badge>
           </div>
           <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">

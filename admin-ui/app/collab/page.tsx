@@ -8,6 +8,7 @@ import {
   ArrowRightLeft, Shield, Clock, Wifi, WifiOff, Activity,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -75,10 +76,10 @@ function AgentCard({ agent }: { agent: AgentStatus }) {
         {agent.role && <p className="text-[10px] text-muted-foreground truncate">{agent.role}</p>}
         <div className="flex items-center gap-2 mt-1">
           {agent.model && (
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">{agent.model}</span>
+            <Badge variant="default" className="font-mono">{agent.model}</Badge>
           )}
           {agent.capabilities.map(cap => (
-            <span key={cap} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{cap}</span>
+            <Badge variant="muted" key={cap}>{cap}</Badge>
           ))}
         </div>
       </div>

@@ -217,9 +217,9 @@ function IterationRow({ cycle, expanded, onToggle }: {
             <span className="text-sm font-medium">迭代 #{cycle.iteration}</span>
             <StatusDot status={cycle.overallStatus} />
             {cycle.rootCause && (
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 truncate max-w-[200px]">
+              <Badge variant="warning" className="truncate max-w-[200px]">
                 根因: {cycle.rootCause}
-              </span>
+              </Badge>
             )}
           </div>
           <div className="flex items-center gap-4 mt-1 text-[10px] text-muted-foreground">
@@ -565,9 +565,9 @@ export default function EvolutionPage() {
                 <div className="flex items-center gap-2">
                   <StatusDot status={insight.severity === 'critical' ? 'error' : insight.severity === 'high' ? 'running' : 'completed'} />
                   <span className="text-xs font-medium">{insight.title || insight.insight_type || '洞察'}</span>
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground ml-auto">
+                  <Badge variant="muted" className="ml-auto">
                     {insight.component || insight.severity || ''}
-                  </span>
+                  </Badge>
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-0.5 ml-4 truncate">
                   {insight.description || insight.message || ''}

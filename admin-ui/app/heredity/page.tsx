@@ -237,7 +237,7 @@ function MigrationCard({ m, onExecute, onRollback, executing }: {
         <div className="flex items-center gap-2">
           <span className="text-xs font-mono text-muted-foreground">{m.migration_id.slice(0, 8)}</span>
           <StatusBadge status={m.status} />
-          {m.dry_run && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">试运行</span>}
+          {m.dry_run && <Badge variant="warning" className="border border-amber-500/20">试运行</Badge>}
         </div>
         <div className="flex items-center gap-1">
           {(m.status === 'pending' || m.status === 'failed') && (
@@ -626,7 +626,7 @@ export default function HeredityPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium">{entry.component_id}</span>
                     <span className="text-[10px] text-muted-foreground font-mono">v{entry.version}</span>
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{entry.action}</span>
+                    <Badge variant="muted">{entry.action}</Badge>
                   </div>
                   {entry.details && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{entry.details}</p>}
                 </div>

@@ -655,9 +655,9 @@ export default function NestPage() {
                     <td className="px-2 lg:px-4 py-2.5 text-xs">{e.action}</td>
                     <td className="px-2 lg:px-4 py-2.5 text-center">
                       {e.allowed ? (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">允许</span>
+                        <Badge variant="success">允许</Badge>
                       ) : (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">拒绝</span>
+                        <Badge variant="destructive">拒绝</Badge>
                       )}
                     </td>
                   </tr>
@@ -790,7 +790,7 @@ export default function NestPage() {
                   <div className="text-xs text-muted-foreground mb-1">标签</div>
                   <div className="flex items-center gap-1 flex-wrap">
                     {selectedTenant.tags.map((tag) => (
-                      <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{tag}</span>
+                      <Badge variant="default" key={tag}>{tag}</Badge>
                     ))}
                   </div>
                 </div>

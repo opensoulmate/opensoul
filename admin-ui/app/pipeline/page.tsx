@@ -8,6 +8,7 @@ import {
   Shield, Brain, Database, ArrowRight, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -346,7 +347,7 @@ export default function PipelinePage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium font-mono truncate">{p.pipeline_id}</span>
                   {p.pipeline_type && (
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{p.pipeline_type}</span>
+                    <Badge variant="muted">{p.pipeline_type}</Badge>
                   )}
                 </div>
               </div>

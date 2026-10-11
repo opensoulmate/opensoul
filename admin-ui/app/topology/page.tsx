@@ -216,7 +216,7 @@ export default function TopologyPage() {
             <div key={cat} className={`rounded-lg border bg-card p-4 ${CATEGORY_COLORS[cat] || 'border-border'}`}>
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-medium">{CATEGORY_LABELS[cat] || cat}</span>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{nodes.length} 个组件</span>
+                <Badge variant="muted">{nodes.length} 个组件</Badge>
               </div>
               <div className="space-y-1.5">
                 {nodes.map((n) => {

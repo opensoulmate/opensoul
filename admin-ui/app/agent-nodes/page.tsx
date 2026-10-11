@@ -8,6 +8,7 @@ import {
   Cpu, Shield, Eye, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -363,7 +364,7 @@ export default function AgentNodesPage() {
                           {node.online ? '在线' : '离线'}
                         </span>
                         {node.status !== 'active' && (
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">{node.status}</span>
+                          <Badge variant="destructive">{node.status}</Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
@@ -395,7 +396,7 @@ export default function AgentNodesPage() {
                           <span className="text-xs text-muted-foreground">能力列表:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {node.capabilities.map((cap) => (
-                              <span key={cap} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{cap}</span>
+                              <Badge variant="default" key={cap}>{cap}</Badge>
                             ))}
                           </div>
                         </div>
@@ -518,9 +519,9 @@ export default function AgentNodesPage() {
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium">{item.title || item.id || `结果 ${i + 1}`}</span>
                         {item.score !== undefined && (
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
+                          <Badge variant="default">
                             {(item.score * 100).toFixed(1)}%
-                          </span>
+                          </Badge>
                         )}
                       </div>
                       <p className="text-muted-foreground text-[10px] line-clamp-3">{item.content || item.text || JSON.stringify(item).slice(0, 200)}</p>
@@ -543,7 +544,7 @@ export default function AgentNodesPage() {
             <div className="flex items-center gap-2 mb-4">
               <Plus className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-medium">注册新节点</h3>
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-600">需要管理员权限</span>
+              <Badge variant="warning" className="text-amber-600">需要管理员权限</Badge>
             </div>
             <div className="space-y-3">
               <div>

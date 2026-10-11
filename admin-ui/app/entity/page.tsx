@@ -298,7 +298,7 @@ export default function EntityPage() {
                 {e.properties && Object.keys(e.properties).length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {Object.entries(e.properties).slice(0, 3).map(([k, v]) => (
-                      <span key={k} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">{k}: {String(v).slice(0, 20)}</span>
+                      <Badge variant="muted" key={k} className="text-inherit">{k}: {String(v).slice(0, 20)}</Badge>
                     ))}
                   </div>
                 )}

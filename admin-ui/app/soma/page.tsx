@@ -260,7 +260,7 @@ function ProcessesTab({ processes }: { processes: ProcessInfo[] }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">{p.executable || p.command.split(' ')[0]}</span>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{p.user}</span>
+                <Badge variant="muted">{p.user}</Badge>
               </div>
               <p className="text-[10px] text-muted-foreground truncate mt-0.5">{p.command}</p>
             </div>
@@ -470,9 +470,9 @@ function AdaptersTab({ adapters }: { adapters: string[] }) {
                 <div className="text-[10px] text-muted-foreground font-mono">{name}</div>
               </div>
               <div className="ml-auto">
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
+                <Badge variant="success" className="border border-emerald-500/30">
                   已注册
-                </span>
+                </Badge>
               </div>
             </div>
           );

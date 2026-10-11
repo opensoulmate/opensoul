@@ -10,6 +10,7 @@ import {
   Copy, Play, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -188,12 +189,12 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">{template.name}</span>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+            <Badge variant="muted">
               {template.category}
-            </span>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
+            </Badge>
+            <Badge variant="default">
               {CHANNEL_LABELS[template.channel] || template.channel}
-            </span>
+            </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{template.description || template.title_template}</p>
           <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
@@ -224,9 +225,9 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
             <div className="flex flex-wrap gap-1">
               <span className="text-[10px] text-muted-foreground mr-1">变量:</span>
               {template.variables.map((v) => (
-                <span key={v} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 font-mono">
+                <Badge variant="warning" key={v} className="font-mono">
                   {`{{${v}}}`}
-                </span>
+                </Badge>
               ))}
             </div>
           )}

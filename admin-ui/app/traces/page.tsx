@@ -124,9 +124,9 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium font-mono truncate">{session.session_id}</span>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground flex items-center gap-1">
+            <Badge variant="muted" className="flex items-center gap-1">
               <Lock className="w-2.5 h-2.5" />不可变
-            </span>
+            </Badge>
           </div>
           <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">

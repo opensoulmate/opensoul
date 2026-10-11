@@ -330,9 +330,9 @@ export default function HippoPage() {
                     </td>
                     <td className="px-2 lg:px-4 py-2.5 text-center">
                       {m.archived ? (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500">归档</span>
+                        <Badge variant="warning">归档</Badge>
                       ) : (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">活跃</span>
+                        <Badge variant="success">活跃</Badge>
                       )}
                     </td>
                     <td className="px-2 lg:px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>

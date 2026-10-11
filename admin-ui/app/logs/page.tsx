@@ -9,6 +9,7 @@ import {
   Zap, Eye, BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface LogEntry {
   id: string;
@@ -315,7 +316,7 @@ export default function LogsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium font-mono ${getTypeBg(log.type)} ${getTypeColor(log.type)}`}>{log.type}</span>
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{log.organ}</span>
+                    <Badge variant="muted">{log.organ}</Badge>
                     <span className="text-[10px] text-muted-foreground" title={formatTime(log.timestamp)}>{formatRelative(log.timestamp)}</span>
                   </div>
                   <p className="text-xs mt-0.5 break-words">{log.summary}</p>

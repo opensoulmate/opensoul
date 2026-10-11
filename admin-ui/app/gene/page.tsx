@@ -7,6 +7,7 @@ import {
   Tag, FolderOpen, Filter, ChevronDown, ChevronRight, Edit3, Package, BarChart3, Eye, Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Template {
   template_id: string;
@@ -327,7 +328,7 @@ export default function GenePage() {
                 </div>
               </div>
               {tpl.builtin && (
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0">内置</span>
+                <Badge variant="info" className="border border-blue-500/20 shrink-0">内置</Badge>
               )}
             </div>
             {tpl.description && (
@@ -338,7 +339,7 @@ export default function GenePage() {
                 {CATEGORY_LABELS[tpl.category] || tpl.category}
               </span>
               {tpl.tags.slice(0, 3).map((tag) => (
-                <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">#{tag}</span>
+                <Badge variant="muted" key={tag}>#{tag}</Badge>
               ))}
               {tpl.tags.length > 3 && <span className="text-[10px] text-muted-foreground">+{tpl.tags.length - 3}</span>}
             </div>
@@ -442,7 +443,7 @@ export default function GenePage() {
                   <label className="text-[10px] text-muted-foreground uppercase tracking-wider">标签</label>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {selectedTemplate.tags.map((tag) => (
-                      <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">#{tag}</span>
+                      <Badge variant="muted" key={tag}>#{tag}</Badge>
                     ))}
                   </div>
                 </div>

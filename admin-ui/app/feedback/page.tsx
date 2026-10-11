@@ -213,7 +213,7 @@ export default function FeedbackPage() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{e.content}</p>
                 <div className="flex items-center gap-2 mt-2">
-                  {e.tags.slice(0, 5).map(t => <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">{t}</span>)}
+                  {e.tags.slice(0, 5).map(t => <Badge variant="muted" key={t} className="text-inherit">{t}</Badge>)}
                   <span className="text-[10px] text-muted-foreground ml-auto">{e.source} · {e.created_at ? new Date(e.created_at).toLocaleDateString() : '—'}</span>
                 </div>
               </div>

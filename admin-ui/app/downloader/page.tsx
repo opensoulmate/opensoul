@@ -414,10 +414,10 @@ export default function DownloaderPage() {
                         {task.status}
                       </span>
                       {task.plugin && (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{task.plugin}</span>
+                        <Badge variant="muted">{task.plugin}</Badge>
                       )}
                       {task.segments > 1 && (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{task.segments}线程</span>
+                        <Badge variant="default">{task.segments}线程</Badge>
                       )}
                     </div>
                     <p className="text-xs font-mono truncate text-muted-foreground">{task.url}</p>
@@ -518,13 +518,13 @@ export default function DownloaderPage() {
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-1">{plugin.description}</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">v{plugin.version}</span>
+                        <Badge variant="muted">v{plugin.version}</Badge>
                         <span className="text-[10px] text-muted-foreground">优先级: {plugin.priority}</span>
                         {plugin.supports_resume && (
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">续传</span>
+                          <Badge variant="success">续传</Badge>
                         )}
                         {plugin.supports_p2p && (
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-purple-500/10 text-purple-600">P2P</span>
+                          <Badge variant="accent" className="bg-purple-500/10 text-purple-600">P2P</Badge>
                         )}
                       </div>
                     </div>

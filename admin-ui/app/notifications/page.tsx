@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronRight, BarChart3, Loader2, Zap, Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Notification {
   id: string;
@@ -470,7 +471,7 @@ export default function NotificationsPage() {
                         <span className="text-[10px] text-muted-foreground">→</span>
                         <div className="flex gap-1 flex-wrap">
                           {channels.map((ch) => (
-                            <span key={ch} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">{ch}</span>
+                            <Badge variant="default" key={ch} className="font-mono">{ch}</Badge>
                           ))}
                         </div>
                       </div>

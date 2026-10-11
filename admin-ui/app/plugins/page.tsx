@@ -7,6 +7,7 @@ import {
   RefreshCw, Package, Check, AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Plugin {
   id: number;
@@ -207,11 +208,11 @@ export default function PluginsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{plugin.name}</h3>
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">v{plugin.version}</span>
+                    <Badge variant="muted">v{plugin.version}</Badge>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${plugin.status === 'enabled' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                       {plugin.status === 'enabled' ? '已启用' : '已禁用'}
                     </span>
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/5 text-primary/70">{plugin.type}</span>
+                    <Badge variant="subtle">{plugin.type}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{plugin.description || '暂无描述'}</p>
                   <div className="text-[10px] text-muted-foreground mt-1">安装时间: {plugin.installed_at}</div>
@@ -328,7 +329,7 @@ export default function PluginsPage() {
               <div className="flex items-center gap-2">
                 <Puzzle className="w-5 h-5 text-primary" />
                 <h2 className="text-sm font-medium">{selectedPlugin.name}</h2>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">v{selectedPlugin.version}</span>
+                <Badge variant="muted">v{selectedPlugin.version}</Badge>
               </div>
               <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
             </div>

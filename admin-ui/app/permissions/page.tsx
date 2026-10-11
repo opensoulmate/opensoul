@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Shield, Search, Plus, Trash2, X, Users, Key, FileText, RefreshCw, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Role {
   name: string;
@@ -306,7 +307,7 @@ export default function PermissionsPage() {
               {filteredPolicies.map((p, i) => (
                 <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/30">
                   <td className="px-2 lg:px-4 py-2.5 text-xs font-medium">
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{p.role}</span>
+                    <Badge variant="default">{p.role}</Badge>
                   </td>
                   <td className="px-2 lg:px-4 py-2.5 text-xs font-mono">{p.resource}</td>
                   <td className="px-2 lg:px-4 py-2.5 text-xs font-mono">{p.action}</td>

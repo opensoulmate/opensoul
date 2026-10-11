@@ -403,7 +403,7 @@ export default function AIEnginePage() {
                   <div className="flex-1" />
                   <div className="flex flex-wrap gap-1">
                     {r.guardrails.map((g, j) => (
-                      <span key={j} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{g}</span>
+                      <Badge variant="muted" key={j}>{g}</Badge>
                     ))}
                   </div>
                 </div>

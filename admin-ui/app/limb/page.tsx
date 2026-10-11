@@ -9,6 +9,7 @@ import {
   Square, Copy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface RPATask {
   task_id: string;
@@ -351,8 +352,8 @@ export default function LimbPage() {
                     <StIcon className={`w-2.5 h-2.5 ${task.status === 'running' ? 'animate-spin' : ''}`} />{st.label}
                   </span>
                   <span className="text-sm font-medium">{task.name}</span>
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">优先级 {task.priority}</span>
-                  {task.tags?.map(tag => <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500">{tag}</span>)}
+                  <Badge variant="muted">优先级 {task.priority}</Badge>
+                  {task.tags?.map(tag => <Badge variant="info" key={tag}>{tag}</Badge>)}
                   <span className="text-[10px] text-muted-foreground ml-auto">{task.actions?.length ?? 0} 步</span>
                   {task.created_at && <span className="text-[10px] text-muted-foreground">{new Date(task.created_at).toLocaleString('zh-CN')}</span>}
                 </div>
@@ -395,7 +396,7 @@ export default function LimbPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium truncate">{tmpl.name}</h3>
-                    {tmpl.is_builtin && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">内置</span>}
+                    {tmpl.is_builtin && <Badge variant="accent">内置</Badge>}
                   </div>
                   {tmpl.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{tmpl.description}</p>}
                   <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">

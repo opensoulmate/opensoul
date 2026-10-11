@@ -427,9 +427,9 @@ export default function AgentProxyPage() {
           >
             <Clock className="w-4 h-4" />
             <span className="text-sm font-medium">对话历史</span>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+            <Badge variant="muted">
               {conversations.length} 条
-            </span>
+            </Badge>
             <div className="flex-1" />
             {showHistory ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>

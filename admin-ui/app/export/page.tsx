@@ -8,6 +8,7 @@ import {
   Tag, Layers, Activity,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -219,9 +220,9 @@ export default function ExportPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{format.label}</span>
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground font-mono">
+                    <Badge variant="muted" className="font-mono">
                       .{format.ext}
-                    </span>
+                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{format.description}</p>
                   {result && (

@@ -7,6 +7,7 @@ import {
   AlertCircle, CheckCircle, XCircle, X, Clock, Database, HardDrive,
   Server, Wrench, FileText, BarChart3, Zap, Settings,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -104,10 +105,10 @@ function ResultPanel({ result, onClose }: { result: ActionResult; onClose: () =>
           )}
           <span className="text-sm font-medium">{result.action}</span>
           {result.cleared !== undefined && (
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">清除 {result.cleared}/{result.total}</span>
+            <Badge variant="success">清除 {result.cleared}/{result.total}</Badge>
           )}
           {result.cleaned !== undefined && (
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500">清理 {result.cleaned}/{result.total}</span>
+            <Badge variant="success">清理 {result.cleaned}/{result.total}</Badge>
           )}
         </div>
         <button onClick={onClose} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>

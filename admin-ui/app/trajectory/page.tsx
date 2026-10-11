@@ -717,9 +717,9 @@ export default function TrajectoryPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium font-mono truncate">{s.session_id}</span>
                         {s.status && <StatusBadge status={s.status} />}
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground flex items-center gap-1">
+                        <Badge variant="muted" className="flex items-center gap-1">
                           <Lock className="w-2.5 h-2.5" />不可变
-                        </span>
+                        </Badge>
                       </div>
                       {s.task_description && (
                         <p className="text-xs text-muted-foreground truncate mt-0.5">{s.task_description}</p>

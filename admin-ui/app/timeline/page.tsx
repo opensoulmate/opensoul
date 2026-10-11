@@ -273,7 +273,7 @@ export default function TimelinePage() {
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-base">{event.emoji || '📌'}</span>
                   <Badge variant="muted">{event.organ}</Badge>
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{event.type}</span>
+                  <Badge variant="default">{event.type}</Badge>
                   <span className="text-[10px] text-muted-foreground ml-auto">{relativeTime(event.timestamp)}</span>
                 </div>
                 <p className="text-sm">{event.summary}</p>
@@ -376,7 +376,7 @@ export default function TimelinePage() {
                 <span className="text-2xl">{selectedEvent.emoji || '📌'}</span>
                 <div>
                   <Badge variant="muted">{selectedEvent.organ}</Badge>
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary ml-2">{selectedEvent.type}</span>
+                  <Badge variant="default" className="ml-2">{selectedEvent.type}</Badge>
                 </div>
               </div>
               <div>

@@ -7,6 +7,7 @@ import {
   BarChart3, Timer, Dna, Volume2, Database, Filter, ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -226,7 +227,7 @@ export default function SearchPage() {
                             {/* Extra metadata */}
                             <div className="flex flex-wrap gap-2 mt-1.5">
                               {Object.entries(item).filter(([k]) => !['source','icon','title','snippet'].includes(k) && item[k] != null).map(([k, v]) => (
-                                <span key={k} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{k}: {String(v).slice(0, 20)}</span>
+                                <Badge variant="muted" key={k}>{k}: {String(v).slice(0, 20)}</Badge>
                               ))}
                             </div>
                           </div>

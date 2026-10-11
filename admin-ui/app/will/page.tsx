@@ -138,9 +138,9 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium truncate">{wf.name}</span>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusClass}`}>{wf.status}</span>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+            <Badge variant="muted">
               {TRIGGER_LABELS[wf.trigger] || wf.trigger}
-            </span>
+            </Badge>
           </div>
           {wf.description && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{wf.description}</p>}
           <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
@@ -207,9 +207,9 @@ function WorkflowCard({ wf, onExecute, onDelete, expanded, onToggle }: {
               <div className="text-xs font-medium mb-1.5">变量</div>
               <div className="flex flex-wrap gap-1">
                 {Object.entries(wf.variables).map(([k, v]) => (
-                  <span key={k} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">
+                  <Badge variant="default" key={k} className="font-mono">
                     {k}={JSON.stringify(v).slice(0, 20)}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             </div>
@@ -504,7 +504,7 @@ export default function WillPage() {
               <div className="flex items-center gap-2 mb-2">
                 <Zap className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium">{action.label}</span>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground font-mono">{action.type}</span>
+                <Badge variant="muted" className="font-mono">{action.type}</Badge>
               </div>
               <p className="text-xs text-muted-foreground mb-2">{action.description}</p>
               {action.config_schema && (

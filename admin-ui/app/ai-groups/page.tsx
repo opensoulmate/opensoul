@@ -8,6 +8,7 @@ import {
   UserPlus, Settings, ListChecks, ArrowLeft, Send, Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -368,7 +369,7 @@ export default function AIGroupsPage() {
                       {msg.agent_id !== 'system' && (
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-medium">{msg.agent_name || msg.agent_id}</span>
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-background">{msg.intent}</span>
+                          <Badge variant="muted" className="bg-background text-inherit">{msg.intent}</Badge>
                           <span className="text-[10px] text-muted-foreground">R{msg.round_num}</span>
                         </div>
                       )}

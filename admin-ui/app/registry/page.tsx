@@ -267,7 +267,7 @@ export default function RegistryPage() {
                       <span className="text-[10px] font-medium text-muted-foreground">能力</span>
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         {comp.capabilities?.map((cap) => (
-                          <span key={cap} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{cap}</span>
+                          <Badge variant="default" key={cap}>{cap}</Badge>
                         ))}
                       </div>
                     </div>
@@ -276,7 +276,7 @@ export default function RegistryPage() {
                         <span className="text-[10px] font-medium text-muted-foreground">依赖</span>
                         <div className="flex flex-wrap gap-1 mt-0.5">
                           {comp.dependencies.map((dep) => (
-                            <span key={dep} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-orange-500/10 text-orange-600">{dep}</span>
+                            <Badge variant="warning" key={dep} className="bg-orange-500/10 text-orange-600">{dep}</Badge>
                           ))}
                         </div>
                       </div>
@@ -286,7 +286,7 @@ export default function RegistryPage() {
                         <span className="text-[10px] font-medium text-muted-foreground">被依赖</span>
                         <div className="flex flex-wrap gap-1 mt-0.5">
                           {comp.dependents.map((dep) => (
-                            <span key={dep} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-600">{dep}</span>
+                            <Badge variant="info" key={dep} className="text-blue-600">{dep}</Badge>
                           ))}
                         </div>
                       </div>
@@ -403,9 +403,9 @@ export default function RegistryPage() {
                   {comps.map((compId) => {
                     const comp = components.find((c) => c.id === compId);
                     return (
-                      <span key={compId} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+                      <Badge variant="muted" key={compId}>
                         {comp?.emoji} {comp?.name || compId}
-                      </span>
+                      </Badge>
                     );
                   })}
                 </div>

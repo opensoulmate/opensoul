@@ -335,7 +335,7 @@ export default function MarrowPage() {
                       <Database className="w-4 h-4 text-blue-500 shrink-0" />
                       <h3 className="text-sm font-medium truncate">{backup.name || backup.backup_id}</h3>
                       {backup.tags?.map(tag => (
-                        <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{tag}</span>
+                        <Badge variant="muted" key={tag}>{tag}</Badge>
                       ))}
                     </div>
                     {backup.description && <p className="text-xs text-muted-foreground mt-0.5 ml-6">{backup.description}</p>}
@@ -401,7 +401,7 @@ export default function MarrowPage() {
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sch.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                         {sch.enabled ? '已启用' : '已禁用'}
                       </span>
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">{sch.cron_expr}</span>
+                      <Badge variant="default" className="font-mono">{sch.cron_expr}</Badge>
                     </div>
                     {sch.description && <p className="text-xs text-muted-foreground mt-0.5 ml-6">{sch.description}</p>}
                     <div className="flex items-center gap-4 mt-1 ml-6 text-[10px] text-muted-foreground">
@@ -455,7 +455,7 @@ export default function MarrowPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium font-mono">{exp.job_id}</span>
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{exp.format}</span>
+                      <Badge variant="default">{exp.format}</Badge>
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
                       <span>{exp.record_count} 条记录</span>

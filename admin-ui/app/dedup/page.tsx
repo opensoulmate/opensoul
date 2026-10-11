@@ -8,6 +8,7 @@ import {
   Zap, Shield, BarChart3, Filter, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -82,9 +83,9 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sev.badge}`}>{sev.label}</span>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+            <Badge variant="muted">
               {pair.content_type || 'unknown'}
-            </span>
+            </Badge>
           </div>
           <div className="mt-1 text-xs">
             <span className="text-foreground font-medium truncate">{pair.title_a || pair.id_a}</span>

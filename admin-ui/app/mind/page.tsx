@@ -271,8 +271,8 @@ export default function MindPage() {
                 <div className="flex items-center gap-2">
                   <Brain className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                   <h3 className="text-sm font-medium">{p.name}</h3>
-                  {p.builtin && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500">内置</span>}
-                  {isActive && <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">激活</span>}
+                  {p.builtin && <Badge variant="info">内置</Badge>}
+                  {isActive && <Badge variant="default">激活</Badge>}
                 </div>
                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                   {!p.builtin && (
@@ -289,14 +289,14 @@ export default function MindPage() {
               </div>
               <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{p.description || '暂无描述'}</p>
               <div className="flex flex-wrap gap-1.5 mt-2">
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">{p.tone}</span>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">{p.language_style}</span>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted">emoji: {p.emoji_usage}</span>
+                <Badge variant="muted" className="text-inherit">{p.tone}</Badge>
+                <Badge variant="muted" className="text-inherit">{p.language_style}</Badge>
+                <Badge variant="muted" className="text-inherit">emoji: {p.emoji_usage}</Badge>
               </div>
               {p.traits.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {p.traits.slice(0, 4).map(t => (
-                    <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/5 text-primary/70">{t}</span>
+                    <Badge variant="subtle" key={t}>{t}</Badge>
                   ))}
                   {p.traits.length > 4 && <span className="text-[10px] text-muted-foreground">+{p.traits.length - 4}</span>}
                 </div>
@@ -494,7 +494,7 @@ export default function MindPage() {
                   )}
                   {emotionResult.keywords.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {emotionResult.keywords.map(k => <span key={k} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">{k}</span>)}
+                      {emotionResult.keywords.map(k => <Badge variant="accent" key={k}>{k}</Badge>)}
                     </div>
                   )}
                   <div className="text-[10px] text-muted-foreground">耗时 {emotionResult.elapsed_ms}ms</div>

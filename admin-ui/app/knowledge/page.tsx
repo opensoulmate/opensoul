@@ -367,7 +367,7 @@ export default function KnowledgePage() {
                   {selected.tags?.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {selected.tags.map((t) => (
-                        <span key={t} className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">#{t}</span>
+                        <Badge variant="default" key={t}>#{t}</Badge>
                       ))}
                     </div>
                   )}

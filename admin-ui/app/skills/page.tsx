@@ -141,9 +141,9 @@ function VersionHistoryPanel({ skillName, versions }: { skillName: string; versi
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono font-medium">v{v.version}</span>
               {i === 0 && (
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
+                <Badge variant="success" className="border border-emerald-500/30">
                   最新
-                </span>
+                </Badge>
               )}
               <span className="text-[10px] text-muted-foreground ml-auto">{formatTime(v.date)}</span>
             </div>
@@ -246,17 +246,17 @@ function SkillCard({
             <span className="text-sm font-medium">{skill.name}</span>
             {skill.installed && <CheckCircle className="w-3.5 h-3.5 text-green-500" />}
             {skill.version && (
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary font-mono">
+              <Badge variant="default" className="font-mono">
                 v{skill.version}
-              </span>
+              </Badge>
             )}
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+            <Badge variant="muted">
               {skill.source}
-            </span>
+            </Badge>
             {skill.category && (
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+              <Badge variant="muted">
                 {skill.category}
-              </span>
+              </Badge>
             )}
             {gating && (
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium font-mono ${
@@ -268,9 +268,9 @@ function SkillCard({
               </span>
             )}
             {skillProposals.length > 0 && (
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">
+              <Badge variant="accent">
                 {skillProposals.length} 提案
-              </span>
+              </Badge>
             )}
           </div>
 

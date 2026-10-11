@@ -119,9 +119,9 @@ function AgentCardView({ card }: { card: AgentCard }) {
       >
         <Globe className="w-4 h-4 text-primary" />
         <span className="text-sm font-medium flex-1">Agent Card</span>
-        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">
+        <Badge variant="default">
           v{card.protocolVersion}
-        </span>
+        </Badge>
         {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
       </button>
       {expanded && (
@@ -407,7 +407,7 @@ function RPCLogPanel({ logs }: { logs: RPCLog[] }) {
       <div className="flex items-center gap-2 p-4 border-b border-border">
         <Activity className="w-4 h-4" />
         <span className="text-sm font-medium">RPC 日志</span>
-        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{logs.length} 条</span>
+        <Badge variant="muted">{logs.length} 条</Badge>
       </div>
       <div className="divide-y divide-border max-h-[400px] overflow-auto">
         {logs.slice().reverse().map((log) => (

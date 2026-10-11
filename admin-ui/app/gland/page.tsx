@@ -359,13 +359,13 @@ export default function GlandPage() {
                       }`}>
                         {p.enabled ? '可用' : '不可用'}
                       </span>
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+                      <Badge variant="muted">
                         优先级: {p.priority}
-                      </span>
+                      </Badge>
                       {p.consecutive_failures > 0 && (
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-500">
+                        <Badge variant="destructive">
                           {p.consecutive_failures} 次失败
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5 font-mono truncate">
