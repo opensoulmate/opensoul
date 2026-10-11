@@ -8,7 +8,7 @@ import {
   Loader2, AlertCircle, Eye, EyeOff, Copy, Settings, Wifi, WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 
 interface Connector {
   connector_id: string;
@@ -56,9 +56,9 @@ const CONNECTOR_TYPES = [
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
-  active: { label: '活跃', color: 'text-green-600 bg-green-500/10', icon: CheckCircle },
-  inactive: { label: '停用', color: 'text-gray-500 bg-gray-500/10', icon: XCircle },
-  error: { label: '错误', color: 'text-red-500 bg-red-500/10', icon: AlertCircle },
+  active: { label: '活跃', color: tone('success'), icon: CheckCircle },
+  inactive: { label: '停用', color: tone('muted'), icon: XCircle },
+  error: { label: '错误', color: tone('destructive'), icon: AlertCircle },
 };
 
 export default function LinkPage() {

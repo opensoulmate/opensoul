@@ -48,9 +48,9 @@ interface Stats {
 
 const CATEGORY_COLORS: Record<string, string> = {
   agent: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  knowledge_base: 'bg-emerald-500/10 text-emerald-500 border-green-500/20',
-  workflow: 'bg-violet-500/10 text-violet-500 border-purple-500/20',
-  skill: 'bg-amber-500/10 text-amber-500 border-orange-500/20',
+  knowledge_base: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  workflow: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
+  skill: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {

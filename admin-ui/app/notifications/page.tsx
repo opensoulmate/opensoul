@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronRight, BarChart3, Loader2, Zap, Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 
 interface Notification {
   id: string;
@@ -38,10 +38,10 @@ interface NotifStats {
 }
 
 const LEVEL_CONFIG: Record<string, { icon: any; color: string; bg: string; label: string }> = {
-  info: { icon: Info, color: 'text-blue-500', bg: 'bg-blue-500/10', label: '信息' },
-  warning: { icon: AlertTriangle, color: 'text-orange-500', bg: 'bg-orange-500/10', label: '警告' },
-  error: { icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', label: '错误' },
-  success: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10', label: '成功' },
+  info: { icon: Info, color: TONES.info.text, bg: TONES.info.bg, label: '信息' },
+  warning: { icon: AlertTriangle, color: TONES.warning.text, bg: TONES.warning.bg, label: '警告' },
+  error: { icon: AlertCircle, color: TONES.destructive.text, bg: TONES.destructive.bg, label: '错误' },
+  success: { icon: CheckCircle, color: TONES.success.text, bg: TONES.success.bg, label: '成功' },
 };
 
 export default function NotificationsPage() {

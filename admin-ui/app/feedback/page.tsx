@@ -6,7 +6,7 @@ import {
   Search, RefreshCw, X, FileText, Sparkles, Brain, Zap,
   BarChart3, Tag, Lightbulb, GitBranch, BookOpen
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface FeedbackEntry {
@@ -118,19 +118,19 @@ export default function FeedbackPage() {
 
   const typeColor = (t: string) => {
     switch (t) {
-      case 'knowledge': return 'bg-blue-500/10 text-blue-500';
-      case 'pattern': return 'bg-emerald-500/10 text-emerald-500';
-      case 'decision': return 'bg-violet-500/10 text-violet-500';
-      default: return 'bg-muted text-muted-foreground';
+      case 'knowledge': return tone('info');
+      case 'pattern': return tone('success');
+      case 'decision': return tone('accent');
+      default: return tone('muted');
     }
   };
 
   const confidenceColor = (c: string) => {
     switch (c) {
-      case 'high': return 'text-green-600';
-      case 'medium': return 'text-yellow-500';
-      case 'low': return 'text-red-500';
-      default: return 'text-muted-foreground';
+      case 'high': return TONES.success.text;
+      case 'medium': return TONES.warning.text;
+      case 'low': return TONES.destructive.text;
+      default: return TONES.muted.text;
     }
   };
 

@@ -9,7 +9,7 @@ import {
   TrendingUp, Clock, Tag, ArrowRight, BarChart3, Lightbulb,
   Star, AlertTriangle, Activity, Layers, History, XCircle,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, toneBordered } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
@@ -76,9 +76,9 @@ function formatRelative(ts: string) {
 
 function ConfidenceBadge({ level }: { level: string }) {
   const config: Record<string, { color: string; label: string }> = {
-    high: { color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30', label: '高置信' },
-    medium: { color: 'bg-amber-500/10 text-amber-500 border-amber-500/30', label: '中置信' },
-    low: { color: 'bg-red-500/10 text-red-500 border-red-500/30', label: '低置信' },
+    high: { color: toneBordered('success'), label: '高置信' },
+    medium: { color: toneBordered('warning'), label: '中置信' },
+    low: { color: toneBordered('destructive'), label: '低置信' },
   };
   const c = config[level] || { color: 'bg-muted text-muted-foreground border-border', label: level };
   return (
@@ -90,10 +90,10 @@ function ConfidenceBadge({ level }: { level: string }) {
 
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { color: string; label: string }> = {
-    pending: { color: 'bg-amber-500/10 text-amber-500 border-amber-500/30', label: '待审批' },
-    approved: { color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30', label: '已批准' },
-    rejected: { color: 'bg-red-500/10 text-red-500 border-red-500/30', label: '已拒绝' },
-    applied: { color: 'bg-blue-500/10 text-blue-500 border-blue-500/30', label: '已应用' },
+    pending: { color: toneBordered('warning'), label: '待审批' },
+    approved: { color: toneBordered('success'), label: '已批准' },
+    rejected: { color: toneBordered('destructive'), label: '已拒绝' },
+    applied: { color: toneBordered('info'), label: '已应用' },
   };
   const c = config[status] || { color: 'bg-muted text-muted-foreground border-border', label: status };
   return (

@@ -9,7 +9,7 @@ import {
   Square, Copy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 
 interface RPATask {
   task_id: string;
@@ -57,11 +57,11 @@ interface WindowInfo {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
-  queued: { label: '排队中', color: 'text-gray-500 bg-gray-500/10', icon: Clock },
-  running: { label: '运行中', color: 'text-blue-500 bg-blue-500/10', icon: Loader2 },
-  completed: { label: '已完成', color: 'text-green-600 bg-green-500/10', icon: CheckCircle },
-  failed: { label: '失败', color: 'text-red-500 bg-red-500/10', icon: XCircle },
-  cancelled: { label: '已取消', color: 'text-orange-500 bg-orange-500/10', icon: Pause },
+  queued: { label: '排队中', color: tone('muted'), icon: Clock },
+  running: { label: '运行中', color: tone('info'), icon: Loader2 },
+  completed: { label: '已完成', color: tone('success'), icon: CheckCircle },
+  failed: { label: '失败', color: tone('destructive'), icon: XCircle },
+  cancelled: { label: '已取消', color: tone('warning'), icon: Pause },
 };
 
 export default function LimbPage() {

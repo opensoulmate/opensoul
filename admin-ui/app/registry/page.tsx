@@ -276,7 +276,7 @@ export default function RegistryPage() {
                         <span className="text-[10px] font-medium text-muted-foreground">依赖</span>
                         <div className="flex flex-wrap gap-1 mt-0.5">
                           {comp.dependencies.map((dep) => (
-                            <Badge variant="warning" key={dep} className="bg-orange-500/10 text-orange-600">{dep}</Badge>
+                            <Badge variant="warning" key={dep}>{dep}</Badge>
                           ))}
                         </div>
                       </div>
@@ -286,7 +286,7 @@ export default function RegistryPage() {
                         <span className="text-[10px] font-medium text-muted-foreground">被依赖</span>
                         <div className="flex flex-wrap gap-1 mt-0.5">
                           {comp.dependents.map((dep) => (
-                            <Badge variant="info" key={dep} className="text-blue-600">{dep}</Badge>
+                            <Badge variant="info" key={dep}>{dep}</Badge>
                           ))}
                         </div>
                       </div>

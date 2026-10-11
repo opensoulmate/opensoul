@@ -8,7 +8,7 @@ import {
   Loader2, ChevronDown, ChevronRight, Zap, ArrowRight, Settings,
   GitBranch, Timer, Eye, Activity,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, toneBordered } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
@@ -66,14 +66,14 @@ interface Stats {
 // ── Helpers ─────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
-  paused: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
-  draft: 'bg-muted text-muted-foreground border-border',
-  running: 'bg-blue-500/10 text-blue-500 border-blue-500/30',
-  completed: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
-  failed: 'bg-red-500/10 text-red-500 border-red-500/30',
-  cancelled: 'bg-muted text-muted-foreground border-border',
-  pending: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
+  active: toneBordered('success'),
+  paused: toneBordered('warning'),
+  draft: toneBordered('muted'),
+  running: toneBordered('info'),
+  completed: toneBordered('success'),
+  failed: toneBordered('destructive'),
+  cancelled: toneBordered('muted'),
+  pending: toneBordered('warning'),
 };
 
 const TRIGGER_LABELS: Record<string, string> = {

@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronRight, BarChart3, Activity, Layers,
   Lightbulb, BookOpen, Target, RotateCcw,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
@@ -66,10 +66,10 @@ const STAGE_CONFIG = [
 ] as const;
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string; fill: string }> = {
-  blue: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/30', fill: 'bg-blue-500' },
-  amber: { bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/30', fill: 'bg-amber-500' },
-  purple: { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-violet-500/30', fill: 'bg-purple-500' },
-  green: { bg: 'bg-green-500/10', text: 'text-green-500', border: 'border-emerald-500/30', fill: 'bg-green-500' },
+  blue: TONES.info,
+  amber: TONES.warning,
+  purple: TONES.accent,
+  green: TONES.success,
 };
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -84,10 +84,10 @@ function formatTime(ts: string) {
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color = status === 'completed' || status === 'ok' ? 'bg-green-500' :
-    status === 'running' ? 'bg-primary animate-pulse' :
-    status === 'error' ? 'bg-red-500' :
-    'bg-muted-foreground/30';
+  const color = status === 'completed' || status === 'ok' ? TONES.success.fill :
+    status === 'running' ? `${TONES.primary.fill} animate-pulse` :
+    status === 'error' ? TONES.destructive.fill :
+    TONES.muted.fill;
   return <span className={`inline-block w-2 h-2 rounded-full ${color}`} />;
 }
 

@@ -8,7 +8,7 @@ import {
   Shield, Brain, Database, ArrowRight, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -50,25 +50,25 @@ const STEP_ICONS: Record<string, typeof FileText> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  completed: 'text-green-600',
-  ok: 'text-green-600',
-  running: 'text-primary',
-  blocked: 'text-orange-500',
-  partial: 'text-yellow-500',
-  failed: 'text-red-500',
-  error: 'text-red-500',
-  skipped: 'text-muted-foreground',
+  completed: TONES.success.text,
+  ok: TONES.success.text,
+  running: TONES.primary.text,
+  blocked: TONES.warning.text,
+  partial: TONES.warning.text,
+  failed: TONES.destructive.text,
+  error: TONES.destructive.text,
+  skipped: TONES.muted.text,
 };
 
 const STATUS_BG: Record<string, string> = {
-  completed: 'bg-green-500/10',
-  ok: 'bg-green-500/10',
-  running: 'bg-primary/10',
-  blocked: 'bg-orange-500/10',
-  partial: 'bg-yellow-500/10',
-  failed: 'bg-red-500/10',
-  error: 'bg-red-500/10',
-  skipped: 'bg-muted',
+  completed: TONES.success.bg,
+  ok: TONES.success.bg,
+  running: TONES.primary.bg,
+  blocked: TONES.warning.bg,
+  partial: TONES.warning.bg,
+  failed: TONES.destructive.bg,
+  error: TONES.destructive.bg,
+  skipped: TONES.muted.bg,
 };
 
 const PIPELINE_TYPES = [

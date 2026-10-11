@@ -46,8 +46,8 @@ function EngineCard({ name, icon: Icon, engine, color }: {
 }) {
   const colorMap: Record<string, { bg: string; text: string; border: string }> = {
     blue: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/30' },
-    green: { bg: 'bg-green-500/10', text: 'text-green-500', border: 'border-emerald-500/30' },
-    purple: { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-violet-500/30' },
+    green: { bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/30' },
+    purple: { bg: 'bg-violet-500/10', text: 'text-violet-500', border: 'border-violet-500/30' },
   };
   const c = colorMap[color] || colorMap.blue;
 

@@ -8,7 +8,7 @@ import {
   Trash2, StopCircle, FileText, AlertTriangle, Lock, Eye,
   TrendingUp, Cpu, Hash,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, toneBordered } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
@@ -91,10 +91,10 @@ function formatTokens(n: number) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  running: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
-  completed: 'bg-blue-500/10 text-blue-500 border-blue-500/30',
-  failed: 'bg-red-500/10 text-red-500 border-red-500/30',
-  forked: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
+  running: toneBordered('success'),
+  completed: toneBordered('info'),
+  failed: toneBordered('destructive'),
+  forked: toneBordered('warning'),
 };
 
 const EVENT_TYPE_LABELS: Record<string, string> = {

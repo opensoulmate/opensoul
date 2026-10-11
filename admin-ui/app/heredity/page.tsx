@@ -8,7 +8,7 @@ import {
   Package, Layers, FileText, Activity, Loader2, Tag, ArrowUpRight,
   Diff, Code, BookOpen,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
@@ -87,20 +87,20 @@ function formatTime(ts: string) {
 }
 
 const STATUS_CONFIG: Record<string, { icon: any; color: string; label: string }> = {
-  active: { icon: CheckCircle, color: 'text-green-500', label: '活跃' },
-  stable: { icon: CheckCircle, color: 'text-green-500', label: '稳定' },
-  deprecated: { icon: AlertTriangle, color: 'text-amber-500', label: '废弃' },
-  beta: { icon: Clock, color: 'text-blue-500', label: '测试' },
-  alpha: { icon: AlertTriangle, color: 'text-orange-500', label: '内测' },
-  pending: { icon: Clock, color: 'text-gray-500', label: '待定' },
-  completed: { icon: CheckCircle, color: 'text-green-500', label: '完成' },
-  executing: { icon: Loader2, color: 'text-blue-500', label: '执行中' },
-  failed: { icon: XCircle, color: 'text-red-500', label: '失败' },
-  rolled_back: { icon: RotateCcw, color: 'text-amber-500', label: '已回滚' },
+  active: { icon: CheckCircle, color: TONES.success.text, label: '活跃' },
+  stable: { icon: CheckCircle, color: TONES.success.text, label: '稳定' },
+  deprecated: { icon: AlertTriangle, color: TONES.warning.text, label: '废弃' },
+  beta: { icon: Clock, color: TONES.info.text, label: '测试' },
+  alpha: { icon: AlertTriangle, color: TONES.warning.text, label: '内测' },
+  pending: { icon: Clock, color: TONES.muted.text, label: '待定' },
+  completed: { icon: CheckCircle, color: TONES.success.text, label: '完成' },
+  executing: { icon: Loader2, color: TONES.info.text, label: '执行中' },
+  failed: { icon: XCircle, color: TONES.destructive.text, label: '失败' },
+  rolled_back: { icon: RotateCcw, color: TONES.warning.text, label: '已回滚' },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || { icon: Clock, color: 'text-muted-foreground', label: status };
+  const cfg = STATUS_CONFIG[status] || { icon: Clock, color: TONES.muted.text, label: status };
   const Icon = cfg.icon;
   return (
     <Badge variant="bare" className={`gap-1 border border-current/20 ${cfg.color}`}>

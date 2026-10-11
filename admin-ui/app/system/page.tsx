@@ -8,7 +8,7 @@ import {
   AlertTriangle, Loader2, Play, Zap, ChevronDown, ChevronRight,
   BarChart3, Terminal, Globe, Info
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
@@ -68,12 +68,12 @@ function formatUptime(seconds: number) {
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
-    ok: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10', label: '正常' },
-    healthy: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10', label: '正常' },
-    error: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10', label: '异常' },
-    timeout: { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-500/10', label: '超时' },
-    degraded: { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-500/10', label: '降级' },
-    uninitialized: { icon: AlertTriangle, color: 'text-gray-500', bg: 'bg-gray-500/10', label: '未初始化' },
+    ok: { icon: CheckCircle, color: TONES.success.text, bg: TONES.success.bg, label: '正常' },
+    healthy: { icon: CheckCircle, color: TONES.success.text, bg: TONES.success.bg, label: '正常' },
+    error: { icon: XCircle, color: TONES.destructive.text, bg: TONES.destructive.bg, label: '异常' },
+    timeout: { icon: AlertTriangle, color: TONES.warning.text, bg: TONES.warning.bg, label: '超时' },
+    degraded: { icon: AlertTriangle, color: TONES.warning.text, bg: TONES.warning.bg, label: '降级' },
+    uninitialized: { icon: AlertTriangle, color: TONES.muted.text, bg: TONES.muted.bg, label: '未初始化' },
   };
   const c = cfg[status] || { icon: Info, color: 'text-muted-foreground', bg: 'bg-muted', label: status || '未知' };
   const Icon = c.icon;

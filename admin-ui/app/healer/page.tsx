@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronRight, Stethoscope
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 
 interface DiagnosisResult {
   organ: string;
@@ -41,11 +41,11 @@ interface CycleResult {
 }
 
 const SEVERITY_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-  healthy: { color: 'text-green-600', bg: 'bg-green-500/10', label: '健康' },
-  recovered: { color: 'text-blue-600', bg: 'bg-blue-500/10', label: '已恢复' },
-  degraded: { color: 'text-orange-600', bg: 'bg-orange-500/10', label: '降级' },
-  critical: { color: 'text-red-600', bg: 'bg-red-500/10', label: '严重' },
-  unknown: { color: 'text-gray-600', bg: 'bg-gray-500/10', label: '未知' },
+  healthy: { color: TONES.success.text, bg: TONES.success.bg, label: '健康' },
+  recovered: { color: TONES.info.text, bg: TONES.info.bg, label: '已恢复' },
+  degraded: { color: TONES.warning.text, bg: TONES.warning.bg, label: '降级' },
+  critical: { color: TONES.destructive.text, bg: TONES.destructive.bg, label: '严重' },
+  unknown: { color: TONES.muted.text, bg: TONES.muted.bg, label: '未知' },
 };
 
 export default function HealerPage() {

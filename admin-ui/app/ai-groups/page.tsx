@@ -8,7 +8,7 @@ import {
   UserPlus, Settings, ListChecks, ArrowLeft, Send, Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -70,15 +70,15 @@ const ROLES = [
 ];
 
 const TASK_STATUSES: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  planning: { label: '规划中', color: 'bg-blue-500/10 text-blue-600', icon: Clock },
-  pending: { label: '待处理', color: 'bg-muted text-muted-foreground', icon: Clock },
-  discussing: { label: '讨论中', color: 'bg-yellow-500/10 text-yellow-600', icon: MessageSquare },
-  assigned: { label: '已分配', color: 'bg-indigo-500/10 text-indigo-600', icon: CheckCircle },
-  executing: { label: '执行中', color: 'bg-primary/10 text-primary', icon: Play },
-  reviewing: { label: '评审中', color: 'bg-orange-500/10 text-orange-600', icon: Eye },
-  scored: { label: '已评分', color: 'bg-teal-500/10 text-teal-600', icon: Star },
-  completed: { label: '已完成', color: 'bg-emerald-500/10 text-emerald-500', icon: CheckCircle },
-  failed: { label: '失败', color: 'bg-red-500/10 text-red-500', icon: AlertCircle },
+  planning: { label: '规划中', color: tone('info'), icon: Clock },
+  pending: { label: '待处理', color: tone('muted'), icon: Clock },
+  discussing: { label: '讨论中', color: tone('warning'), icon: MessageSquare },
+  assigned: { label: '已分配', color: tone('accent'), icon: CheckCircle },
+  executing: { label: '执行中', color: tone('primary'), icon: Play },
+  reviewing: { label: '评审中', color: tone('warning'), icon: Eye },
+  scored: { label: '已评分', color: tone('info'), icon: Star },
+  completed: { label: '已完成', color: tone('success'), icon: CheckCircle },
+  failed: { label: '失败', color: tone('destructive'), icon: AlertCircle },
 };
 
 function getRoleLabel(role: string) {
@@ -88,7 +88,7 @@ function getRoleColor(role: string) {
   return ROLES.find((r) => r.value === role)?.color || 'bg-muted text-muted-foreground';
 }
 function getStatusInfo(status: string) {
-  return TASK_STATUSES[status] || { label: status, color: 'bg-muted text-muted-foreground', icon: Clock };
+  return TASK_STATUSES[status] || { label: status, color: tone('muted'), icon: Clock };
 }
 
 // ── Main Page ─────────────────────────────────────────────────

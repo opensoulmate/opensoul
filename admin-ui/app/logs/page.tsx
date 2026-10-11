@@ -9,7 +9,7 @@ import {
   Zap, Eye, BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 
 interface LogEntry {
   id: string;
@@ -175,17 +175,17 @@ export default function LogsPage() {
   };
 
   const getTypeColor = (type: string) => {
-    if (['error', 'alert', 'ip_blacklisted', 'content_blocked'].includes(type)) return 'text-red-500';
-    if (['warning', 'rate_limited'].includes(type)) return 'text-orange-500';
-    if (['backup_created', 'file_uploaded', 'component_registered'].includes(type)) return 'text-green-500';
-    return 'text-blue-500';
+    if (['error', 'alert', 'ip_blacklisted', 'content_blocked'].includes(type)) return TONES.destructive.text;
+    if (['warning', 'rate_limited'].includes(type)) return TONES.warning.text;
+    if (['backup_created', 'file_uploaded', 'component_registered'].includes(type)) return TONES.success.text;
+    return TONES.info.text;
   };
 
   const getTypeBg = (type: string) => {
-    if (['error', 'alert', 'ip_blacklisted', 'content_blocked'].includes(type)) return 'bg-red-500/10';
-    if (['warning', 'rate_limited'].includes(type)) return 'bg-orange-500/10';
-    if (['backup_created', 'file_uploaded', 'component_registered'].includes(type)) return 'bg-green-500/10';
-    return 'bg-blue-500/10';
+    if (['error', 'alert', 'ip_blacklisted', 'content_blocked'].includes(type)) return TONES.destructive.bg;
+    if (['warning', 'rate_limited'].includes(type)) return TONES.warning.bg;
+    if (['backup_created', 'file_uploaded', 'component_registered'].includes(type)) return TONES.success.bg;
+    return TONES.info.bg;
   };
 
   const handleExport = () => {

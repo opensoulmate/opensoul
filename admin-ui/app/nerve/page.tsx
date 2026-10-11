@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Tab, TabBar } from '@/components/ui/tab';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, toneBordered } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -73,11 +73,11 @@ function formatRelative(ts: string) {
 }
 
 function topicColor(topic: string) {
-  if (topic.startsWith('soma.')) return 'bg-blue-500/10 text-blue-500 border-blue-500/30';
-  if (topic.startsWith('organ.')) return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30';
-  if (topic.startsWith('system.')) return 'bg-violet-500/10 text-violet-500 border-violet-500/30';
-  if (topic.startsWith('nerve.')) return 'bg-amber-500/10 text-amber-500 border-amber-500/30';
-  return 'bg-muted text-muted-foreground border-border';
+  if (topic.startsWith('soma.')) return toneBordered('info');
+  if (topic.startsWith('organ.')) return toneBordered('success');
+  if (topic.startsWith('system.')) return toneBordered('accent');
+  if (topic.startsWith('nerve.')) return toneBordered('warning');
+  return toneBordered('muted');
 }
 
 // ── Main Page ───────────────────────────────────────────────

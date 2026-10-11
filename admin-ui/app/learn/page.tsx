@@ -8,7 +8,7 @@ import {
   FileText, HelpCircle, Award, Clock, Edit3, Sparkles, BarChart3,
   CheckSquare, Square, ArrowLeft
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface QuizQuestion {
@@ -287,10 +287,10 @@ export default function LearnPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-emerald-500/10 text-emerald-500';
-      case 'in_progress': return 'bg-blue-500/10 text-blue-500';
-      case 'archived': return 'bg-muted text-muted-foreground';
-      default: return 'bg-amber-500/10 text-amber-500';
+      case 'completed': return tone('success');
+      case 'in_progress': return tone('info');
+      case 'archived': return tone('muted');
+      default: return tone('warning');
     }
   };
 

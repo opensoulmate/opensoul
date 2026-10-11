@@ -7,7 +7,7 @@ import {
   Eye, Ban, CheckCircle, Clock, Lock, Unlock, BarChart3, FileText,
   Zap, Globe, ShieldAlert, ShieldOff
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface Threat {
@@ -205,11 +205,11 @@ export default function ImmunePage() {
 
   const riskColor = (level: string) => {
     switch (level) {
-      case 'critical': return 'text-red-600 bg-red-500/10';
-      case 'high': return 'text-red-500 bg-red-500/10';
-      case 'medium': return 'text-orange-500 bg-orange-500/10';
-      case 'low': return 'text-yellow-500 bg-yellow-500/10';
-      default: return 'text-muted-foreground bg-muted';
+      case 'critical': return tone('destructive');
+      case 'high': return tone('destructive');
+      case 'medium': return tone('warning');
+      case 'low': return tone('warning');
+      default: return tone('muted');
     }
   };
 

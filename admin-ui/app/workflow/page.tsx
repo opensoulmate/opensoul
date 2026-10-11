@@ -6,7 +6,7 @@ import {
   Search, Workflow, Plus, Trash2, Play, Pause, RefreshCw, X,
   Loader2, AlertCircle, CheckCircle, Clock, RotateCcw, Settings, PauseCircle
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface WorkflowTask {
@@ -31,12 +31,12 @@ interface WorkflowStats {
 }
 
 const STATUS_CONFIG: Record<string, { icon: any; color: string; bg: string; label: string }> = {
-  idle: { icon: Clock, color: 'text-gray-500', bg: 'bg-gray-500/10', label: '空闲' },
-  running: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-500/10', label: '运行中' },
-  active: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10', label: '活跃' },
-  paused: { icon: PauseCircle, color: 'text-orange-500', bg: 'bg-orange-500/10', label: '已暂停' },
-  error: { icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', label: '错误' },
-  completed: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-600/10', label: '已完成' },
+  idle: { icon: Clock, color: TONES.muted.text, bg: TONES.muted.bg, label: '空闲' },
+  running: { icon: Loader2, color: TONES.info.text, bg: TONES.info.bg, label: '运行中' },
+  active: { icon: CheckCircle, color: TONES.success.text, bg: TONES.success.bg, label: '活跃' },
+  paused: { icon: PauseCircle, color: TONES.warning.text, bg: TONES.warning.bg, label: '已暂停' },
+  error: { icon: AlertCircle, color: TONES.destructive.text, bg: TONES.destructive.bg, label: '错误' },
+  completed: { icon: CheckCircle, color: TONES.success.text, bg: TONES.success.bg, label: '已完成' },
 };
 
 const TASK_TYPES = [

@@ -440,7 +440,7 @@ export default function BrainPage() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium truncate">{entry.title}</span>
                         {entry.pinned && <Badge variant="default">置顶</Badge>}
-                        {entry.starred && <Badge variant="warning" className="text-amber-400">收藏</Badge>}
+                        {entry.starred && <Badge variant="warning">收藏</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2">{entry.content.slice(0, 120)}</p>
                       <div className="flex items-center gap-2 mt-1.5">

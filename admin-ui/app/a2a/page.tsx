@@ -8,7 +8,7 @@ import {
   Copy, Play, Ban, Eye, Server, Code, AlertCircle, Network,
   ArrowRight, RotateCcw, FileText, Search, Activity,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
@@ -87,16 +87,16 @@ function shortId(id: string) {
 }
 
 const STATE_CONFIG: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
-  submitted: { label: '已提交', color: 'text-blue-500 bg-blue-500/10', icon: Clock },
-  working: { label: '处理中', color: 'text-amber-500 bg-amber-500/10', icon: Loader2 },
-  'input-required': { label: '需要输入', color: 'text-purple-500 bg-purple-500/10', icon: MessageSquare },
-  completed: { label: '已完成', color: 'text-green-500 bg-green-500/10', icon: CheckCircle },
-  failed: { label: '失败', color: 'text-red-500 bg-red-500/10', icon: XCircle },
-  canceled: { label: '已取消', color: 'text-muted-foreground bg-muted', icon: Ban },
+  submitted: { label: '已提交', color: tone('info'), icon: Clock },
+  working: { label: '处理中', color: tone('warning'), icon: Loader2 },
+  'input-required': { label: '需要输入', color: tone('accent'), icon: MessageSquare },
+  completed: { label: '已完成', color: tone('success'), icon: CheckCircle },
+  failed: { label: '失败', color: tone('destructive'), icon: XCircle },
+  canceled: { label: '已取消', color: tone('muted'), icon: Ban },
 };
 
 function StateBadge({ state }: { state: string }) {
-  const cfg = STATE_CONFIG[state] || { label: state, color: 'text-muted-foreground bg-muted', icon: Clock };
+  const cfg = STATE_CONFIG[state] || { label: state, color: tone('muted'), icon: Clock };
   const Icon = cfg.icon;
   return (
     <Badge className={`gap-1 ${cfg.color}`}>

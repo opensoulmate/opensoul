@@ -8,7 +8,7 @@ import {
   Activity, Layers, Target, Edit3, Save, Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -77,9 +77,9 @@ function formatRelative(ts: string) {
 }
 
 function importanceColor(val: number) {
-  if (val >= 0.8) return 'text-red-500 bg-red-500/10';
-  if (val >= 0.5) return 'text-amber-500 bg-amber-500/10';
-  return 'text-green-500 bg-green-500/10';
+  if (val >= 0.8) return tone('destructive');
+  if (val >= 0.5) return tone('warning');
+  return tone('success');
 }
 
 function importanceLabel(val: number) {

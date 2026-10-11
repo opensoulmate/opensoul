@@ -8,7 +8,7 @@ import {
   AlertTriangle, TrendingUp, Database, Brain, GitBranch, Lightbulb,
   MessageSquare, Shield, Timer, BarChart3, Layers, Gauge, Workflow,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES, tone, type ToneName } from '@/components/ui/badge';
 import { Button } from '../components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────────
@@ -69,24 +69,22 @@ function formatBytes(mb: number): string {
   return mb + ' MB';
 }
 
-function statusColor(status: string) {
+function statusTone(status: string): ToneName {
   switch (status) {
-    case 'ok': return 'text-emerald-400';
-    case 'degraded': return 'text-amber-400';
-    case 'critical': return 'text-red-400';
-    case 'error': return 'text-red-400';
-    default: return 'text-muted-foreground';
+    case 'ok': return 'success';
+    case 'degraded': return 'warning';
+    case 'critical': return 'destructive';
+    case 'error': return 'destructive';
+    default: return 'muted';
   }
 }
 
+function statusColor(status: string) {
+  return TONES[statusTone(status)].text;
+}
+
 function statusBg(status: string) {
-  switch (status) {
-    case 'ok': return 'bg-emerald-500';
-    case 'degraded': return 'bg-amber-500';
-    case 'critical': return 'bg-red-500';
-    case 'error': return 'bg-red-500';
-    default: return 'bg-gray-500';
-  }
+  return TONES[statusTone(status)].fill;
 }
 
 function statusLabel(status: string) {
@@ -215,7 +213,7 @@ function OrganHealthGrid({ organs }: { organs: OrganHealth }) {
         <div className="flex items-center gap-2">
           <Server className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-medium">器官状态</h3>
-          <Badge className={`${statusColor(organs.status)}`}>
+          <Badge variant="bare" className={tone(statusTone(organs.status))}>
             {statusLabel(organs.status)}
           </Badge>
         </div>

@@ -8,7 +8,7 @@ import {
   AlertCircle, CheckCircle, Clock, Database, Globe, Lock,
   BarChart3, FileText, Settings, Eye,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ──────────────────────────────────────────────────
@@ -83,9 +83,9 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-emerald-500/10 text-emerald-500',
-  suspended: 'bg-amber-500/10 text-amber-500',
-  deleted: 'bg-red-500/10 text-red-500',
+  active: tone('success'),
+  suspended: tone('warning'),
+  deleted: tone('destructive'),
 };
 
 // ── Main Component ─────────────────────────────────────────

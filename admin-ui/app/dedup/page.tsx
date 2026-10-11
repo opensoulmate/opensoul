@@ -8,7 +8,7 @@ import {
   Zap, Shield, BarChart3, Filter, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -65,9 +65,9 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
   const simPct = Math.round(pair.similarity * 100);
   const severity = simPct >= 90 ? 'high' : simPct >= 70 ? 'medium' : 'low';
   const severityConfig = {
-    high: { color: 'border-red-500/30 bg-red-500/5', badge: 'bg-red-500/10 text-red-500', label: '高度重复' },
-    medium: { color: 'border-amber-500/30 bg-amber-500/5', badge: 'bg-amber-500/10 text-amber-500', label: '中度重复' },
-    low: { color: 'border-emerald-500/30 bg-green-500/5', badge: 'bg-emerald-500/10 text-emerald-500', label: '低度重复' },
+    high: { color: 'border-red-500/30 bg-red-500/5', badge: tone('destructive'), label: '高度重复' },
+    medium: { color: 'border-amber-500/30 bg-amber-500/5', badge: tone('warning'), label: '中度重复' },
+    low: { color: 'border-emerald-500/30 bg-emerald-500/5', badge: tone('success'), label: '低度重复' },
   };
   const sev = severityConfig[severity];
 

@@ -6,7 +6,7 @@ import {
   Search, Plus, Trash2, RefreshCw, X, Timer, Play, Pause, RotateCcw,
   Clock, BarChart3, Zap, Activity, CheckCircle, AlertCircle
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface PulseSignal {
@@ -151,11 +151,11 @@ export default function PulsePage() {
 
   const statusColor = (s: string) => {
     switch (s) {
-      case 'active': return 'text-green-600 bg-green-500/10';
-      case 'paused': return 'text-yellow-500 bg-yellow-500/10';
-      case 'completed': return 'text-blue-500 bg-blue-500/10';
-      case 'cancelled': return 'text-muted-foreground bg-muted';
-      default: return 'text-muted-foreground bg-muted';
+      case 'active': return tone('success');
+      case 'paused': return tone('warning');
+      case 'completed': return tone('info');
+      case 'cancelled': return tone('muted');
+      default: return tone('muted');
     }
   };
 

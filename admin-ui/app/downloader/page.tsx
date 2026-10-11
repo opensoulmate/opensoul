@@ -7,7 +7,7 @@ import {
   HardDrive, Settings, Loader2, AlertCircle, CheckCircle, Server,
   ArrowDownToLine, FolderOpen, Zap, Clock, Activity, ChevronDown, ChevronRight,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ──────────────────────────────────────────────────────
@@ -59,16 +59,16 @@ interface DownloadConfig {
 type Tab = 'tasks' | 'plugins' | 'cache' | 'config';
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-600',
-  connecting: 'bg-blue-500/10 text-blue-600 animate-pulse',
-  downloading: 'bg-emerald-500/10 text-emerald-500',
-  paused: 'bg-orange-500/10 text-orange-600',
-  done: 'bg-green-500/10 text-green-700',
-  error: 'bg-red-500/10 text-red-500',
-  cancelled: 'bg-gray-500/10 text-gray-500',
-  installed: 'bg-emerald-500/10 text-emerald-500',
-  available: 'bg-blue-500/10 text-blue-600',
-  unavailable: 'bg-gray-500/10 text-gray-500',
+  pending: tone('warning'),
+  connecting: `${tone('info')} animate-pulse`,
+  downloading: tone('success'),
+  paused: tone('warning'),
+  done: tone('success'),
+  error: tone('destructive'),
+  cancelled: tone('muted'),
+  installed: tone('success'),
+  available: tone('info'),
+  unavailable: tone('muted'),
 };
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -524,7 +524,7 @@ export default function DownloaderPage() {
                           <Badge variant="success">续传</Badge>
                         )}
                         {plugin.supports_p2p && (
-                          <Badge variant="accent" className="bg-purple-500/10 text-purple-600">P2P</Badge>
+                          <Badge variant="accent">P2P</Badge>
                         )}
                       </div>
                     </div>

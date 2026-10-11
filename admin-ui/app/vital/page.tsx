@@ -9,7 +9,7 @@ import {
   Eye, EyeOff, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, tone, toneBordered } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -127,9 +127,9 @@ function percentBarColor(pct: number) {
 }
 
 function severityColor(s: string) {
-  if (s === 'critical' || s === 'error') return 'bg-red-500/10 text-red-500 border-red-500/30';
-  if (s === 'warning' || s === 'warn') return 'bg-amber-500/10 text-amber-500 border-amber-500/30';
-  return 'bg-blue-500/10 text-blue-500 border-blue-500/30';
+  if (s === 'critical' || s === 'error') return toneBordered('destructive');
+  if (s === 'warning' || s === 'warn') return toneBordered('warning');
+  return toneBordered('info');
 }
 
 // ── Mini Sparkline (SVG) ────────────────────────────────────
@@ -328,7 +328,7 @@ export default function VitalPage() {
           <Badge variant="muted">OpenVital</Badge>
           {stats && (
             <Badge variant="bare" className={`${
- stats.health.status === 'ok' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-orange-500/10 text-orange-600'
+ stats.health.status === 'ok' ? tone('success') : tone('warning')
  }`}>
               {stats.health.status === 'ok' ? '健康' : '降级'}
             </Badge>

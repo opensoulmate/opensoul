@@ -8,7 +8,7 @@ import {
   AlertCircle, CheckCircle, Loader2, Filter, Camera,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, toneBordered } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -48,11 +48,11 @@ function formatRelative(ts: number) {
 
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { color: string; label: string }> = {
-    captured: { color: 'bg-blue-500/10 text-blue-500 border-blue-500/30', label: '已捕获' },
-    promoted: { color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30', label: '已提升' },
-    duplicate: { color: 'bg-amber-500/10 text-amber-500 border-amber-500/30', label: '重复' },
+    captured: { color: toneBordered('info'), label: '已捕获' },
+    promoted: { color: toneBordered('success'), label: '已提升' },
+    duplicate: { color: toneBordered('warning'), label: '重复' },
   };
-  const c = config[status] || { color: 'bg-muted text-muted-foreground border-border', label: status };
+  const c = config[status] || { color: toneBordered('muted'), label: status };
   return (
     <Badge variant="bare" className={`border ${c.color}`}>
       {c.label}

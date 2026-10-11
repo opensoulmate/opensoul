@@ -6,7 +6,7 @@ import {
   Search, Plus, Trash2, X, RefreshCw, Pause, Play, Eye, Camera,
   Variable, Clock, Tag, Filter, FlaskConical, Copy, Layers, Activity, Settings
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, toneBordered } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ─────────────────────────────────────────────────────
@@ -308,11 +308,11 @@ export default function MirrorPage() {
 
   const statusColor = (s: string) => {
     switch (s) {
-      case 'active': return 'text-green-400 bg-green-400/10 border-green-400/20';
-      case 'paused': return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20';
-      case 'destroyed': return 'text-red-400 bg-red-400/10 border-red-400/20';
-      case 'expired': return 'text-orange-400 bg-orange-400/10 border-orange-400/20';
-      default: return 'text-muted-foreground bg-muted/50 border-border';
+      case 'active': return toneBordered('success');
+      case 'paused': return toneBordered('warning');
+      case 'destroyed': return toneBordered('destructive');
+      case 'expired': return toneBordered('warning');
+      default: return toneBordered('muted');
     }
   };
 

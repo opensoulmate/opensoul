@@ -7,7 +7,7 @@ import {
   Lightbulb, AlertTriangle, Info, Activity, Zap, BarChart3, ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 
 interface SystemSummary {
   health_score: number;
@@ -49,10 +49,10 @@ interface Recommendation {
 }
 
 const SEVERITY_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
-  critical: { icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-600/10' },
-  high: { icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-500/10' },
-  medium: { icon: AlertTriangle, color: 'text-orange-500', bg: 'bg-orange-500/10' },
-  low: { icon: Info, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  critical: { icon: AlertCircle, color: TONES.destructive.text, bg: TONES.destructive.bg },
+  high: { icon: AlertTriangle, color: TONES.destructive.text, bg: TONES.destructive.bg },
+  medium: { icon: AlertTriangle, color: TONES.warning.text, bg: TONES.warning.bg },
+  low: { icon: Info, color: TONES.info.text, bg: TONES.info.bg },
 };
 
 const TYPE_LABELS: Record<string, string> = {

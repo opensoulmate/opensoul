@@ -7,7 +7,7 @@ import {
   Zap, CheckCircle, AlertCircle, Loader2, DollarSign, Gauge, Wifi,
   WifiOff, Settings, ArrowRight, Shield, BarChart3, Clock,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
@@ -71,7 +71,7 @@ function formatTime(ts: string) {
 }
 
 function StatusDot({ enabled }: { enabled: boolean }) {
-  return <span className={`inline-block w-2 h-2 rounded-full ${enabled ? 'bg-green-500' : 'bg-red-500'}`} />;
+  return <span className={`inline-block w-2 h-2 rounded-full ${enabled ? TONES.success.fill : TONES.destructive.fill}`} />;
 }
 
 // ── Main Page ───────────────────────────────────────────────

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Tab, TabBar } from '@/components/ui/tab';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -63,9 +63,9 @@ function formatRelative(ts: string) {
 
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { bg: string; text: string; icon: typeof Clock; label: string }> = {
-    pending: { bg: 'bg-amber-500/10', text: 'text-amber-500', icon: Clock, label: '待审批' },
-    approved: { bg: 'bg-green-500/10', text: 'text-green-600', icon: CheckCircle, label: '已通过' },
-    rejected: { bg: 'bg-red-500/10', text: 'text-red-500', icon: XCircle, label: '已拒绝' },
+    pending: { bg: TONES.warning.bg, text: TONES.warning.text, icon: Clock, label: '待审批' },
+    approved: { bg: TONES.success.bg, text: TONES.success.text, icon: CheckCircle, label: '已通过' },
+    rejected: { bg: TONES.destructive.bg, text: TONES.destructive.text, icon: XCircle, label: '已拒绝' },
   };
   const c = config[status] || config.pending;
   const Icon = c.icon;

@@ -10,7 +10,7 @@ import {
   Copy, Play, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, TONES } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -96,10 +96,10 @@ const CHANNEL_ICONS: Record<string, string> = {
 };
 
 function StatusDot({ status }: { status: string }) {
-  const color = status === 'ok' ? 'bg-green-500' :
-    status === 'error' ? 'bg-red-500' :
-    status === 'unconfigured' ? 'bg-amber-500' :
-    'bg-muted-foreground/30';
+  const color = status === 'ok' ? TONES.success.fill :
+    status === 'error' ? TONES.destructive.fill :
+    status === 'unconfigured' ? TONES.warning.fill :
+    TONES.muted.fill;
   return <span className={`inline-block w-2 h-2 rounded-full ${color}`} />;
 }
 

@@ -51,8 +51,8 @@ type Tab = 'nodes' | 'memory' | 'register';
 const TYPE_COLORS: Record<string, string> = {
   generic: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
   hermes: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  mimo: 'bg-violet-500/10 text-violet-500 border-purple-500/20',
-  codex: 'bg-emerald-500/10 text-emerald-500 border-green-500/20',
+  mimo: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
+  codex: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
   copilot: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   openclaw: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
   soma: 'bg-pink-500/10 text-pink-500 border-pink-500/20',
@@ -544,7 +544,7 @@ export default function AgentNodesPage() {
             <div className="flex items-center gap-2 mb-4">
               <Plus className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-medium">注册新节点</h3>
-              <Badge variant="warning" className="text-amber-600">需要管理员权限</Badge>
+              <Badge variant="warning">需要管理员权限</Badge>
             </div>
             <div className="space-y-3">
               <div>
