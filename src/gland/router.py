@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -98,6 +99,104 @@ def _chat_payload(
 
 
 _REDACTOR_INIT = False
+
+
+class StreamingProtocolError(Exception):
+    """上游流式响应形态不可消费（空帧流/坏帧/未知 content-type）。
+
+    必须可见：抛出后由 _walk_chain 按节点失败走 provider 链降级，
+    禁静默回空串把协议故障伪装成"模型没说话"。
+    """
+
+
+def _aggregate_sse_frames(lines) -> dict:
+    """把 OpenAI 风格 chat-completion SSE 帧流聚合成单个 completion dict（真流式消费）。
+
+    F4b-① 收口对象：stream=True 时上游回 text/event-stream，旧代码 resp.json()
+    整段解析必抛 JSONDecodeError（wired 但不 functional）。本函数逐帧读
+    delta.content 拼接，id/model/created/usage/finish_reason/role 如实透传上游值
+    ——上游没发的键不硬造（finish_reason 缺失即 None、usage 缺失即无键；role 缺失
+    默认 assistant，回复方角色无歧义）。`[DONE]` 即止，注释/心跳/空行忽略。
+    返回形状与 stream=False 的 resp.json() 同一契约（chat() 返回整段 dict），
+    多 choice 按 index 各自聚合不静默丢弃；逐 token 交付面不在此层。
+    """
+    per_choice: dict[int, dict] = {}
+    frames_seen = 0
+    resp_id = None
+    model = None
+    created = None
+    usage = None
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith(":") or not line.startswith("data:"):
+            continue  # 心跳/注释帧、event/id 等非数据行
+        data = line[len("data:") :].strip()
+        if data == "[DONE]":
+            break
+        try:
+            obj = json.loads(data)
+        except json.JSONDecodeError as exc:
+            raise StreamingProtocolError(
+                f"SSE data frame is not valid JSON: {data[:120]!r}"
+            ) from exc
+        if not isinstance(obj, dict):
+            raise StreamingProtocolError(
+                f"SSE data frame is not a JSON object: {type(obj).__name__}"
+            )
+        frames_seen += 1
+        if isinstance(obj.get("id"), str):
+            resp_id = obj["id"]
+        if isinstance(obj.get("model"), str):
+            model = obj["model"]
+        if isinstance(obj.get("created"), int):
+            created = obj["created"]
+        if isinstance(obj.get("usage"), dict):
+            usage = obj["usage"]
+        choices = obj.get("choices")
+        if not isinstance(choices, list):
+            continue
+        for ch in choices:
+            if not isinstance(ch, dict):
+                continue
+            raw_idx = ch.get("index")
+            idx = raw_idx if isinstance(raw_idx, int) else 0
+            entry = per_choice.setdefault(idx, {"parts": [], "role": None, "finish_reason": None})
+            delta = ch.get("delta")
+            if not isinstance(delta, dict):
+                delta = {}
+            if isinstance(delta.get("role"), str):
+                entry["role"] = delta["role"]
+            piece = delta.get("content")
+            if isinstance(piece, str) and piece:
+                entry["parts"].append(piece)
+            if isinstance(ch.get("finish_reason"), str):
+                entry["finish_reason"] = ch["finish_reason"]
+    if frames_seen == 0:
+        raise StreamingProtocolError("streaming response contained no SSE data frames")
+    result: dict = {
+        "choices": [
+            {
+                "index": idx,
+                "message": {
+                    "role": per_choice[idx]["role"] or "assistant",
+                    "content": "".join(per_choice[idx]["parts"]),
+                },
+                "finish_reason": per_choice[idx]["finish_reason"],
+            }
+            for idx in sorted(per_choice)
+        ]
+    }
+    if resp_id is not None:
+        result["id"] = resp_id
+    if model is not None:
+        result["model"] = model
+    if created is not None:
+        result["created"] = created
+    if usage is not None:
+        result["usage"] = usage
+    return result
+
+
 # Minimum risk level redacted before text leaves the machine toward an LLM
 # provider. "critical" = API keys/tokens/passwords only; set to "low" to also
 # redact PII (phone/id/email/IP). Configurable per-deployment.
@@ -755,13 +854,27 @@ class ModelRouter:
 
         client = self._http_client or httpx.AsyncClient(timeout=180)
         headers = _auth_headers(api_key)
-        resp = await client.post(
-            f"{provider.base_url}/chat/completions",
-            headers=headers,
-            json=_chat_payload(model, messages, temperature, max_tokens, stream, top_p, top_k),
-        )
-        resp.raise_for_status()
-        return resp.json()
+        payload = _chat_payload(model, messages, temperature, max_tokens, stream, top_p, top_k)
+        url = f"{provider.base_url}/chat/completions"
+        if not stream:
+            resp = await client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            return resp.json()
+        # stream=True：按上游真实响应形态真流式消费（F4b-① 收口）。旧代码
+        # resp.json() 整段解析，对回 text/event-stream 的上游必抛 JSONDecodeError
+        # （wired 但不 functional，全仓 stream=True 调用点=0 故为潜在断点）。
+        # SSE 帧流→_aggregate_sse_frames 逐帧聚合；忽略 stream 回 JSON 的上游走
+        # json 解析；其余形态如实抛 StreamingProtocolError（链降级可见）。
+        async with client.stream("POST", url, headers=headers, json=payload) as resp:
+            resp.raise_for_status()
+            ctype = (resp.headers.get("content-type") or "").lower()
+            if "event-stream" in ctype:
+                return _aggregate_sse_frames([line async for line in resp.aiter_lines()])
+            if "json" in ctype:
+                return json.loads(await resp.aread())
+            raise StreamingProtocolError(
+                f"unrecognized content-type for stream=True response: {ctype or '<missing>'!r}"
+            )
 
     async def _call_embedding(
         self,
