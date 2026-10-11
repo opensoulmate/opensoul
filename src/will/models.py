@@ -151,6 +151,8 @@ class StepExecution(BaseModel):
     output_data: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
     duration_ms: float = 0
+    # 节点级错误恢复可观测：实际执行次数（重试成功>1，config.retry=0 恒为 1）
+    attempts: int = 1
 
 
 class WorkflowExecution(BaseModel):

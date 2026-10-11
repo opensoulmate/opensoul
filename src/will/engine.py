@@ -362,12 +362,27 @@ class WorkflowEngine:
             queue: list[str] = [t.id for t in triggers]
             visited: set[str] = set()
             if resume:
+                # 失败补偿回滚语义：被成功补偿（compensate:* 步骤 SUCCESS）的节点效果
+                # 已撤销，续跑必须重放——从"已完成"剔除（补偿失败=效果仍在，不重放防双执行）
+                compensated_nodes = {
+                    s.node_id[len("compensate:") :]
+                    for s in execution.steps
+                    if s.node_id.startswith("compensate:") and s.status == ExecutionStatus.SUCCESS
+                }
                 completed_nodes = {
-                    s.node_id for s in execution.steps if s.status == ExecutionStatus.SUCCESS
+                    s.node_id
+                    for s in execution.steps
+                    if s.status == ExecutionStatus.SUCCESS
+                    and not s.node_id.startswith("compensate:")
+                    and s.node_id not in compensated_nodes
                 }
                 # 丢弃失败/中断的部分步骤——重跑时从头重放（LangGraph节点幂等重放语义）
                 execution.steps = [
-                    s for s in execution.steps if s.status == ExecutionStatus.SUCCESS
+                    s
+                    for s in execution.steps
+                    if s.status == ExecutionStatus.SUCCESS
+                    and not s.node_id.startswith("compensate:")
+                    and s.node_id not in compensated_nodes
                 ]
                 if completed_nodes:
                     frontier: list[str] = []
@@ -410,19 +425,59 @@ class WorkflowEngine:
                 )
                 execution.steps.append(step)
 
-                try:
-                    result = await self._execute_node_async(node, execution.variables, client)
+                # 节点级错误恢复：config.retry 次内重试（默认 0=原语义不变），
+                # 退避 retry_delay 秒（上限 5s）；attempts 全程落 step 可观测
+                max_retries = max(0, min(int(node.config.get("retry", 0) or 0), 5))
+                retry_delay = min(float(node.config.get("retry_delay", 0.5) or 0), 5.0)
+                result: dict[str, Any] = {}
+                node_error: Exception | None = None
+                for attempt in range(max_retries + 1):
+                    step.attempts = attempt + 1
+                    try:
+                        result = await self._execute_node_async(node, execution.variables, client)
+                        # 动作层显式声明失败（success=False：脚本非零退出/HTTP 4xx·5xx）=
+                        # 节点失败，与异常同路径——可重试、耗尽后补偿回滚。禁把声明的失败
+                        # 静默当成功继续跑（失败必须可见，否则"错误恢复/回滚"对最常见的
+                        # 失败形态永不触发=接线了≠跑通了）
+                        if isinstance(result, dict) and result.get("success") is False:
+                            raise ValueError(
+                                "action reported failure: "
+                                + str(result.get("output") or result.get("response") or result)[
+                                    :200
+                                ]
+                            )
+                        node_error = None
+                        break
+                    except Exception as e:
+                        node_error = e
+                        if attempt < max_retries:
+                            logger.warning(
+                                "Workflow node '%s' attempt %d/%d failed: %s — retrying",
+                                node.display_label,
+                                attempt + 1,
+                                max_retries + 1,
+                                e,
+                            )
+                            if retry_delay:
+                                await asyncio.sleep(retry_delay)
+                if node_error is None:
                     step.output_data = result
                     step.status = ExecutionStatus.SUCCESS
                     execution.variables.update(result)
-                except Exception as e:
+                else:
                     step.status = ExecutionStatus.FAILED
-                    step.error = str(e)
+                    step.error = (
+                        str(node_error)
+                        if step.attempts <= 1
+                        else f"{node_error} (after {step.attempts} attempts)"
+                    )
                     execution.status = ExecutionStatus.FAILED
-                    execution.error = f"Node '{node.display_label}' failed: {e}"
+                    execution.error = f"Node '{node.display_label}' failed: {step.error}"
                     execution.completed_at = datetime.now(UTC).isoformat()
-                    logger.error("Workflow node '%s' failed: %s", node.display_label, e)
-                    # 分阶段落盘：失败现场（已完成阶段产物+失败步骤）checkpoint持久化
+                    logger.error("Workflow node '%s' failed: %s", node.display_label, node_error)
+                    # 失败补偿回滚（saga）：已成功节点逆序执行 compensate 动作
+                    await self._compensate(execution, wf, client)
+                    # 分阶段落盘：失败现场（已完成阶段产物+失败步骤+补偿记录）checkpoint持久化
                     self._checkpoints.save(execution)
                     return
 
@@ -505,6 +560,75 @@ class WorkflowEngine:
                 "executed": True,
                 "warning": f"Unknown action type: {action_type}",
             }
+
+    async def _compensate(
+        self,
+        execution: WorkflowExecution,
+        wf: Workflow,
+        client: httpx.AsyncClient,
+    ) -> None:
+        """失败补偿回滚（saga）：已成功节点按逆序执行 config.compensate 动作。
+
+        - 只补偿声明了 compensate（动作 spec，形状同 config：type/url/command/…）的节点；
+          未声明的不硬造回滚——无法自动撤销的副作用留档在原步骤，不假装已撤销
+        - 每条补偿落独立步骤（node_id 前缀 compensate:，随 steps checkpoint 持久化，
+          断点续跑按该前缀识别"已回滚节点需重放"）
+        - 补偿失败只记录不中断其余补偿（best-effort 全跑完，禁静默），汇总追加进
+          execution.error
+        """
+        rolled_back = 0
+        failed = 0
+        for step in reversed(execution.steps):
+            if step.status != ExecutionStatus.SUCCESS:
+                continue
+            if step.node_id.startswith("compensate:"):
+                continue
+            node = wf.get_node(step.node_id)
+            if not node:
+                continue
+            spec = node.config.get("compensate")
+            if not isinstance(spec, dict) or not spec:
+                continue
+            comp_node = WorkflowNode(
+                id=f"compensate:{node.id}",
+                node_type=NodeType.ACTION,
+                label=f"compensate:{node.display_label}",
+                config=dict(spec),
+            )
+            comp_step = StepExecution(
+                node_id=comp_node.id,
+                node_label=comp_node.label,
+                status=ExecutionStatus.RUNNING,
+                started_at=datetime.now(UTC).isoformat(),
+                input_data=dict(execution.variables),
+            )
+            execution.steps.append(comp_step)
+            try:
+                result = await self._execute_node_async(comp_node, execution.variables, client)
+                # 补偿动作显式 success:False（如回滚脚本非零退出）=补偿失败，
+                # 如实记 FAILED 不谎报已回滚
+                if isinstance(result, dict) and result.get("success") is False:
+                    raise ValueError(
+                        "compensation action reported failure: "
+                        + str(result.get("output") or result.get("response") or result)[:200]
+                    )
+                comp_step.output_data = result
+                comp_step.status = ExecutionStatus.SUCCESS
+                rolled_back += 1
+            except Exception as e:
+                comp_step.status = ExecutionStatus.FAILED
+                comp_step.error = str(e)
+                failed += 1
+                logger.error("Compensation for '%s' failed: %s", step.node_label, e)
+            comp_step.completed_at = datetime.now(UTC).isoformat()
+            # 每条补偿同步落盘（关键写入 sync：中途崩溃补偿现场不丢）
+            self._checkpoints.save(execution)
+
+        summary = f"compensation: {rolled_back} rolled back"
+        if failed:
+            summary += f", {failed} failed"
+        if rolled_back or failed:
+            execution.error = f"{execution.error} | {summary}" if execution.error else summary
 
     # ── Real Action Implementations ─────────────────────────────
 
