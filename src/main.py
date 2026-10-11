@@ -22,6 +22,7 @@ from src.api.browser_api import router as browser_router
 from src.api.capture import router as capture_router
 from src.api.chat import router as chat_router
 from src.api.config_api import router as config_api_router
+from src.api.context_api import router as context_router
 from src.api.cortex import router as cortex_router
 from src.api.cortex_enhanced import router as cortex_enhanced_router
 from src.api.dedup import router as dedup_router
@@ -596,6 +597,7 @@ _ORGAN_HEALTH_ROUTES = [
     ("sessions", "/api/sessions/health"),
     ("terminal", "/api/terminal/health"),
     ("browser", "/api/browser/health"),
+    ("context", "/api/context/health"),
     ("system-overview", "/api/system/health"),
 ]
 
@@ -710,6 +712,7 @@ app.include_router(workspace_router, prefix="/api", tags=["workspace"])
 app.include_router(git_router, prefix="/api/git", tags=["git"])
 app.include_router(capture_router, prefix="/api/capture", tags=["capture"])
 app.include_router(browser_router, prefix="/api/browser", tags=["browser"])
+app.include_router(context_router, prefix="/api/context", tags=["context"])
 app.include_router(pipeline_router, prefix="/api/pipeline", tags=["pipeline"])
 app.include_router(topology_router, prefix="/api/topology", tags=["topology"])
 app.include_router(workflow_router, prefix="/api/workflow", tags=["workflow"])
