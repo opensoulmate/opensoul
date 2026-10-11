@@ -118,12 +118,18 @@ def test_default_watchers_registered():
 
     eng = ProactiveEngine(db_path="")
     names = register_default_watchers(eng)
-    assert set(names) == {"memory_decay", "experience_collect", "heredity_triggers"}
+    assert set(names) == {
+        "memory_decay",
+        "experience_collect",
+        "heredity_triggers",
+        "pattern_extract",
+    }
     intervals = {
         w["name"]: w["interval_seconds"] for w in asyncio.run(eng.get_status())["watchers"]
     }
     assert (
         intervals["memory_decay"]
+        > intervals["pattern_extract"]
         > intervals["experience_collect"]
         > intervals["heredity_triggers"]
         > 0
