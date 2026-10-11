@@ -38,6 +38,9 @@ class ResourceType(StrEnum):
         "ai_group"  # F3b-③b-3（2026-10-12）：AI 群组组面（ai_groups 表）+ 成员/能力/评分行归属
     )
     CHECKPOINT = "checkpoint"  # F3b-③c-1（2026-10-12）：will 执行 checkpoint（will_checkpoints 表）
+    TIMELINE_EVENT = (
+        "timeline_event"  # F3b-③c-2①（2026-10-12）：时间线事件面（timeline.db events 表）
+    )
 
 
 @dataclass
@@ -116,6 +119,9 @@ class IsolationEngine:
         ),
         ResourceType.CHECKPOINT: IsolationPolicy(
             ResourceType.CHECKPOINT, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.TIMELINE_EVENT: IsolationPolicy(
+            ResourceType.TIMELINE_EVENT, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 
