@@ -7,6 +7,7 @@ import {
   Tag, AlertCircle, CheckCircle, Loader2, ArrowRight, BarChart3,
   Activity, Layers, Target, Edit3, Save, Shield,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -308,15 +309,15 @@ export default function ReflexPage() {
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
-        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchAll} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
         <button onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/20">
           <Clock className="w-3.5 h-3.5" />清理过期
         </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />添加缓存
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -383,10 +384,10 @@ export default function ReflexPage() {
                       </div>
                     </div>
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditingId(null)} className="px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted">取消</button>
-                      <button onClick={saveEdit} className="flex items-center gap-2 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                      <Button onClick={() => setEditingId(null)} variant="secondary" className="px-2 py-1 text-[10px]">取消</Button>
+                      <Button onClick={saveEdit} variant="primary" className="py-1 text-[10px]">
                         <Save className="w-3 h-3" />保存
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -449,14 +450,11 @@ export default function ReflexPage() {
                 onChange={(e) => setLookupQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
               />
-              <button
-                onClick={handleLookup}
-                disabled={!lookupQuery.trim() || looking}
-                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-              >
+              <Button onClick={handleLookup}
+                disabled={!lookupQuery.trim() || looking} variant="primary">
                 {looking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
                 查询
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -511,15 +509,15 @@ export default function ReflexPage() {
                 缓存配置
               </div>
               {!editingConfig ? (
-                <button onClick={() => setEditingConfig(true)} className="flex items-center gap-1 px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted transition-colors">
+                <Button onClick={() => setEditingConfig(true)} variant="secondary" className="gap-1 px-2 py-1 text-[10px]">
                   <Edit3 className="w-3 h-3" />编辑
-                </button>
+                </Button>
               ) : (
                 <div className="flex gap-1">
-                  <button onClick={() => setEditingConfig(false)} className="px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted">取消</button>
-                  <button onClick={saveConfig} className="flex items-center gap-2 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                  <Button onClick={() => setEditingConfig(false)} variant="secondary" className="px-2 py-1 text-[10px]">取消</Button>
+                  <Button onClick={saveConfig} variant="primary" className="py-1 text-[10px]">
                     <Save className="w-3 h-3" />保存
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -605,15 +603,12 @@ export default function ReflexPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button
-                  onClick={handleCreate}
-                  disabled={!newEntry.query.trim() || !newEntry.response.trim() || creating}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowCreate(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreate}
+                  disabled={!newEntry.query.trim() || !newEntry.response.trim() || creating} variant="primary">
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   添加
-                </button>
+                </Button>
               </div>
             </div>
           </div>

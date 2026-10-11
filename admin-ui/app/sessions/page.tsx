@@ -6,6 +6,7 @@ import {
   Search, MessageSquare, Trash2, Edit3, Tag, X, ChevronLeft,
   ChevronRight, RefreshCw, Clock, Hash, User, Bot, Send
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Session {
   id: string;
@@ -198,12 +199,12 @@ export default function SessionsPage() {
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
         </div>
-        <button onClick={handleSearch} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={handleSearch} variant="secondary">
           <Search className="w-3.5 h-3.5" />搜索
-        </button>
-        <button onClick={() => { setSearch(''); fetchSessions(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={() => { setSearch(''); fetchSessions(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Sessions table */}
@@ -291,20 +292,14 @@ export default function SessionsPage() {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>共 {total} 条，第 {page + 1}/{totalPages} 页</span>
           <div className="flex items-center gap-1">
-            <button
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="p-1.5 rounded-md border border-border hover:bg-muted disabled:opacity-30"
-            >
+            <Button disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))} variant="secondary" className="p-1.5 rounded-md disabled:opacity-30">
               <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <button
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
-              className="p-1.5 rounded-md border border-border hover:bg-muted disabled:opacity-30"
-            >
+            </Button>
+            <Button disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)} variant="secondary" className="p-1.5 rounded-md disabled:opacity-30">
               <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -380,12 +375,9 @@ export default function SessionsPage() {
 
             {/* Footer actions */}
             <div className="flex items-center gap-2 p-4 border-t border-border shrink-0">
-              <button
-                onClick={() => { setEditingId(selectedSession.id); setEditTitle(selectedSession.title || ''); setShowDetail(false); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-              >
+              <Button onClick={() => { setEditingId(selectedSession.id); setEditTitle(selectedSession.title || ''); setShowDetail(false); }} variant="secondary" className="gap-1">
                 <Edit3 className="w-3 h-3" />重命名
-              </button>
+              </Button>
               <button
                 onClick={() => { handleDelete(selectedSession.id); }}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"

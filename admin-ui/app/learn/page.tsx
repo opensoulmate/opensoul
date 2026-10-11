@@ -8,6 +8,8 @@ import {
   FileText, HelpCircle, Award, Clock, Edit3, Sparkles, BarChart3,
   CheckSquare, Square, ArrowLeft
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface QuizQuestion {
   question: string;
@@ -372,24 +374,18 @@ export default function LearnPage() {
               ))}
               <div className="flex items-center gap-3 pt-2">
                 {!quizSubmitted ? (
-                  <button
-                    onClick={() => setQuizSubmitted(true)}
-                    disabled={Object.keys(quizAnswers).length < quizChapter.quiz.length}
-                    className="flex items-center gap-2 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                  >
+                  <Button onClick={() => setQuizSubmitted(true)}
+                    disabled={Object.keys(quizAnswers).length < quizChapter.quiz.length} variant="primary" className="px-4 py-1.5">
                     <Award className="w-3 h-3" />提交答案
-                  </button>
+                  </Button>
                 ) : (
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-medium">
                       得分: {quizChapter.quiz.filter((q, i) => quizAnswers[i] === q.correctIndex).length}/{quizChapter.quiz.length}
                     </span>
-                    <button
-                      onClick={() => { setQuizAnswers({}); setQuizSubmitted(false); }}
-                      className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                    >
+                    <Button onClick={() => { setQuizAnswers({}); setQuizSubmitted(false); }} variant="secondary">
                       重新答题
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -468,9 +464,9 @@ export default function LearnPage() {
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-medium">章节列表</span>
           <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{chapters.length}</span>
-          <button onClick={() => setShowAddChapter(true)} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 ml-auto font-medium transition-colors">
+          <Button onClick={() => setShowAddChapter(true)} variant="primary" className="ml-auto">
             <Plus className="w-3 h-3" />添加章节
-          </button>
+          </Button>
         </div>
 
         {/* Chapters */}
@@ -549,10 +545,10 @@ export default function LearnPage() {
                   <textarea className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md h-40 resize-none font-mono" value={chapterForm.content} onChange={(e) => setChapterForm(f => ({ ...f, content: e.target.value }))} placeholder="章节内容..." />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <button onClick={() => setShowAddChapter(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                  <button onClick={handleAddChapter} disabled={!chapterForm.title.trim() || addingChapter} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                  <Button onClick={() => setShowAddChapter(false)} variant="secondary">取消</Button>
+                  <Button onClick={handleAddChapter} disabled={!chapterForm.title.trim() || addingChapter} variant="primary">
                     {addingChapter ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}添加
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -581,10 +577,10 @@ export default function LearnPage() {
                   <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md w-24" type="number" value={editChapterForm.order} onChange={(e) => setEditChapterForm(f => ({ ...f, order: e.target.value }))} />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <button onClick={() => setShowEditChapter(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                  <button onClick={handleUpdateChapter} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                  <Button onClick={() => setShowEditChapter(false)} variant="secondary">取消</Button>
+                  <Button onClick={handleUpdateChapter} variant="primary">
                     <Save className="w-3 h-3" />保存
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -639,15 +635,15 @@ export default function LearnPage() {
           <option value="completed">已完成</option>
           <option value="archived">已归档</option>
         </select>
-        <button onClick={() => { fetchCourses(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => { fetchCourses(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
         <button onClick={() => setShowGenerate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-purple-500/20 rounded-lg hover:bg-violet-500/20">
           <Sparkles className="w-3.5 h-3.5" />AI生成
         </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />新建课程
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -712,7 +708,7 @@ export default function LearnPage() {
               </div>
               {course.tags.length > 0 && (
                 <div className="flex items-center gap-1 mt-2">
-                  {course.tags.slice(0, 3).map(t => <span key={t} className="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">{t}</span>)}
+                  {course.tags.slice(0, 3).map(t => <Badge key={t} variant="muted">{t}</Badge>)}
                   {course.tags.length > 3 && <span className="text-[10px] text-muted-foreground">+{course.tags.length - 3}</span>}
                 </div>
               )}
@@ -753,10 +749,10 @@ export default function LearnPage() {
                 <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md" value={createForm.domain} onChange={(e) => setCreateForm(f => ({ ...f, domain: e.target.value }))} placeholder="计算机科学" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleCreate} disabled={!createForm.title.trim() || creating} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowCreate(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreate} disabled={!createForm.title.trim() || creating} variant="primary">
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}创建
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -795,7 +791,7 @@ export default function LearnPage() {
               </div>
               <p className="text-[10px] text-muted-foreground">AI 将自动生成课程大纲、章节内容和测验题目。</p>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowGenerate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
+                <Button onClick={() => setShowGenerate(false)} variant="secondary">取消</Button>
                 <button onClick={handleGenerate} disabled={!generateForm.topic.trim() || generating} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-purple-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50">
                   {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}{generating ? '生成中...' : '开始生成'}
                 </button>

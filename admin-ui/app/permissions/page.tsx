@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Shield, Search, Plus, Trash2, X, Users, Key, FileText, RefreshCw, CheckCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Role {
   name: string;
@@ -221,35 +222,23 @@ export default function PermissionsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
-          onClick={fetchData}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={fetchData} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
         {tab === 'roles' && (
-          <button
-            onClick={() => setShowCreateRole(true)}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-          >
+          <Button onClick={() => setShowCreateRole(true)} variant="primary" className="gap-1.5">
             <Plus className="w-3.5 h-3.5" />新建角色
-          </button>
+          </Button>
         )}
         {tab === 'policies' && (
-          <button
-            onClick={() => setShowCreatePolicy(true)}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-          >
+          <Button onClick={() => setShowCreatePolicy(true)} variant="primary" className="gap-1.5">
             <Plus className="w-3.5 h-3.5" />添加策略
-          </button>
+          </Button>
         )}
         {tab === 'assignments' && (
-          <button
-            onClick={() => setShowAssignRole(true)}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-          >
+          <Button onClick={() => setShowAssignRole(true)} variant="primary" className="gap-1.5">
             <Plus className="w-3.5 h-3.5" />分配角色
-          </button>
+          </Button>
         )}
       </div>
 
@@ -375,8 +364,8 @@ export default function PermissionsPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreateRole(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleCreateRole} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">创建</button>
+                <Button onClick={() => setShowCreateRole(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreateRole} variant="primary">创建</Button>
               </div>
             </div>
           </div>
@@ -424,8 +413,8 @@ export default function PermissionsPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreatePolicy(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleCreatePolicy} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">添加</button>
+                <Button onClick={() => setShowCreatePolicy(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreatePolicy} variant="primary">添加</Button>
               </div>
             </div>
           </div>
@@ -464,8 +453,8 @@ export default function PermissionsPage() {
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAssignRole(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleAssignRole} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">分配</button>
+                <Button onClick={() => setShowAssignRole(false)} variant="secondary">取消</Button>
+                <Button onClick={handleAssignRole} variant="primary">分配</Button>
               </div>
             </div>
           </div>

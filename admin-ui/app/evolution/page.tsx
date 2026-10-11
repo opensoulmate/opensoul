@@ -8,6 +8,8 @@ import {
   ChevronDown, ChevronRight, BarChart3, Activity, Layers,
   Lightbulb, BookOpen, Target, RotateCcw,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -157,12 +159,12 @@ function CycleDiagram({ latestCycle }: { latestCycle?: EvolutionCycle }) {
               <span className="text-[10px] text-muted-foreground text-center">{stage.desc}</span>
               {/* Data count */}
               {stageData && (
-                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${isCompleted ? c.bg + ' ' + c.text : 'bg-muted text-muted-foreground'}`}>
+                <Badge className={`font-mono ${isCompleted ? c.bg + ' ' + c.text : 'bg-muted text-muted-foreground'}`}>
                   {stage.id === 'extraction' && `${stageData.entries ?? 0} 条`}
                   {stage.id === 'discovery' && `${stageData.patterns ?? 0} 个模式`}
                   {stage.id === 'skillUpdate' && `${stageData.proposals ?? 0} 提案`}
                   {stage.id === 'validation' && `分数 ${stageData.score?.toFixed(1) ?? '-'}`}
-                </span>
+                </Badge>
               )}
               {/* Arrow between stages */}
               {i < 3 && (
@@ -597,12 +599,9 @@ export default function EvolutionPage() {
           <option value="running">进行中</option>
           <option value="error">失败</option>
         </select>
-        <button
-          onClick={() => fetchData()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={() => fetchData()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* ── Iteration History ── */}

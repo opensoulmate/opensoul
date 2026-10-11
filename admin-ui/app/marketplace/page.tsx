@@ -7,6 +7,8 @@ import {
   ExternalLink, CheckCircle, XCircle, Filter, Download, Package,
   Zap, ShoppingBag, Globe, ToggleLeft, ToggleRight, AlertCircle
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface Source {
   id: string;
@@ -266,18 +268,12 @@ export default function MarketplacePage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
-          onClick={() => { fetchSources(); fetchStats(); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={() => { fetchSources(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button
-          onClick={() => { resetForm(); setShowCreate(true); }}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-        >
+        </Button>
+        <Button onClick={() => { resetForm(); setShowCreate(true); }} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />添加数据源
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -308,7 +304,7 @@ export default function MarketplacePage() {
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">{src.name}</span>
                 {src.builtin && (
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary">内置</span>
+                  <Badge variant="default">内置</Badge>
                 )}
               </div>
               <p className="text-[10px] text-muted-foreground truncate mt-0.5">{src.description}</p>
@@ -452,19 +448,13 @@ export default function MarketplacePage() {
                 </div>
               )}
               <div className="flex items-center gap-2 pt-2">
-                <button
-                  onClick={handleSave}
-                  disabled={!formName.trim()}
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={handleSave}
+                  disabled={!formName.trim()} variant="primary" className="gap-1.5 px-4 py-1.5">
                   <Save className="w-3.5 h-3.5" />{editSource ? '保存' : '创建'}
-                </button>
-                <button
-                  onClick={() => resetForm()}
-                  className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                >
+                </Button>
+                <Button onClick={() => resetForm()} variant="secondary" className="px-4">
                   取消
-                </button>
+                </Button>
               </div>
             </div>
           </div>

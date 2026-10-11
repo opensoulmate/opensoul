@@ -6,6 +6,7 @@ import {
   Search, Dna, Plus, Trash2, RefreshCw, X, Copy, Download, Upload, Play,
   Tag, FolderOpen, Filter, ChevronDown, ChevronRight, Edit3, Package, BarChart3, Eye, Settings,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Template {
   template_id: string;
@@ -285,18 +286,18 @@ export default function GenePage() {
             <option key={t.tag} value={t.tag}>{t.tag} ({t.count})</option>
           ))}
         </select>
-        <button onClick={() => fetchAll()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => fetchAll()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        </Button>
+        <Button onClick={() => setShowCreateDialog(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />新建
-        </button>
-        <button onClick={() => setShowImportDialog(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={() => setShowImportDialog(true)} variant="secondary">
           <Upload className="w-3.5 h-3.5" />导入
-        </button>
-        <button onClick={handleExportAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={handleExportAll} variant="secondary">
           <Download className="w-3.5 h-3.5" />导出全部
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -473,24 +474,15 @@ export default function GenePage() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                <button
-                  onClick={() => { setInstantiateVars({}); setInstantiateResult(null); setShowInstantiateDialog(true); }}
-                  className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-                >
+                <Button onClick={() => { setInstantiateVars({}); setInstantiateResult(null); setShowInstantiateDialog(true); }} variant="primary" className="gap-1.5">
                   <Play className="w-3.5 h-3.5" />实例化
-                </button>
-                <button
-                  onClick={() => { setCloneName(selectedTemplate.name + ' (副本)'); setCloneId(''); setShowCloneDialog(true); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                >
+                </Button>
+                <Button onClick={() => { setCloneName(selectedTemplate.name + ' (副本)'); setCloneId(''); setShowCloneDialog(true); }} variant="secondary">
                   <Copy className="w-3.5 h-3.5" />克隆
-                </button>
-                <button
-                  onClick={() => handleExport(selectedTemplate.template_id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                >
+                </Button>
+                <Button onClick={() => handleExport(selectedTemplate.template_id)} variant="secondary">
                   <Download className="w-3.5 h-3.5" />导出
-                </button>
+                </Button>
                 {!selectedTemplate.builtin && (
                   <button
                     onClick={() => { handleDelete(selectedTemplate.template_id); }}
@@ -557,8 +549,8 @@ export default function GenePage() {
                 <textarea className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none font-mono h-20 resize-none" value={newTemplate.variables} onChange={(e) => setNewTemplate(p => ({ ...p, variables: e.target.value }))} placeholder='[{"name": "var1", "type": "string", "description": "变量说明"}]' />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreateDialog(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleCreate} disabled={!newTemplate.name} className="px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">创建</button>
+                <Button onClick={() => setShowCreateDialog(false)} variant="secondary" className="px-4">取消</Button>
+                <Button onClick={handleCreate} disabled={!newTemplate.name} variant="primary" className="px-4 py-1.5">创建</Button>
               </div>
             </div>
           </div>
@@ -585,8 +577,8 @@ export default function GenePage() {
                 <input className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none font-mono" value={cloneId} onChange={(e) => setCloneId(e.target.value)} placeholder="自动生成" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCloneDialog(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleClone} className="px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">克隆</button>
+                <Button onClick={() => setShowCloneDialog(false)} variant="secondary" className="px-4">取消</Button>
+                <Button onClick={handleClone} variant="primary" className="px-4 py-1.5">克隆</Button>
               </div>
             </div>
           </div>
@@ -628,8 +620,8 @@ export default function GenePage() {
                 <p className="text-xs text-muted-foreground">此模板没有可配置变量。</p>
               )}
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowInstantiateDialog(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleInstantiate} className="px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">实例化</button>
+                <Button onClick={() => setShowInstantiateDialog(false)} variant="secondary" className="px-4">取消</Button>
+                <Button onClick={handleInstantiate} variant="primary" className="px-4 py-1.5">实例化</Button>
               </div>
               {instantiateResult && (
                 <div className="mt-3">
@@ -668,8 +660,8 @@ export default function GenePage() {
                 覆盖已有模板
               </label>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowImportDialog(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleImport} disabled={!importJson.trim()} className="px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">导入</button>
+                <Button onClick={() => setShowImportDialog(false)} variant="secondary" className="px-4">取消</Button>
+                <Button onClick={handleImport} disabled={!importJson.trim()} variant="primary" className="px-4 py-1.5">导入</Button>
               </div>
             </div>
           </div>

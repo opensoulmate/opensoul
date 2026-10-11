@@ -6,6 +6,7 @@ import {
   Search, Clock, Plus, Trash2, Play, Pause, RefreshCw, X,
   History, Loader2, AlertCircle, CheckCircle, Timer
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface CronJob {
   id: string;
@@ -169,12 +170,12 @@ export default function CronPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={() => fetchJobs()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => fetchJobs()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        </Button>
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />创建任务
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -326,15 +327,12 @@ export default function CronPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button
-                  onClick={handleCreate}
-                  disabled={!createForm.schedule || creating}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowCreate(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreate}
+                  disabled={!createForm.schedule || creating} variant="primary">
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   {creating ? '创建中...' : '创建'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

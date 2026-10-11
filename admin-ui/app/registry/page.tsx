@@ -7,6 +7,9 @@ import {
   Layers, GitBranch, Zap, Filter, BarChart3, ExternalLink,
   CheckCircle, AlertCircle, Loader2
 } from 'lucide-react';
+import { Tab, TabBar } from '@/components/ui/tab';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface Component {
   id: string;
@@ -167,17 +170,13 @@ export default function RegistryPage() {
 
       {/* View tabs + Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center rounded-md border border-border overflow-hidden">
+        <TabBar>
           {(['grid', 'graph', 'capabilities'] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm transition-colors ${view === v ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80 text-muted-foreground'} font-medium`}
-            >
+            <Tab active={view === v} key={v} onClick={() => setView(v)}>
               {v === 'grid' ? '列表' : v === 'graph' ? '依赖图' : '能力'}
-            </button>
+            </Tab>
           ))}
-        </div>
+        </TabBar>
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
@@ -204,13 +203,13 @@ export default function RegistryPage() {
           <option value="">全部阶段</option>
           {phases.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
-        <button onClick={handleHealthCheck} disabled={checkingHealth} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
+        <Button onClick={handleHealthCheck} disabled={checkingHealth} variant="secondary">
           {checkingHealth ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
           健康检查
-        </button>
-        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={fetchAll} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -262,7 +261,7 @@ export default function RegistryPage() {
                   <div className="mt-3 pt-2 border-t border-border space-y-2">
                     <div>
                       <span className="text-[10px] font-medium text-muted-foreground">API前缀</span>
-                      <div className="text-xs font-mono bg-muted px-2 py-0.5 rounded mt-0.5">{comp.api_prefix}</div>
+                      <Badge variant="muted" className="font-mono mt-0.5">{comp.api_prefix}</Badge>
                     </div>
                     <div>
                       <span className="text-[10px] font-medium text-muted-foreground">能力</span>
@@ -367,7 +366,7 @@ export default function RegistryPage() {
                   const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS.core;
                   return (
                     <div key={cat} className="flex items-center justify-between">
-                      <span className={`text-[11px] px-1.5 py-0.5 rounded ${catColor.bg} ${catColor.text}`}>{cat}</span>
+                      <Badge className={`${catColor.bg} ${catColor.text}`}>{cat}</Badge>
                       <span className="text-xs font-medium">{count}</span>
                     </div>
                   );
@@ -379,7 +378,7 @@ export default function RegistryPage() {
               <div className="space-y-1.5">
                 {Object.entries(graph.stats.phases).map(([phase, count]) => (
                   <div key={phase} className="flex items-center justify-between">
-                    <span className={`text-[11px] px-1.5 py-0.5 rounded ${PHASE_COLORS[phase] || 'bg-muted text-muted-foreground'}`}>{phase}</span>
+                    <Badge className={`${PHASE_COLORS[phase] || 'bg-muted text-muted-foreground'}`}>{phase}</Badge>
                     <span className="text-xs font-medium">{count}</span>
                   </div>
                 ))}

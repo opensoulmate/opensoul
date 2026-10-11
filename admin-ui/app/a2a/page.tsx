@@ -8,6 +8,8 @@ import {
   Copy, Play, Ban, Eye, Server, Code, AlertCircle, Network,
   ArrowRight, RotateCcw, FileText, Search, Activity,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -97,10 +99,10 @@ function StateBadge({ state }: { state: string }) {
   const cfg = STATE_CONFIG[state] || { label: state, color: 'text-muted-foreground bg-muted', icon: Clock };
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${cfg.color}`}>
+    <Badge className={`gap-1 ${cfg.color}`}>
       <Icon className={`w-3 h-3 ${state === 'working' ? 'animate-spin' : ''}`} />
       {cfg.label}
-    </span>
+    </Badge>
   );
 }
 
@@ -148,17 +150,14 @@ function AgentCardView({ card }: { card: AgentCard }) {
                 { key: 'push', label: '推送通知', value: card.capabilities.pushNotifications },
                 { key: 'history', label: '状态历史', value: card.capabilities.stateTransitionHistory },
               ].map((cap) => (
-                <span
-                  key={cap.key}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${
+                <Badge key={cap.key} className={`gap-1 ${
                     cap.value
                       ? 'bg-emerald-500/10 text-emerald-500'
                       : 'bg-muted text-muted-foreground'
-                  }`}
-                >
+                  }`}>
                   {cap.value ? <CheckCircle className="w-2.5 h-2.5" /> : <XCircle className="w-2.5 h-2.5" />}
                   {cap.label}
-                </span>
+                </Badge>
               ))}
             </div>
           </div>
@@ -177,9 +176,9 @@ function AgentCardView({ card }: { card: AgentCard }) {
                   <div className="text-[10px] text-muted-foreground mb-1.5">{skill.description}</div>
                   <div className="flex flex-wrap gap-1">
                     {skill.tags.map((tag) => (
-                      <span key={tag} className="px-1.5 py-0.5 rounded bg-muted text-[10px] text-muted-foreground">
+                      <Badge key={tag} variant="muted">
                         {tag}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                   {skill.examples.length > 0 && (
@@ -388,14 +387,11 @@ function RPCPanel({ onResult }: { onResult: (log: RPCLog) => void }) {
             spellCheck={false}
           />
         </div>
-        <button
-          onClick={handleSend}
-          disabled={sending}
-          className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-        >
+        <Button onClick={handleSend}
+          disabled={sending} variant="primary" className="gap-1.5 px-4 py-1.5">
           {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
           {sending ? '发送中...' : '发送请求'}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -609,12 +605,9 @@ export default function A2APage() {
           </button>
         ))}
         <div className="flex-1" />
-        <button
-          onClick={fetchData}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted mb-1 transition-colors"
-        >
+        <Button onClick={fetchData} variant="secondary" className="mb-1">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Card Tab */}

@@ -9,6 +9,7 @@ import {
   MessageSquare, FileText, Activity, Loader2, Wifi, WifiOff,
   Copy, Play, ToggleLeft, ToggleRight,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -158,12 +159,9 @@ function ChannelCard({ channel, health, onConfigure, onToggle }: {
         <div className="text-[10px] text-red-400 mb-2 truncate">{health.error}</div>
       )}
 
-      <button
-        onClick={onConfigure}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-      >
+      <Button onClick={onConfigure} variant="secondary" className="w-full">
         <Settings className="w-3 h-3" />配置
-      </button>
+      </Button>
     </div>
   );
 }
@@ -234,18 +232,12 @@ function TemplateCard({ template, expanded, onToggle, onSend, onEdit, onDelete }
           )}
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={onSend}
-              className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-            >
+            <Button onClick={onSend} variant="primary" className="gap-1.5">
               <Send className="w-3 h-3" />发送
-            </button>
-            <button
-              onClick={onEdit}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-            >
+            </Button>
+            <Button onClick={onEdit} variant="secondary">
               <Edit3 className="w-3 h-3" />编辑
-            </button>
+            </Button>
             <button
               onClick={onDelete}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/20"
@@ -323,15 +315,12 @@ function ConfigureDialog({ channel, onClose, onSave }: {
         </div>
 
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-          >
+          <Button onClick={onClose} variant="secondary">取消</Button>
+          <Button onClick={handleSave}
+            disabled={saving} variant="primary" className="gap-1.5">
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             保存
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -426,15 +415,12 @@ function SendDialog({ defaultChannel, onClose }: {
         )}
 
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">关闭</button>
-          <button
-            onClick={handleSend}
-            disabled={sending || !title.trim() || !content.trim()}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-          >
+          <Button onClick={onClose} variant="secondary">关闭</Button>
+          <Button onClick={handleSend}
+            disabled={sending || !title.trim() || !content.trim()} variant="primary" className="gap-1.5">
             {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
             发送
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -568,18 +554,12 @@ export default function EchoPage() {
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => { setSendChannel(undefined); setShowSend(true); }}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-          >
+          <Button onClick={() => { setSendChannel(undefined); setShowSend(true); }} variant="primary" className="gap-1.5">
             <Send className="w-3 h-3" />发送消息
-          </button>
-          <button
-            onClick={() => fetchAll()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-          >
+          </Button>
+          <Button onClick={() => fetchAll()} variant="secondary">
             <RefreshCw className="w-3.5 h-3.5" />刷新
-          </button>
+          </Button>
         </div>
       </div>
 

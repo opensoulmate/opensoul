@@ -7,6 +7,7 @@ import {
   MessageSquare, CheckCircle, Clock, AlertCircle, Play, Eye,
   UserPlus, Settings, ListChecks, ArrowLeft, Send, Star,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -289,10 +290,9 @@ export default function AIGroupsPage() {
             </div>
             <div className="flex items-center gap-1.5">
               {selectedTask.status === 'pending' && selectedTask.assigned_agent_id && (
-                <button onClick={() => handleExecuteTask(selectedTask.id, selectedTask.assigned_agent_id!, selectedTask.goal)}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                <Button onClick={() => handleExecuteTask(selectedTask.id, selectedTask.assigned_agent_id!, selectedTask.goal)} variant="primary">
                   <Play className="w-3.5 h-3.5" />执行
-                </button>
+                </Button>
               )}
               {(selectedTask.status === 'reviewing' || selectedTask.status === 'scored') && (
                 <>
@@ -306,10 +306,9 @@ export default function AIGroupsPage() {
                   </button>
                 </>
               )}
-              <button onClick={() => fetchDiscussion(selectedTask.id)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+              <Button onClick={() => fetchDiscussion(selectedTask.id)} variant="secondary" className="gap-1">
                 <MessageSquare className="w-3.5 h-3.5" />讨论
-              </button>
+              </Button>
             </div>
           </div>
           {selectedTask.result && (
@@ -403,10 +402,9 @@ export default function AIGroupsPage() {
               </div>
             </div>
             <div className="flex items-center gap-1.5">
-              <button onClick={() => { setTaskForm({ goal: '', constraints: '', criteria: '' }); setShowSubmitTask(true); }}
-                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+              <Button onClick={() => { setTaskForm({ goal: '', constraints: '', criteria: '' }); setShowSubmitTask(true); }} variant="primary">
                 <Send className="w-3.5 h-3.5" />提交任务
-              </button>
+              </Button>
               <button onClick={() => handleDelete(selectedGroup.id)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20">
                 <Trash2 className="w-3.5 h-3.5" />删除
@@ -431,10 +429,9 @@ export default function AIGroupsPage() {
         {detailTab === 'agents' && (
           <div className="space-y-2">
             <div className="flex justify-end">
-              <button onClick={() => { setAddAgentForm({ agent_id: '', name: '', role: 'executor', model: '' }); setShowAddAgent(true); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+              <Button onClick={() => { setAddAgentForm({ agent_id: '', name: '', role: 'executor', model: '' }); setShowAddAgent(true); }} variant="secondary" className="gap-1">
                 <UserPlus className="w-3.5 h-3.5" />添加Agent
-              </button>
+              </Button>
             </div>
             <div className="rounded-lg border border-border bg-card divide-y divide-border">
               {(selectedGroup.agents || []).length === 0 ? (
@@ -537,8 +534,8 @@ export default function AIGroupsPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 p-4 border-t border-border">
-                <button onClick={() => setShowAddAgent(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleAddAgent} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">添加</button>
+                <Button onClick={() => setShowAddAgent(false)} variant="secondary">取消</Button>
+                <Button onClick={handleAddAgent} variant="primary">添加</Button>
               </div>
             </div>
           </div>
@@ -570,8 +567,8 @@ export default function AIGroupsPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 p-4 border-t border-border">
-                <button onClick={() => setShowSubmitTask(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button onClick={handleSubmitTask} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">提交</button>
+                <Button onClick={() => setShowSubmitTask(false)} variant="secondary">取消</Button>
+                <Button onClick={handleSubmitTask} variant="primary">提交</Button>
               </div>
             </div>
           </div>
@@ -620,13 +617,12 @@ export default function AIGroupsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={fetchGroups} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchGroups} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button onClick={() => { setNewName(''); setNewDesc(''); setShowCreate(true); }}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        </Button>
+        <Button onClick={() => { setNewName(''); setNewDesc(''); setShowCreate(true); }} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />新建群组
-        </button>
+        </Button>
       </div>
 
       {/* Group Grid */}
@@ -728,9 +724,8 @@ export default function AIGroupsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border shrink-0">
-              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-              <button onClick={handleCreate} disabled={!newName.trim()}
-                className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">创建</button>
+              <Button onClick={() => setShowCreate(false)} variant="secondary">取消</Button>
+              <Button onClick={handleCreate} disabled={!newName.trim()} variant="primary">创建</Button>
             </div>
           </div>
         </div>

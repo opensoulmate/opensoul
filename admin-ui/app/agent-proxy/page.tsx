@@ -7,6 +7,8 @@ import {
   Loader2, RefreshCw, ChevronDown, ChevronRight, Zap,
   AlertCircle, MessageSquare, Copy, Play, Server, Cpu,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -75,14 +77,14 @@ function AgentCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{agent.name}</span>
-          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] ${
+          <Badge className={`gap-1 ${
             agent.available
               ? 'bg-emerald-500/10 text-emerald-500'
               : 'bg-muted text-muted-foreground'
           }`}>
             {agent.available ? <CheckCircle className="w-2.5 h-2.5" /> : <XCircle className="w-2.5 h-2.5" />}
             {agent.available ? '可用' : '未安装'}
-          </span>
+          </Badge>
         </div>
         <div className="text-[10px] text-muted-foreground mt-0.5">{agent.description}</div>
         <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
@@ -126,11 +128,11 @@ function ChatPanel({
           <div className="text-sm font-medium">{agent.name}</div>
           <div className="text-[10px] text-muted-foreground">{agent.description}</div>
         </div>
-        <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+        <Badge className={`${
           agent.available ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
         }`}>
           {agent.available ? '在线' : '离线'}
-        </span>
+        </Badge>
       </div>
 
       {/* Messages */}
@@ -195,13 +197,10 @@ function ChatPanel({
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSubmit()}
             disabled={!agent.available || sending}
           />
-          <button
-            onClick={handleSubmit}
-            disabled={!input.trim() || !agent.available || sending}
-            className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-          >
+          <Button onClick={handleSubmit}
+            disabled={!input.trim() || !agent.available || sending} variant="primary">
             {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

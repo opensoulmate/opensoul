@@ -7,6 +7,8 @@ import {
   Loader2, AlertCircle, CheckCircle, Server, Terminal, Radio, Plug,
   Send, ChevronDown, ChevronRight, Table, FileText, Eye, Zap, Cpu,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -376,14 +378,11 @@ export default function ConnectorsPage() {
           </button>
         ))}
         <div className="flex-1" />
-        <button
-          onClick={handleScan}
-          disabled={scanning}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 mb-1 font-medium transition-colors"
-        >
+        <Button onClick={handleScan}
+          disabled={scanning} variant="primary" className="gap-1.5 mb-1">
           {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
           {scanning ? '扫描中...' : '系统扫描'}
-        </button>
+        </Button>
       </div>
 
       {/* ── Discovery Tab ── */}
@@ -405,7 +404,7 @@ export default function ConnectorsPage() {
                   {adapter.capabilities.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {adapter.capabilities.map((cap) => (
-                        <span key={cap} className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary">{cap}</span>
+                        <Badge key={cap} variant="default">{cap}</Badge>
                       ))}
                     </div>
                   )}
@@ -423,7 +422,7 @@ export default function ConnectorsPage() {
               {/* Processes */}
               <div className="rounded-lg border border-border bg-card p-4">
                 <h3 className="text-xs font-medium text-muted-foreground mb-3">
-                  运行进程 <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded ml-1">{scanResult.processes.length}</span>
+                  运行进程 <Badge variant="muted" className="ml-1">{scanResult.processes.length}</Badge>
                 </h3>
                 <div className="max-h-[200px] overflow-auto space-y-1">
                   {scanResult.processes.slice(0, 30).map((p) => (
@@ -440,7 +439,7 @@ export default function ConnectorsPage() {
               {/* CLI Tools */}
               <div className="rounded-lg border border-border bg-card p-4">
                 <h3 className="text-xs font-medium text-muted-foreground mb-3">
-                  CLI工具 <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded ml-1">{scanResult.cli_tools.length}</span>
+                  CLI工具 <Badge variant="muted" className="ml-1">{scanResult.cli_tools.length}</Badge>
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
                   {scanResult.cli_tools.map((tool) => (
@@ -455,14 +454,14 @@ export default function ConnectorsPage() {
               {/* Services */}
               <div className="rounded-lg border border-border bg-card p-4">
                 <h3 className="text-xs font-medium text-muted-foreground mb-3">
-                  监听服务 <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded ml-1">{scanResult.services.length}</span>
+                  监听服务 <Badge variant="muted" className="ml-1">{scanResult.services.length}</Badge>
                 </h3>
                 <div className="max-h-[200px] overflow-auto space-y-1">
                   {scanResult.services.map((s, i) => (
                     <div key={i} className="flex items-center gap-2 text-[10px] py-1 border-b border-border last:border-0">
                       <span className="font-medium flex-1 truncate">{s.name || s.host}</span>
                       <span className="font-mono text-muted-foreground">{s.host}:{s.port}</span>
-                      <span className="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">{s.protocol}</span>
+                      <Badge variant="muted">{s.protocol}</Badge>
                     </div>
                   ))}
                 </div>
@@ -507,10 +506,9 @@ export default function ConnectorsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <button onClick={handleRestConfigure} disabled={restLoading || !restConfig.base_url}
-                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleRestConfigure} disabled={restLoading || !restConfig.base_url} variant="primary">
                 {restLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}配置
-              </button>
+              </Button>
               <button onClick={handleRestProbe} disabled={restLoading || !restConfig.base_url}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50">
                 <Eye className="w-3 h-3" />探测OpenAPI
@@ -533,10 +531,9 @@ export default function ConnectorsPage() {
               </select>
               <input className="flex-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono"
                 value={restPath} onChange={(e) => setRestPath(e.target.value)} placeholder="/api/v1/resource" />
-              <button onClick={handleRestRequest} disabled={restLoading || !restPath}
-                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleRestRequest} disabled={restLoading || !restPath} variant="primary">
                 {restLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}发送
-              </button>
+              </Button>
             </div>
             {['POST', 'PUT', 'PATCH'].includes(restMethod) && (
               <textarea className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono h-20 resize-none mb-3"
@@ -576,27 +573,24 @@ export default function ConnectorsPage() {
                   placeholder="/path/to/db.sqlite 或 postgresql://user:pass@host/db" />
               </div>
             </div>
-            <button onClick={handleDbConfigure} disabled={dbLoading || !dbConfig.connection_string}
-              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 mt-3 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+            <Button onClick={handleDbConfigure} disabled={dbLoading || !dbConfig.connection_string} variant="primary" className="mt-3">
               {dbLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}配置连接
-            </button>
+            </Button>
           </div>
 
           {/* Query */}
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-medium text-muted-foreground">SQL查询</h3>
-              <button onClick={handleDbTables}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] border border-border rounded-lg hover:bg-muted transition-colors">
+              <Button onClick={handleDbTables} variant="secondary" className="gap-1 px-2 py-1 text-[10px]">
                 <Table className="w-3 h-3" />查看表
-              </button>
+              </Button>
             </div>
             <textarea className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono h-20 resize-none mb-2"
               value={dbQuery} onChange={(e) => setDbQuery(e.target.value)} placeholder="SELECT * FROM table_name LIMIT 100" />
-            <button onClick={handleDbQuery} disabled={dbLoading || !dbQuery}
-              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+            <Button onClick={handleDbQuery} disabled={dbLoading || !dbQuery} variant="primary">
               {dbLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}执行查询
-            </button>
+            </Button>
 
             {/* Tables */}
             {dbTables && (
@@ -658,10 +652,9 @@ export default function ConnectorsPage() {
                 </select>
               </div>
             </div>
-            <button onClick={handleFsConfigure} disabled={fsLoading || !fsConfig.root_path}
-              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 mt-3 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+            <Button onClick={handleFsConfigure} disabled={fsLoading || !fsConfig.root_path} variant="primary" className="mt-3">
               {fsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}配置
-            </button>
+            </Button>
           </div>
 
           {/* Browse */}
@@ -670,10 +663,9 @@ export default function ConnectorsPage() {
             <div className="flex items-center gap-2 mb-3">
               <input className="flex-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono"
                 value={fsPath} onChange={(e) => setFsPath(e.target.value)} placeholder="/" />
-              <button onClick={handleFsList} disabled={fsLoading}
-                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleFsList} disabled={fsLoading} variant="primary">
                 <FolderOpen className="w-3 h-3" />列出
-              </button>
+              </Button>
               <button onClick={handleFsRead} disabled={fsLoading}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 disabled:opacity-50">
                 <FileText className="w-3 h-3" />读取

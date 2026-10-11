@@ -6,6 +6,9 @@ import {
   Search, RefreshCw, X, Plus, Trash2, Network, CircleDot, GitBranch,
   ZoomIn, ZoomOut, Maximize2, Filter, Eye,
 } from 'lucide-react';
+import { Tab, TabBar } from '@/components/ui/tab';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -332,15 +335,15 @@ function ForceGraph({
         onWheel={handleWheel}
       />
       <div className="absolute top-2 right-2 flex flex-col gap-1">
-        <button onClick={zoomIn} className="p-1.5 rounded-md bg-card/80 border border-border hover:bg-muted" title="放大">
+        <Button onClick={zoomIn}  title="放大" variant="secondary" className="p-1.5 rounded-md bg-card/80">
           <ZoomIn className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={zoomOut} className="p-1.5 rounded-md bg-card/80 border border-border hover:bg-muted" title="缩小">
+        </Button>
+        <Button onClick={zoomOut}  title="缩小" variant="secondary" className="p-1.5 rounded-md bg-card/80">
           <ZoomOut className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={resetView} className="p-1.5 rounded-md bg-card/80 border border-border hover:bg-muted" title="重置视图">
+        </Button>
+        <Button onClick={resetView}  title="重置视图" variant="secondary" className="p-1.5 rounded-md bg-card/80">
           <Maximize2 className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </div>
       <div className="absolute bottom-2 left-2 text-[10px] text-muted-foreground bg-card/80 px-2 py-1 rounded">
         {Math.round(zoom * 100)}% · {data.nodes.length} 节点 · {data.edges.length} 边
@@ -495,32 +498,20 @@ export default function KnowledgeGraphPage() {
           <option value={2}>深度 2</option>
           <option value={3}>深度 3</option>
         </select>
-        <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button
-            onClick={() => setViewMode('graph')}
-            className={`px-2.5 py-1.5 text-xs lg:text-sm ${viewMode === 'graph' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}
-          >
+        <TabBar>
+          <Tab active={viewMode === 'graph'} onClick={() => setViewMode('graph')}>
             <Network className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-2.5 py-1.5 text-xs lg:text-sm ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}
-          >
+          </Tab>
+          <Tab active={viewMode === 'list'} onClick={() => setViewMode('list')}>
             <Filter className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <button
-          onClick={() => setShowCreateRelation(true)}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-        >
+          </Tab>
+        </TabBar>
+        <Button onClick={() => setShowCreateRelation(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />添加关系
-        </button>
-        <button
-          onClick={() => fetchAll()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        </Button>
+        <Button onClick={() => fetchAll()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Content */}
@@ -562,9 +553,9 @@ export default function KnowledgeGraphPage() {
                       </span>
                     </td>
                     <td className="px-2 lg:px-4 py-2.5">
-                      <span className="px-1.5 py-0.5 rounded-full text-[10px]" style={{ backgroundColor: `${getColor(entity.type)}20`, color: getColor(entity.type) }}>
+                      <Badge style={{ backgroundColor: `${getColor(entity.type)}20`, color: getColor(entity.type) }} variant="default">
                         {entity.type}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-2 lg:px-4 py-2.5 text-muted-foreground max-w-xs truncate">{entity.description || '-'}</td>
                     <td className="px-2 lg:px-4 py-2.5 text-right">
@@ -600,9 +591,9 @@ export default function KnowledgeGraphPage() {
               <div className="flex items-center gap-2">
                 <CircleDot className="w-5 h-5" style={{ color: getColor(selectedEntity.type) }} />
                 <h2 className="text-base font-medium">{selectedEntity.name}</h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px]" style={{ backgroundColor: `${getColor(selectedEntity.type)}20`, color: getColor(selectedEntity.type) }}>
+                <Badge style={{ backgroundColor: `${getColor(selectedEntity.type)}20`, color: getColor(selectedEntity.type) }} variant="default">
                   {selectedEntity.type}
-                </span>
+                </Badge>
               </div>
               <button onClick={() => setShowDetail(false)} className="p-1 rounded-md hover:bg-muted">
                 <X className="w-4 h-4" />
@@ -701,16 +692,13 @@ export default function KnowledgeGraphPage() {
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreateRelation(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+                <Button onClick={() => setShowCreateRelation(false)} variant="secondary">
                   取消
-                </button>
-                <button
-                  onClick={handleCreateRelation}
-                  disabled={creating || !relationForm.source_entity_id || !relationForm.target_entity_id}
-                  className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                </Button>
+                <Button onClick={handleCreateRelation}
+                  disabled={creating || !relationForm.source_entity_id || !relationForm.target_entity_id} variant="primary">
                   {creating ? '创建中...' : '创建关系'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

@@ -6,6 +6,7 @@ import {
   Settings, RefreshCw, X, Save, Zap, AlertCircle, CheckCircle,
   Loader2, Plus, Trash2, Server, Key, Cpu, Activity
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface LLMConfig {
   base_url: string;
@@ -195,14 +196,11 @@ export default function LlmPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 mt-3">
-          <button
-            onClick={handleSaveConfig}
-            disabled={saving}
-            className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-          >
+          <Button onClick={handleSaveConfig}
+            disabled={saving} variant="primary">
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             {saving ? '保存中...' : '保存'}
-          </button>
+          </Button>
           <button
             onClick={handleTest}
             disabled={testing}
@@ -231,9 +229,9 @@ export default function LlmPage() {
             <h2 className="text-sm font-medium">Provider 管理</h2>
             <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{providers.length} 个</span>
           </div>
-          <button onClick={() => setShowAddProvider(true)} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+          <Button onClick={() => setShowAddProvider(true)} variant="primary">
             <Plus className="w-3 h-3" />添加Provider
-          </button>
+          </Button>
         </div>
 
         {providersLoading ? (
@@ -305,10 +303,10 @@ export default function LlmPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAddProvider(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleAddProvider} disabled={!newProvider.name || !newProvider.base_url} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowAddProvider(false)} variant="secondary">取消</Button>
+                <Button onClick={handleAddProvider} disabled={!newProvider.name || !newProvider.base_url} variant="primary">
                   <Plus className="w-3 h-3" />添加
-                </button>
+                </Button>
               </div>
             </div>
           </div>

@@ -7,6 +7,9 @@ import {
   HardDrive, File, Search, Plus, Loader2, AlertCircle, Clock,
   Tag, Eye, RotateCcw, Zap, Package, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { Tab, TabBar } from '@/components/ui/tab';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -209,11 +212,11 @@ export default function VeinPage() {
 
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button onClick={() => setTab('files')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'files' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>文件</button>
-          <button onClick={() => setTab('cache')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'cache' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>缓存</button>
-          <button onClick={() => setTab('uploads')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'uploads' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>上传</button>
-        </div>
+        <TabBar>
+          <Tab active={tab === 'files'} onClick={() => setTab('files')}>文件</Tab>
+          <Tab active={tab === 'cache'} onClick={() => setTab('cache')}>缓存</Tab>
+          <Tab active={tab === 'uploads'} onClick={() => setTab('uploads')}>上传</Tab>
+        </TabBar>
         {tab === 'files' && (
           <>
             <div className="relative flex-1 min-w-[150px]">
@@ -228,9 +231,9 @@ export default function VeinPage() {
             )}
           </>
         )}
-        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchData} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* ── Files Tab ── */}
@@ -263,7 +266,7 @@ export default function VeinPage() {
                   {file.tags?.length > 0 && (
                     <div className="flex gap-1 shrink-0">
                       {file.tags.slice(0, 3).map(t => (
-                        <span key={t} className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary">{t}</span>
+                        <Badge key={t} variant="default">{t}</Badge>
                       ))}
                     </div>
                   )}

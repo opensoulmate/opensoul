@@ -6,6 +6,8 @@ import {
   Search, Plus, Trash2, X, RefreshCw, Pause, Play, Eye, Camera,
   Variable, Clock, Tag, Filter, FlaskConical, Copy, Layers, Activity, Settings
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -381,9 +383,9 @@ export default function MirrorPage() {
           >
             {t.icon}
             {t.label}
-            <span className="ml-1 rounded-full px-2 py-0.5 text-xs font-medium bg-muted">
+            <Badge variant="muted" className="ml-1">
               {t.key === 'sandboxes' ? sandboxes.length : templates.length}
-            </span>
+            </Badge>
           </button>
         ))}
       </div>
@@ -414,15 +416,15 @@ export default function MirrorPage() {
               <option value="destroyed">已销毁</option>
               <option value="expired">已过期</option>
             </select>
-            <button onClick={() => fetchSandboxes()} className="p-2 rounded-lg bg-muted hover:bg-muted border border-border" title="刷新">
+            <Button onClick={() => fetchSandboxes()}  title="刷新" variant="secondary" className="p-2 bg-muted">
               <RefreshCw className="w-4 h-4" />
-            </button>
+            </Button>
             <button onClick={handleCleanup} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-orange-500/10 text-orange-400 hover:bg-amber-500/20 border border-orange-500/20" title="清理过期沙箱">
               <Trash2 className="w-4 h-4" /> 清理过期
             </button>
-            <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium transition-colors">
+            <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5 px-3 text-sm">
               <Plus className="w-4 h-4" /> 创建沙箱
-            </button>
+            </Button>
           </div>
 
           {/* Sandbox List */}
@@ -448,9 +450,9 @@ export default function MirrorPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-sm truncate">{sb.name || sb.sandbox_id}</span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${statusColor(sb.status)}`}>
+                        <Badge className={`gap-1 border ${statusColor(sb.status)}`}>
                           {statusLabel(sb.status)}
-                        </span>
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="font-mono">{sb.sandbox_id.slice(0, 12)}</span>
@@ -462,7 +464,7 @@ export default function MirrorPage() {
                       {sb.tags?.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {sb.tags.map((t, i) => (
-                            <span key={i} className="px-1.5 py-0.5 rounded text-xs bg-muted text-muted-foreground">{t}</span>
+                            <Badge key={i} variant="muted">{t}</Badge>
                           ))}
                         </div>
                       )}
@@ -557,9 +559,9 @@ export default function MirrorPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">{templates.length} 个模板</div>
-            <button onClick={() => setShowCreateTpl(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium transition-colors">
+            <Button onClick={() => setShowCreateTpl(true)} variant="primary" className="gap-1.5 px-3 text-sm">
               <Plus className="w-4 h-4" /> 创建模板
-            </button>
+            </Button>
           </div>
 
           {templates.length === 0 ? (
@@ -584,7 +586,7 @@ export default function MirrorPage() {
                   {tpl.tags?.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {tpl.tags.map((t, i) => (
-                        <span key={i} className="px-1.5 py-0.5 rounded text-xs bg-muted text-muted-foreground">{t}</span>
+                        <Badge key={i} variant="muted">{t}</Badge>
                       ))}
                     </div>
                   )}
@@ -643,10 +645,10 @@ export default function MirrorPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted">取消</button>
-              <button onClick={handleCreateSandbox} disabled={creating || !createForm.name} className="px-2 lg:px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={() => setShowCreate(false)} variant="secondary" className="px-4 py-2 text-sm">取消</Button>
+              <Button onClick={handleCreateSandbox} disabled={creating || !createForm.name} variant="primary" className="text-sm">
                 {creating ? '创建中...' : '创建'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -689,8 +691,8 @@ export default function MirrorPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCreateTpl(false)} className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted">取消</button>
-              <button onClick={handleCreateTemplate} disabled={!tplForm.name} className="px-2 lg:px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">创建模板</button>
+              <Button onClick={() => setShowCreateTpl(false)} variant="secondary" className="px-4 py-2 text-sm">取消</Button>
+              <Button onClick={handleCreateTemplate} disabled={!tplForm.name} variant="primary" className="text-sm">创建模板</Button>
             </div>
           </div>
         </div>
@@ -718,8 +720,8 @@ export default function MirrorPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowInstantiate(null)} className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted">取消</button>
-              <button onClick={handleInstantiate} className="px-2 lg:px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium transition-colors">创建</button>
+              <Button onClick={() => setShowInstantiate(null)} variant="secondary" className="px-4 py-2 text-sm">取消</Button>
+              <Button onClick={handleInstantiate} variant="primary" className="text-sm">创建</Button>
             </div>
           </div>
         </div>

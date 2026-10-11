@@ -7,6 +7,8 @@ import {
   HardDrive, Settings, Loader2, AlertCircle, CheckCircle, Server,
   ArrowDownToLine, FolderOpen, Zap, Clock, Activity, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -380,23 +382,17 @@ export default function DownloaderPage() {
             <t.icon className="w-3.5 h-3.5" />
             {t.label}
             {t.key === 'tasks' && activeTasks.length > 0 && (
-              <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500">{activeTasks.length}</span>
+              <Badge variant="success" className="ml-1">{activeTasks.length}</Badge>
             )}
           </button>
         ))}
         <div className="flex-1" />
-        <button
-          onClick={() => setShowNewDownload(true)}
-          className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 mb-1 font-medium transition-colors"
-        >
+        <Button onClick={() => setShowNewDownload(true)} variant="primary" className="mb-1">
           <ArrowDownToLine className="w-3 h-3" />新建下载
-        </button>
-        <button
-          onClick={fetchAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted mb-1 transition-colors"
-        >
+        </Button>
+        <Button onClick={fetchAll} variant="secondary" className="mb-1">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* ── Tasks Tab ── */}
@@ -534,12 +530,9 @@ export default function DownloaderPage() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
                       {plugin.status !== 'installed' && (
-                        <button
-                          onClick={() => handleInstallPlugin(plugin.id)}
-                          className="flex items-center gap-2 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-                        >
+                        <Button onClick={() => handleInstallPlugin(plugin.id)} variant="primary" className="py-1 text-[10px]">
                           <Download className="w-3 h-3" />安装
-                        </button>
+                        </Button>
                       )}
                       {plugin.status === 'installed' && (
                         <button
@@ -647,13 +640,10 @@ export default function DownloaderPage() {
                   placeholder="8"
                 />
               </div>
-              <button
-                onClick={handleSetConfig}
-                disabled={!editConfig.key}
-                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-              >
+              <Button onClick={handleSetConfig}
+                disabled={!editConfig.key} variant="primary">
                 <Zap className="w-3 h-3" />设置
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -687,15 +677,12 @@ export default function DownloaderPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowNewDownload(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button
-                  onClick={handleStartDownload}
-                  disabled={downloading || !newUrl}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowNewDownload(false)} variant="secondary">取消</Button>
+                <Button onClick={handleStartDownload}
+                  disabled={downloading || !newUrl} variant="primary">
                   {downloading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                   开始下载
-                </button>
+                </Button>
               </div>
             </div>
           </div>

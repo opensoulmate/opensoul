@@ -8,6 +8,8 @@ import {
   Trash2, StopCircle, FileText, AlertTriangle, Lock, Eye,
   TrendingUp, Cpu, Hash,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -341,14 +343,11 @@ function SearchView() {
               <option key={v} value={v}>{l}</option>
             ))}
           </select>
-          <button
-            onClick={doSearch}
-            disabled={searching}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-          >
+          <Button onClick={doSearch}
+            disabled={searching} variant="primary" className="gap-1.5">
             {searching ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
             搜索
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -442,13 +441,10 @@ function SessionEvents({ sessionId, onClose }: { sessionId: string; onClose: () 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setReplayStep(replayStep < 0 ? 0 : replayStep + 1 >= events.length ? -1 : replayStep + 1)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-            >
+            <Button onClick={() => setReplayStep(replayStep < 0 ? 0 : replayStep + 1 >= events.length ? -1 : replayStep + 1)} variant="secondary">
               <Play className="w-3 h-3" />
               {replayStep < 0 ? '回放' : replayStep + 1 >= events.length ? '停止' : `步骤 ${replayStep + 1}/${events.length}`}
-            </button>
+            </Button>
             {replayStep >= 0 && events[replayStep] && (
               <button
                 onClick={doFork}
@@ -496,9 +492,9 @@ function SessionEvents({ sessionId, onClose }: { sessionId: string; onClose: () 
                       {evt.metadata && Object.keys(evt.metadata).length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {Object.entries(evt.metadata).slice(0, 6).map(([k, v]) => (
-                            <span key={k} className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                            <Badge key={k} variant="muted" className="font-mono">
                               {k}: {typeof v === 'string' ? v.slice(0, 40) : JSON.stringify(v).slice(0, 40)}
-                            </span>
+                            </Badge>
                           ))}
                         </div>
                       )}
@@ -686,18 +682,12 @@ export default function TrajectoryPage() {
               <option value="completed">已完成</option>
               <option value="failed">失败</option>
             </select>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-            >
+            <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
               <Plus className="w-3.5 h-3.5" />新建会话
-            </button>
-            <button
-              onClick={fetchSessions}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-            >
+            </Button>
+            <Button onClick={fetchSessions} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
-            </button>
+            </Button>
           </div>
 
           {/* Session list */}
@@ -772,16 +762,10 @@ export default function TrajectoryPage() {
                 第 {page + 1} / {totalPages} 页，共 {total} 条
               </span>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage(Math.max(0, page - 1))}
-                  disabled={page === 0}
-                  className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-                >上一页</button>
-                <button
-                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-                >下一页</button>
+                <Button onClick={() => setPage(Math.max(0, page - 1))}
+                  disabled={page === 0} variant="secondary" className="disabled:opacity-30">上一页</Button>
+                <Button onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                  disabled={page >= totalPages - 1} variant="secondary" className="disabled:opacity-30">下一页</Button>
               </div>
             </div>
           )}
@@ -824,14 +808,8 @@ export default function TrajectoryPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button
-                onClick={() => setShowCreate(false)}
-                className="px-4 py-2 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-              >取消</button>
-              <button
-                onClick={doCreate}
-                className="px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-              >创建</button>
+              <Button onClick={() => setShowCreate(false)} variant="secondary" className="px-4 py-2">取消</Button>
+              <Button onClick={doCreate} variant="primary">创建</Button>
             </div>
           </div>
         </div>

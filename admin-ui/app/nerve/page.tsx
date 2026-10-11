@@ -7,6 +7,8 @@ import {
   Send, Wifi, WifiOff, Clock, Filter, Activity, Users, Eye,
   AlertCircle, Loader2, ChevronDown, ChevronRight, Unplug,
 } from 'lucide-react';
+import { Tab, TabBar } from '@/components/ui/tab';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -256,11 +258,11 @@ export default function NervePage() {
 
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button onClick={() => setTab('events')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'events' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>事件</button>
-          <button onClick={() => setTab('subscriptions')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'subscriptions' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>订阅 ({subscriptions.length})</button>
-          <button onClick={() => setTab('nodes')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'nodes' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>节点 ({nodes.length})</button>
-        </div>
+        <TabBar>
+          <Tab active={tab === 'events'} onClick={() => setTab('events')}>事件</Tab>
+          <Tab active={tab === 'subscriptions'} onClick={() => setTab('subscriptions')}>订阅 ({subscriptions.length})</Tab>
+          <Tab active={tab === 'nodes'} onClick={() => setTab('nodes')}>节点 ({nodes.length})</Tab>
+        </TabBar>
         {tab === 'events' && (
           <div className="relative flex-1 min-w-[200px]">
             <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -272,23 +274,23 @@ export default function NervePage() {
             />
           </div>
         )}
-        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchData} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
         {tab === 'events' && (
-          <button onClick={() => setShowPublish(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+          <Button onClick={() => setShowPublish(true)} variant="primary" className="gap-1.5">
             <Send className="w-3.5 h-3.5" />发布事件
-          </button>
+          </Button>
         )}
         {tab === 'subscriptions' && (
-          <button onClick={() => setShowSubscribe(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+          <Button onClick={() => setShowSubscribe(true)} variant="primary" className="gap-1.5">
             <Plus className="w-3.5 h-3.5" />添加订阅
-          </button>
+          </Button>
         )}
         {tab === 'nodes' && (
-          <button onClick={() => setShowRegisterNode(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+          <Button onClick={() => setShowRegisterNode(true)} variant="primary" className="gap-1.5">
             <Plus className="w-3.5 h-3.5" />注册节点
-          </button>
+          </Button>
         )}
       </div>
 
@@ -442,10 +444,10 @@ export default function NervePage() {
                 <textarea className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono h-24 resize-none" value={publishForm.data} onChange={(e) => setPublishForm(f => ({ ...f, data: e.target.value }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowPublish(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handlePublish} disabled={!publishForm.topic || publishing} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowPublish(false)} variant="secondary">取消</Button>
+                <Button onClick={handlePublish} disabled={!publishForm.topic || publishing} variant="primary">
                   {publishing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}发布
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -474,10 +476,10 @@ export default function NervePage() {
                 <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono" value={subscribeForm.callback_url} onChange={(e) => setSubscribeForm(f => ({ ...f, callback_url: e.target.value }))} placeholder="http://..." />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowSubscribe(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleSubscribe} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                <Button onClick={() => setShowSubscribe(false)} variant="secondary">取消</Button>
+                <Button onClick={handleSubscribe} variant="primary">
                   <Plus className="w-3 h-3" />订阅
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -512,10 +514,10 @@ export default function NervePage() {
                 <textarea className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono h-16 resize-none" value={nodeForm.metadata} onChange={(e) => setNodeForm(f => ({ ...f, metadata: e.target.value }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowRegisterNode(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleRegisterNode} disabled={!nodeForm.node_id} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowRegisterNode(false)} variant="secondary">取消</Button>
+                <Button onClick={handleRegisterNode} disabled={!nodeForm.node_id} variant="primary">
                   <Server className="w-3 h-3" />注册
-                </button>
+                </Button>
               </div>
             </div>
           </div>

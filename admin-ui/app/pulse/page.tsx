@@ -6,6 +6,8 @@ import {
   Search, Plus, Trash2, RefreshCw, X, Timer, Play, Pause, RotateCcw,
   Clock, BarChart3, Zap, Activity, CheckCircle, AlertCircle
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface PulseSignal {
   signal_id: string;
@@ -217,15 +219,15 @@ export default function PulsePage() {
           <option value="paused">暂停</option>
           <option value="completed">完成</option>
         </select>
-        <button onClick={() => { setShowTicks(true); fetchTicks(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => { setShowTicks(true); fetchTicks(); }} variant="secondary">
           <BarChart3 className="w-3.5 h-3.5" />触发历史
-        </button>
+        </Button>
         <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
           <Plus className="w-3.5 h-3.5" />新建信号
         </button>
-        <button onClick={() => { fetchSignals(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => { fetchSignals(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Signal Grid */}
@@ -291,7 +293,7 @@ export default function PulsePage() {
                 <div><span className="text-muted-foreground">ID: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selected.signal_id}</code></div>
                 <div><span className="text-muted-foreground">类型: </span>{selected.signal_type}</div>
                 <div><span className="text-muted-foreground">间隔: </span>{formatInterval(selected.interval_ms)}</div>
-                <div><span className="text-muted-foreground">状态: </span><span className={`text-xs px-1.5 py-0.5 rounded ${statusColor(selected.status)}`}>{selected.status}</span></div>
+                <div><span className="text-muted-foreground">状态: </span><Badge className={`${statusColor(selected.status)}`}>{selected.status}</Badge></div>
                 <div><span className="text-muted-foreground">触发次数: </span>{selected.fire_count}{selected.max_fires > 0 ? `/${selected.max_fires}` : ''}</div>
                 <div><span className="text-muted-foreground">漂移修正: </span>{selected.drift_correction}ms</div>
               </div>
@@ -342,9 +344,9 @@ export default function PulsePage() {
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
-              <button onClick={handleCreate} disabled={saving || !form.name.trim()} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleCreate} disabled={saving || !form.name.trim()} variant="primary" className="gap-1.5">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}创建
-              </button>
+              </Button>
             </div>
           </div>
         </div>

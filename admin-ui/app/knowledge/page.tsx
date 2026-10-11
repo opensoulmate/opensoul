@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Search, BookOpen, Plus, Trash2, X, RefreshCw, Edit2, Save, Star, Pin, Upload, Eye, Filter } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface KnowledgeEntry {
   id: string;
@@ -242,18 +244,12 @@ export default function KnowledgePage() {
           <Upload className="w-3.5 h-3.5" />{uploading ? '上传中...' : '上传文件'}
           <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
         </label>
-        <button
-          onClick={fetchEntries}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={fetchEntries} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-        >
+        </Button>
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />添加条目
-        </button>
+        </Button>
       </div>
 
       {/* Knowledge List */}
@@ -352,10 +348,10 @@ export default function KnowledgePage() {
                     />
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
-                    <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                    <button onClick={handleSave} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                    <Button onClick={() => setEditing(false)} variant="secondary">取消</Button>
+                    <Button onClick={handleSave} variant="primary">
                       <Save className="w-3.5 h-3.5" />保存
-                    </button>
+                    </Button>
                   </div>
                 </>
               ) : (
@@ -457,14 +453,11 @@ export default function KnowledgePage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button
-                  onClick={handleCreate}
-                  disabled={creating}
-                  className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowCreate(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreate}
+                  disabled={creating} variant="primary">
                   {creating ? '创建中...' : '创建'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -501,7 +494,7 @@ function KnowledgeCard({
           <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{entry.content}</p>
         </div>
         <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-muted text-muted-foreground">{entry.content_type}</span>
+          <Badge variant="muted">{entry.content_type}</Badge>
         </div>
       </div>
       <div className="flex items-center justify-between mt-2">

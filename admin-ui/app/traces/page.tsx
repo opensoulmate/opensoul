@@ -7,6 +7,8 @@ import {
   Database, Bot, Shield, Eye, ArrowRight, Lock, Filter,
   Play, AlertTriangle, FileText, MessageSquare,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -155,9 +157,9 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
           {agentList.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-3">
               {agentList.map((agent) => (
-                <span key={agent} className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary">
+                <Badge key={agent} variant="default">
                   <Bot className="w-2.5 h-2.5 inline mr-1" />{agent.trim()}
-                </span>
+                </Badge>
               ))}
             </div>
           )}
@@ -193,9 +195,9 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
                     {evt.metadata && Object.keys(evt.metadata).length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {Object.entries(evt.metadata).slice(0, 5).map(([k, v]) => (
-                          <span key={k} className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                          <Badge key={k} variant="muted" className="font-mono">
                             {k}: {typeof v === 'string' ? v.slice(0, 30) : JSON.stringify(v).slice(0, 30)}
-                          </span>
+                          </Badge>
                         ))}
                       </div>
                     )}
@@ -329,12 +331,9 @@ export default function TracesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
-          onClick={() => fetchSessions()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={() => fetchSessions()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Session list */}
@@ -358,20 +357,14 @@ export default function TracesPage() {
             第 {page + 1} / {totalPages} 页，共 {total} 条
           </span>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(Math.max(0, page - 1))}
-              disabled={page === 0}
-              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-            >
+            <Button onClick={() => setPage(Math.max(0, page - 1))}
+              disabled={page === 0} variant="secondary" className="disabled:opacity-30">
               上一页
-            </button>
-            <button
-              onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-              disabled={page >= totalPages - 1}
-              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-            >
+            </Button>
+            <Button onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+              disabled={page >= totalPages - 1} variant="secondary" className="disabled:opacity-30">
               下一页
-            </button>
+            </Button>
           </div>
         </div>
       )}

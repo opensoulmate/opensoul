@@ -6,6 +6,7 @@ import {
   Search, Gauge, Play, Trash2, RefreshCw, X, Loader2, AlertCircle,
   BarChart3, Zap, Clock, Target, TrendingUp
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface BenchmarkTarget {
   organ: string;
@@ -194,8 +195,8 @@ export default function BenchmarkPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="text-sm font-medium mb-3">选择测试目标</h3>
             <div className="flex flex-wrap gap-2 mb-4">
-              <button onClick={() => setSelectedOrgans(new Set(targets.map((t) => t.organ)))} className="text-xs lg:text-sm px-2 py-1 border border-border rounded-lg hover:bg-muted transition-colors">全选</button>
-              <button onClick={() => setSelectedOrgans(new Set())} className="text-xs lg:text-sm px-2 py-1 border border-border rounded-lg hover:bg-muted transition-colors">清空</button>
+              <Button onClick={() => setSelectedOrgans(new Set(targets.map((t) => t.organ)))} variant="secondary" className="px-2 py-1">全选</Button>
+              <Button onClick={() => setSelectedOrgans(new Set())} variant="secondary" className="px-2 py-1">清空</Button>
               {targets.map((t) => (
                 <button key={t.organ} onClick={() => toggleOrgan(t.organ)} className={`text-xs lg:text-sm px-2.5 py-1 rounded-lg border transition-colors ${selectedOrgans.has(t.organ) ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground hover:text-foreground'}`}>
                   {t.label || t.organ}
@@ -212,10 +213,10 @@ export default function BenchmarkPage() {
                 <input type="number" min={1} max={50} className="w-full px-3 py-1.5 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50" value={concurrency} onChange={(e) => setConcurrency(Math.min(50, Math.max(1, +e.target.value || 5)))} />
               </div>
             </div>
-            <button onClick={handleRun} disabled={running} className="flex items-center gap-1.5 px-2 lg:px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+            <Button onClick={handleRun} disabled={running} variant="primary" className="gap-1.5 text-sm">
               {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
               {running ? '运行中...' : '开始基准测试'}
-            </button>
+            </Button>
           </div>
 
           {/* Quick Run */}
@@ -223,9 +224,9 @@ export default function BenchmarkPage() {
             <h3 className="text-sm font-medium mb-3">快速测试（单个目标，10次迭代）</h3>
             <div className="flex flex-wrap gap-2">
               {targets.map((t) => (
-                <button key={t.organ} onClick={() => handleQuick(t.organ)} disabled={running} className="flex items-center gap-1 text-xs lg:text-sm px-3 py-1.5 border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
+                <Button key={t.organ} onClick={() => handleQuick(t.organ)} disabled={running} variant="secondary" className="gap-1">
                   <Zap className="w-3 h-3" />{t.label || t.organ}
-                </button>
+                </Button>
               ))}
             </div>
           </div>

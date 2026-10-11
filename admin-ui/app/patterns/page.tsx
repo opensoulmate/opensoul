@@ -7,6 +7,8 @@ import {
   Lightbulb, AlertTriangle, Shield, Plus, Trash2, Filter,
   TrendingUp, BookOpen, Brain, Tag, Clock, CheckCircle,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -108,9 +110,9 @@ function PatternCard({ pattern, expanded, onToggle }: {
             <span className="text-sm font-medium">{pattern.title || '未命名模式'}</span>
             <ConfidenceBadge level={confidence} />
             {tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+              <Badge key={tag} variant="muted">
                 {tag}
-              </span>
+              </Badge>
             ))}
           </div>
 
@@ -175,14 +177,14 @@ function PatternCard({ pattern, expanded, onToggle }: {
           {/* Metadata */}
           <div className="flex flex-wrap gap-2">
             {meta.session_id && (
-              <span className="text-[10px] px-2 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+              <Badge variant="muted" className="font-mono">
                 会话: {meta.session_id}
-              </span>
+              </Badge>
             )}
             {tags.map((tag) => (
-              <span key={tag} className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary">
+              <Badge key={tag} variant="default">
                 <Tag className="w-2.5 h-2.5 inline mr-0.5" />{tag}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>
@@ -311,12 +313,9 @@ export default function PatternsPage() {
           <option value="medium">中置信</option>
           <option value="low">低置信</option>
         </select>
-        <button
-          onClick={() => fetchPatterns()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={() => fetchPatterns()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Pattern list */}
@@ -336,20 +335,14 @@ export default function PatternsPage() {
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">第 {page + 1} 页</span>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(Math.max(0, page - 1))}
-              disabled={page === 0}
-              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-            >
+            <Button onClick={() => setPage(Math.max(0, page - 1))}
+              disabled={page === 0} variant="secondary" className="disabled:opacity-30">
               上一页
-            </button>
-            <button
-              onClick={() => setPage(page + 1)}
-              disabled={patterns.length < pageSize}
-              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-            >
+            </Button>
+            <Button onClick={() => setPage(page + 1)}
+              disabled={patterns.length < pageSize} variant="secondary" className="disabled:opacity-30">
               下一页
-            </button>
+            </Button>
           </div>
         </div>
       )}

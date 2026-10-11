@@ -7,6 +7,7 @@ import {
   AlertCircle, CheckCircle, Target, Users, MessageSquare,
   BarChart3, Clock, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -263,14 +264,11 @@ export default function CortexPage() {
                   onChange={(e) => setPlanGoal(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handlePlan()}
                 />
-                <button
-                  onClick={handlePlan}
-                  disabled={!planGoal.trim() || planning}
-                  className="flex items-center gap-1.5 px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={handlePlan}
+                  disabled={!planGoal.trim() || planning} variant="primary" className="gap-1.5">
                   {planning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />}
                   {planning ? '规划中...' : '分解'}
-                </button>
+                </Button>
               </div>
               {planResult && (
                 <div className="space-y-2">

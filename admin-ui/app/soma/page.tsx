@@ -8,6 +8,8 @@ import {
   Server, Database, FolderOpen, ChevronDown, ChevronRight,
   AlertTriangle, Loader2, Zap, Settings, Eye,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -338,7 +340,7 @@ function ToolsTab({ tools }: { tools: CLITool[] }) {
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-medium font-mono">{tool.name}</span>
                 {tool.version && (
-                  <span className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary">{tool.version}</span>
+                  <Badge variant="default">{tool.version}</Badge>
                 )}
               </div>
               <p className="text-[10px] text-muted-foreground truncate">{tool.description || tool.path}</p>
@@ -555,14 +557,11 @@ export default function SomaPage() {
               扫描耗时 {formatTime(data.scan_time)}
             </span>
           )}
-          <button
-            onClick={handleRescan}
-            disabled={scanning}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-          >
+          <Button onClick={handleRescan}
+            disabled={scanning} variant="primary" className="gap-1.5">
             {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             {scanning ? '扫描中...' : '重新扫描'}
-          </button>
+          </Button>
         </div>
       </div>
 

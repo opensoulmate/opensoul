@@ -7,6 +7,8 @@ import {
   AlertCircle, Search, Settings, ChevronDown, ChevronRight,
   Copy, CheckCircle, Zap, Database, Brain, BarChart3,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -45,10 +47,10 @@ function SourceBadge({ source, index }: { source: Source; index: number }) {
     source.score >= 0.5 ? 'text-amber-500' : 'text-red-500';
 
   return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">
+    <Badge variant="muted" className="gap-1 font-mono">
       <span className="text-muted-foreground">#{index + 1}</span>
       <span className={scoreColor}>{source.score.toFixed(3)}</span>
-    </span>
+    </Badge>
   );
 }
 
@@ -402,13 +404,11 @@ export default function ChatTestPage() {
 
       {/* Input */}
       <div className="mt-3 flex items-center gap-2">
-        <button
-          onClick={handleClear}
-          className="p-2 rounded-lg border border-border hover:bg-muted transition-colors"
-          title="清空对话"
-        >
+        <Button onClick={handleClear}
+          
+          title="清空对话" variant="secondary" className="p-2">
           <RefreshCw className="w-4 h-4 text-muted-foreground" />
-        </button>
+        </Button>
         <div className="flex-1 relative">
           <input
             ref={inputRef}

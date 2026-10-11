@@ -6,6 +6,8 @@ import {
   RefreshCw, X, AlertCircle, Loader2, Network, Activity,
   ChevronRight, Layers, GitBranch
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface TopoNode {
   id: string;
@@ -155,9 +157,9 @@ export default function TopologyPage() {
           </button>
         </div>
         <div className="flex-1" />
-        <button onClick={fetchGraph} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchGraph} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Graph View */}
@@ -276,7 +278,7 @@ export default function TopologyPage() {
                       <span className="text-xs text-muted-foreground">依赖 ({dependencies.depends_on.length})</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {dependencies.depends_on.map((dep) => (
-                          <span key={dep} className="text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-500">{dep}</span>
+                          <Badge key={dep} variant="info">{dep}</Badge>
                         ))}
                       </div>
                     </div>
@@ -286,7 +288,7 @@ export default function TopologyPage() {
                       <span className="text-xs text-muted-foreground">被依赖 ({dependencies.depended_by.length})</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {dependencies.depended_by.map((dep) => (
-                          <span key={dep} className="text-xs px-2 py-0.5 rounded bg-violet-500/10 text-violet-500">{dep}</span>
+                          <Badge key={dep} variant="accent">{dep}</Badge>
                         ))}
                       </div>
                     </div>

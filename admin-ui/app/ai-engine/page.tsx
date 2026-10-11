@@ -6,6 +6,8 @@ import {
   Brain, Layers, Activity, Cpu, Workflow, Zap, RefreshCw, Search,
   ChevronRight, Shield, Target, Network, ArrowRight, CheckCircle, XCircle
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -280,9 +282,9 @@ export default function AIEnginePage() {
               placeholder="输入任务描述，如：帮我写一个系统架构方案"
               className="flex-1 px-3 py-2 text-sm rounded-lg bg-muted border border-border focus:outline-none focus:border-primary"
             />
-            <button onClick={handleAnalyze} disabled={analyzing} className="px-2 lg:px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+            <Button onClick={handleAnalyze} disabled={analyzing} variant="primary" className="text-sm">
               {analyzing ? '分析中...' : '分析'}
-            </button>
+            </Button>
           </div>
 
           {analyzeResult && (
@@ -294,9 +296,9 @@ export default function AIEnginePage() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="rounded-lg bg-muted/50 p-3">
                   <div className="text-xs text-muted-foreground mb-1">复杂度</div>
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs border ${COMPLEXITY_COLORS[analyzeResult.complexity] || ''}`}>
+                  <Badge className={`inline-block border ${COMPLEXITY_COLORS[analyzeResult.complexity] || ''}`}>
                     {analyzeResult.complexity}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <div className="text-xs text-muted-foreground mb-1">预计时间</div>
@@ -394,10 +396,10 @@ export default function AIEnginePage() {
               {toolRoutes.map((r, i) => (
                 <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
                   <code className="text-xs font-mono bg-muted px-2 py-1 rounded">{r.tool}</code>
-                  <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">{r.mode}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded ${r.permissions === 'readonly' ? 'bg-green-400/10 text-green-400' : 'bg-yellow-400/10 text-yellow-400'}`}>
+                  <Badge variant="default">{r.mode}</Badge>
+                  <Badge className={`${r.permissions === 'readonly' ? 'bg-emerald-400/10 text-emerald-400' : 'bg-amber-400/10 text-amber-400'}`}>
                     {r.permissions === 'readonly' ? '只读' : '读写'}
-                  </span>
+                  </Badge>
                   <div className="flex-1" />
                   <div className="flex flex-wrap gap-1">
                     {r.guardrails.map((g, j) => (
@@ -461,9 +463,9 @@ export default function AIEnginePage() {
                 placeholder="输入目标，如：编写系统架构方案"
                 className="flex-1 px-3 py-2 text-sm rounded-lg bg-muted border border-border focus:outline-none focus:border-primary"
               />
-              <button onClick={handleDecompose} disabled={decomposing} className="px-2 lg:px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleDecompose} disabled={decomposing} variant="primary" className="text-sm">
                 {decomposing ? '分解中...' : '分解'}
-              </button>
+              </Button>
             </div>
 
             {decomposeResult && (
@@ -476,11 +478,11 @@ export default function AIEnginePage() {
                   <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
                     <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center shrink-0">{st.order}</span>
                     <span className="text-sm flex-1">{st.goal}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded ${
+                    <Badge className={`${
                       st.role === 'advisor' ? 'bg-blue-400/10 text-blue-400' :
-                      st.role === 'executor' ? 'bg-green-400/10 text-green-400' :
-                      'bg-purple-400/10 text-purple-400'
-                    }`}>{st.role}</span>
+                      st.role === 'executor' ? 'bg-emerald-400/10 text-emerald-400' :
+                      'bg-violet-400/10 text-violet-400'
+                    }`}>{st.role}</Badge>
                   </div>
                 ))}
               </div>

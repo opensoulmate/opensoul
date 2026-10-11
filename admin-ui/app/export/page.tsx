@@ -7,6 +7,7 @@ import {
   RefreshCw, X, AlertCircle, CheckCircle, Loader2, Database,
   Tag, Layers, Activity,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -230,14 +231,11 @@ export default function ExportPage() {
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={() => handleExport(format)}
-                  disabled={isExporting || !userId}
-                  className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 shrink-0 font-medium transition-colors"
-                >
+                <Button onClick={() => handleExport(format)}
+                  disabled={isExporting || !userId} variant="primary" className="gap-1.5 shrink-0">
                   {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {isExporting ? '导出中...' : '导出'}
-                </button>
+                </Button>
               </div>
             );
           })}

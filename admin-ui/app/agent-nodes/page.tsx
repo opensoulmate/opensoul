@@ -7,6 +7,7 @@ import {
   Clock, CheckCircle, AlertCircle, Loader2, Send, Zap, Radio,
   Cpu, Shield, Eye, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -296,12 +297,9 @@ export default function AgentNodesPage() {
           </button>
         ))}
         <div className="flex-1" />
-        <button
-          onClick={fetchData}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted mb-1 transition-colors"
-        >
+        <Button onClick={fetchData} variant="secondary" className="mb-1">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* ── Nodes Tab ── */}
@@ -503,14 +501,11 @@ export default function AgentNodesPage() {
                   placeholder="输入问题检索相关记忆..."
                   onKeyDown={(e) => e.key === 'Enter' && handleRecall()}
                 />
-                <button
-                  onClick={handleRecall}
-                  disabled={recalling || !recallQuery}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={handleRecall}
+                  disabled={recalling || !recallQuery} variant="primary">
                   {recalling ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
                   检索
-                </button>
+                </Button>
               </div>
 
               {recallResults && (
@@ -594,14 +589,11 @@ export default function AgentNodesPage() {
                   placeholder='{"version": "1.0"}'
                 />
               </div>
-              <button
-                onClick={handleRegister}
-                disabled={registering || !registerForm.name}
-                className="flex items-center gap-1.5 px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-              >
+              <Button onClick={handleRegister}
+                disabled={registering || !registerForm.name} variant="primary" className="gap-1.5">
                 {registering ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
                 {registering ? '注册中...' : '注册节点'}
-              </button>
+              </Button>
             </div>
 
             {/* Register Result */}
@@ -667,15 +659,12 @@ export default function AgentNodesPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowReport(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button
-                  onClick={handleReport}
-                  disabled={reporting || !reportForm.agent_id}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowReport(false)} variant="secondary">取消</Button>
+                <Button onClick={handleReport}
+                  disabled={reporting || !reportForm.agent_id} variant="primary">
                   {reporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                   提交
-                </button>
+                </Button>
               </div>
             </div>
           </div>

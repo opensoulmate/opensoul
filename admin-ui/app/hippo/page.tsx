@@ -7,6 +7,8 @@ import {
   Brain, Tag, Settings, BarChart3, Play, Edit3, Save, Zap, AlertTriangle,
   Layers
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface Memory {
   memory_id: string;
@@ -291,9 +293,9 @@ export default function HippoPage() {
               <input type="checkbox" checked={includeArchived} onChange={e => setIncludeArchived(e.target.checked)} className="rounded" />
               包含已归档
             </label>
-            <button onClick={fetchMemories} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+            <Button onClick={fetchMemories} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
-            </button>
+            </Button>
             <button onClick={() => setShowCreateMem(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
               <Plus className="w-3.5 h-3.5" />新建记忆
             </button>
@@ -323,7 +325,7 @@ export default function HippoPage() {
                     <td className="px-2 lg:px-4 py-2.5 text-center text-muted-foreground">{m.access_count}</td>
                     <td className="px-2 lg:px-4 py-2.5">
                       <div className="flex flex-wrap gap-1">
-                        {m.tags.slice(0, 3).map(t => <span key={t} className="text-[10px] px-1 py-0.5 rounded bg-muted">{t}</span>)}
+                        {m.tags.slice(0, 3).map(t => <Badge key={t} variant="muted">{t}</Badge>)}
                       </div>
                     </td>
                     <td className="px-2 lg:px-4 py-2.5 text-center">
@@ -353,9 +355,9 @@ export default function HippoPage() {
       {tab === 'sessions' && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={fetchSessions} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+            <Button onClick={fetchSessions} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
-            </button>
+            </Button>
             <button onClick={() => setShowCreateSess(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
               <Plus className="w-3.5 h-3.5" />新建会话
             </button>
@@ -502,7 +504,7 @@ export default function HippoPage() {
               </div>
               {selectedMem.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {selectedMem.tags.map(t => <span key={t} className="text-xs px-2 py-0.5 rounded bg-primary/5 text-primary/70">{t}</span>)}
+                  {selectedMem.tags.map(t => <Badge key={t} variant="subtle">{t}</Badge>)}
                 </div>
               )}
               <div className="text-xs text-muted-foreground">
@@ -544,9 +546,9 @@ export default function HippoPage() {
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowCreateMem(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
-              <button onClick={handleCreateMemory} disabled={saving || !memForm.content.trim()} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleCreateMemory} disabled={saving || !memForm.content.trim()} variant="primary" className="gap-1.5">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}保存
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -572,9 +574,9 @@ export default function HippoPage() {
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowCreateSess(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
-              <button onClick={handleCreateSession} disabled={saving} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleCreateSession} disabled={saving} variant="primary" className="gap-1.5">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}保存
-              </button>
+              </Button>
             </div>
           </div>
         </div>

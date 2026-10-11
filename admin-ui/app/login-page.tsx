@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { login } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
+import { Button } from '@/components/ui/button';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
@@ -53,10 +54,9 @@ export function LoginPage() {
             </div>
           </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
-          <button type="submit" disabled={loading}
-            className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-opacity transition-colors">
+          <Button type="submit" disabled={loading} variant="primary" className="w-full py-2.5 text-sm transition-opacity">
             {loading ? '登录中...' : '登录'}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

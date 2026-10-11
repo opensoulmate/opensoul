@@ -6,6 +6,8 @@ import {
   Search, Plus, Trash2, RefreshCw, X, Database, Edit3, Save, Zap,
   Tag, BarChart3, Layers, Settings
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface Entity {
   id: string;
@@ -261,9 +263,9 @@ export default function EntityPage() {
             <button onClick={() => { setEditEntityId(null); setEntityForm({ name: '', entity_type: 'concept', description: '', properties: '' }); setShowEntityDialog(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
               <Plus className="w-3.5 h-3.5" />新建实体
             </button>
-            <button onClick={fetchEntities} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+            <Button onClick={fetchEntities} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
-            </button>
+            </Button>
           </div>
 
           {/* Type distribution */}
@@ -272,7 +274,7 @@ export default function EntityPage() {
               {Object.entries(stats.by_type).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([type, cnt]) => (
                 <button key={type} onClick={() => setFilterType(filterType === type ? '' : type)}
                   className={`flex items-center gap-1.5 px-2 py-1 text-xs lg:text-sm rounded-lg border border-border transition-colors ${filterType === type ? 'bg-primary/10 text-primary' : 'bg-card hover:bg-muted/50'}`}>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${typeColor(type)}`}>{type}</span>
+                  <Badge className={`${typeColor(type)}`}>{type}</Badge>
                   <span className="font-medium">{String(cnt)}</span>
                 </button>
               ))}
@@ -317,9 +319,9 @@ export default function EntityPage() {
             <button onClick={() => { setEditTagId(null); setTagForm({ name: '', color: '#3b82f6' }); setShowTagDialog(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
               <Plus className="w-3.5 h-3.5" />新建标签
             </button>
-            <button onClick={fetchTags} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+            <Button onClick={fetchTags} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
-            </button>
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -354,7 +356,7 @@ export default function EntityPage() {
               <button onClick={() => setShowEntityDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
             </div>
             <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2"><span className={`text-xs px-2 py-0.5 rounded ${typeColor(selectedEntity.entity_type)}`}>{selectedEntity.entity_type}</span></div>
+              <div className="flex items-center gap-2"><Badge className={`${typeColor(selectedEntity.entity_type)}`}>{selectedEntity.entity_type}</Badge></div>
               <div><span className="text-muted-foreground">描述: </span>{selectedEntity.description || '暂无'}</div>
               <div><span className="text-muted-foreground">ID: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selectedEntity.id}</code></div>
               {selectedEntity.properties && Object.keys(selectedEntity.properties).length > 0 && (
@@ -402,9 +404,9 @@ export default function EntityPage() {
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowEntityDialog(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
-              <button onClick={handleSaveEntity} disabled={saving || !entityForm.name.trim()} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleSaveEntity} disabled={saving || !entityForm.name.trim()} variant="primary" className="gap-1.5">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}保存
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -437,9 +439,9 @@ export default function EntityPage() {
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowTagDialog(false)} className="px-3 py-1.5 text-xs lg:text-sm bg-muted border border-border rounded-lg">取消</button>
-              <button onClick={handleSaveTag} disabled={saving || !tagForm.name.trim()} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={handleSaveTag} disabled={saving || !tagForm.name.trim()} variant="primary" className="gap-1.5">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}保存
-              </button>
+              </Button>
             </div>
           </div>
         </div>

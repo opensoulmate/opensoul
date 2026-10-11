@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Search, UserPlus, Trash2, X, Shield, RefreshCw, Users as UsersIcon, UserCheck, UserX, Edit2, Save } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface User {
   id: number;
@@ -147,18 +148,12 @@ export default function UsersPage() {
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
-        <button
-          onClick={fetchUsers}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={fetchUsers} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-        >
+        </Button>
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
           <UserPlus className="w-3.5 h-3.5" />添加用户
-        </button>
+        </Button>
       </div>
 
       {/* Users Table */}
@@ -251,14 +246,11 @@ export default function UsersPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-                <button
-                  onClick={handleCreate}
-                  disabled={creating}
-                  className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowCreate(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreate}
+                  disabled={creating} variant="primary">
                   {creating ? '创建中...' : '创建'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -294,16 +286,13 @@ export default function UsersPage() {
                     onChange={(e) => setNewRole(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAssignRole()}
                   />
-                  <button
-                    onClick={handleAssignRole}
-                    className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-                  >
+                  <Button onClick={handleAssignRole} variant="primary">
                     <Save className="w-3.5 h-3.5" />分配
-                  </button>
+                  </Button>
                 </div>
               </div>
               <div className="flex justify-end pt-2">
-                <button onClick={() => setEditUser(null)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">关闭</button>
+                <Button onClick={() => setEditUser(null)} variant="secondary">关闭</Button>
               </div>
             </div>
           </div>

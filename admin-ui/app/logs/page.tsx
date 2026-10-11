@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, Terminal, Wifi, WifiOff, Radio,
   Zap, Eye, BarChart3,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface LogEntry {
   id: string;
@@ -283,12 +284,12 @@ export default function LogsPage() {
             轮询(5s)
           </label>
         )}
-        <button onClick={handleRefreshStream} disabled={refreshing} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
+        <Button onClick={handleRefreshStream} disabled={refreshing} variant="secondary">
           {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}刷新流
-        </button>
-        <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={handleExport} variant="secondary">
           <Download className="w-3.5 h-3.5" />导出CSV
-        </button>
+        </Button>
       </div>
 
       {/* Error */}

@@ -9,6 +9,8 @@ import {
   TrendingUp, Clock, Tag, ArrowRight, BarChart3, Lightbulb,
   Star, AlertTriangle, Activity, Layers, History, XCircle,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -298,7 +300,7 @@ function SkillCard({
             >
               <History className="w-3.5 h-3.5" />版本历史
               {versions.length > 0 && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-muted">{versions.length}</span>
+                <Badge variant="muted">{versions.length}</Badge>
               )}
             </button>
             <button
@@ -317,7 +319,7 @@ function SkillCard({
             >
               <Lightbulb className="w-3.5 h-3.5" />进化提案
               {skillProposals.length > 0 && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/10 text-violet-500">{skillProposals.length}</span>
+                <Badge variant="accent">{skillProposals.length}</Badge>
               )}
             </button>
           </div>
@@ -696,9 +698,9 @@ export default function SkillsPage() {
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <button onClick={() => fetchData()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => fetchData()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
         <button
           onClick={handleMigrate}
           disabled={migrating}
@@ -707,9 +709,9 @@ export default function SkillsPage() {
           {migrating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderInput className="w-3.5 h-3.5" />}
           全部迁移
         </button>
-        <button onClick={() => { setShowInstall(true); setInstallResult(null); }} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        <Button onClick={() => { setShowInstall(true); setInstallResult(null); }} variant="primary" className="gap-1.5">
           <Download className="w-3.5 h-3.5" />安装技能
-        </button>
+        </Button>
       </div>
 
       {/* ── Error / Result banners ── */}
@@ -789,15 +791,12 @@ export default function SkillsPage() {
                 </div>
               )}
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowInstall(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button
-                  onClick={handleInstall}
-                  disabled={!installName.trim() || installing}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowInstall(false)} variant="secondary">取消</Button>
+                <Button onClick={handleInstall}
+                  disabled={!installName.trim() || installing} variant="primary">
                   {installing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                   {installing ? '安装中...' : '安装'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

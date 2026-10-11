@@ -8,6 +8,7 @@ import {
   TrendingDown, Minus, Loader2, BarChart3, Heart, Shield, Bell,
   Eye, EyeOff, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -349,9 +350,9 @@ export default function VitalPage() {
             <option value={360}>6小时</option>
             <option value={720}>12小时</option>
           </select>
-          <button onClick={fetchData} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
+          <Button onClick={fetchData} disabled={loading} variant="secondary">
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}刷新
-          </button>
+          </Button>
         </div>
       </div>
 

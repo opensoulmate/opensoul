@@ -7,6 +7,7 @@ import {
   Info, AlertTriangle, CheckCircle, Filter, Beaker, Send, Settings,
   ChevronDown, ChevronRight, BarChart3, Loader2, Zap, Globe,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Notification {
   id: string;
@@ -283,21 +284,21 @@ export default function NotificationsPage() {
           <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} className="rounded" />
           仅未读
         </label>
-        <button onClick={fetchNotifications} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchNotifications} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button onClick={handleMarkAllRead} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={handleMarkAllRead} variant="secondary">
           <CheckCheck className="w-3.5 h-3.5" />全部已读
-        </button>
-        <button onClick={() => setShowForwardRules(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={() => setShowForwardRules(true)} variant="secondary">
           <Settings className="w-3.5 h-3.5" />转发规则
-        </button>
-        <button onClick={() => setShowStats(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={() => setShowStats(true)} variant="secondary">
           <BarChart3 className="w-3.5 h-3.5" />统计
-        </button>
-        <button onClick={handleTest} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={handleTest} variant="secondary">
           <Beaker className="w-3.5 h-3.5" />测试
-        </button>
+        </Button>
         <button onClick={handleClearAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20">
           <Trash2 className="w-3.5 h-3.5" />清空
         </button>
@@ -478,9 +479,9 @@ export default function NotificationsPage() {
                 </div>
               )}
               <div className="flex gap-2 pt-2">
-                <button onClick={handleTestForward} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+                <Button onClick={handleTestForward} variant="secondary" className="gap-1">
                   <Beaker className="w-3 h-3" />发送测试转发
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -567,15 +568,12 @@ export default function NotificationsPage() {
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setForwardNotif(null)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button
-                  onClick={handleForward}
-                  disabled={!forwardChannel || forwarding}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setForwardNotif(null)} variant="secondary">取消</Button>
+                <Button onClick={handleForward}
+                  disabled={!forwardChannel || forwarding} variant="primary">
                   {forwarding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                   {forwarding ? '转发中...' : '转发'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

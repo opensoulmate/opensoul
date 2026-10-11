@@ -8,6 +8,8 @@ import {
   AlertCircle, CheckCircle, Clock, Database, Globe, Lock,
   BarChart3, FileText, Settings, Eye,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -404,18 +406,12 @@ export default function NestPage() {
             >
               {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-            >
+            <Button onClick={openCreate} variant="primary" className="gap-1.5">
               <Plus className="w-3.5 h-3.5" />新建租户
-            </button>
-            <button
-              onClick={() => { fetchTenants(); fetchStats(); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-            >
+            </Button>
+            <Button onClick={() => { fetchTenants(); fetchStats(); }} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
-            </button>
+            </Button>
           </div>
 
           {/* Tenant table */}
@@ -443,7 +439,7 @@ export default function NestPage() {
                       {t.tags && t.tags.length > 0 && (
                         <div className="flex items-center gap-1 mt-1">
                           {t.tags.slice(0, 3).map((tag) => (
-                            <span key={tag} className="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">{tag}</span>
+                            <Badge key={tag} variant="muted">{tag}</Badge>
                           ))}
                         </div>
                       )}
@@ -506,12 +502,12 @@ export default function NestPage() {
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>第 {page + 1}/{totalPages} 页</span>
               <div className="flex items-center gap-1">
-                <button disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))} className="p-1.5 rounded-md border border-border hover:bg-muted disabled:opacity-30">
+                <Button disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))} variant="secondary" className="p-1.5 rounded-md disabled:opacity-30">
                   <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="p-1.5 rounded-md border border-border hover:bg-muted disabled:opacity-30">
+                </Button>
+                <Button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} variant="secondary" className="p-1.5 rounded-md disabled:opacity-30">
                   <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -523,9 +519,9 @@ export default function NestPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-xs text-muted-foreground">资源类型隔离策略 — 控制跨租户访问权限</div>
-            <button onClick={fetchPolicies} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+            <Button onClick={fetchPolicies} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
-            </button>
+            </Button>
           </div>
 
           <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -632,9 +628,9 @@ export default function NestPage() {
                 onChange={(e) => setAuditTenantFilter(e.target.value)}
               />
             </div>
-            <button onClick={fetchAudit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+            <Button onClick={fetchAudit} variant="secondary">
               <RefreshCw className="w-3.5 h-3.5" />刷新
-            </button>
+            </Button>
           </div>
 
           <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -713,8 +709,8 @@ export default function NestPage() {
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-              <button onClick={handleCreate} disabled={!form.name.trim()} className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">创建</button>
+              <Button onClick={() => setShowCreate(false)} variant="secondary">取消</Button>
+              <Button onClick={handleCreate} disabled={!form.name.trim()} variant="primary">创建</Button>
             </div>
           </div>
         </div>
@@ -825,16 +821,16 @@ export default function NestPage() {
             <div className="flex items-center gap-2 p-4 border-t border-border shrink-0">
               {editMode ? (
                 <>
-                  <button onClick={handleUpdate} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                  <Button onClick={handleUpdate} variant="primary">
                     <Save className="w-3 h-3" />保存
-                  </button>
-                  <button onClick={() => setEditMode(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+                  </Button>
+                  <Button onClick={() => setEditMode(false)} variant="secondary">取消</Button>
                 </>
               ) : (
                 <>
-                  <button onClick={() => setEditMode(true)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+                  <Button onClick={() => setEditMode(true)} variant="secondary" className="gap-1">
                     <Edit3 className="w-3 h-3" />编辑
-                  </button>
+                  </Button>
                   {selectedTenant.status === 'active' ? (
                     <button onClick={() => handleSuspend(selectedTenant.tenant_id)} className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500/20">
                       <PauseCircle className="w-3 h-3" />暂停

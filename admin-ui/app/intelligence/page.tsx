@@ -6,6 +6,7 @@ import {
   Brain, RefreshCw, X, AlertCircle, Loader2, TrendingUp, TrendingDown,
   Lightbulb, AlertTriangle, Info, Activity, Zap, BarChart3, ShieldCheck
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface SystemSummary {
   health_score: number;
@@ -172,13 +173,13 @@ export default function IntelligencePage() {
           ))}
         </div>
         <div className="flex-1" />
-        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchAll} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button onClick={handleCollect} disabled={collecting} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+        </Button>
+        <Button onClick={handleCollect} disabled={collecting} variant="primary" className="gap-1.5">
           {collecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart3 className="w-3.5 h-3.5" />}
           {collecting ? '采集中...' : '采集指标'}
-        </button>
+        </Button>
       </div>
 
       {/* Overview Tab */}

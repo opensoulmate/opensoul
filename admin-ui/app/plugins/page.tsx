@@ -6,6 +6,7 @@ import {
   Search, Puzzle, Plus, Trash2, Power, PowerOff, Settings, X,
   RefreshCw, Package, Check, AlertCircle
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Plugin {
   id: number;
@@ -173,12 +174,12 @@ export default function PluginsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={() => fetchPlugins()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => fetchPlugins()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button onClick={() => setShowInstall(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        </Button>
+        <Button onClick={() => setShowInstall(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />安装插件
-        </button>
+        </Button>
       </div>
 
       {/* Error banner */}
@@ -308,14 +309,11 @@ export default function PluginsPage() {
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowInstall(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button
-                  onClick={handleInstall}
-                  disabled={!installForm.name || installing}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowInstall(false)} variant="secondary">取消</Button>
+                <Button onClick={handleInstall}
+                  disabled={!installForm.name || installing} variant="primary">
                   {installing ? '安装中...' : '安装'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -364,13 +362,10 @@ export default function PluginsPage() {
                 {selectedPlugin.status === 'enabled' ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
                 {selectedPlugin.status === 'enabled' ? '禁用' : '启用'}
               </button>
-              <button
-                onClick={handleSaveConfig}
-                disabled={saving}
-                className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-              >
+              <Button onClick={handleSaveConfig}
+                disabled={saving} variant="primary">
                 <Settings className="w-3 h-3" />{saving ? '保存中...' : '保存配置'}
-              </button>
+              </Button>
               <button
                 onClick={() => handleUninstall(selectedPlugin)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs lg:text-sm bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 ml-auto"

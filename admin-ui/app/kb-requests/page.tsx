@@ -7,6 +7,8 @@ import {
   FileText, Share2, Filter, MessageSquare, User, AlertCircle,
   ChevronDown, ChevronRight, Plus, Loader2, BookOpen, Shield,
 } from 'lucide-react';
+import { Tab, TabBar } from '@/components/ui/tab';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -376,30 +378,17 @@ export default function KbRequestsPage() {
           <option value="approved">已通过</option>
           <option value="rejected">已拒绝</option>
         </select>
-        <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button
-            onClick={() => setTab('create')}
-            className={`flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${
-              tab === 'create' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
-            } font-medium transition-colors`}
-          >
+        <TabBar>
+          <Tab active={tab === 'create'} onClick={() => setTab('create')}>
             <FileText className="w-3 h-3" />创建 ({allCreate.length})
-          </button>
-          <button
-            onClick={() => setTab('sharing')}
-            className={`flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${
-              tab === 'sharing' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
-            } font-medium transition-colors`}
-          >
+          </Tab>
+          <Tab active={tab === 'sharing'} onClick={() => setTab('sharing')}>
             <Share2 className="w-3 h-3" />共享 ({allSharing.length})
-          </button>
-        </div>
-        <button
-          onClick={fetchRequests}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+          </Tab>
+        </TabBar>
+        <Button onClick={fetchRequests} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Error */}

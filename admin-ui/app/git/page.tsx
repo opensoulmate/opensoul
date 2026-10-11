@@ -7,6 +7,8 @@ import {
   CheckCircle, Loader2, ArrowUp, ArrowDown, FileText,
   Plus, Minus, Edit3, Shield, Activity, Clock, Terminal,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -152,14 +154,11 @@ export default function GitPage() {
             onChange={(e) => setCustomCwd(e.target.value)}
           />
         </div>
-        <button
-          onClick={fetchStatus}
-          disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
-        >
+        <Button onClick={fetchStatus}
+          disabled={loading} variant="secondary">
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           刷新
-        </button>
+        </Button>
       </div>
 
       {/* ── Status Detail ── */}
@@ -184,19 +183,19 @@ export default function GitPage() {
                 <div className="text-[10px] text-muted-foreground">当前分支</div>
               </div>
               {status.ahead > 0 && (
-                <span className="ml-auto flex items-center gap-1 text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">
+                <Badge variant="warning" className="ml-auto gap-1">
                   <ArrowUp className="w-3 h-3" />领先 {status.ahead} 提交
-                </span>
+                </Badge>
               )}
               {status.behind > 0 && (
-                <span className="ml-auto flex items-center gap-1 text-xs text-red-500 bg-red-500/10 px-2 py-0.5 rounded">
+                <Badge variant="destructive" className="ml-auto gap-1">
                   <ArrowDown className="w-3 h-3" />落后 {status.behind} 提交
-                </span>
+                </Badge>
               )}
               {isSynced && (
-                <span className="ml-auto flex items-center gap-1 text-xs text-green-500 bg-green-500/10 px-2 py-0.5 rounded">
+                <Badge variant="success" className="ml-auto gap-1">
                   <CheckCircle className="w-3 h-3" />已同步
-                </span>
+                </Badge>
               )}
             </div>
 
@@ -248,14 +247,11 @@ export default function GitPage() {
               onChange={(e) => setCommitMsg(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
             />
-            <button
-              onClick={handleCommit}
-              disabled={committing || !commitMsg.trim()}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-            >
+            <Button onClick={handleCommit}
+              disabled={committing || !commitMsg.trim()} variant="primary" className="gap-1.5 px-4 py-1.5">
               {committing ? <Loader2 className="w-3 h-3 animate-spin" /> : <GitCommit className="w-3 h-3" />}
               提交
-            </button>
+            </Button>
           </div>
 
           {commitResult && (

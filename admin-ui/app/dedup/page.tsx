@@ -7,6 +7,7 @@ import {
   CheckCircle, Loader2, Database, Layers, Eye, ArrowRight,
   Zap, Shield, BarChart3, Filter, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -258,20 +259,14 @@ export default function DedupPage() {
           <option value="medium">70-90% 中度</option>
           <option value="low">&lt;70% 低度</option>
         </select>
-        <button
-          onClick={fetchDuplicates}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={fetchDuplicates} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button
-          onClick={() => setShowDedupConfirm(true)}
-          disabled={deduping || duplicates.length === 0}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-        >
+        </Button>
+        <Button onClick={() => setShowDedupConfirm(true)}
+          disabled={deduping || duplicates.length === 0} variant="primary" className="gap-1.5">
           {deduping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
           自动去重
-        </button>
+        </Button>
       </div>
 
       {/* ── Dedup Result ── */}
@@ -356,12 +351,9 @@ export default function DedupPage() {
               将自动删除 {totalPairs} 组重复条目中的冗余项，保留最新版本。此操作不可撤销。
             </p>
             <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowDedupConfirm(false)}
-                className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-              >
+              <Button onClick={() => setShowDedupConfirm(false)} variant="secondary">
                 取消
-              </button>
+              </Button>
               <button
                 onClick={handleDeduplicate}
                 disabled={deduping}

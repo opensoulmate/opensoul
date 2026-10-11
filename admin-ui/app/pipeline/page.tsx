@@ -7,6 +7,7 @@ import {
   Filter, ChevronDown, ChevronRight, AlertTriangle, Zap, FileText,
   Shield, Brain, Database, ArrowRight, Trash2,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -323,18 +324,12 @@ export default function PipelinePage() {
             <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
-        <button
-          onClick={() => fetchHistory()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={() => fetchHistory()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button
-          onClick={() => setShowUpload(true)}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-        >
+        </Button>
+        <Button onClick={() => setShowUpload(true)} variant="primary" className="gap-1.5">
           <Upload className="w-3.5 h-3.5" />上传文件
-        </button>
+        </Button>
       </div>
 
       {/* Pipeline Timeline */}
@@ -561,20 +556,14 @@ export default function PipelinePage() {
 
               {/* Actions */}
               <div className="flex items-center gap-2 pt-2">
-                <button
-                  onClick={handleUpload}
-                  disabled={!uploadFile || uploading}
-                  className="flex items-center gap-1.5 px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={handleUpload}
+                  disabled={!uploadFile || uploading} variant="primary" className="gap-1.5">
                   {uploading ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                   {uploading ? '处理中...' : '开始处理'}
-                </button>
-                <button
-                  onClick={() => setShowUpload(false)}
-                  className="px-4 py-2 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                >
+                </Button>
+                <Button onClick={() => setShowUpload(false)} variant="secondary" className="px-4 py-2">
                   取消
-                </button>
+                </Button>
               </div>
             </div>
           </div>

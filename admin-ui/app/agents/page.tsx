@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Search, Bot, Download, Trash2, RefreshCw, X, CheckCircle, XCircle, Clock, Filter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Agent {
   id: string;
@@ -209,12 +210,9 @@ export default function AgentsPage() {
           <option value="installed">已安装</option>
           <option value="available">未安装</option>
         </select>
-        <button
-          onClick={() => fetchAgents()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={() => fetchAgents()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Agent Grid */}
@@ -281,12 +279,9 @@ export default function AgentsPage() {
                         </button>
                       </>
                     ) : (
-                      <button
-                        onClick={() => handleInstall(agent.id)}
-                        className="flex items-center gap-2 px-2 py-1 text-[10px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-                      >
+                      <Button onClick={() => handleInstall(agent.id)} variant="primary" className="py-1 text-[10px]">
                         <Download className="w-3 h-3" />安装
-                      </button>
+                      </Button>
                     )}
                   </>
                 )}
@@ -394,12 +389,9 @@ export default function AgentsPage() {
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={() => { handleInstall(selectedAgent.id); }}
-                    className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-                  >
+                  <Button onClick={() => { handleInstall(selectedAgent.id); }} variant="primary">
                     <Download className="w-3.5 h-3.5" />安装
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

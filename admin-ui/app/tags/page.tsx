@@ -6,6 +6,7 @@ import {
   Search, RefreshCw, X, Tag, Plus, Trash2, Edit3, Save,
   AlertTriangle, Loader2, CheckCircle, Palette, Hash,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -120,15 +121,12 @@ function TagDialog({ tag, onClose, onSave }: {
         </div>
 
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
-            className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-          >
+          <Button onClick={onClose} variant="secondary">取消</Button>
+          <Button onClick={handleSave}
+            disabled={saving || !name.trim()} variant="primary" className="gap-1.5">
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             {tag ? '保存' : '创建'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -229,18 +227,12 @@ export default function TagsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-        >
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3 h-3" />新建标签
-        </button>
-        <button
-          onClick={fetchTags}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        </Button>
+        <Button onClick={fetchTags} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* ── Tag Grid ── */}
@@ -270,12 +262,9 @@ export default function TagsPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setEditingTag(tag)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-              >
+              <Button onClick={() => setEditingTag(tag)} variant="secondary" className="flex-1">
                 <Edit3 className="w-3 h-3" />编辑
-              </button>
+              </Button>
               <button
                 onClick={() => handleDelete(tag.id)}
                 disabled={deleting === tag.id}

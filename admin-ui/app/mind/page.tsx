@@ -6,6 +6,8 @@ import {
   Search, Plus, Trash2, RefreshCw, X, Brain, Sparkles, Heart,
   CheckCircle, Edit3, Save, ChevronRight, BarChart3, Zap, Star
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface Personality {
   personality_id: string;
@@ -250,9 +252,9 @@ export default function MindPage() {
         <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">
           <Plus className="w-3.5 h-3.5" />新建人格
         </button>
-        <button onClick={() => { fetchAll(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => { fetchAll(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Personality Grid */}
@@ -344,7 +346,7 @@ export default function MindPage() {
               <div className="flex items-center gap-2">
                 <Brain className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-medium">{selected.name}</h2>
-                {selected.builtin && <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-blue-500/10 text-blue-500">内置</span>}
+                {selected.builtin && <Badge variant="info">内置</Badge>}
               </div>
               <button onClick={() => setShowDetail(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
             </div>
@@ -360,7 +362,7 @@ export default function MindPage() {
                 <div>
                   <span className="text-muted-foreground">特质: </span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {selected.traits.map(t => <span key={t} className="text-xs px-2 py-0.5 rounded bg-primary/5 text-primary/70">{t}</span>)}
+                    {selected.traits.map(t => <Badge key={t} variant="subtle">{t}</Badge>)}
                   </div>
                 </div>
               )}
@@ -368,7 +370,7 @@ export default function MindPage() {
               <div><span className="text-muted-foreground">人格ID: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selected.personality_id}</code></div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              {!selected.builtin && <button onClick={() => { setShowDetail(false); openEdit(selected.personality_id); }} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">编辑</button>}
+              {!selected.builtin && <Button onClick={() => { setShowDetail(false); openEdit(selected.personality_id); }} variant="secondary">编辑</Button>}
               {selected.personality_id !== activeId && (
                 <button onClick={() => { handleSetActive(selected.personality_id); setShowDetail(false); }} className="px-3 py-1.5 text-xs lg:text-sm bg-primary/10 text-primary border border-border rounded-lg hover:bg-primary/20">设为激活</button>
               )}
@@ -430,11 +432,11 @@ export default function MindPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowDialog(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-              <button onClick={handleSave} disabled={saving || !form.name.trim()} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={() => setShowDialog(false)} variant="secondary">取消</Button>
+              <Button onClick={handleSave} disabled={saving || !form.name.trim()} variant="primary" className="gap-1.5">
                 {saving ? <Zap className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 {saving ? '保存中...' : '保存'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

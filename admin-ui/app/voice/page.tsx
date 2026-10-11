@@ -6,6 +6,9 @@ import {
   Mic, Plus, Trash2, RefreshCw, X, Save, Volume2, Play,
   Settings, Loader2, AlertCircle, CheckCircle, Headphones
 } from 'lucide-react';
+import { Tab, TabBar } from '@/components/ui/tab';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface VoiceProfile {
   profile_id: string;
@@ -189,14 +192,11 @@ export default function VoicePage() {
             <option value="">默认声音</option>
             {profiles.map((p) => <option key={p.profile_id} value={p.profile_id}>{p.name}</option>)}
           </select>
-          <button
-            onClick={handleTestTTS}
-            disabled={testing || !testText.trim()}
-            className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-          >
+          <Button onClick={handleTestTTS}
+            disabled={testing || !testText.trim()} variant="primary">
             {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
             {testing ? '合成中...' : '测试'}
-          </button>
+          </Button>
         </div>
         {testResult && !testResult.error && (
           <div className="mt-2 p-2 rounded bg-green-500/5 border border-green-500/20 text-xs">
@@ -214,17 +214,17 @@ export default function VoicePage() {
 
       {/* Tab + Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button onClick={() => setTab('profiles')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'profiles' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>语音角色</button>
-          <button onClick={() => setTab('voices')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'voices' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>可用声音</button>
-        </div>
-        <button onClick={() => { fetchProfiles(); fetchVoices(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <TabBar>
+          <Tab active={tab === 'profiles'} onClick={() => setTab('profiles')}>语音角色</Tab>
+          <Tab active={tab === 'voices'} onClick={() => setTab('voices')}>可用声音</Tab>
+        </TabBar>
+        <Button onClick={() => { fetchProfiles(); fetchVoices(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
         {tab === 'profiles' && (
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 ml-auto font-medium transition-colors">
+          <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5 ml-auto">
             <Plus className="w-3.5 h-3.5" />新建角色
-          </button>
+          </Button>
         )}
       </div>
 
@@ -247,7 +247,7 @@ export default function VoicePage() {
                   <div className="flex items-center gap-2">
                     <Headphones className="w-4 h-4 text-primary shrink-0" />
                     <h3 className="text-xs font-medium truncate">{p.name}</h3>
-                    {p.builtin && <span className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary">内置</span>}
+                    {p.builtin && <Badge variant="default">内置</Badge>}
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{p.description || p.voice_id}</p>
                   <div className="flex items-center gap-2 mt-1.5">
@@ -257,7 +257,7 @@ export default function VoicePage() {
                   </div>
                   {p.tags.length > 0 && (
                     <div className="flex items-center gap-1 mt-1">
-                      {p.tags.map((t) => <span key={t} className="text-[10px] px-1 py-0.5 rounded bg-primary/5 text-primary/70">{t}</span>)}
+                      {p.tags.map((t) => <Badge key={t} variant="subtle">{t}</Badge>)}
                     </div>
                   )}
                 </div>
@@ -352,10 +352,10 @@ export default function VoicePage() {
                 <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md" value={createForm.tags} onChange={(e) => setCreateForm((f) => ({ ...f, tags: e.target.value }))} placeholder="温柔, 女声" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleCreate} disabled={!createForm.name || creating} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowCreate(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreate} disabled={!createForm.name || creating} variant="primary">
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}创建
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -379,10 +379,10 @@ export default function VoicePage() {
                 <div><label className="text-xs text-muted-foreground">音量</label><input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md" value={editProfile.volume} onChange={(e) => setEditProfile((p) => p ? { ...p, volume: e.target.value } : null)} /></div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowEdit(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleSaveEdit} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                <Button onClick={() => setShowEdit(false)} variant="secondary">取消</Button>
+                <Button onClick={handleSaveEdit} variant="primary">
                   <Save className="w-3 h-3" />保存
-                </button>
+                </Button>
               </div>
             </div>
           </div>

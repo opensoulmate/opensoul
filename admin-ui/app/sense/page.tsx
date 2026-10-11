@@ -7,6 +7,7 @@ import {
   CheckCircle, XCircle, AlertTriangle, Loader2, Settings,
   Activity, Zap, Globe, Languages, Monitor,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -331,9 +332,9 @@ export default function SensePage() {
             );
           })}
         </div>
-        <button onClick={fetchData} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchData} variant="secondary" className="ml-auto">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Error */}

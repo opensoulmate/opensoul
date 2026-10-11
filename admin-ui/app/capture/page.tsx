@@ -7,6 +7,7 @@ import {
   Globe, FileText, MousePointer, Clock, ExternalLink, ArrowUpCircle,
   AlertCircle, CheckCircle, Loader2, Filter, Camera,
 } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -195,9 +196,9 @@ export default function CapturePage() {
           <option value="page">整页</option>
           <option value="selection">选区</option>
         </select>
-        <button onClick={() => fetchData()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => fetchData()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* ── Capture List ── */}
@@ -286,7 +287,7 @@ export default function CapturePage() {
                       href={capture.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 px-2.5 py-1 text-[10px] bg-muted border border-border rounded hover:bg-muted/80"
+                      className={buttonVariants({ variant: 'secondary', size: 'xs' })}
                     >
                       <ExternalLink className="w-3 h-3" />打开原文
                     </a>
@@ -309,10 +310,8 @@ export default function CapturePage() {
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">第 {page + 1} / {totalPages} 页，共 {total} 条</span>
           <div className="flex items-center gap-1">
-            <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
-              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">上一页</button>
-            <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
-              className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">下一页</button>
+            <Button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} variant="secondary" className="disabled:opacity-30">上一页</Button>
+            <Button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} variant="secondary" className="disabled:opacity-30">下一页</Button>
           </div>
         </div>
       )}

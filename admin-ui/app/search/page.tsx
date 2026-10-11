@@ -6,6 +6,7 @@ import {
   Search, RefreshCw, X, BookOpen, FileText, Radio, Bot, GraduationCap,
   BarChart3, Timer, Dna, Volume2, Database, Filter, ChevronDown
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -130,9 +131,9 @@ export default function SearchPage() {
               autoFocus
             />
           </div>
-          <button onClick={handleSearch} disabled={searching} className="px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+          <Button onClick={handleSearch} disabled={searching} variant="primary" className="px-5 py-2.5 text-sm">
             {searching ? '搜索中...' : '搜索'}
-          </button>
+          </Button>
         </div>
 
         {/* Mode + Source Filter */}
@@ -161,14 +162,11 @@ export default function SearchPage() {
 
           {mode === 'unified' && (
             <div className="relative">
-              <button
-                onClick={() => setShowSourceFilter(!showSourceFilter)}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs lg:text-sm rounded-lg border border-border hover:bg-muted transition-colors"
-              >
+              <Button onClick={() => setShowSourceFilter(!showSourceFilter)} variant="secondary" className="px-2.5 py-1">
                 <Filter className="w-3 h-3" />
                 来源
                 <ChevronDown className="w-3 h-3" />
-              </button>
+              </Button>
               {showSourceFilter && (
                 <div className="absolute top-full left-0 mt-1 z-10 w-48 rounded-lg border border-border bg-card shadow-lg p-2 space-y-1">
                   <button

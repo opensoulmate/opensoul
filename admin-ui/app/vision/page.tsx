@@ -7,6 +7,8 @@ import {
   Trash2, Download, Loader2, AlertCircle, CheckCircle, Network,
   Activity, FileImage, Settings, Plus, Minus,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -348,14 +350,11 @@ export default function VisionPage() {
               </>
             )}
 
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-            >
+            <Button onClick={handleGenerate}
+              disabled={generating} variant="primary" className="w-full gap-1.5 px-3">
               {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
               {generating ? '生成中...' : '生成图表'}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -383,9 +382,9 @@ export default function VisionPage() {
           </div>
           {previewMeta?.output_file && (
             <div className="px-4 pb-3">
-              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500">
+              <Badge variant="success">
                 已保存: {previewMeta.output_file}
-              </span>
+              </Badge>
             </div>
           )}
         </div>

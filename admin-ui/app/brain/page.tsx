@@ -6,6 +6,7 @@ import {
   Brain, BookOpen, Lightbulb, GitBranch, MessageSquare, Search,
   RefreshCw, Filter, Eye, Tag, TrendingUp, Database, Network, X,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -473,7 +474,7 @@ export default function BrainPage() {
             <div className="text-sm text-foreground/80 whitespace-pre-wrap mb-4">{selectedEntry.content}</div>
             {(selectedEntry.tags || []).length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {selectedEntry.tags.map((t) => <span key={t} className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{t}</span>)}
+                {selectedEntry.tags.map((t) => <Badge key={t} variant="muted">{t}</Badge>)}
               </div>
             )}
             <div className="text-xs text-muted-foreground mt-4 pt-4 border-t border-border">

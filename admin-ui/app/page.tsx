@@ -8,6 +8,7 @@ import {
   AlertTriangle, TrendingUp, Database, Brain, GitBranch, Lightbulb,
   MessageSquare, Shield, Timer, BarChart3, Layers, Gauge, Workflow,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -213,9 +214,9 @@ function OrganHealthGrid({ organs }: { organs: OrganHealth }) {
         <div className="flex items-center gap-2">
           <Server className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-medium">器官状态</h3>
-          <span className={`text-xs px-1.5 py-0.5 rounded ${statusColor(organs.status)}`}>
+          <Badge className={`${statusColor(organs.status)}`}>
             {statusLabel(organs.status)}
-          </span>
+          </Badge>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-400" />{organs.healthy_count}</span>
@@ -249,9 +250,9 @@ function OrganHealthGrid({ organs }: { organs: OrganHealth }) {
           <div className="text-xs text-muted-foreground mb-1.5">响应最慢：</div>
           <div className="flex flex-wrap gap-2">
             {organs.latency.slowest.slice(0, 3).map((s) => (
-              <span key={s.organ} className="text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-400">
+              <Badge key={s.organ} variant="warning">
                 {s.organ} {s.ms.toFixed(0)}ms
-              </span>
+              </Badge>
             ))}
           </div>
         </div>

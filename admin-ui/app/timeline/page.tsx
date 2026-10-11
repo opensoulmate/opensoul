@@ -6,6 +6,8 @@ import {
   Search, Clock, Trash2, RefreshCw, X, AlertCircle, Filter,
   ChevronLeft, ChevronRight, Plus, Loader2, Calendar, BarChart3, Layers
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface TimelineEvent {
   id: string;
@@ -229,15 +231,15 @@ export default function TimelinePage() {
           <option value="">全部类型</option>
           {types.map((t) => <option key={t.type} value={t.type}>{t.type} ({t.count})</option>)}
         </select>
-        <button onClick={() => { fetchEvents(); fetchMeta(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => { fetchEvents(); fetchMeta(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button onClick={handleSync} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors" title="从事件流同步">
+        </Button>
+        <Button onClick={handleSync}  title="从事件流同步" variant="secondary">
           <Layers className="w-3.5 h-3.5" />同步
-        </button>
-        <button onClick={() => setShowRecord(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        </Button>
+        <Button onClick={() => setShowRecord(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />记录事件
-        </button>
+        </Button>
         <button onClick={() => setShowClear(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm text-red-500 bg-muted border border-border rounded-lg hover:bg-red-500/10">
           <Trash2 className="w-3.5 h-3.5" />清理
         </button>
@@ -270,7 +272,7 @@ export default function TimelinePage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-base">{event.emoji || '📌'}</span>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{event.organ}</span>
+                  <Badge variant="muted">{event.organ}</Badge>
                   <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary">{event.type}</span>
                   <span className="text-[10px] text-muted-foreground ml-auto">{relativeTime(event.timestamp)}</span>
                 </div>
@@ -352,10 +354,10 @@ export default function TimelinePage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowRecord(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-              <button onClick={handleRecord} disabled={recording || !recordForm.summary.trim() || !recordForm.organ.trim()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={() => setShowRecord(false)} variant="secondary" className="px-4">取消</Button>
+              <Button onClick={handleRecord} disabled={recording || !recordForm.summary.trim() || !recordForm.organ.trim()} variant="primary" className="gap-1.5 px-4 py-1.5">
                 {recording && <Loader2 className="w-3 h-3 animate-spin" />}记录
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -373,7 +375,7 @@ export default function TimelinePage() {
               <div className="flex items-center gap-3">
                 <span className="text-2xl">{selectedEvent.emoji || '📌'}</span>
                 <div>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{selectedEvent.organ}</span>
+                  <Badge variant="muted">{selectedEvent.organ}</Badge>
                   <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary ml-2">{selectedEvent.type}</span>
                 </div>
               </div>
@@ -420,7 +422,7 @@ export default function TimelinePage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowClear(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
+              <Button onClick={() => setShowClear(false)} variant="secondary" className="px-4">取消</Button>
               <button onClick={handleClear} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-red-500 text-white rounded-lg hover:bg-red-600">
                 <Trash2 className="w-3 h-3" />确认清理
               </button>

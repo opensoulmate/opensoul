@@ -7,6 +7,7 @@ import {
   Clock, Server, Cpu, HardDrive, MemoryStick, Loader2, Settings,
   ChevronDown, ChevronRight, Zap, Layers, Wifi
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface OrganCheck {
   key: string;
@@ -247,16 +248,14 @@ export default function DiagnosticsPage() {
           <option value="ok">正常</option>
           <option value="error">异常</option>
         </select>
-        <button onClick={runCheckAll} disabled={scanning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
+        <Button onClick={runCheckAll} disabled={scanning} variant="secondary">
           {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           {scanning ? '扫描中...' : '重新扫描'}
-        </button>
-        <button onClick={fetchConfigDiff} disabled={configLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
+        </Button>
+        <Button onClick={fetchConfigDiff} disabled={configLoading} variant="secondary">
           {configLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Settings className="w-3.5 h-3.5" />}
           配置差异
-        </button>
+        </Button>
       </div>
 
       {/* Organ Grid */}
@@ -348,8 +347,7 @@ export default function DiagnosticsPage() {
               )}
             </div>
             <div className="flex items-center justify-end p-4 border-t border-border shrink-0">
-              <button onClick={() => setShowConfig(false)}
-                className="px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">关闭</button>
+              <Button onClick={() => setShowConfig(false)} variant="primary">关闭</Button>
             </div>
           </div>
         </div>

@@ -7,6 +7,8 @@ import {
   Zap, CheckCircle, AlertCircle, Loader2, DollarSign, Gauge, Wifi,
   WifiOff, Settings, ArrowRight, Shield, BarChart3, Clock,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -269,10 +271,7 @@ export default function GlandPage() {
               <span className="text-xs text-muted-foreground">
                 {formatNumber((usage?.total_input_tokens || 0) + (usage?.total_output_tokens || 0))} / {formatNumber(usage.budget_limit)}
               </span>
-              <button
-                onClick={() => { setBudgetLimit(String(usage.budget_limit)); setShowBudget(true); }}
-                className="text-[10px] px-2 py-0.5 border border-border rounded-lg hover:bg-muted transition-colors"
-              >修改</button>
+              <Button onClick={() => { setBudgetLimit(String(usage.budget_limit)); setShowBudget(true); }} variant="secondary" className="text-[10px] px-2 py-0.5">修改</Button>
             </div>
           </div>
           <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
@@ -294,41 +293,26 @@ export default function GlandPage() {
             <DollarSign className="w-4 h-4 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Token预算: 无限制</span>
           </div>
-          <button
-            onClick={() => { setBudgetLimit(''); setShowBudget(true); }}
-            className="text-xs lg:text-sm px-3 py-1 border border-border rounded-lg hover:bg-muted transition-colors"
-          >设置预算</button>
+          <Button onClick={() => { setBudgetLimit(''); setShowBudget(true); }} variant="secondary" className="py-1">设置预算</Button>
         </div>
       )}
 
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => handleTestProvider()}
-          disabled={testing !== null}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-        >
+        <Button onClick={() => handleTestProvider()}
+          disabled={testing !== null} variant="primary" className="gap-1.5">
           {testing === 'auto' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wifi className="w-3.5 h-3.5" />}
           测试连接
-        </button>
-        <button
-          onClick={() => fetchData()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        </Button>
+        <Button onClick={() => fetchData()} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button
-          onClick={() => setShowAddProvider(true)}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-        >
+        </Button>
+        <Button onClick={() => setShowAddProvider(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />添加Provider
-        </button>
-        <button
-          onClick={() => setShowAddKey(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        </Button>
+        <Button onClick={() => setShowAddKey(true)} variant="secondary">
           <Key className="w-3.5 h-3.5" />添加密钥
-        </button>
+        </Button>
       </div>
 
       {/* ── Test Result ── */}
@@ -390,22 +374,20 @@ export default function GlandPage() {
                     {Object.keys(p.models || {}).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {Object.entries(p.models).map(([task, model]) => (
-                          <span key={task} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                          <Badge key={task} variant="default">
                             {task}: {model}
-                          </span>
+                          </Badge>
                         ))}
                       </div>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => handleTestProvider(p.name)}
+                    <Button onClick={() => handleTestProvider(p.name)}
                       disabled={testing !== null}
-                      className="text-[10px] px-2 py-1 border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
-                      title="测试连接"
-                    >
+                      
+                      title="测试连接" variant="secondary" className="text-[10px] px-2 py-1">
                       {testing === p.name ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />}
-                    </button>
+                    </Button>
                     <button
                       onClick={() => handleRemoveProvider(p.name)}
                       className="text-[10px] px-2 py-1 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
@@ -570,12 +552,11 @@ export default function GlandPage() {
                   type="number" value={newProvider.priority} onChange={e => setNewProvider(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAddProvider(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleAddProvider} disabled={!newProvider.name || !newProvider.base_url || addingProvider}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowAddProvider(false)} variant="secondary">取消</Button>
+                <Button onClick={handleAddProvider} disabled={!newProvider.name || !newProvider.base_url || addingProvider} variant="primary">
                   {addingProvider ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   添加
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -606,12 +587,11 @@ export default function GlandPage() {
                   placeholder="sk-..." />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAddKey(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleAddKey} disabled={!newKey.provider || !newKey.api_key || addingKey}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowAddKey(false)} variant="secondary">取消</Button>
+                <Button onClick={handleAddKey} disabled={!newKey.provider || !newKey.api_key || addingKey} variant="primary">
                   {addingKey ? <Loader2 className="w-3 h-3 animate-spin" /> : <Key className="w-3 h-3" />}
                   添加
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -634,12 +614,11 @@ export default function GlandPage() {
                   placeholder="0" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowBudget(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleSetBudget} disabled={settingBudget}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowBudget(false)} variant="secondary">取消</Button>
+                <Button onClick={handleSetBudget} disabled={settingBudget} variant="primary">
                   {settingBudget ? <Loader2 className="w-3 h-3 animate-spin" /> : <DollarSign className="w-3 h-3" />}
                   保存
-                </button>
+                </Button>
               </div>
             </div>
           </div>

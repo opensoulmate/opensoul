@@ -7,6 +7,7 @@ import {
   CheckCircle, XCircle, AlertTriangle, Loader2, Plus, Zap,
   ArrowRightLeft, Shield, Clock, Wifi, WifiOff, Activity,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -177,11 +178,10 @@ function RegisterDialog({ onClose, onRegistered }: { onClose: () => void; onRegi
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">关闭</button>
-            <button onClick={handleRegister} disabled={!form.agent_id.trim() || !form.name.trim() || saving}
-              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+            <Button onClick={onClose} variant="secondary">关闭</Button>
+            <Button onClick={handleRegister} disabled={!form.agent_id.trim() || !form.name.trim() || saving} variant="primary">
               {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}注册
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -259,11 +259,10 @@ function MessageDialog({ agents, onClose }: { agents: AgentStatus[]; onClose: ()
           </div>
           {result && <div className="text-xs p-2 rounded bg-muted">{result}</div>}
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">关闭</button>
-            <button onClick={handleSend} disabled={!fromAgent || !toAgent || sending}
-              className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+            <Button onClick={onClose} variant="secondary">关闭</Button>
+            <Button onClick={handleSend} disabled={!fromAgent || !toAgent || sending} variant="primary">
               {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}发送
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -337,16 +336,15 @@ export default function CollabPage() {
           <input className="w-full pl-8 pr-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
             placeholder="搜索Agent名称、ID、能力..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button onClick={() => setShowRegister(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        <Button onClick={() => setShowRegister(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />注册Agent
-        </button>
-        <button onClick={() => setShowMessage(true)} disabled={onlineCount < 2}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">
+        </Button>
+        <Button onClick={() => setShowMessage(true)} disabled={onlineCount < 2} variant="secondary" className="disabled:opacity-30">
           <Send className="w-3.5 h-3.5" />发送消息
-        </button>
-        <button onClick={fetchAgents} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={fetchAgents} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Error */}

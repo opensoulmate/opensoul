@@ -6,6 +6,8 @@ import {
   Search, Activity, RefreshCw, X, AlertCircle, Radio, Pause, Play,
   ChevronDown, ChevronRight, Filter, Zap, Wifi, WifiOff, Clock
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface Event {
   id: string;
@@ -259,12 +261,9 @@ export default function EventsPage() {
           {liveMode ? <Pause className="w-3.5 h-3.5" /> : <Radio className="w-3.5 h-3.5" />}
           {liveMode ? '停止实时' : '实时模式'}
         </button>
-        <button
-          onClick={handleRefresh}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={handleRefresh} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -292,9 +291,9 @@ export default function EventsPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className={`px-1.5 py-0.5 text-[10px] rounded-md font-medium ${getOrganColor(ev.organ)}`}>
+                  <Badge className={`${getOrganColor(ev.organ)}`}>
                     {ev.organ}
-                  </span>
+                  </Badge>
                   <span className="text-[10px] text-muted-foreground">{ev.type}</span>
                   {liveMode && (
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />

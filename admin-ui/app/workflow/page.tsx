@@ -6,6 +6,8 @@ import {
   Search, Workflow, Plus, Trash2, Play, Pause, RefreshCw, X,
   Loader2, AlertCircle, CheckCircle, Clock, RotateCcw, Settings, PauseCircle
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface WorkflowTask {
   id: string;
@@ -225,18 +227,12 @@ export default function WorkflowPage() {
             <option key={k} value={k}>{v.label}</option>
           ))}
         </select>
-        <button
-          onClick={() => { fetchTasks(); fetchStats(); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-        >
+        <Button onClick={() => { fetchTasks(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors"
-        >
+        </Button>
+        <Button onClick={() => setShowCreate(true)} variant="primary" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" />新建任务
-        </button>
+        </Button>
       </div>
 
       {/* Task List */}
@@ -269,9 +265,9 @@ export default function WorkflowPage() {
                   <div className="text-sm font-medium truncate">{task.name}</div>
                   {task.description && <div className="text-[10px] text-muted-foreground truncate">{task.description}</div>}
                 </div>
-                <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground w-fit">
+                <Badge variant="muted" className="w-fit">
                   {TASK_TYPES.find((t) => t.value === task.task_type)?.label || task.task_type}
-                </span>
+                </Badge>
                 <span className={`flex items-center gap-1 text-xs ${sc.color}`}>
                   <StatusIcon className={`w-3 h-3 ${task.status === 'running' ? 'animate-spin' : ''}`} />
                   {sc.label}
@@ -339,10 +335,10 @@ export default function WorkflowPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-              <button onClick={handleCreate} disabled={creating || !createForm.name.trim()} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={() => setShowCreate(false)} variant="secondary" className="px-4">取消</Button>
+              <Button onClick={handleCreate} disabled={creating || !createForm.name.trim()} variant="primary" className="gap-1.5 px-4 py-1.5">
                 {creating && <Loader2 className="w-3 h-3 animate-spin" />}创建
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -387,9 +383,9 @@ export default function WorkflowPage() {
             </div>
             <div className="flex justify-between p-4 border-t border-border">
               <div className="flex gap-2">
-                <button onClick={() => { setShowDetail(false); openEdit(selectedTask); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+                <Button onClick={() => { setShowDetail(false); openEdit(selectedTask); }} variant="secondary">
                   <Settings className="w-3 h-3" />编辑
-                </button>
+                </Button>
               </div>
               <div className="flex gap-2">
                 {(selectedTask.status === 'idle' || selectedTask.status === 'active') && (
@@ -448,10 +444,10 @@ export default function WorkflowPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-border">
-              <button onClick={() => setShowEdit(false)} className="px-4 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">取消</button>
-              <button onClick={() => { setShowEdit(false); /* TODO: PUT endpoint not available yet */ }} disabled={editing} className="flex items-center gap-1.5 px-4 py-1.5 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+              <Button onClick={() => setShowEdit(false)} variant="secondary" className="px-4">取消</Button>
+              <Button onClick={() => { setShowEdit(false); /* TODO: PUT endpoint not available yet */ }} disabled={editing} variant="primary" className="gap-1.5 px-4 py-1.5">
                 {editing && <Loader2 className="w-3 h-3 animate-spin" />}保存
-              </button>
+              </Button>
             </div>
           </div>
         </div>

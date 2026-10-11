@@ -8,6 +8,8 @@ import {
   ChevronRight, Settings, BarChart3, AlertTriangle, Zap,
   TrendingUp, Eye, X, Layers, Globe, Database,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -98,9 +100,9 @@ function formatBytes(bytes?: number) {
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'ok') {
-    return <span className="flex items-center gap-1 text-[10px] text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded"><CheckCircle className="w-3 h-3" />健康</span>;
+    return <Badge variant="success" className="gap-1"><CheckCircle className="w-3 h-3" />健康</Badge>;
   }
-  return <span className="flex items-center gap-1 text-[10px] text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded"><XCircle className="w-3 h-3" />异常</span>;
+  return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" />异常</Badge>;
 }
 
 // ── Component ───────────────────────────────────────────────
@@ -405,15 +407,15 @@ export default function MonitoringPage() {
             </select>
           )}
         </div>
-        <button onClick={fetchData} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
+        <Button onClick={fetchData} disabled={loading} variant="secondary">
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}刷新
-        </button>
-        <button onClick={fetchConfigDiff} disabled={configLoading} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors">
+        </Button>
+        <Button onClick={fetchConfigDiff} disabled={configLoading} variant="secondary">
           {configLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Settings className="w-3.5 h-3.5" />}配置差异
-        </button>
-        <button onClick={fetchMetrics} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        </Button>
+        <Button onClick={fetchMetrics} variant="secondary">
           <BarChart3 className="w-3.5 h-3.5" />Prometheus
-        </button>
+        </Button>
         {stats && (
           <span className="text-[10px] text-muted-foreground ml-auto">
             {stats.total_organs} 组件 · {stats.categories.length} 分类

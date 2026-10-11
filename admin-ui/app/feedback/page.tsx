@@ -6,6 +6,8 @@ import {
   Search, RefreshCw, X, FileText, Sparkles, Brain, Zap,
   BarChart3, Tag, Lightbulb, GitBranch, BookOpen
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface FeedbackEntry {
   id: string;
@@ -178,9 +180,9 @@ export default function FeedbackPage() {
         <button onClick={() => { setExtractResult(null); setExtractText(''); setShowExtract(true); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-violet-500/10 text-violet-500 border border-border rounded-lg hover:bg-violet-500/20">
           <Sparkles className="w-3.5 h-3.5" />知识提取
         </button>
-        <button onClick={() => { fetchEntries(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={() => { fetchEntries(); fetchStats(); }} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
       </div>
 
       {/* Confidence distribution */}
@@ -236,7 +238,7 @@ export default function FeedbackPage() {
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded ${typeColor(selected.feedback_type)}`}>{typeLabel(selected.feedback_type)}</span>
+                <Badge className={`${typeColor(selected.feedback_type)}`}>{typeLabel(selected.feedback_type)}</Badge>
                 <span className={`text-xs ${confidenceColor(selected.confidence)}`}>置信度: {selected.confidence}</span>
               </div>
               <div><span className="text-muted-foreground">内容: </span>{selected.content}</div>
@@ -248,7 +250,7 @@ export default function FeedbackPage() {
               )}
               {selected.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {selected.tags.map(t => <span key={t} className="text-xs px-2 py-0.5 rounded bg-primary/5 text-primary/70">{t}</span>)}
+                  {selected.tags.map(t => <Badge key={t} variant="subtle">{t}</Badge>)}
                 </div>
               )}
               <div className="text-xs text-muted-foreground">
@@ -300,14 +302,14 @@ export default function FeedbackPage() {
                   {extractResult.entries.map((entry, i) => (
                     <div key={i} className="p-3 rounded-lg bg-muted/50 space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${typeColor(entry.type)}`}>{typeLabel(entry.type)}</span>
+                        <Badge className={`${typeColor(entry.type)}`}>{typeLabel(entry.type)}</Badge>
                         <span className={`text-xs ${confidenceColor(entry.confidence)}`}>{entry.confidence}</span>
                         <span className="text-sm font-medium">{entry.title}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">{entry.content}</p>
                       {entry.evidence && <div className="text-xs text-muted-foreground italic">证据: {entry.evidence}</div>}
                       <div className="flex flex-wrap gap-1">
-                        {entry.tags.map(t => <span key={t} className="text-[10px] px-1 py-0.5 rounded bg-primary/5">{t}</span>)}
+                        {entry.tags.map(t => <Badge key={t} variant="subtle">{t}</Badge>)}
                       </div>
                     </div>
                   ))}

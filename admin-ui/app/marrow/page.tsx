@@ -8,6 +8,9 @@ import {
   RotateCcw, Power, PowerOff, Settings, Shield, Calendar,
   FileText, Package, ArrowUpDown,
 } from 'lucide-react';
+import { Tab, TabBar } from '@/components/ui/tab';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -289,24 +292,24 @@ export default function MarrowPage() {
 
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center border border-border rounded-md overflow-hidden">
-          <button onClick={() => setTab('backups')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'backups' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>备份</button>
-          <button onClick={() => setTab('schedules')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'schedules' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>计划</button>
-          <button onClick={() => setTab('exports')} className={`px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm ${tab === 'exports' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'} font-medium transition-colors`}>导出</button>
-        </div>
-        <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <TabBar>
+          <Tab active={tab === 'backups'} onClick={() => setTab('backups')}>备份</Tab>
+          <Tab active={tab === 'schedules'} onClick={() => setTab('schedules')}>计划</Tab>
+          <Tab active={tab === 'exports'} onClick={() => setTab('exports')}>导出</Tab>
+        </TabBar>
+        <Button onClick={fetchData} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
+        </Button>
         {tab === 'backups' && (
-          <button onClick={() => setShowCreateBackup(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+          <Button onClick={() => setShowCreateBackup(true)} variant="primary" className="gap-1.5">
             <Plus className="w-3.5 h-3.5" />创建备份
-          </button>
+          </Button>
         )}
         {tab === 'schedules' && (
           <>
-            <button onClick={() => setShowCreateSchedule(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+            <Button onClick={() => setShowCreateSchedule(true)} variant="primary" className="gap-1.5">
               <Plus className="w-3.5 h-3.5" />新建计划
-            </button>
+            </Button>
             <button onClick={handleRunDue} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg hover:bg-blue-500/20">
               <Play className="w-3.5 h-3.5" />执行到期
             </button>
@@ -345,7 +348,7 @@ export default function MarrowPage() {
                     {backup.source_dirs && backup.source_dirs.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
                         {backup.source_dirs.map(d => (
-                          <span key={d} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-mono">{d}</span>
+                          <Badge key={d} variant="info" className="font-mono">{d}</Badge>
                         ))}
                       </div>
                     )}
@@ -408,7 +411,7 @@ export default function MarrowPage() {
                     {sch.source_dirs && sch.source_dirs.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
                         {sch.source_dirs.map(d => (
-                          <span key={d} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-mono">{d}</span>
+                          <Badge key={d} variant="info" className="font-mono">{d}</Badge>
                         ))}
                       </div>
                     )}
@@ -496,11 +499,11 @@ export default function MarrowPage() {
                 <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md" value={backupForm.description} onChange={(e) => setBackupForm(f => ({ ...f, description: e.target.value }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreateBackup(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleCreateBackup} disabled={creating} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowCreateBackup(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreateBackup} disabled={creating} variant="primary">
                   {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />}
                   {creating ? '创建中...' : '创建备份'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -543,11 +546,11 @@ export default function MarrowPage() {
                 <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md" value={scheduleForm.description} onChange={(e) => setScheduleForm(f => ({ ...f, description: e.target.value }))} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreateSchedule(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button onClick={handleCreateSchedule} disabled={creatingSchedule} className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors">
+                <Button onClick={() => setShowCreateSchedule(false)} variant="secondary">取消</Button>
+                <Button onClick={handleCreateSchedule} disabled={creatingSchedule} variant="primary">
                   {creatingSchedule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Calendar className="w-3 h-3" />}
                   {creatingSchedule ? '创建中...' : '创建计划'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

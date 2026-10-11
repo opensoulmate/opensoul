@@ -8,6 +8,8 @@ import {
   Package, Layers, FileText, Activity, Loader2, Tag, ArrowUpRight,
   Diff, Code, BookOpen,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -167,9 +169,9 @@ function ComponentCard({ comp, expanded, onToggle, detail, loadingDetail }: {
                   <div className="text-xs font-medium text-muted-foreground mb-2">依赖关系</div>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(detail.current.dependencies).map(([dep, ver]) => (
-                      <span key={dep} className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                      <Badge key={dep} variant="info" className="border border-blue-500/20">
                         {dep} {ver}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                 </div>
@@ -523,12 +525,12 @@ export default function HeredityPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={fetchAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted transition-colors">
+        <Button onClick={fetchAll} variant="secondary">
           <RefreshCw className="w-3.5 h-3.5" />刷新
-        </button>
-        <button onClick={() => setShowNewMigration(true)} className="flex items-center gap-1.5 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 font-medium transition-colors">
+        </Button>
+        <Button onClick={() => setShowNewMigration(true)} variant="primary" className="gap-1.5">
           <GitBranch className="w-3.5 h-3.5" />新建迁移
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -690,15 +692,12 @@ export default function HeredityPage() {
                 试运行（不实际执行）
               </label>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowNewMigration(false)} className="px-3 py-1.5 text-xs lg:text-sm border border-border rounded-lg hover:bg-muted">取消</button>
-                <button
-                  onClick={createMigration}
-                  disabled={!newMigration.component_id || !newMigration.from_version || !newMigration.to_version || creatingMigration}
-                  className="flex items-center gap-2 px-2 lg:px-2 lg:px-4 py-2 text-xs lg:text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
-                >
+                <Button onClick={() => setShowNewMigration(false)} variant="secondary">取消</Button>
+                <Button onClick={createMigration}
+                  disabled={!newMigration.component_id || !newMigration.from_version || !newMigration.to_version || creatingMigration} variant="primary">
                   {creatingMigration ? <Loader2 className="w-3 h-3 animate-spin" /> : <GitBranch className="w-3 h-3" />}
                   创建
-                </button>
+                </Button>
               </div>
             </div>
           </div>
