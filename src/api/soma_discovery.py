@@ -200,6 +200,8 @@ class ScanResult(BaseModel):
 class AdapterInfo(BaseModel):
     name: str
     description: str
+    capabilities: list[str] = []
+    configured: bool = False
     registered_at: float
 
 
@@ -274,10 +276,16 @@ class SoftwareAdapter(ABC):
     software categories (databases, containers, IDEs, etc.).
     """
 
-    def __init__(self, name: str, description: str = ""):
+    def __init__(self, name: str, description: str = "", capabilities: list[str] | None = None):
         self.name = name
         self.description = description
+        self.capabilities = capabilities or []
         self.registered_at = time.time()
+
+    @property
+    def configured(self) -> bool:
+        """适配器是否已具备工作所需配置（本地扫描类无需配置，即就绪）。"""
+        return True
 
     @abstractmethod
     async def scan(self) -> list[dict[str, Any]]:
@@ -293,6 +301,8 @@ class SoftwareAdapter(ABC):
         return AdapterInfo(
             name=self.name,
             description=self.description,
+            capabilities=list(self.capabilities),
+            configured=self.configured,
             registered_at=self.registered_at,
         )
 
@@ -527,7 +537,11 @@ class ProcessAdapter(SoftwareAdapter):
     """Adapter that exposes the process scanner."""
 
     def __init__(self):
-        super().__init__("process", "Discover and inspect running processes")
+        super().__init__(
+            "process",
+            "Discover and inspect running processes",
+            capabilities=["scan", "kill", "info"],
+        )
 
     async def scan(self) -> list[dict[str, Any]]:
         procs = await scan_processes()
@@ -561,7 +575,11 @@ class CLIToolAdapter(SoftwareAdapter):
     """Adapter that exposes CLI tool scanning."""
 
     def __init__(self):
-        super().__init__("cli-tools", "Discover command-line tools on PATH")
+        super().__init__(
+            "cli-tools",
+            "Discover command-line tools on PATH",
+            capabilities=["scan", "help", "which", "version"],
+        )
 
     async def scan(self) -> list[dict[str, Any]]:
         tools = await scan_cli_tools()
@@ -605,7 +623,11 @@ class ServiceAdapter(SoftwareAdapter):
     """Adapter that exposes local service scanning."""
 
     def __init__(self):
-        super().__init__("services", "Discover local listening services")
+        super().__init__(
+            "services",
+            "Discover local listening services",
+            capabilities=["scan", "connections"],
+        )
 
     async def scan(self) -> list[dict[str, Any]]:
         services = await scan_services()
@@ -637,9 +659,17 @@ class RestAdapter(SoftwareAdapter):
     """
 
     def __init__(self):
-        super().__init__("rest", "Interact with arbitrary REST APIs (GET/POST/PUT/DELETE)")
+        super().__init__(
+            "rest",
+            "Interact with arbitrary REST APIs (GET/POST/PUT/DELETE)",
+            capabilities=["scan", "configure", "probe", "request"],
+        )
         self._config: dict[str, Any] = {}  # base_url, headers, auth_token, timeout
         self._schema_cache: dict[str, Any] | None = None
+
+    @property
+    def configured(self) -> bool:
+        return bool(self._config.get("base_url"))
 
     def _build_headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         headers: dict[str, str] = {"Accept": "application/json"}
@@ -808,11 +838,19 @@ class DatabaseAdapter(SoftwareAdapter):
     )
 
     def __init__(self):
-        super().__init__("database", "Query SQLite/PostgreSQL databases (read-only)")
+        super().__init__(
+            "database",
+            "Query SQLite/PostgreSQL databases (read-only)",
+            capabilities=["scan", "configure", "query", "tables", "describe"],
+        )
         self._db_type: str | None = None
         self._conn_str: str | None = None
         self._max_queries: int = 100
         self._pg_pool: Any | None = None  # asyncpg pool
+
+    @property
+    def configured(self) -> bool:
+        return bool(self._db_type and self._conn_str)
 
     def _is_readonly(self, sql: str) -> bool:
         """Check that the SQL is a read-only statement."""
@@ -1095,13 +1133,30 @@ class FileSystemAdapter(SoftwareAdapter):
     """
 
     def __init__(self):
-        super().__init__("filesystem", "Monitor and explore local file systems")
+        super().__init__(
+            "filesystem",
+            "Monitor and explore local file systems",
+            capabilities=[
+                "scan",
+                "configure",
+                "list",
+                "read",
+                "search",
+                "info",
+                "changes",
+                "stop_watch",
+            ],
+        )
         self._directory: str | None = None
         self._watching: bool = False
         self._max_depth: int = 5
         self._watch_task: asyncio.Task | None = None
         self._change_log: list[dict[str, Any]] = []
         self._max_change_log: int = 500
+
+    @property
+    def configured(self) -> bool:
+        return self._directory is not None
 
     async def scan(self) -> list[dict[str, Any]]:
         """Return filesystem adapter status and recent changes."""
