@@ -257,6 +257,71 @@ def admit_intent(raw: str) -> tuple[bool, str]:
     return True, "ok"
 
 
+# ── F2b-② 推荐回流执行：字面相关度检索 + prompt 纯函数格式化 ──────────────
+# 契约：与 get_recommendations 同一读真源（learned_patterns 表）、同一准入
+# （admit_intent/normalize_intent_key）——不造第二套查询/准入语义。
+# 精确命中优先（直接复用 get_recommendations）；无精确命中时按字符二元组
+# 重合率（**字面**相关度，非语义 embedding，如实标注）取相关候选 top-k。
+# 宁缺勿滥：无关策略注入 prompt 是噪声还会误导执行，重合率低于门槛=零注入。
+
+_RELEVANCE_THRESHOLD = 0.15
+_RELEVANCE_CANDIDATES = 200
+
+
+def _char_bigrams(text: str) -> set[str]:
+    """字符二元组集合（去空白）——中文无分词依赖的字面相关度原子。"""
+    s = re.sub(r"\s+", "", text or "")
+    if len(s) < 2:
+        return {s} if s else set()
+    return {s[i : i + 2] for i in range(len(s) - 1)}
+
+
+def format_advisory_for_prompt(recs: list | None, top_k: int = 3) -> str:
+    """推荐 → 执行 prompt 建议块（纯函数；空推荐返回空串=零注入）。
+
+    语义（软上下文非硬指令）：建议块自带"仅供参考、与任务要求冲突时以任务
+    要求为准"免责——学习建议不覆盖任务本体要求。类型未知如实标注不硬造。
+    """
+    lines = []
+    for i, rec in enumerate((recs or [])[:top_k], 1):
+        rtype = rec.get("type") or "unknown"
+        key = rec.get("key") or ""
+        data = rec.get("data") or {}
+        samples = rec.get("samples") or 0
+        if rtype == "strategy":
+            rate = data.get("success_rate")
+            rec_mode = data.get("recommendation") or ""
+            if rec_mode == "patch":
+                advice = "历史多采用小步补丁式修改并成功，建议保持最小改动"
+            elif rec_mode == "stepwise":
+                advice = "历史成功率偏低，建议分步执行、逐步验证，避免一次性大改"
+            else:
+                advice = f"历史策略={rec_mode or '无'}"
+            rate_txt = (
+                f"成功率{round(rate * 100)}%" if isinstance(rate, (int, float)) else "成功率未知"
+            )
+            lines.append(f"{i}. 任务「{key}」历史样本{samples}次、{rate_txt}：{advice}")
+        elif rtype == "file_combo":
+            files = data.get("files") or []
+            combo = "+".join(str(f) for f in files) if files else key
+            co = data.get("co_occurrence", samples)
+            lines.append(
+                f"{i}. 文件组合 {combo} 历史上常一起修改（共现{co}次），改动时注意联动检查"
+            )
+        elif rtype == "failure":
+            fixes = [str(f) for f in (data.get("common_fixes") or []) if f]
+            fix_txt = "；".join(fixes[:2]) if fixes else "注意规避同类错误"
+            lines.append(f"{i}. 易错点「{key}」（历史{data.get('count', samples)}次）：{fix_txt}")
+        else:
+            lines.append(f"{i}. 「{key}」（{rtype}，样本{samples}）")
+    if not lines:
+        return ""
+    return (
+        "【历史经验建议】来自本系统对该类任务的历史学习，仅供参考；"
+        "与任务要求冲突时以任务要求为准：\n" + "\n".join(lines)
+    )
+
+
 class LongTermLearning:
     """长期学习：从经验中提取模式，优化Agent行为。"""
 
@@ -573,6 +638,58 @@ class LongTermLearning:
                 "samples": row["sample_count"],
             }
             for row in rows
+        ]
+
+    async def get_recommendations_for_prompt(self, intent_summary: str, top_k: int = 3) -> list:
+        """执行 prompt 回流用推荐（F2b-②）——行为优化闭环的执行侧消费口。
+
+        语义（与 get_recommendations 同一读真源/同一准入，不造第二套）：
+        1) 精确命中优先：直接复用 get_recommendations（normalize 同 key）；
+        2) 无精确命中 → 字面相关度兜底：全量候选按字符二元组重合率（Jaccard）
+           排序，达 _RELEVANCE_THRESHOLD 才算相关（宁缺勿滥，无关=零注入）。
+        如实标注：相关度是**字面**匹配（字符二元组），非语义 embedding。
+        """
+        if not intent_summary:
+            return []
+        ok, _reason = admit_intent(intent_summary)
+        if not ok:
+            return []
+        precise = await self.get_recommendations(intent_summary)
+        if precise:
+            return precise[:top_k]
+
+        await self._ensure_table()
+        if not self.db:
+            return []
+        rows = await self.db.fetch(
+            f"""SELECT pattern_type, pattern_key, pattern_data, confidence, sample_count
+                FROM learned_patterns
+                WHERE tenant_id = ? AND agent_id = ?
+                ORDER BY confidence DESC, sample_count DESC
+                LIMIT {_RELEVANCE_CANDIDATES}""",
+            [self.tenant_id, self.agent_id],
+        )
+        target = _char_bigrams(normalize_intent_key(intent_summary))
+        if not target:
+            return []
+        scored = []
+        for row in rows:
+            key_bigrams = _char_bigrams(row["pattern_key"])
+            if not key_bigrams:
+                continue
+            overlap = len(target & key_bigrams) / len(target | key_bigrams)
+            if overlap >= _RELEVANCE_THRESHOLD:
+                scored.append((overlap, row["confidence"] or 0.0, row))
+        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [
+            {
+                "type": row["pattern_type"],
+                "key": row["pattern_key"],
+                "data": json.loads(row["pattern_data"]),
+                "confidence": row["confidence"],
+                "samples": row["sample_count"],
+            }
+            for _overlap, _conf, row in scored[:top_k]
         ]
 
     async def get_stats(self) -> dict:

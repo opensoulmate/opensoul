@@ -1384,6 +1384,21 @@ async def _run_task_chain(group_id: str, parent_task_id: str, discuss_after: boo
             )
 
 
+async def _learned_advisory_for(run_goal: str) -> tuple[str, int]:
+    """F2b-② 推荐回流取数口：learned_patterns → 执行 prompt 建议块（条数可观测）。
+
+    与 proactive pattern_extract / POST /api/brain/learn 共用 LongTermLearning
+    同一读真源；tenant/agent 取 "default"/"default" = experience_collect 采集
+    口径（学习产出在哪写就去哪读）。返回 (建议块, 条数)，无推荐=("", 0) 零注入。
+    """
+    from src.database.postgres import db_pool
+    from src.learn.long_term import LongTermLearning, format_advisory_for_prompt
+
+    learning = LongTermLearning(db_pool, "default", "default")
+    recs = await learning.get_recommendations_for_prompt(run_goal, top_k=3)
+    return format_advisory_for_prompt(recs), len(recs)
+
+
 async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskRequest") -> dict:
     """真正执行Agent任务 — 调用run_agent_proxy获取实际结果（由_run_task_background后台调用）"""
     conn = get_db()
@@ -1478,6 +1493,32 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
                 group_id, task_id, req.agent_id, "brain-error", f"think失败(不阻断执行): {e}"
             )
 
+        # ── F2b-② 推荐回流执行：learned_patterns → 执行prompt（行为优化真闭环） ──
+        # F2 审计定性真断点：get_recommendations 全仓消费=仅 API 出口，执行流程
+        # 从不读学习产出。此处把意图相关的历史策略/易错点注入执行prompt（软建议
+        # 块，自带"以任务要求为准"免责，不覆盖任务本体）；学习层自身故障不阻断
+        # 执行但必须可见（learned-context-error 事件，禁静默）。
+        exec_goal = run_goal
+        try:
+            advisory, advisory_n = await _learned_advisory_for(run_goal)
+            if advisory:
+                exec_goal = f"{run_goal}\n\n{advisory}"
+                _emit_exec_event(
+                    group_id,
+                    task_id,
+                    req.agent_id,
+                    "learned-context",
+                    f"历史经验建议注入执行prompt：{advisory_n}条（learned_patterns→执行）",
+                )
+        except Exception as e:
+            _emit_exec_event(
+                group_id,
+                task_id,
+                req.agent_id,
+                "learned-context-error",
+                f"推荐回流失败(不阻断执行): {e}",
+            )
+
         async def _on_exec_event(etype: str, line: str):
             _emit_exec_event(group_id, task_id, req.agent_id, etype, line)
 
@@ -1490,11 +1531,11 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
                 # 红线：SoulMate 走自己的 agent（acp-proxy），不经 hermes CLI
                 # 11.2：与 CLI 通道同套挂死可见性——心跳/时长查询/显式取消（task_ref 同一查找键）
                 response_text, source, success = await _run_soulmate_turn(
-                    run_goal, on_event=_on_exec_event, task_ref=run_ref
+                    exec_goal, on_event=_on_exec_event, task_ref=run_ref
                 )
             else:
                 response_text, source, success = await run_agent_proxy(
-                    real_binary, run_goal, on_event=_on_exec_event, task_ref=run_ref
+                    real_binary, exec_goal, on_event=_on_exec_event, task_ref=run_ref
                 )
             if success or attempt >= 1 or source == "cancelled":
                 break
