@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from src.config import settings
@@ -29,6 +30,10 @@ class LLMRequest(BaseModel):
     model: str | None = None
     temperature: float = 0.7
     max_tokens: int = 2048
+    # F4b-②：stream=true 真流式透传（修前此字段缺失，客户端带 stream:true 被
+    # pydantic 静默忽略=想要流式被静默降级，F4 审计④）；缺省 False 时请求体与
+    # 既有字节恒等（payload 不带 stream 键，零行为漂移）。
+    stream: bool = False
 
 
 class LLMConfig(BaseModel):
@@ -728,6 +733,9 @@ async def completions(req: LLMRequest):
 
     # 失败必须typed可见（mem0 §1.1）：上游错误→502，超时→504，不可达→502；
     # 禁止裸raise导致ASGI 500纯文本（此前connect失败直接500，客户端无法区分原因）
+    if req.stream:
+        # F4b-②：stream=true 真流式透传（StreamingResponse），非流式路径字节零变化
+        return await _completions_stream(base_url, api_key, model, req)
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
@@ -761,3 +769,79 @@ async def completions(req: LLMRequest):
         raise HTTPException(
             status_code=502, detail=f"LLM completion failed: {type(e).__name__}: {e}"
         )
+
+
+async def _completions_stream(base_url: str, api_key: str, model: str, req: LLMRequest):
+    """F4b-②：stream=true 真流式透传（生态通用 LLM 直通 API，透传代理语义）。
+
+    - 上游回 text/event-stream → StreamingResponse 逐块转发上游原始帧（字节级
+      透传不改写不聚合——直通 API 的契约就是上游真实响应，逐 token 交付由此达成）
+    - 上游忽略 stream 回 JSON（真实存在）→ 按真实形态整段回，content-type 如实
+      告诉客户端（不硬造 SSE 帧把整段响应伪装成流式）
+    - 其余形态 → 原样透传带上游真实 content-type（透传代理不猜形态不硬造）
+    首字节前的失败沿用与非流式路径同款 typed 映射（502/504）；流开始后中途断联
+    无法再改状态码，连接由客户端侧感知（如实边界）。
+    """
+    client = httpx.AsyncClient(timeout=120)
+    try:
+        upstream_req = client.build_request(
+            "POST",
+            f"{base_url}/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                **_auth_headers(api_key),
+            },
+            json={
+                "model": model,
+                "messages": req.messages,
+                "temperature": req.temperature,
+                "max_tokens": req.max_tokens,
+                "stream": True,
+            },
+        )
+        resp = await client.send(upstream_req, stream=True)
+    except httpx.TimeoutException:
+        await client.aclose()
+        raise HTTPException(status_code=504, detail="LLM request timed out (120s)")
+    except httpx.RequestError as e:
+        await client.aclose()
+        raise HTTPException(
+            status_code=502, detail=f"LLM upstream unreachable: {type(e).__name__}: {e}"
+        )
+    except Exception as e:
+        await client.aclose()
+        raise HTTPException(
+            status_code=502, detail=f"LLM completion failed: {type(e).__name__}: {e}"
+        )
+
+    if resp.status_code >= 400:
+        try:
+            err_body = (await resp.aread()).decode("utf-8", "replace")[:200]
+        finally:
+            await resp.aclose()
+            await client.aclose()
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM API error: {resp.status_code} — {err_body}",
+        )
+
+    content_type = resp.headers.get("content-type", "")
+
+    if "text/event-stream" in content_type:
+
+        async def _sse_relay():
+            try:
+                async for chunk in resp.aiter_bytes():
+                    yield chunk
+            finally:
+                await resp.aclose()
+                await client.aclose()
+
+        return StreamingResponse(_sse_relay(), media_type="text/event-stream")
+
+    body = await resp.aread()
+    await resp.aclose()
+    await client.aclose()
+    if "application/json" in content_type:
+        return json.loads(body)
+    return Response(content=body, media_type=content_type or "application/octet-stream")
