@@ -11,6 +11,9 @@ router = APIRouter()
 # ── Singletons ─────────────────────────────────────────────
 manager = TenantManager()
 isolation = IsolationEngine()
+# F3b-①：'default' 租户补位（幂等）——生产数据 tenant_id 全='default'，管理面真源
+# 必须登记该租户（修前 access-check default → 404 Tenant not found，真源与数据脱节）。
+manager.ensure_default_tenant()
 
 
 # ── Request Schemas ────────────────────────────────────────

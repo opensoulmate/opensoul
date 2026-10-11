@@ -15,6 +15,8 @@ import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from src.nest.store import NestStore
+
 
 class TenantTier(StrEnum):
     FREE = "free"
@@ -185,12 +187,97 @@ class Tenant:
 
 
 class TenantManager:
-    """Manage tenants with resource quotas and namespace isolation."""
+    """Manage tenants with resource quotas and namespace isolation.
 
-    def __init__(self):
+    F3b-①（2026-10-12）：租户真源持久化到 SQLite（NestStore）——修前 _tenants 内存
+    dict 重启即丢，现定义/配额/用量随写随落盘、构造时全量回载。
+    """
+
+    def __init__(self, db_path: str | None = None):
         self._tenants: dict[str, Tenant] = {}
         self._lock = threading.Lock()
         self._namespace_index: dict[str, str] = {}  # namespace -> tenant_id
+        self._store = NestStore(db_path)
+        self._load_from_store()
+
+    # ── Persistence (F3b-①) ────────────────────────────────
+
+    def _load_from_store(self) -> None:
+        """启动回载：SQLite 行 → Tenant（内存表只是缓存，真源在库）。"""
+        for row in self._store.load_tenants():
+            tenant = self._from_row(row)
+            self._tenants[tenant.tenant_id] = tenant
+            self._namespace_index[tenant.namespace] = tenant.tenant_id
+
+    @staticmethod
+    def _from_row(row: dict) -> Tenant:
+        usage_data = dict(row.get("usage") or {})
+        day_key = usage_data.pop("day_key", "")
+        usage = ResourceUsage(**usage_data)
+        usage._day_key = day_key
+        return Tenant(
+            tenant_id=row["tenant_id"],
+            name=row["name"],
+            tier=TenantTier(row["tier"]),
+            status=TenantStatus(row["status"]),
+            namespace=row["namespace"],
+            owner_user_id=row["owner_user_id"],
+            description=row["description"],
+            tags=row["tags"],
+            config=row["config"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            quota=ResourceQuota(**(row.get("quota") or {})),
+            usage=usage,
+            metadata=row.get("metadata") or {},
+        )
+
+    def _to_row(self, tenant: Tenant) -> dict:
+        usage = tenant.usage.to_dict()
+        usage["day_key"] = tenant.usage._day_key
+        return {
+            "tenant_id": str(tenant.tenant_id),
+            "name": tenant.name,
+            "tier": tenant.tier.value,
+            "status": tenant.status.value,
+            "namespace": tenant.namespace,
+            "owner_user_id": tenant.owner_user_id,
+            "description": tenant.description,
+            "tags": tenant.tags,
+            "config": tenant.config,
+            "metadata": tenant.metadata,
+            "quota": tenant.quota.to_dict(),
+            "usage": usage,
+            "created_at": tenant.created_at,
+            "updated_at": tenant.updated_at,
+        }
+
+    def _persist(self, tenant: Tenant) -> None:
+        self._store.upsert_tenant(self._to_row(tenant))
+
+    def ensure_default_tenant(self) -> Tenant:
+        """补位 'default' 租户（幂等）——F3 审计：生产数据 tenant_id 全='default' 而
+        TenantManager 无 'default'（access-check → 404 Tenant not found）=租户真源与
+        数据分布脱节。namespace 与 create() 同构派生（ns-default）。"""
+        with self._lock:
+            tenant = self._tenants.get("default")
+            if tenant:
+                return tenant
+            now = time.time()
+            tenant = Tenant(
+                tenant_id="default",
+                name="default",
+                tier=TenantTier.FREE,
+                status=TenantStatus.ACTIVE,
+                namespace="ns-default",
+                description="系统默认租户（生产数据 tenant_id='default' 归属）",
+                created_at=now,
+                updated_at=now,
+            )
+            self._tenants["default"] = tenant
+            self._namespace_index[tenant.namespace] = tenant.tenant_id
+            self._persist(tenant)
+            return tenant
 
     def create(
         self,
@@ -230,6 +317,7 @@ class TenantManager:
         with self._lock:
             self._tenants[tenant_id] = tenant
             self._namespace_index[namespace] = tenant_id
+            self._persist(tenant)
 
         return tenant
 
@@ -282,6 +370,7 @@ class TenantManager:
                     if hasattr(tenant.quota, key):
                         setattr(tenant.quota, key, value)
             tenant.updated_at = time.time()
+            self._persist(tenant)
         return True
 
     def delete(self, tenant_id: str) -> bool:
@@ -289,6 +378,7 @@ class TenantManager:
             tenant = self._tenants.pop(tenant_id, None)
             if tenant:
                 self._namespace_index.pop(tenant.namespace, None)
+                self._store.delete_tenant(tenant.tenant_id)
                 return True
         return False
 
@@ -319,6 +409,7 @@ class TenantManager:
             tenant.usage.documents = max(0, tenant.usage.documents + document_delta)
             tenant.usage.api_calls_today += api_calls
             tenant.usage.tokens_today += tokens
+            self._persist(tenant)
         return True
 
     def check_quota(self, tenant_id: str, resource: str, amount: int = 1) -> dict:
@@ -331,7 +422,10 @@ class TenantManager:
                 return {"allowed": False, "reason": f"tenant is {tenant.status.value}"}
 
             today = time.strftime("%Y-%m-%d")
+            prev_day = tenant.usage._day_key
             tenant.usage.reset_daily(today)
+            if tenant.usage._day_key != prev_day:
+                self._persist(tenant)  # 日计数器跨日归零也要落盘（重启不回滚）
 
             checks = {
                 "storage": (

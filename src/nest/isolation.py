@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import StrEnum
+
+from src.nest.store import NestStore
 
 
 class ResourceType(StrEnum):
@@ -87,12 +89,13 @@ class IsolationEngine:
         ),
     }
 
-    def __init__(self):
+    def __init__(self, db_path: str | None = None):
         self._policies: dict[ResourceType, IsolationPolicy] = dict(self.DEFAULT_POLICIES)
-        self._access_log: list[AccessLog] = []
         self._lock = threading.Lock()
         self._max_log = 10000
-        self._blocked_attempts = 0
+        # F3b-①（2026-10-12）：审计日志真源持久化到 SQLite（NestStore）——修前
+        # _access_log 内存 list 重启即丢，现随写随落盘、读走库（内存 list 移除，单一真源）。
+        self._store = NestStore(db_path)
 
     def namespaced_id(self, namespace: str, resource_id: str) -> str:
         """Create a namespaced resource ID."""
@@ -138,7 +141,6 @@ class IsolationEngine:
                     f"namespace mismatch: {resource_ns} != {tenant_namespace}",
                     source_ip,
                 )
-                self._blocked_attempts += 1
                 return {
                     "allowed": False,
                     "reason": f"Resource belongs to different tenant (namespace: {resource_ns})",
@@ -212,42 +214,22 @@ class IsolationEngine:
         allowed: bool | None = None,
         limit: int = 100,
     ) -> list[dict]:
-        with self._lock:
-            entries = list(self._access_log)
-        if tenant_id:
-            entries = [e for e in entries if e.tenant_id == tenant_id]
-        if action:
-            entries = [e for e in entries if e.action == action]
-        if allowed is not None:
-            entries = [e for e in entries if e.allowed == allowed]
-        return [
-            {
-                "timestamp": e.timestamp,
-                "tenant_id": e.tenant_id,
-                "resource_type": e.resource_type,
-                "resource_id": e.resource_id,
-                "action": e.action,
-                "allowed": e.allowed,
-                "reason": e.reason,
-                "source_ip": e.source_ip,
-            }
-            for e in sorted(entries, key=lambda x: x.timestamp, reverse=True)[:limit]
-        ]
+        """倒序读审计日志（真源 SQLite，重启后历史照读；过滤语义与原内存版一致）。"""
+        return self._store.list_access_log(
+            tenant_id=tenant_id, action=action, allowed=allowed, limit=limit
+        )
 
     def stats(self) -> dict:
-        with self._lock:
-            total = len(self._access_log)
-            blocked = sum(1 for e in self._access_log if not e.allowed)
-            by_type = {}
-            for e in self._access_log:
-                by_type[e.resource_type] = by_type.get(e.resource_type, 0) + 1
-            return {
-                "total_access_checks": total,
-                "blocked_attempts": blocked,
-                "block_rate": round(blocked / total * 100, 2) if total else 0,
-                "by_resource_type": by_type,
-                "policies_count": len(self._policies),
-            }
+        s = self._store.access_stats()
+        total = s["total_access_checks"]
+        blocked = s["blocked_attempts"]
+        return {
+            "total_access_checks": total,
+            "blocked_attempts": blocked,
+            "block_rate": round(blocked / total * 100, 2) if total else 0,
+            "by_resource_type": s["by_resource_type"],
+            "policies_count": len(self._policies),
+        }
 
     def _log_access(
         self,
@@ -269,7 +251,4 @@ class IsolationEngine:
             reason=reason,
             source_ip=source_ip,
         )
-        with self._lock:
-            self._access_log.append(entry)
-            if len(self._access_log) > self._max_log:
-                self._access_log = self._access_log[-self._max_log :]
+        self._store.insert_access_log(asdict(entry), max_log=self._max_log)
