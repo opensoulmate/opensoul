@@ -1012,6 +1012,9 @@ async def _run_soulmate_turn(
     ① 进度心跳 on_event("heartbeat", ...)（默认 SOULMATE_PROXY_HEARTBEAT_S=30s）
     ② 执行时长可查询（register_proxy_run 登记 → exec-status/proxy_run_snapshot）
     ③ 可显式取消（cancel_proxy_run → cancel_cb 摘观察窗停止本次执行等待）。
+    ④ F4b-④ 逐块推送：chunk 即刻 on_event("output")（与 CLI 通道 _pump 逐行同径），
+       群组时间线逐块实时可见；聊天流仍回合结束一条完整 agent_reply（单条消息语义，
+       禁逐块刷屏）。
     **无到点自动杀**：timeout 只是等待预算（耗尽如实报未完成，禁把超时当成功），
     远端生成按会话生命周期处理（WS断开不杀进程）。
     """
@@ -1028,11 +1031,17 @@ async def _run_soulmate_turn(
     heartbeat_task: asyncio.Task | None = None
     completed = False
 
-    def _note_chunk(text: str) -> None:
+    async def _note_chunk(text: str) -> None:
+        """F4b-④ 逐块推送：chunk 即刻走 on_event("output")——与 CLI 通道 _pump
+        逐行同径（_on_exec_event→task_execution_events→ws_group 尾随 task_progress
+        WS 帧），群组时间线逐块实时可见+可回放。修前攒块到回合结束一次性 agent_reply
+        （执行期间黑箱，仅心跳），与 CLI 通道逐行不对称。回调失败旁路（_emit 兜底）
+        不阻塞回合本体。"""
         chunks.append(text)
         entry["lines"] = entry.get("lines", 0) + 1
         entry["last_event_type"] = "output"
         entry["last_event"] = text[:200]
+        await _emit("output", text)
 
     async def _emit(etype: str, line: str) -> None:
         """事件旁路纪律：回调失败只计数不冒泡，绝不阻塞回合。"""
@@ -1179,9 +1188,9 @@ async def _run_soulmate_turn(
                     upd = (frame.get("params") or {}).get("update") or {}
                     c = upd.get("content")
                     if isinstance(c, dict) and isinstance(c.get("text"), str):
-                        _note_chunk(c["text"])
+                        await _note_chunk(c["text"])
                     elif isinstance(c, str):
-                        _note_chunk(c)
+                        await _note_chunk(c)
                     if upd.get("last"):
                         completed = True
                         break
