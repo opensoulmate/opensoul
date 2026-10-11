@@ -453,6 +453,8 @@ async def chat_websocket(websocket: WebSocket):
     - Client sends: {"type": "message", "text": "...", "mode": "hermes|acp|a2a|agent_proxy", "session_id": "...", "agent_id": "..."}
     - Server sends: {"type": "thinking"} (when processing starts)
     - Server sends: {"type": "chunk", "text": "..."} (streaming chunks)
+    - Server sends: {"type": "agent_event", "event": "output|stderr|tool_call|heartbeat", "text": "..."}
+      (agent_proxy 模式过程可见事件；stdout 响应行走 chunk，其余事件走此帧不混入响应文本)
     - Server sends: {"type": "done", "text": "...", "source": "..."} (final response)
     - Server sends: {"type": "error", "message": "..."} (on error)
     """
@@ -506,8 +508,22 @@ async def chat_websocket(websocket: WebSocket):
                     image_attachments = [a for a in attachments if a.get("type") == "image"]
 
                     if mode == "agent_proxy" and agent_id:
-                        # Route to specific CLI agent
-                        response_text, source, success = await run_agent_proxy(agent_id, text)
+                        # Route to specific CLI agent（F4b-③：on_event 接线逐行帧——
+                        # stdout 行=响应文本流走 chunk（与 ACP chunk 同消费语义：逐块拼接即响应，
+                        # 行尾补 \n 保行形态）；stderr/tool_call/heartbeat=过程可见事件走
+                        # agent_event（不混入响应文本）。事件帧是增量可见面，done 契约不变。
+
+                        async def _ws_event(etype: str, line: str):
+                            if etype == "output":
+                                await websocket.send_json({"type": "chunk", "text": line + "\n"})
+                            else:
+                                await websocket.send_json(
+                                    {"type": "agent_event", "event": etype, "text": line}
+                                )
+
+                        response_text, source, success = await run_agent_proxy(
+                            agent_id, text, on_event=_ws_event
+                        )
                     else:
                         acp = get_acp_process()
                         if not session_id:
