@@ -120,6 +120,9 @@ def _classify_stream_event(etype: str, line: str) -> str:
 # hermes 长回合实测 12 分钟+仍完成，自动超时杀 = 误杀正常长回合）。取消是显式意图：
 # 先 SIGTERM 独立进程组，有界等待，force=True 才升级 SIGKILL（对齐 process_tools 9.2
 # 纪律）。心跳走 on_event("heartbeat", ...)，群组任务经 _emit_exec_event 可见进度。
+# 11.2（周期#60）：三件套扩到群组任务的 soulmate ACP 回合通道（channel='acp_ws'，
+# 同一登记表）——该通道无子进程对象，显式取消 = 停止本次执行等待并摘观察窗
+# （会话生命周期归系统，WS断开不杀远端生成），同样绝无到点自动杀。
 _PROXY_HEARTBEAT_S = float(os.environ.get("SOULMATE_PROXY_HEARTBEAT_S", "30"))
 _PROXY_RUNS: dict[str, dict] = {}  # run_id -> 执行登记项（proc 不外泄，快照走 proxy_run_snapshot）
 _PROXY_RUNS_MAX = 64
@@ -137,6 +140,51 @@ def _prune_proxy_runs() -> None:
         _PROXY_RUNS.pop(rid, None)
 
 
+def register_proxy_run(
+    agent_id: str,
+    task_ref: str | None = None,
+    run_id: str | None = None,
+    channel: str = "cli",
+) -> tuple[str, dict]:
+    """登记一次 agent 执行（11.2：CLI 子进程与 soulmate ACP WS 回合共用同一登记表，
+    exec-status/exec-cancel 两个任务级端点对两种通道同一套语义）。
+
+    channel: 'cli'=子进程通道（取消走 killpg 信号）/'acp_ws'=ACP WS 回合通道
+    （取消走 cancel_cb 摘观察窗）。返回 (run_id, entry)。
+    """
+    run_id = run_id or f"run-{uuid.uuid4().hex[:12]}"
+    entry = {
+        "run_id": run_id,
+        "agent_id": agent_id,
+        "task_ref": task_ref,
+        "channel": channel,
+        "status": "running",
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+        "started_mono": time.monotonic(),
+        "pid": None,
+        "proc": None,
+        "cancel_cb": None,
+        "returncode": None,
+        "lines": 0,
+        "last_event_type": None,
+        "last_event": None,
+        "cancel_requested": False,
+    }
+    _PROXY_RUNS[run_id] = entry
+    _prune_proxy_runs()
+    return run_id, entry
+
+
+def finish_proxy_run(run_id: str, status: str, returncode: int | None = None) -> None:
+    """执行收口（run_agent_proxy 与 _run_soulmate_turn 共用：异常路径不留 running 假象）。"""
+    entry = _PROXY_RUNS.get(run_id)
+    if not entry:
+        return
+    entry["status"] = status
+    if returncode is not None:
+        entry["returncode"] = returncode
+
+
 def proxy_run_snapshot(run_id: str) -> dict | None:
     """执行登记项的 JSON 安全快照（执行时长实时计算；proc 对象不外泄）。"""
     entry = _PROXY_RUNS.get(run_id)
@@ -145,6 +193,7 @@ def proxy_run_snapshot(run_id: str) -> dict | None:
     return {
         "run_id": entry["run_id"],
         "agent_id": entry["agent_id"],
+        "channel": entry.get("channel", "cli"),
         "task_ref": entry.get("task_ref"),
         "status": entry["status"],
         "started_at": entry["started_at"],
@@ -190,10 +239,44 @@ async def cancel_proxy_run(run_id: str, force: bool = False) -> dict:
             "run_id": run_id,
         }
     proc = entry.get("proc")
-    if proc is None or proc.returncode is not None:
+    cancel_cb = entry.get("cancel_cb")
+    if (proc is None or proc.returncode is not None) and cancel_cb is None:
         return {"ok": False, "reason": "执行进程已退出，无可取消对象", "run_id": run_id}
     entry["cancel_requested"] = True
     entry["status"] = "cancelling"
+    channel = entry.get("channel", "cli")
+    if proc is not None and proc.returncode is not None:
+        proc = None  # 进程已退出但回合通道还有等待方 → 走 cancel_cb
+    if proc is None:
+        # ACP WS 回合通道（11.2）：无子进程对象，显式取消 = 停止本次执行等待并摘观察窗。
+        # 会话生命周期归系统（WS断开不杀远端生成），绝无到点自动杀。
+        if cancel_cb is None:
+            return {"ok": False, "reason": "执行已退出，无可取消对象", "run_id": run_id}
+        try:
+            r = cancel_cb()
+            if asyncio.iscoroutine(r):
+                await r
+        except Exception as e:
+            return {
+                "ok": False,
+                "reason": f"取消唤醒失败: {type(e).__name__}: {e}",
+                "run_id": run_id,
+            }
+        # 有界等待收口（等待观察窗口，不是超时杀）
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and entry["status"] == "cancelling":
+            await asyncio.sleep(0.05)
+        return {
+            "ok": True,
+            "run_id": run_id,
+            "channel": channel,
+            "mode": "acp_ws_detach",
+            "signal": None,
+            "force": force,
+            "exited": entry["status"] != "cancelling",
+            "returncode": entry.get("returncode"),
+            "elapsed_s": round(time.monotonic() - entry["started_mono"], 1),
+        }
     sig_name, signum = ("SIGKILL", 9) if force else ("SIGTERM", 15)
     try:
         os.killpg(os.getpgid(proc.pid), signum)
@@ -206,6 +289,8 @@ async def cancel_proxy_run(run_id: str, force: bool = False) -> dict:
     return {
         "ok": True,
         "run_id": run_id,
+        "channel": channel,
+        "mode": "signal",
         "signal": sig_name,
         "force": force,
         "exited": proc.returncode is not None,
@@ -243,24 +328,7 @@ async def run_agent_proxy(
     cmd = [binary_path] + args + [text]
     logger.info(f"Agent proxy running: {' '.join(cmd)}")
 
-    run_id = run_id or f"run-{uuid.uuid4().hex[:12]}"
-    entry = {
-        "run_id": run_id,
-        "agent_id": agent_id,
-        "task_ref": task_ref,
-        "status": "running",
-        "started_at": datetime.now().isoformat(timespec="seconds"),
-        "started_mono": time.monotonic(),
-        "pid": None,
-        "proc": None,
-        "returncode": None,
-        "lines": 0,
-        "last_event_type": None,
-        "last_event": None,
-        "cancel_requested": False,
-    }
-    _PROXY_RUNS[run_id] = entry
-    _prune_proxy_runs()
+    run_id, entry = register_proxy_run(agent_id, task_ref=task_ref, run_id=run_id, channel="cli")
 
     heartbeat_task: asyncio.Task | None = None
     try:

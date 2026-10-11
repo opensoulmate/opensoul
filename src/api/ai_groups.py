@@ -6,6 +6,7 @@ import logging
 import re
 import sqlite3
 import statistics
+import time
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -15,8 +16,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.api.ws_chat import (
+    _PROXY_HEARTBEAT_S,
     cancel_proxy_run,
     find_proxy_run,
+    finish_proxy_run,
+    register_proxy_run,
     run_agent_proxy,
     which_agent,
 )
@@ -966,14 +970,31 @@ async def _notify_group_chat(
         logger.warning(f"群聊回帖失败(不影响任务): {e}")
 
 
-async def _run_soulmate_turn(goal: str, timeout: float = 600.0) -> tuple[str, bool]:
-    """走 SoulMate 自己的 agent（acp-proxy :8092 /ws/acp JSON-RPC）跑一轮，返回(回复文本, 是否成功)。
+async def _run_soulmate_turn(
+    goal: str,
+    timeout: float = 600.0,
+    on_event=None,
+    run_id: str | None = None,
+    task_ref: str | None = None,
+    heartbeat_s: float | None = None,
+) -> tuple[str, str, bool]:
+    """走 SoulMate 自己的 agent（acp-proxy :8092 /ws/acp JSON-RPC）跑一轮，
+    返回(回复文本, source, 是否成功)。source: 'soulmate-agent' | 'cancelled'。
+
     红线：SoulMate 是独立 agent，绝不经 hermes CLI。
     线协议对齐 live :8092/ws/acp 实测（2026-10-10探测取证）：
       initialize(protocolVersion=1) → session/new 取 result.sessionId（om-开头）
       → session/prompt(sessionId,messageId,prompt=[{type:text,text:...}])
       流式通知 method=session/update：params.update.content.text 逐块
-      （params.update.sessionUpdate=agent_message_chunk），id=3 result.stopReason 收尾。"""
+      （params.update.sessionUpdate=agent_message_chunk），id=3 result.stopReason 收尾。
+
+    11.2 挂死可见性（10.3 三件套扩到群组任务的 ACP WS 回合通道，同一登记表）：
+    ① 进度心跳 on_event("heartbeat", ...)（默认 SOULMATE_PROXY_HEARTBEAT_S=30s）
+    ② 执行时长可查询（register_proxy_run 登记 → exec-status/proxy_run_snapshot）
+    ③ 可显式取消（cancel_proxy_run → cancel_cb 摘观察窗停止本次执行等待）。
+    **无到点自动杀**：timeout 只是等待预算（耗尽如实报未完成，禁把超时当成功），
+    远端生成按会话生命周期处理（WS断开不杀进程）。
+    """
     import websockets
 
     from src.services.auth import create_access_token
@@ -981,10 +1002,67 @@ async def _run_soulmate_turn(goal: str, timeout: float = 600.0) -> tuple[str, bo
     token = create_access_token(uuid.uuid4())
     url = f"{SOULMATE_WS}?token={token}"
     chunks: list[str] = []
+    run_id, entry = register_proxy_run(
+        "soulmate", task_ref=task_ref, run_id=run_id, channel="acp_ws"
+    )
+    heartbeat_task: asyncio.Task | None = None
+    completed = False
+
+    def _note_chunk(text: str) -> None:
+        chunks.append(text)
+        entry["lines"] = entry.get("lines", 0) + 1
+        entry["last_event_type"] = "output"
+        entry["last_event"] = text[:200]
+
+    async def _emit(etype: str, line: str) -> None:
+        """事件旁路纪律：回调失败只计数不冒泡，绝不阻塞回合。"""
+        if on_event is None:
+            return
+        try:
+            r = on_event(etype, line)
+            if asyncio.iscoroutine(r):
+                await r
+        except Exception:
+            pass
+
+    async def _heartbeat() -> None:
+        """进度心跳：只报进度不打断执行（已用时/已收块数/最近输出）。"""
+        interval = float(heartbeat_s if heartbeat_s is not None else _PROXY_HEARTBEAT_S)
+        if interval <= 0:
+            return
+        try:
+            while entry["status"] == "running":
+                await asyncio.sleep(interval)
+                if entry["status"] != "running":
+                    break
+                elapsed = time.monotonic() - entry["started_mono"]
+                last = (entry.get("last_event") or "（暂无输出）").replace("\n", " ")
+                await _emit(
+                    "heartbeat",
+                    "⏳ SoulMate回合进行中：已用 {e:.0f}s｜已收 {n} 块｜最近: {last}".format(
+                        e=elapsed, n=entry.get("lines", 0), last=last[:80]
+                    ),
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+
     try:
+        heartbeat_task = asyncio.create_task(_heartbeat())
         async with websockets.connect(url, max_size=8 * 1024 * 1024, open_timeout=15) as ws:
             loop = asyncio.get_event_loop()
             deadline = loop.time() + timeout
+
+            async def _cancel_cb() -> None:
+                # 显式取消唤醒：关掉观察窗连接，recv 立即醒来（不杀远端生成）
+                entry["cancel_requested"] = True
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+
+            entry["cancel_cb"] = _cancel_cb
             await ws.send(
                 json.dumps(
                     {
@@ -1008,28 +1086,40 @@ async def _run_soulmate_turn(goal: str, timeout: float = 600.0) -> tuple[str, bo
             # 等 initialize(id=1)/session/new(id=2) 响应，从 id=2 取 sessionId
             session_id = ""
             pending = {1, 2}
-            while pending and loop.time() < deadline:
+            while pending and loop.time() < deadline and not entry.get("cancel_requested"):
                 try:
                     raw = await asyncio.wait_for(
                         ws.recv(), timeout=max(1.0, deadline - loop.time())
                     )
                 except TimeoutError:
                     break
+                except Exception:
+                    break  # 连接被显式取消关闭等，收口逻辑按 cancel_requested 如实报
                 try:
                     frame = json.loads(raw)
                 except Exception:
                     continue
                 if frame.get("error"):
                     logger.error(f"SoulMate回合握手失败: {frame['error']}")
-                    return "", False
+                    finish_proxy_run(run_id, "failed")
+                    return "", "soulmate-agent", False
                 fid = frame.get("id")
                 if fid in pending:
                     pending.discard(fid)
                     if fid == 2:
                         session_id = str((frame.get("result") or {}).get("sessionId") or "")
             if not session_id:
+                if entry.get("cancel_requested"):
+                    elapsed = time.monotonic() - entry["started_mono"]
+                    finish_proxy_run(run_id, "cancelled")
+                    return (
+                        f"⚠️ SoulMate回合已被显式取消（用时 {elapsed:.1f}s，握手阶段）",
+                        "cancelled",
+                        False,
+                    )
                 logger.error("SoulMate回合失败: session/new未返回sessionId")
-                return "", False
+                finish_proxy_run(run_id, "failed")
+                return "", "soulmate-agent", False
             await ws.send(
                 json.dumps(
                     {
@@ -1044,37 +1134,87 @@ async def _run_soulmate_turn(goal: str, timeout: float = 600.0) -> tuple[str, bo
                     }
                 )
             )
-            while loop.time() < deadline:
+            while loop.time() < deadline and not entry.get("cancel_requested"):
                 try:
                     raw = await asyncio.wait_for(
                         ws.recv(), timeout=max(1.0, deadline - loop.time())
                     )
                 except TimeoutError:
                     break
+                except Exception:
+                    break  # 连接被显式取消关闭等，收口逻辑按 cancel_requested 如实报
                 try:
                     frame = json.loads(raw)
                 except Exception:
                     continue
                 if frame.get("error") and frame.get("id") == 3:
                     logger.error(f"SoulMate回合prompt失败: {frame['error']}")
-                    return "", False
+                    finish_proxy_run(run_id, "failed")
+                    return "", "soulmate-agent", False
                 if frame.get("id") == 3:
                     # 最终响应（stopReason等），文本已由session/update流式攒齐
+                    completed = True
                     break
                 if frame.get("method") == "session/update":
                     upd = (frame.get("params") or {}).get("update") or {}
                     c = upd.get("content")
                     if isinstance(c, dict) and isinstance(c.get("text"), str):
-                        chunks.append(c["text"])
+                        _note_chunk(c["text"])
                     elif isinstance(c, str):
-                        chunks.append(c)
+                        _note_chunk(c)
                     if upd.get("last"):
+                        completed = True
                         break
     except Exception as e:
         logger.error(f"SoulMate回合失败: {e}")
-        return "", False
+        if entry.get("cancel_requested"):
+            elapsed = time.monotonic() - entry["started_mono"]
+            finish_proxy_run(run_id, "cancelled")
+            return (
+                f"⚠️ SoulMate回合已被显式取消（用时 {elapsed:.1f}s，已收 {len(chunks)} 块）",
+                "cancelled",
+                False,
+            )
+        finish_proxy_run(run_id, "failed")
+        return "", "soulmate-agent", False
+    finally:
+        entry["cancel_cb"] = None
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+
+    elapsed = time.monotonic() - entry["started_mono"]
     text = "".join(chunks).strip()
-    return text, bool(text)
+    if entry.get("cancel_requested"):
+        # 显式取消：如实报告被取消 + 部分输出，绝不冒充正常完成
+        finish_proxy_run(run_id, "cancelled")
+        partial = text[-800:]
+        note = "（截断显示末尾800字）" if len(text) > 800 else ""
+        body = f"\n已收到的部分回复{note}：\n{partial}" if partial else ""
+        return (
+            f"⚠️ SoulMate回合已被显式取消（用时 {elapsed:.1f}s，已收 {len(chunks)} 块）{body}",
+            "cancelled",
+            False,
+        )
+    if not completed:
+        # 等待预算耗尽：如实报未完成（禁把超时当成功），已收部分保留可见
+        finish_proxy_run(run_id, "timeout")
+        partial = text[-800:]
+        note = "（截断显示末尾800字）" if len(text) > 800 else ""
+        body = f"\n已收到的部分回复{note}：\n{partial}" if partial else "（无任何回复块）"
+        return (
+            f"⚠️ SoulMate回合等待超时（等待预算 {timeout:.0f}s，已用 {elapsed:.1f}s，"
+            f"已收 {len(chunks)} 块，回合未完成）{body}",
+            "soulmate-agent",
+            False,
+        )
+    finish_proxy_run(run_id, "done" if text else "failed")
+    return text, "soulmate-agent", bool(text)
 
 
 # ── B2 任务链↔讨论联动：任务执行完可发起讨论（start_discussion与任务链联动） ──
@@ -1328,8 +1468,10 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
         while True:
             if (req.agent_id or "").lower() == "soulmate":
                 # 红线：SoulMate 走自己的 agent（acp-proxy），不经 hermes CLI
-                response_text, success = await _run_soulmate_turn(run_goal)
-                source = "soulmate-agent"
+                # 11.2：与 CLI 通道同套挂死可见性——心跳/时长查询/显式取消（task_ref 同一查找键）
+                response_text, source, success = await _run_soulmate_turn(
+                    run_goal, on_event=_on_exec_event, task_ref=run_ref
+                )
             else:
                 response_text, source, success = await run_agent_proxy(
                     real_binary, run_goal, on_event=_on_exec_event, task_ref=run_ref
@@ -1572,7 +1714,12 @@ async def cancel_task_exec(group_id: str, task_id: str, req: CancelExecRequest):
             task_id,
             run.get("agent_id") or "",
             "cancel-requested",
-            f"显式取消执行：signal={result.get('signal')} force={req.force} exited={result.get('exited')}",
+            "显式取消执行：mode={m} signal={s} force={f} exited={e}".format(
+                m=result.get("mode"),
+                s=result.get("signal"),
+                f=req.force,
+                e=result.get("exited"),
+            ),
         )
     return result
 
