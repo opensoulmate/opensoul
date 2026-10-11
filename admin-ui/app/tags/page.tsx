@@ -7,6 +7,11 @@ import {
   AlertTriangle, Loader2, CheckCircle, Palette, Hash,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+
+// tags API user_id 为必填 UUID 查询参数（src/api/tag.py），前端调用面统一默认用户——
+// 与 entity 页同 API 调用面（00000000-0000-0000-0000-000000000000）对齐（C3-⑪ 根因修复：缺参致整页 422）。
+const TAG_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -54,14 +59,14 @@ function TagDialog({ tag, onClose, onSave }: {
     try {
       if (tag) {
         // Update
-        await apiFetch(`/api/tags/${tag.id}`, {
+        await apiFetch(`/api/tags/${tag.id}?user_id=${TAG_USER_ID}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, color }),
         });
       } else {
         // Create
-        await apiFetch('/api/tags/', {
+        await apiFetch(`/api/tags/?user_id=${TAG_USER_ID}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, color }),
@@ -110,12 +115,9 @@ function TagDialog({ tag, onClose, onSave }: {
             </div>
             <div className="mt-2 flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground">预览:</span>
-              <span
-                className="rounded-full px-2 py-0.5 text-xs font-medium text-white font-medium"
-                style={{ backgroundColor: color }}
-              >
+              <Badge variant="bare" className="text-xs text-white" style={{ backgroundColor: color }}>
                 {name || '标签名'}
-              </span>
+              </Badge>
             </div>
           </div>
         </div>
@@ -148,7 +150,7 @@ export default function TagsPage() {
     try {
       setLoading(true);
       setError('');
-      const data = await apiFetch('/api/tags/');
+      const data = await apiFetch(`/api/tags/?user_id=${TAG_USER_ID}`);
       setTags(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setError(e.message);
@@ -162,7 +164,7 @@ export default function TagsPage() {
   const handleDelete = async (id: string) => {
     setDeleting(id);
     try {
-      await apiFetch(`/api/tags/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/tags/${id}?user_id=${TAG_USER_ID}`, { method: 'DELETE' });
       setTags((prev) => prev.filter((t) => t.id !== id));
     } catch (e: any) {
       setError(e.message);
@@ -204,9 +206,9 @@ export default function TagsPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           {topTag ? (
             <>
-              <span className="text-sm px-2 py-0.5 rounded-full text-white font-medium" style={{ backgroundColor: topTag.color }}>
+              <Badge variant="bare" className="text-sm text-white" style={{ backgroundColor: topTag.color }}>
                 {topTag.name}
-              </span>
+              </Badge>
               <div className="text-[10px] text-muted-foreground mt-1">{topTag.usage_count}次使用</div>
             </>
           ) : (
@@ -240,12 +242,9 @@ export default function TagsPage() {
         {filtered.map((tag) => (
           <div key={tag.id} className="rounded-lg border border-border bg-card p-4 hover:bg-muted/20 transition-colors">
             <div className="flex items-center gap-3 mb-3">
-              <span
-                className="text-sm px-3 py-1 rounded-full text-white font-medium"
-                style={{ backgroundColor: tag.color || '#6b7280' }}
-              >
+              <Badge variant="bare" className="text-sm px-3 py-1 text-white" style={{ backgroundColor: tag.color || '#6b7280' }}>
                 {tag.name}
-              </span>
+              </Badge>
               <div className="flex-1" />
               <span className="text-[10px] text-muted-foreground font-mono">{tag.id.slice(0, 8)}</span>
             </div>

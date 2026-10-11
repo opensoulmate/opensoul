@@ -45,32 +45,38 @@ def _convert_sql_for_sqlite(sql: str, args: tuple) -> tuple[str, tuple]:
     # 0.1 Convert UUID objects to strings (SQLite doesn't support UUID type)
     args = tuple(str(a) if isinstance(a, UUID) else a for a in args)
 
-    # 1. Handle ANY($N) first — expand list args into IN (?, ...)
-    def _replace_any(m: re.Match) -> str:
-        idx = int(m.group(1)) - 1  # $N is 1-indexed
-        arg = args[idx]
-        if isinstance(arg, (list, tuple)):
-            return "IN (" + ", ".join("?" for _ in arg) + ")"
-        return "IN (?)"
-
-    any_indices = {int(m.group(1)) for m in _ANY_RE.finditer(sql)}
-    new_sql = _ANY_RE.sub(_replace_any, sql)
-
-    # Expand list arguments for ANY
+    # 1+2. 统一扫描：ANY($N) 与 $N → ?，参数按 $N 序号重排绑定（asyncpg 语义：
+    #     $N 按编号绑定，与文本出现顺序无关；同一 $N 复用则按出现次数展开参数）。
+    #     2026-10-11 实证：旧实现按文本顺序无差别替换 $N→?，乱序占位符
+    #     （entity list `LIMIT $3 OFFSET $2`）被静默错绑（LIMIT 绑到 offset=0、
+    #     OFFSET 绑到 limit=50）→ 列表恒空；ANY($N) 展开后后续 $N 的参数位置
+    #     也会错位。本扫描对两种情形按编号正确绑定。
+    #     无 $N 的 "?" 风格调用点（services/feedback.py 等）参数原样透传。
+    _TOKEN_RE = re.compile(r"ANY\(\$(\d+)\)|\$(\d+)")
     expanded_args: list = []
-    for i, arg in enumerate(args):
-        if (i + 1) in any_indices and isinstance(arg, (list, tuple)):
-            expanded_args.extend(arg)
-        else:
-            expanded_args.append(arg)
 
-    # 2. Replace remaining $N → ?
-    new_sql = _PARAM_RE.sub("?", new_sql)
+    def _scan(m: re.Match) -> str:
+        if m.group(1):
+            arg = args[int(m.group(1)) - 1]
+            if isinstance(arg, (list, tuple)):
+                expanded_args.extend(arg)
+                return "IN (" + ", ".join("?" for _ in arg) + ")"
+            expanded_args.append(arg)
+            return "IN (?)"
+        expanded_args.append(args[int(m.group(2)) - 1])
+        return "?"
+
+    if _PARAM_RE.search(sql):
+        new_sql = _TOKEN_RE.sub(_scan, sql)
+        final_args = tuple(expanded_args)
+    else:
+        new_sql = sql
+        final_args = tuple(args)
 
     # 3. Replace NOW() → datetime('now')
     new_sql = new_sql.replace("NOW()", "datetime('now')")
 
-    return new_sql, tuple(expanded_args)
+    return new_sql, final_args
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +244,18 @@ class SQLitePool:
                 "agent_reports",
                 "data",
                 "ALTER TABLE agent_reports ADD COLUMN data TEXT DEFAULT '{}'",
+            ),
+            # C3-⑪（2026-10-11）：tags 生产表是 knowledge/feedback/vein/capture
+            # 建的标签形状（id/user_id/name/created_at），而 api/tag.py 增改读全用
+            # color 列（INSERT name/color/user_id、TagUpdate color、TagResponse.color）
+            # —— "no column named color" 建/改标签必炸（live 实测 POST 500）。
+            # 默认值取 models/tag.py TagBase.color 同值 '#6366f1'：存量行自动回填
+            # 模型默认色，TagResponse 校验不炸（DEFAULT NULL 会让显式 None 过不了
+            # color: str 校验）；knowledge 等无色建标签路径同样落到模型默认色。
+            (
+                "tags",
+                "color",
+                "ALTER TABLE tags ADD COLUMN color TEXT DEFAULT '#6366f1'",
             ),
             # 审计另发现两张"同名不同形"表冲突（trajectory_events：store.py形状
             # vs api/trajectory_api.py形状；agent_messages：消息树形状 vs

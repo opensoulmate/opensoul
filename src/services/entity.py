@@ -11,15 +11,24 @@ from src.models.entity import EntityCreate, EntityUpdate
 def _row_to_entity(row) -> dict:
     d = dict(row)
     d["entity_type"] = d.pop("type", "")
+    # properties 列存 TEXT JSON（写侧 json.dumps），API 契约 properties: dict——
+    # 读侧解析为 dict 并兼容存量 NULL 行（C3-⑪ 2026-10-11 根因收口：修前
+    # create/update 回包拿 raw TEXT/None 过不了 EntityResponse dict 校验，全形态 500）。
+    raw = d.get("properties")
+    if isinstance(raw, str):
+        try:
+            d["properties"] = json.loads(raw)
+        except ValueError:
+            d["properties"] = {}
+    elif raw is None:
+        d["properties"] = {}
     return d
 
 
 async def create_entity(data: EntityCreate, user_id: UUID) -> dict:
-    import json as _json
     import uuid as _uuid
 
     entity_id = str(_uuid.uuid4())
-    _json.dumps(data.properties) if isinstance(data.properties, dict) else data.properties
     await db_pool.execute(
         "INSERT INTO entities (id, name, type, description, properties, user_id) "
         "VALUES ($1, $2, $3, $4, $5, $6)",
@@ -27,7 +36,9 @@ async def create_entity(data: EntityCreate, user_id: UUID) -> dict:
         data.name,
         data.entity_type,
         data.description,
-        json.dumps(data.properties) if data.properties else None,
+        # json.dumps 铁律：dict 禁直接绑参；空 dict 也落 '{}'（原写法空 dict 落 NULL，
+        # 回包 properties=None 过不了 dict 校验）。
+        json.dumps(data.properties or {}),
         str(user_id),
     )
     row = await db_pool.fetchrow("SELECT * FROM entities WHERE id = $1", entity_id)
@@ -92,7 +103,8 @@ async def update_entity(entity_id: UUID, data: EntityUpdate, user_id: UUID) -> d
     for field, value in fields.items():
         col = "type" if field == "entity_type" else field
         set_clauses.append(f"{col} = ${idx}")
-        values.append(value)
+        # properties 同走 json.dumps 铁律（dict 直接绑参 SQLite 必炸）
+        values.append(json.dumps(value) if field == "properties" and value is not None else value)
         idx += 1
 
     values.extend([str(entity_id), str(user_id)])

@@ -1,4 +1,4 @@
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException
 
@@ -16,8 +16,12 @@ async def tag_health():
 
 @router.post("/", response_model=TagResponse)
 async def create(data: TagCreate, user_id: UUID):
+    # id 显式生成（C3-⑪ 2026-10-11 根因修复）：生产 SQLite tags.id 无默认值，
+    # 原写法依赖 PG 端 id 默认→NULL 落库（live 实测 id=None，TagResponse UUID 校验炸）。
+    # 显式 str(uuid4()) 双库同义，且过 SQLite UUID 绑参铁律。
     row = await db_pool.fetchrow(
-        "INSERT INTO tags (name, color, user_id) VALUES ($1, $2, $3) RETURNING *",
+        "INSERT INTO tags (id, name, color, user_id) VALUES ($1, $2, $3, $4) RETURNING *",
+        str(uuid4()),
         data.name,
         data.color,
         user_id,

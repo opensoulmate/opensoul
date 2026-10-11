@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Badge, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
 
 interface PulseSignal {
   signal_id: string;
@@ -290,7 +291,7 @@ export default function PulsePage() {
             </div>
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-2">
-                <div><span className="text-muted-foreground">ID: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selected.signal_id}</code></div>
+                <div><span className="text-muted-foreground">ID: </span><Code variant="chip">{selected.signal_id}</Code></div>
                 <div><span className="text-muted-foreground">类型: </span>{selected.signal_type}</div>
                 <div><span className="text-muted-foreground">间隔: </span>{formatInterval(selected.interval_ms)}</div>
                 <div><span className="text-muted-foreground">状态: </span><Badge className={`${statusColor(selected.status)}`}>{selected.status}</Badge></div>

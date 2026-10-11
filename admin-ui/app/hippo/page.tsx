@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
 
 interface Memory {
   memory_id: string;
@@ -495,8 +496,8 @@ export default function HippoPage() {
             <div className="space-y-3 text-sm">
               <div><span className="text-muted-foreground">内容: </span>{selectedMem.content}</div>
               <div className="grid grid-cols-2 gap-2">
-                <div><span className="text-muted-foreground">ID: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selectedMem.memory_id}</code></div>
-                <div><span className="text-muted-foreground">会话: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selectedMem.session_id}</code></div>
+                <div><span className="text-muted-foreground">ID: </span><Code variant="chip">{selectedMem.memory_id}</Code></div>
+                <div><span className="text-muted-foreground">会话: </span><Code variant="chip">{selectedMem.session_id}</Code></div>
                 <div><span className="text-muted-foreground">重要度: </span>{selectedMem.importance.toFixed(2)}</div>
                 <div><span className="text-muted-foreground">留存率: </span><span className={retentionColor(selectedMem.retention)}>{(selectedMem.retention * 100).toFixed(1)}%</span></div>
                 <div><span className="text-muted-foreground">访问次数: </span>{selectedMem.access_count}</div>

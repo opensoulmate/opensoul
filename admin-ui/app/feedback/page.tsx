@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Badge, TONES, tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
 
 interface FeedbackEntry {
   id: string;
@@ -255,7 +256,7 @@ export default function FeedbackPage() {
               )}
               <div className="text-xs text-muted-foreground">
                 <div>来源: {selected.source}</div>
-                <div>ID: <code className="bg-muted px-1 rounded">{selected.id}</code></div>
+                <div>ID: <Code variant="chip-sm">{selected.id}</Code></div>
                 <div>创建: {selected.created_at}</div>
               </div>
             </div>

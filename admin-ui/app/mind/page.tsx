@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
 
 interface Personality {
   personality_id: string;
@@ -367,7 +368,7 @@ export default function MindPage() {
                 </div>
               )}
               <div><span className="text-muted-foreground">使用次数: </span>{selected.usage_count}</div>
-              <div><span className="text-muted-foreground">人格ID: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selected.personality_id}</code></div>
+              <div><span className="text-muted-foreground">人格ID: </span><Code variant="chip">{selected.personality_id}</Code></div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
               {!selected.builtin && <Button onClick={() => { setShowDetail(false); openEdit(selected.personality_id); }} variant="secondary">编辑</Button>}

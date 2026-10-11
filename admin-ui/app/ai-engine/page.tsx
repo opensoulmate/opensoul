@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -395,7 +396,7 @@ export default function AIEnginePage() {
             <div className="space-y-2">
               {toolRoutes.map((r, i) => (
                 <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
-                  <code className="text-xs font-mono bg-muted px-2 py-1 rounded">{r.tool}</code>
+                  <Code variant="chip-lg" className="font-mono">{r.tool}</Code>
                   <Badge variant="default">{r.mode}</Badge>
                   <Badge className={`${r.permissions === 'readonly' ? 'bg-emerald-400/10 text-emerald-400' : 'bg-amber-400/10 text-amber-400'}`}>
                     {r.permissions === 'readonly' ? '只读' : '读写'}

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Code } from '@/components/ui/code';
 
 interface Entity {
   id: string;
@@ -358,7 +359,7 @@ export default function EntityPage() {
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2"><Badge className={`${typeColor(selectedEntity.entity_type)}`}>{selectedEntity.entity_type}</Badge></div>
               <div><span className="text-muted-foreground">描述: </span>{selectedEntity.description || '暂无'}</div>
-              <div><span className="text-muted-foreground">ID: </span><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selectedEntity.id}</code></div>
+              <div><span className="text-muted-foreground">ID: </span><Code variant="chip">{selectedEntity.id}</Code></div>
               {selectedEntity.properties && Object.keys(selectedEntity.properties).length > 0 && (
                 <div>
                   <span className="text-muted-foreground">属性:</span>

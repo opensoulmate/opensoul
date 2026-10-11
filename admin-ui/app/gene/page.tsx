@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Code } from '@/components/ui/code';
 
 interface Template {
   template_id: string;
@@ -455,7 +456,7 @@ export default function GenePage() {
                   <div className="mt-1 space-y-1">
                     {selectedTemplate.variables.map((v, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs p-2 bg-muted rounded">
-                        <code className="font-mono text-primary">{v.name}</code>
+                        <Code variant="bare" className="font-mono text-primary">{v.name}</Code>
                         {v.type && <span className="text-[10px] text-muted-foreground">({v.type})</span>}
                         {v.required && <span className="text-[10px] text-red-500">必填</span>}
                         {v.description && <span className="text-[10px] text-muted-foreground flex-1 truncate">{v.description}</span>}
@@ -568,7 +569,7 @@ export default function GenePage() {
               <Button onClick={() => setShowCloneDialog(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
-              <p className="text-xs text-muted-foreground">源模板: <code className="font-mono">{selectedTemplate.template_id}</code></p>
+              <p className="text-xs text-muted-foreground">源模板: <Code variant="bare" className="font-mono">{selectedTemplate.template_id}</Code></p>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">新名称</label>
                 <input className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none" value={cloneName} onChange={(e) => setCloneName(e.target.value)} placeholder={selectedTemplate.name + ' (副本)'} />
@@ -596,7 +597,7 @@ export default function GenePage() {
               <Button onClick={() => setShowInstantiateDialog(false)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3">
-              <p className="text-xs text-muted-foreground">模板: <code className="font-mono">{selectedTemplate.template_id}</code></p>
+              <p className="text-xs text-muted-foreground">模板: <Code variant="bare" className="font-mono">{selectedTemplate.template_id}</Code></p>
               {selectedTemplate.variables.length > 0 ? (
                 <div className="space-y-2">
                   <label className="text-xs font-medium">填写变量</label>
