@@ -188,10 +188,10 @@ def _artifact_update_payload(
 class LLMStreamError(RuntimeError):
     """LLM 流式生成中途故障（F4b-⑯b）：已发分块不可撤回——如实让任务失败可见。
 
-    刻意不是 TimeoutError 子类：run_processing 的 25s 超时降级（把"AI处理超时"文本
-    当成功回复）只适用于零分块路径；一旦已对外发过 artifactUpdate 分块，再把降级文本
-    当成功回复=流与终稿互相矛盾（谎报 ok，F1 语义收口同款纪律）。发块后故障必须走
-    failed（错误进 status.message 不进 history，F4b-⑧）。
+    刻意不是 TimeoutError 子类：两类故障都归 failed 可见（F4b-⑲ 收口后预算超时
+    不再把降级文本当成功回复），但错误文案必须保留真因——本异常=生成中途故障
+    （坏帧/上游断联等），TimeoutError=总预算耗尽取消，禁混文案。发块后故障必须
+    走 failed（错误进 status.message 不进 history，F4b-⑧）。
     """
 
 
@@ -383,6 +383,10 @@ def _materialize_extra_choices(task: Task, choices: list) -> None:
 
 class TaskManager:
     """In-memory task manager for A2A protocol with real service integration."""
+
+    # 端到端处理总预算（s）——run_processing 超时语义单一源（F4b-⑲）；
+    # 类属性供测试短缩（真实 wait_for 计时语义不动）。
+    PROCESS_BUDGET_S = 25.0
 
     def __init__(self):
         self.tasks: dict[str, Task] = {}
@@ -737,9 +741,9 @@ class TaskManager:
         create_task+process_task 同一消息双 append（live 实证 hist=2 user+1 agent
         =首条用户消息重复记录，多轮上下文也把首条喂两遍）。
 
-        三态收口（F4b-⑱）：completed（正常回复）/ failed（处理故障）/ input-required
-        （TaskInputRequired——agent 问句入史后暂停等用户补充输入，§6.3 续接可达）；
-        三态共用同一收尾路径（推送 + 流式收束）。
+        三态收口（F4b-⑱）：completed（正常回复）/ failed（处理故障/预算超时——失败
+        可见禁降级谎报，F4b-⑲）/ input-required（TaskInputRequired——agent 问句入史
+        后暂停等用户补充输入，§6.3 续接可达）；三态共用同一收尾路径（推送+流式收束）。
         """
         task.status = TaskStatus(state="working")
         await self._notify_push(task)  # 状态迁移即任务更新 → webhook（§4.3.3）
@@ -756,15 +760,12 @@ class TaskManager:
                 raise TaskInputRequired(_NO_TEXT_QUESTION)
 
             # Process based on skills — 端到端总预算25s（失败三级降级/kilocode）：
-            # 任一处理层挂死都在客户端30s预算内优雅收场，不再有无界等待
-            try:
-                response_text = await asyncio.wait_for(
-                    self._process_message(user_text, task), timeout=25.0
-                )
-            except TimeoutError:
-                response_text = (
-                    f"收到您的消息：{user_text}\n\nAI处理超时（25s总预算耗尽），请稍后重试。"
-                )
+            # 任一处理层挂死都在客户端30s预算内优雅收场，不再有无界等待。
+            # 预算耗尽=处理被强制取消、未产出真实回复——归 except TimeoutError
+            # 走 failed 可见（F4b-⑲），不 fabricated 成功回复
+            response_text = await asyncio.wait_for(
+                self._process_message(user_text, task), timeout=self.PROCESS_BUDGET_S
+            )
 
             # Create agent response
             agent_msg = Message(
@@ -781,6 +782,29 @@ class TaskManager:
             # 也不 failed；状态迁移本体走唯一产生口，收尾（推送/流式收束）与
             # completed/failed 走同一收尾路径（下）
             self.require_input(task, e.question)
+        except TimeoutError:
+            # 预算超时收口（F4b-⑲，F4b-⑱ 留档⑤）：25s 总预算耗尽=处理被强制取消、
+            # 未产出真实回复——修前把"AI处理超时…请稍后重试"降级文本当成功回复入史
+            # 并标 completed=机器可读面谎报成功（F1"谎报 ok"同型）。失败可见：
+            # state=failed、超时说明进 status.message 不进 history（F4b-⑧）。
+            logger.error("Task processing timed out (budget exhausted)")
+            task.status = TaskStatus(
+                state="failed",
+                message=Message(
+                    role="agent",
+                    parts=[
+                        {
+                            "type": "text",
+                            "text": (
+                                f"AI处理超时（{self.PROCESS_BUDGET_S:g}s总预算耗尽），"
+                                "任务未能完成，请稍后重试。"
+                            ),
+                        }
+                    ],
+                    taskId=task.id,
+                    contextId=task.contextId,
+                ),
+            )
         except Exception as e:
             logger.error(f"Task processing failed: {e}")
             task.status = TaskStatus(
@@ -1025,8 +1049,9 @@ class TaskManager:
                     messages.append({"role": role, "content": "\n".join(text_parts)})
 
             if stream is not None:
-                # 内层预算 20s < run_processing 外层 25s：流式故障在本层先归口
-                # （超时→按 committed 分流降级/失败），不落进外层"超时文本当成功回复"面
+                # 内层预算 20s < run_processing 外层总预算：流式故障在本层先归口
+                # （超时→按 committed 分流降级/失败），不落进外层预算超时面
+                # （外层超时=处理被取消→failed 可见，F4b-⑲）
                 return await asyncio.wait_for(
                     self._chat_stream(
                         task, messages, stream, api_key=api_key, base_url=base_url, model=model
@@ -1068,6 +1093,13 @@ class TaskManager:
                 return await asyncio.wait_for(self._handle_acp_chat(text, task), timeout=10.0)
             except TimeoutError:
                 return f"收到您的消息：{text}\n\nAI服务超时，请检查服务配置。"
+        finally:
+            # 任何 unwind（含外层预算超时取消——CancelledError 不经上面 except
+            # Exception）已发块不悬挂：剩余块 lastChunk 收尾（F4b-⑯b"客户端不悬挂"
+            # 纪律补全取消路径）。成功/LLMStreamError 路径已收尾=幂等 no-op；
+            # 发块前失败路径 committed=False 跳过（pending 块不出="无痕可撤"语义）。
+            if stream is not None and stream.committed:
+                stream.close()
 
     async def _chat_stream(
         self,
