@@ -210,6 +210,26 @@ class TaskInputRequired(Exception):
         self.question = question
 
 
+class TaskCancelled(Exception):
+    """处理层 → 任务 canceled 的产生信号（F4b-㉔ 取消语义）。
+
+    §6.3 续接回答是取消意图（「不用了」「算了」「取消」…闭集字面匹配，
+    _is_cancel_intent）时由处理层 raise，run_processing 归口到
+    TaskManager.cancel_by_user（唯一产生口）：取消确认以 agent 消息入史
+    （恰一次，F4b-⑧）+ 状态置 canceled（终态）。
+
+    与 TaskInputRequired 同族（都是"处理层→任务状态"的产生信号），与客户端
+    CancelTask RPC（cancel_task）刻意分开——那是传输层取消、不带消息历史；
+    这是用户在消息里说不干了，须留对话痕迹。修前（F4b-㉑ 留档诚实边界）
+    pending 回答被当查询参数 verbatim（「不用了」→搜索「不用了」fabricate
+    查询结果）。
+    """
+
+    def __init__(self, ack: str):
+        super().__init__(ack)
+        self.ack = ack
+
+
 # 产生面真实触发（F4b-⑱）：消息无可提取文本（空 parts / 仅图片 / 仅文件 / 仅 data
 # part——part_text 三形只认文本）→ agent 无法在本轮继续，如实暂停等用户补充文字输入。
 # 修前此处拿空 prompt 硬跑 LLM（llm_mode=stub 则回显空消息）→ fabricated completed。
@@ -271,6 +291,74 @@ def _skill_residual(text: str, tag: str) -> str:
         if idx >= 0:
             text = text[:idx] + text[idx + len(tag) :]
     return _strip_fillers(text)
+
+
+# ── 取消语义（F4b-㉔）────────────────────────────────────────────────────
+# §6.3 续接回答=取消意图 → 任务 canceled，禁当查询参数 verbatim（F4b-㉑ 留档
+# 诚实边界「pending 回答=参数 verbatim（『不用了』会被当查询）」收口）。
+# 闭集字面匹配非语义理解（宁窄勿滥，F4b-㉒ 关键词纪律同款）：归一后**全等**
+# 才算取消——containment 会误杀真查询（「如何取消订单」是要搜的内容不是取消），
+# 禁用。集合存归一形（去空白/首尾标点/句末语气词/小写）。
+_CANCEL_PHRASES = frozenset(
+    {
+        "不用了",
+        "不用",
+        "算了",
+        "算了不用",
+        "算了不用了",
+        "取消",
+        "不要了",
+        "不要",
+        "不需要",
+        "不需要了",
+        "不必了",
+        "不必",
+        "停止",
+        "终止",
+        "别搜了",
+        "别搜索了",
+        "别查了",
+        "别查询了",
+        "cancel",
+        "stop",
+    }
+)
+
+# 句末语气词（归一剥除：「取消吧」「算了啊」=「取消」「算了」）
+_CANCEL_FINAL_PARTICLES = "吧啊呀哦呢哈嘛呗"
+
+# 取消判定第二形剥除的寒暄填充词——**只剥礼貌/寒暄词，不剥查询动词**
+# （搜索/查询/搜/查/找/看）：查询动词是真查询的信号，剥掉会把「搜索取消」
+# 折叠成「取消」误杀真查询（宁窄勿滥）。
+_CANCEL_POLITE_FILLERS = ("一下", "帮我", "帮忙", "麻烦", "谢谢", "多谢", "请")
+
+_CANCEL_ACK = "好的，已按您的要求取消本次请求。如需继续，随时告诉我。"
+
+
+def _strip_polite(text: str) -> str:
+    """剥礼貌/寒暄填充词（最长优先，与 _strip_fillers 同纪律）。"""
+    for w in sorted(_CANCEL_POLITE_FILLERS, key=len, reverse=True):
+        text = text.replace(w, "")
+    return text
+
+
+def _cancel_norm(text: str) -> str:
+    """取消意图归一形：去空白/首尾标点/句末语气词，小写。"""
+    t = text.strip(" \t\r\n,，。.！!？?：:；;、~…—-" + _CANCEL_FINAL_PARTICLES)
+    return "".join(t.split()).lower()
+
+
+def _is_cancel_intent(text: str) -> bool:
+    """续接回答=取消意图？（闭集全等匹配，宁窄勿滥）
+
+    双形判定：直接归一形（「取消吧」→「取消」）+ 剥礼貌寒暄后归一形
+    （「帮我取消一下」→「取消」「不用了，谢谢」→「不用了」）——任一形全等命中
+    才算取消。全等语义锁死：「如何取消订单」「停止按钮在哪」「搜索取消」是真
+    查询不是取消（containment/查询动词折叠都会误杀，禁用）。
+    """
+    if _cancel_norm(text) in _CANCEL_PHRASES:
+        return True
+    return _cancel_norm(_strip_polite(text)) in _CANCEL_PHRASES
 
 
 class _ArtifactChunkStream:
@@ -787,6 +875,25 @@ class TaskManager:
         task.status = TaskStatus(state="input-required", message=agent_msg)
         return task
 
+    def cancel_by_user(self, task: Task, ack: str) -> Task:
+        """用户消息取消意图唯一产生口（F4b-㉔）：取消确认入史 + 状态置 canceled。
+
+        与 require_input 同族（处理层信号→状态迁移单点），与 cancel_task（客户端
+        CancelTask RPC，无消息历史）刻意分开。取消确认以 agent 消息入史恰一次
+        （F4b-⑧：status.message 指同一消息对象，禁双入史）；canceled=终态——
+        ensure_accepts_message 此后拒收续接（§3.1.1/§3.1.2），推送/流式收尾由
+        run_processing 统一收尾路径发出（终态 {"task"} 全量 + 收尾快照）。
+        """
+        agent_msg = Message(
+            role="agent",
+            parts=[{"type": "text", "text": ack}],
+            taskId=task.id,
+            contextId=task.contextId,
+        )
+        task.history.append(agent_msg)
+        task.status = TaskStatus(state="canceled", message=agent_msg)
+        return task
+
     async def run_processing(self, task: Task, message: Message) -> Task:
         """执行处理并把 agent 回复入史；message 不入史——入史责任在调用方。
 
@@ -836,6 +943,11 @@ class TaskManager:
             # 也不 failed；状态迁移本体走唯一产生口，收尾（推送/流式收束）与
             # completed/failed 走同一收尾路径（下）
             self.require_input(task, e.question)
+        except TaskCancelled as e:
+            # 用户取消归口（F4b-㉔）：§6.3 续接回答=取消意图 → canceled 终态可见，
+            # 禁当查询参数 fabricate 结果；也不 completed——没干的活不标成功
+            # （F4b-⑲ fabricated completed 同型纪律）。状态迁移本体走唯一产生口。
+            self.cancel_by_user(task, e.ack)
         except TimeoutError:
             # 预算超时收口（F4b-⑲，F4b-⑱ 留档⑤）：25s 总预算耗尽=处理被强制取消、
             # 未产出真实回复——修前把"AI处理超时…请稍后重试"降级文本当成功回复入史
@@ -929,9 +1041,14 @@ class TaskManager:
           直接回填同一技能执行——回答通常不含触发词，按普通路由会掉进 LLM chat
           到不了提问的技能=参数永远送不达。pending 消费一次即清；回答仍无实质
           内容=再问（不丢不重，F4b-⑱ 同语义）。
+        - 取消语义（F4b-㉔）：回答=取消意图（闭集全等，_is_cancel_intent）→
+          TaskCancelled 任务收口 canceled，禁当查询参数 verbatim（修前「不用了」
+          →搜索「不用了」fabricate 查询结果）。
         """
         pending = task.metadata.pop(_PENDING_SKILL_KEY, "")
         if pending:
+            if _is_cancel_intent(text):
+                raise TaskCancelled(_CANCEL_ACK)
             if _strip_fillers(text):
                 return await self._handle_skill(pending, text, task)
             task.metadata[_PENDING_SKILL_KEY] = pending
