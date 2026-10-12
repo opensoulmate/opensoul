@@ -48,7 +48,9 @@ class EmotionDrivenDecision:
         if decision.execute_mode == "deny":
             return decision
 
-        emotion_weight = EMOTION_WEIGHTS.get(user_emotion, EMOTION_WEIGHTS["neutral"])
+        # 权重取数单一源（F4b-㉛）：决策面与观测口（get_emotion_sensitivity→
+        # /api/mind/emotion/sensitivity）共用同一取数口，禁两套查找漂移
+        emotion_weight = self.get_emotion_sensitivity(user_emotion)
 
         # 风险等级调整
         risk_level = decision.risk.overall_level
@@ -102,5 +104,9 @@ class EmotionDrivenDecision:
         return decision
 
     def get_emotion_sensitivity(self, user_emotion: str) -> dict:
-        """获取情绪敏感度"""
+        """获取情绪敏感度（权重取数单一源，F4b-㉛）。
+
+        决策面（adjust_decision）与观测面（/api/mind/emotion/sensitivity）共用
+        此取数口：EMOTION_WEIGHTS 唯一查找点在此，缺省回落 neutral 权重。
+        """
         return EMOTION_WEIGHTS.get(user_emotion, EMOTION_WEIGHTS["neutral"])

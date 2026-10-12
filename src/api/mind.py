@@ -4,6 +4,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from src.mind.emotion import EmotionAnalyzer
+from src.mind.emotion_decision import EMOTION_WEIGHTS, EmotionDrivenDecision
 from src.mind.personality import PersonalityManager
 from src.mind.preference_learner import PreferenceLearner
 from src.services.tenant_binding import bind_identity
@@ -12,6 +13,7 @@ router = APIRouter()
 
 # ── Singletons ─────────────────────────────────────────────
 emotion_analyzer = EmotionAnalyzer()
+emotion_decision = EmotionDrivenDecision()
 personality_mgr = PersonalityManager()
 preference_learner = PreferenceLearner()
 
@@ -93,6 +95,30 @@ async def emotion_keywords():
                 "arousal": config["arousal"],
             }
             for name, config in _EMOTION_LEXICON.items()
+        }
+    }
+
+
+@router.get("/emotion/sensitivity")
+async def emotion_sensitivity(emotion: str | None = None):
+    """情绪→决策权重观测口（F4b-㉛ 接线——修前 get_emotion_sensitivity 全仓零消费）。
+
+    与 /emotion/keywords 同族：mind 情绪面观测口。权重取数走
+    EmotionDrivenDecision.get_emotion_sensitivity 单一源（决策面 adjust_decision
+    同一取数口）；未收录情绪回落 neutral 如实报 matched/resolved 不冒充。
+    """
+    if emotion is not None:
+        weights = emotion_decision.get_emotion_sensitivity(emotion)
+        matched = emotion in EMOTION_WEIGHTS
+        return {
+            "emotion": emotion,
+            "matched": matched,
+            "resolved": emotion if matched else "neutral",
+            "weights": weights,
+        }
+    return {
+        "emotions": {
+            name: emotion_decision.get_emotion_sensitivity(name) for name in EMOTION_WEIGHTS
         }
     }
 
