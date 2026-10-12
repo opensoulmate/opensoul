@@ -337,6 +337,25 @@ class TrajectoryStore:
         flipped = 0
         for row in rows:
             sid = row["id"]
+            # P1-15 user_idle 终止条件落 trace：闲置收口前给 session 留终止标记
+            # 事件（metadata.termination=user_idle）——"为什么这个 session 结束了"
+            # 在 trace 里可查。注意顺序：add_event 会把 session 自愈翻回 running，
+            # 标记必须在 end_session 之前落，收口才是终态。
+            try:
+                await self.add_event(
+                    TrajectoryEvent(
+                        session_id=sid,
+                        event_type=EventType.CUSTOM.value,
+                        agent_id="system",
+                        content="会话闲置收口（user_idle 终止条件）",
+                        metadata_json=json.dumps(
+                            {"termination": "user_idle", "kind": "termination"}, ensure_ascii=False
+                        ),
+                        status="ok",
+                    )
+                )
+            except Exception:
+                pass  # 标记失败不阻塞收口（收口是清扫的本职）
             await self.end_session(sid, status="completed")
             flipped += 1
         return flipped
@@ -540,6 +559,7 @@ class TrajectoryStore:
         event_id: str,
         status: str = "ok",
         token_usage: int | None = None,
+        termination: str = "",
     ) -> TrajectoryEvent | None:
         """Close a span-style event: stamp ``end_at`` and derive duration.
 
@@ -547,6 +567,10 @@ class TrajectoryStore:
         still "open". Duration is computed here from created_at→now rather
         than trusted from the caller, so every span's duration comes from
         one clock. ``token_usage`` folds back into the session total.
+
+        ``termination``（P1-15 五终止条件词汇，agent/termination.py）合入事件
+        metadata（metadata.termination）——回合被哪个终止条件收口落 trace；
+        空串=正常完成，metadata 不动（向后兼容零变化）。
         """
         await self.ensure_tables()
         row = await db_pool.fetchrow("SELECT * FROM trajectory_events WHERE id = ?", event_id)
@@ -567,14 +591,20 @@ class TrajectoryStore:
             # successful call into an error").
             pass
         new_tokens = ev.token_usage if token_usage is None else token_usage
+        new_meta_json = ev.metadata_json
+        if termination:
+            meta = ev.metadata
+            meta["termination"] = str(termination)[:40]
+            new_meta_json = json.dumps(meta, ensure_ascii=False)
         await db_pool.execute(
             """UPDATE trajectory_events
-               SET end_at = ?, duration_ms = ?, status = ?, token_usage = ?
+               SET end_at = ?, duration_ms = ?, status = ?, token_usage = ?, metadata_json = ?
                WHERE id = ?""",
             end_at,
             duration,
             status,
             new_tokens,
+            new_meta_json,
             event_id,
         )
         if token_usage is not None and token_usage != ev.token_usage:
@@ -589,6 +619,7 @@ class TrajectoryStore:
         ev.duration_ms = duration
         ev.status = status
         ev.token_usage = new_tokens
+        ev.metadata_json = new_meta_json
         return ev
 
     async def get_trace_tree(self, session_id: str, limit: int = 500) -> dict:

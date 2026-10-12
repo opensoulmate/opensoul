@@ -382,6 +382,9 @@ async def replay_session(session_id: str, from_event: str = Query(default="")):
 class EventEndRequest(BaseModel):
     status: str = "ok"
     token_usage: int | None = None
+    # P1-15 五终止条件词汇（agent/termination.py 单一真源）：回合被哪个终止
+    # 条件收口，落事件 metadata.termination；空=正常完成
+    termination: str = ""
 
 
 @router.post("/events/{event_id}/end")
@@ -389,7 +392,10 @@ async def end_event(event_id: str, req: EventEndRequest | None = None):
     """Close a span-style event — stamps end_at and derives duration_ms."""
     status = req.status if req else "ok"
     token_usage = req.token_usage if req else None
-    event = await trajectory_store.end_event(event_id, status=status, token_usage=token_usage)
+    termination = (req.termination if req else "") or ""
+    event = await trajectory_store.end_event(
+        event_id, status=status, token_usage=token_usage, termination=termination
+    )
     if not event:
         raise HTTPException(404, "Event not found")
     return event.to_dict()
