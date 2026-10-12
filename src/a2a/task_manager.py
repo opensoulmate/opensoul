@@ -243,19 +243,108 @@ class _ArtifactChunkStream:
         )
 
 
-def _sse_delta_text(frame: dict) -> str:
-    """OpenAI 形 SSE 帧 → 本块文本增量（choices[0].delta.content）。
+class _ChoiceChunkStreams:
+    """多 choice 分块发射面（F4b-⑰）：每 choice 一条独立 _ArtifactChunkStream。
 
-    非文本帧（usage 收尾帧/无 content/形状不符）返回空串不 fabricate 块；多 choice
-    只取 choice[0]（chat 单回复语义，如实边界记录，禁静默把多 choice 混成一文）。
+    - 主 choice（index 0）artifact name="response"（既有契约零变化）；非主 choice
+      name=f"response-{index}"——非主 choice 一律物化为独立 artifact 不静默丢
+      （修前 _sse_delta_text 只取 choices[0]，choices[i>0] 增量被静默丢弃，与
+      F4b-① gland"多 choice 按 index 各自聚合不静默丢"纪律相悖）。
+    - 各 artifact 的 append/lastChunk 语义与主 choice 同款精确（每 artifact 独立
+      收尾：首块 append=False、末块 lastChunk=True）。
+    - 懒创建：该 choice 首个非空增量到来才建流（不为缺席的 choice fabricate artifact）。
+    - committed/close 与单流同语义（失败分流"已发块不可撤回"=任一 choice 已发块）。
     """
+
+    def __init__(self, manager: "TaskManager", task: Task):
+        self._streams: dict[int, _ArtifactChunkStream] = {}
+        self._manager = manager
+        self._task = task
+
+    def push(self, index: int, delta: str) -> None:
+        """收一个 choice 的 token 增量（空串不 fabricate 块）。"""
+        if not delta:
+            return
+        s = self._streams.get(index)
+        if s is None:
+            s = _ArtifactChunkStream(
+                self._manager,
+                self._task,
+                name="response" if index == 0 else f"response-{index}",
+            )
+            self._streams[index] = s
+        s.push(delta)
+
+    def close(self) -> None:
+        """收尾：逐 choice 各自 lastChunk 收束（不悬挂任一 artifact）。"""
+        for s in self._streams.values():
+            s.close()
+
+    @property
+    def committed(self) -> bool:
+        """任一 choice 已对外发过块（不可撤回）——失败分流依据。"""
+        return any(s.committed for s in self._streams.values())
+
+
+def _sse_choice_deltas(frame: dict) -> dict[int, str]:
+    """OpenAI 形 SSE 帧 → 逐 choice 文本增量 {choice_index: delta}（F4b-⑰）。
+
+    修前 _sse_delta_text 只取 choices[0]，非主 choice 的 delta 被静默丢弃——现逐
+    choice 归集（每 choice 走自己的 artifact 分块流，_ChoiceChunkStreams）。
+    - index 取 choices[].index；缺失/非法（bool/非 int）按帧内位置兜底（单 choice
+      帧恒 0=既有语义零变化）。
+    - 非文本帧（usage 收尾帧/无 content/形状不符/空串）不 fabricate 块；content
+      非 str（如 None）同忽略；畸形帧同 index 撞键按序累加（禁静默丢）。
+    """
+    out: dict[int, str] = {}
     try:
         choices = frame.get("choices") or []
-        delta = choices[0].get("delta") or {}
-    except (AttributeError, IndexError, KeyError, TypeError):
-        return ""
-    content = delta.get("content")
-    return content if isinstance(content, str) else ""
+    except AttributeError:
+        return out
+    for pos, choice in enumerate(choices):
+        try:
+            idx = choice.get("index")
+            if isinstance(idx, bool) or not isinstance(idx, int):
+                idx = pos
+            content = (choice.get("delta") or {}).get("content")
+        except AttributeError:
+            continue
+        if isinstance(content, str) and content:
+            out[idx] = out.get(idx, "") + content
+    return out
+
+
+def _message_choice_texts(choices: list) -> dict[int, str]:
+    """非流式 choices[]（message.content 形）→ {choice_index: content}。
+
+    index 兜底/空 content 过滤与 _sse_choice_deltas 同纪律；供非流式/JSON 整段
+    路径把非主 choice 物化为独立 artifact（F4b-⑰ 不静默丢）。
+    """
+    out: dict[int, str] = {}
+    for pos, choice in enumerate(choices):
+        try:
+            idx = choice.get("index")
+            if isinstance(idx, bool) or not isinstance(idx, int):
+                idx = pos
+            content = (choice.get("message") or {}).get("content")
+        except AttributeError:
+            continue
+        if isinstance(content, str) and content:
+            out[idx] = out.get(idx, "") + content
+    return out
+
+
+def _materialize_extra_choices(task: Task, choices: list) -> None:
+    """非主 choice 物化为独立 artifact（F4b-⑰，非流式路径不静默丢）。
+
+    主 choice（index 0，位置兜底）契约零变化：回复文本照旧、非流式路径不为主
+    choice 建 artifact（F4b-⑯b 零变化面延续）；仅非主 choice 补 artifact——单块
+    append=False/lastChunk=True（无流式过程可回放，不硬造伪增量）。
+    """
+    texts = _message_choice_texts(choices)
+    texts.pop(0, None)
+    for idx in sorted(texts):
+        task.artifacts.append(Artifact(name=f"response-{idx}", parts=[{"text": texts[idx]}]))
 
 
 class TaskManager:
@@ -822,7 +911,9 @@ class TaskManager:
 
         token 级增量（F4b-⑯b）：有活跃流订阅者（has_stream_subscribers）时真流式消费
         上游 SSE，逐 delta 发 TaskArtifactUpdateEvent 分块；无订阅者走既有整段路径
-        （字节零变化）。失败分流以"已发块不可撤回"为界：
+        （字节零变化）。多 choice（F4b-⑰）：主 choice（index 0）=回复文本（history
+        契约零变化），非主 choice 一律物化为独立 artifact（name="response-{index}"）
+        不静默丢。失败分流以"已发块不可撤回"为界：
         - 发块前失败 → 既有 ACP 降级语义零变化（无痕可撤，连 pending 块也不出）
         - 发块后故障 → LLMStreamError 让任务 failed 可见（禁降级文本与已发流互相矛盾）
         """
@@ -830,7 +921,7 @@ class TaskManager:
         # metadata.llm_mode=stub 时零网络确定性应答——集成测试/离线演示不打真实LLM
         if task.metadata.get("llm_mode") == "stub":
             return f"[stub-llm] 收到您的消息：{text}\n\n（确定性离线应答，未调用真实LLM）"
-        stream = _ArtifactChunkStream(self, task) if self.has_stream_subscribers(task.id) else None
+        stream = _ChoiceChunkStreams(self, task) if self.has_stream_subscribers(task.id) else None
         try:
             import httpx
 
@@ -883,7 +974,11 @@ class TaskManager:
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    return data["choices"][0]["message"]["content"]
+                    # 主 choice（choices[0]）回复契约零变化；非主 choice 物化为独立
+                    # artifact 不静默丢（F4b-⑰，_materialize_extra_choices）
+                    primary = data["choices"][0]["message"]["content"]
+                    _materialize_extra_choices(task, data.get("choices") or [])
+                    return primary
                 else:
                     logger.warning(f"LLM API error {resp.status_code}, falling back to ACP")
                     # 与异常路径同款wait_for——此前这里裸await无界（httpx 120s），
@@ -905,7 +1000,7 @@ class TaskManager:
         self,
         task: Task,
         messages: list,
-        stream: _ArtifactChunkStream,
+        stream: _ChoiceChunkStreams,
         *,
         api_key: str,
         base_url: str,
@@ -914,16 +1009,18 @@ class TaskManager:
         """真流式消费上游 chat/completions，逐 delta 发 artifactUpdate 分块（F4b-⑯b）。
 
         按上游真实响应形态消费（F4b-① gland 同纪律，禁猜形态）：
-        - text/event-stream → 逐帧取 delta.content（token 级增量），[DONE] 即止，
-          注释/心跳/非 data 行忽略，坏帧如实抛（JSONDecodeError 不吞=禁静默跳块）
-        - application/json（上游忽略 stream:true 回整段）→ 整段作单块
+        - text/event-stream → 逐帧按 choice 归集 delta（F4b-⑰：每 choice 独立
+          artifact 分块，非主 choice 不静默丢），[DONE] 即止，注释/心跳/非 data 行
+          忽略，坏帧如实抛（JSONDecodeError 不吞=禁静默跳块）
+        - application/json（上游忽略 stream:true 回整段）→ 各 choice 整段作单块
           （append=False/lastChunk=True）——不硬造伪增量
         - 其余 content-type 如实抛（禁猜形态）；非 200 首字节前如实抛
-        返回=逐块拼接全文（与非流式 content 同一契约）。
+        返回=主 choice（index 0）逐块拼接全文（chat 单回复语义，history 契约零
+        变化；非主 choice 只进各自 artifact）。
         """
         import httpx
 
-        parts: list[str] = []
+        parts: list[str] = []  # 主 choice（index 0）拼接=回复文本
         async with httpx.AsyncClient(timeout=15) as client:
             async with client.stream(
                 "POST",
@@ -951,16 +1048,22 @@ class TaskManager:
                         if not payload:
                             continue
                         frame = json.loads(payload)  # 坏帧如实抛禁静默跳块
-                        delta = _sse_delta_text(frame)
-                        if delta:
-                            parts.append(delta)
-                            stream.push(delta)
+                        for idx, delta in _sse_choice_deltas(frame).items():
+                            if idx == 0:
+                                parts.append(delta)
+                            stream.push(idx, delta)
                 elif ctype.startswith("application/json"):
                     obj = json.loads(await resp.aread())
+                    # 主 choice 严格提取（畸形如实抛→降级，契约零变化）；非主 choice
+                    # 各作单块（F4b-⑰ 不静默丢，_message_choice_texts 同纪律归集）
                     content = obj["choices"][0]["message"]["content"]
                     if isinstance(content, str) and content:
                         parts.append(content)
-                        stream.push(content)
+                        stream.push(0, content)
+                    texts = _message_choice_texts(obj.get("choices") or [])
+                    texts.pop(0, None)
+                    for idx in sorted(texts):
+                        stream.push(idx, texts[idx])
                 else:
                     raise RuntimeError(f"Unsupported upstream content-type: {ctype!r}")
         stream.close()
