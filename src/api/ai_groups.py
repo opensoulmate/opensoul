@@ -1148,6 +1148,13 @@ class RetryTaskRequest(BaseModel):
     agent_id: str = ""
 
 
+class ConfirmTaskRequest(BaseModel):
+    """F4b-⑳ 确认门禁人工裁决：approved=true 放行继续执行 / false 终止（note=裁决说明）。"""
+
+    approved: bool = True
+    note: str = ""
+
+
 _ROLE_SLOT_RE = re.compile(r"^(advisor|executor|verifier|human)(-\d+)?$", re.IGNORECASE)
 
 
@@ -1240,6 +1247,25 @@ async def _run_task_background(group_id: str, task_id: str, req: "ExecuteTaskReq
         )
     finally:
         _RUNNING_TASKS.discard(task_id)
+
+
+async def _confirm_resume_chain(
+    group_id: str, task_id: str, req: "ExecuteTaskRequest", parent_task_id: str | None
+):
+    """F4b-⑳ 确认放行执行+链续跑：被确认子任务跑完后，继续同父任务下未启动的后续子任务
+    （确认门禁暂停时链已断在该子任务处，此处接上；无父任务=单任务只跑自己）。
+    恢复链不带原 discuss_after 语义（暂停链不自动补发复盘讨论，诚实边界留档）。"""
+    try:
+        await _execute_task_impl(group_id, task_id, req, confirmed=True)
+    except Exception as e:
+        logger.error(f"confirm-resume task {task_id} execution error: {e}")
+        _emit_exec_event(
+            group_id, task_id, req.agent_id, "failed", f"执行异常: {type(e).__name__}: {e}"
+        )
+    finally:
+        _RUNNING_TASKS.discard(task_id)
+    if parent_task_id:
+        await _run_task_chain(group_id, parent_task_id)
 
 
 @router.post("/{group_id}/tasks/{task_id}/execute")
@@ -1688,21 +1714,32 @@ def _start_post_task_discussion(
 
 async def _run_task_chain(group_id: str, parent_task_id: str, discuss_after: bool = False):
     """子任务链自动执行：按创建顺序（规划→执行→验证→审查）逐个跑，结果回群聊。
-    B2联动：discuss_after=True时链跑完自动发起复盘讨论（讨论失败不影响任务链结果）。"""
+    B2联动：discuss_after=True时链跑完自动发起复盘讨论（讨论失败不影响任务链结果）。
+    F4b-⑳：子任务被确认门禁暂停（confirm_required）时链断在暂停处（后续子任务不抢跑），
+    父任务不收口、复盘讨论不发起；人工放行后 _confirm_resume_chain 续跑剩余子任务。"""
     conn = get_db()
     try:
         subs = conn.execute(
-            "SELECT id, goal, assigned_agent_id FROM ai_group_tasks WHERE parent_task_id=? ORDER BY created_at, rowid",
+            "SELECT id, goal, assigned_agent_id, status FROM ai_group_tasks WHERE parent_task_id=? ORDER BY created_at, rowid",
             (parent_task_id,),
         ).fetchall()
     finally:
         conn.close()
+    paused_sub = None
     for st in subs:
+        # F4b-⑳ 链恢复安全：只跑未启动（pending）子任务——已跑/已终结/暂停中的不重跑
+        # （确认放行续跑与初始链共用本函数，防双执行；语义收口：链不再重跑已执行子任务）
+        if st["status"] != "pending":
+            continue
         try:
             req = ExecuteTaskRequest(
                 agent_id=st["assigned_agent_id"] or "soulmate", goal=st["goal"]
             )
-            await _execute_task_impl(group_id, st["id"], req)
+            res = await _execute_task_impl(group_id, st["id"], req)
+            if isinstance(res, dict) and res.get("status") == "confirm_required":
+                # F4b-⑳ 确认门禁暂停：后续子任务依赖前者不抢跑，链断在暂停处
+                paused_sub = st
+                break
         except Exception as e:
             logger.error(f"任务链子任务 {st['id']} 失败: {e}")
             _emit_exec_event(
@@ -1712,6 +1749,17 @@ async def _run_task_chain(group_id: str, parent_task_id: str, discuss_after: boo
                 "failed",
                 f"链式执行失败: {e}",
             )
+    if paused_sub is not None:
+        # F4b-⑳ 暂停链不收口父任务（子任务未全终结禁提前收口）、不发起复盘讨论
+        # （结果不完整禁提前复盘）；人工确认放行后 _confirm_resume_chain 自动续跑。
+        _emit_exec_event(
+            group_id,
+            parent_task_id,
+            "chain",
+            "chain-paused",
+            f"子任务{paused_sub['id']}等待人工确认，链暂停（确认放行后自动续跑剩余子任务）",
+        )
+        return
     # B1根因修复：链跑完收口父任务（此前父任务永远卡planning，看板不可信）
     conn = get_db()
     try:
@@ -1753,8 +1801,15 @@ async def _learned_advisory_for(run_goal: str) -> tuple[str, int]:
     return format_advisory_for_prompt(recs), len(recs)
 
 
-async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskRequest") -> dict:
-    """真正执行Agent任务 — 调用run_agent_proxy获取实际结果（由_run_task_background后台调用）"""
+async def _execute_task_impl(
+    group_id: str, task_id: str, req: "ExecuteTaskRequest", confirmed: bool = False
+) -> dict:
+    """真正执行Agent任务 — 调用run_agent_proxy获取实际结果（由_run_task_background后台调用）。
+
+    F4b-⑳ confirmed=True=确认门禁已人工放行（仅 /tasks/{id}/confirm 传入）：
+    brain 决策 confirm_required 不再重复要确认（否则恢复执行会再次被门禁拦下=无限确认环）。
+    其余调用面（execute/retry/任务链）一律未确认，门禁照常生效。
+    """
     conn = get_db()
     try:
         task = conn.execute(
@@ -1822,30 +1877,72 @@ async def _execute_task_impl(group_id: str, task_id: str, req: "ExecuteTaskReque
                     m=brain_decision.get("execute_mode", "?"),
                 ),
             )
-            if brain_decision.get("execute_mode") == "deny":
-                deny_reason = (
-                    brain_decision.get("confirm_prompt") or "brain风险门禁拒绝（critical风险）"
-                )
-                conn.execute(
-                    "UPDATE ai_group_tasks SET status='failed', result=?, updated_at=? WHERE id=?",
-                    (deny_reason, datetime.now().isoformat(), task_id),
-                )
-                conn.commit()
-                _emit_exec_event(
-                    group_id, task_id, req.agent_id, "failed", f"brain deny: {deny_reason}"
-                )
-                return {
-                    "status": "denied",
-                    "task_id": task_id,
-                    "agent_id": req.agent_id,
-                    "success": False,
-                    "deny_reason": deny_reason,
-                    "brain_decision": brain_decision,
-                }
         except Exception as e:
             _emit_exec_event(
                 group_id, task_id, req.agent_id, "brain-error", f"think失败(不阻断执行): {e}"
             )
+
+        # ── F4b-⑳ 决策真正生效：门禁执行移出认知层try（"认知层故障不阻断执行"只覆盖
+        # think本体——门禁自身故障必须阻断禁静默放行，否则门禁失败=无门） ──
+        if brain_decision and brain_decision.get("execute_mode") == "deny":
+            deny_reason = (
+                brain_decision.get("confirm_prompt") or "brain风险门禁拒绝（critical风险）"
+            )
+            conn.execute(
+                "UPDATE ai_group_tasks SET status='failed', result=?, updated_at=? WHERE id=?",
+                (deny_reason, datetime.now().isoformat(), task_id),
+            )
+            conn.commit()
+            _emit_exec_event(
+                group_id, task_id, req.agent_id, "failed", f"brain deny: {deny_reason}"
+            )
+            return {
+                "status": "denied",
+                "task_id": task_id,
+                "agent_id": req.agent_id,
+                "success": False,
+                "deny_reason": deny_reason,
+                "brain_decision": brain_decision,
+            }
+        if (
+            brain_decision
+            and brain_decision.get("execute_mode") == "confirm_required"
+            and not confirmed
+        ):
+            # F4b-⑳ 确认门禁真执行（修前 confirm_required 被静默忽略照常执行=门禁形同
+            # 虚设）：任务暂停为 awaiting_confirm 等人工裁决，问句回群聊（人机对话面），
+            # /tasks/{id}/confirm approved=true 放行（confirmed=True 不再重复要确认）。
+            confirm_prompt = (
+                brain_decision.get("confirm_prompt") or "需要确认：风险较高，等待人工放行"
+            )
+            conn.execute(
+                "UPDATE ai_group_tasks SET status='awaiting_confirm', result=?, updated_at=? WHERE id=?",
+                (confirm_prompt, datetime.now().isoformat(), task_id),
+            )
+            conn.commit()
+            _emit_exec_event(
+                group_id,
+                task_id,
+                req.agent_id,
+                "confirm-required",
+                f"brain确认门禁：{confirm_prompt}（任务暂停，等待人工确认）",
+            )
+            await _notify_group_chat(
+                group_id,
+                "system",
+                "系统",
+                f"⏸️ {confirm_prompt}\n任务已暂停执行，等待人工确认：POST /api/ai-groups/{group_id}/tasks/{task_id}/confirm"
+                "（approved=true 放行继续执行 / approved=false 终止）。",
+                task_id,
+            )
+            return {
+                "status": "confirm_required",
+                "task_id": task_id,
+                "agent_id": req.agent_id,
+                "success": False,
+                "confirm_prompt": confirm_prompt,
+                "brain_decision": brain_decision,
+            }
 
         # ── F2b-② 推荐回流执行：learned_patterns → 执行prompt（行为优化真闭环） ──
         # F2 审计定性真断点：get_recommendations 全仓消费=仅 API 出口，执行流程
@@ -2084,6 +2181,75 @@ async def retry_task(
     asyncio.create_task(_run_task_background(group_id, task_id, exec_req))
     return JSONResponse(
         {"status": "executing", "task_id": task_id, "message": "已开始重试，进度见事件流"},
+        status_code=202,
+    )
+
+
+@router.post("/{group_id}/tasks/{task_id}/confirm")
+async def confirm_task(
+    group_id: str,
+    task_id: str,
+    req: ConfirmTaskRequest,
+    authorization: str | None = Header(None),
+):
+    """F4b-⑳ 确认门禁人工裁决口：approved=true 放行继续执行（confirmed=True 不再重复
+    要确认，且链式子任务自动续跑剩余子任务）/ approved=false 任务终止（原因如实落 result）。
+    只有 awaiting_confirm 任务可裁决（409 如实，禁静默换状态）。
+    F3b-③b-1：by-ID 写走隔离闸门（跨租户 403 禁裁决他租户任务）。"""
+    identity = bind_identity(authorization)
+    conn = get_db()
+    try:
+        task = _load_gated_task(conn, identity.tenant_id, group_id, task_id, "write")
+        if task["status"] != "awaiting_confirm":
+            raise HTTPException(
+                409, f"任务当前状态为{task['status']}，只有awaiting_confirm任务可确认/拒绝"
+            )
+        now = datetime.now().isoformat()
+        if not req.approved:
+            reason = f"人工拒绝执行：{req.note or '未说明原因'}"
+            conn.execute(
+                "UPDATE ai_group_tasks SET status='failed', result=?, updated_at=? WHERE id=?",
+                (reason, now, task_id),
+            )
+            conn.commit()
+            _emit_exec_event(
+                group_id,
+                task_id,
+                task["assigned_agent_id"] or "",
+                "confirm-rejected",
+                reason,
+            )
+            return JSONResponse(
+                {"status": "failed", "task_id": task_id, "approved": False, "reason": reason},
+                status_code=200,
+            )
+        conn.execute(
+            "UPDATE ai_group_tasks SET status='pending', updated_at=? WHERE id=?",
+            (now, task_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    agent_id = task["assigned_agent_id"] or ""
+    _emit_exec_event(
+        group_id,
+        task_id,
+        agent_id,
+        "confirm-approved",
+        f"人工确认放行 note={req.note or '无'}（继续执行不再重复要确认）",
+    )
+    if task_id in _RUNNING_TASKS:
+        raise HTTPException(409, "task already executing")
+    _RUNNING_TASKS.add(task_id)
+    exec_req = ExecuteTaskRequest(agent_id=agent_id, goal="")
+    asyncio.create_task(_confirm_resume_chain(group_id, task_id, exec_req, task["parent_task_id"]))
+    return JSONResponse(
+        {
+            "status": "executing",
+            "task_id": task_id,
+            "approved": True,
+            "message": "已确认放行，继续执行（链式子任务自动续跑剩余子任务）",
+        },
         status_code=202,
     )
 

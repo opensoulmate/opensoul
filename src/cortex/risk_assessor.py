@@ -7,6 +7,27 @@ from src.models.cognitive import Intent, Risk, RiskAssessment, TaskContext
 
 logger = logging.getLogger(__name__)
 
+# F4b-⑳ 意图级风险词：破坏性/不可逆操作意图（字面匹配非语义理解，阈值如实可调；
+# 窄集防误伤日常开发语（"删除注释"不触发），宁可漏报不滥报——触发后只是问一次人）
+_DESTRUCTIVE_KEYWORDS = (
+    "清空",
+    "格式化",
+    "删库",
+    "清库",
+    "销毁",
+    "永久删除",
+    "不可逆",
+    "rm -rf",
+    "drop table",
+    "drop database",
+    "truncate",
+    "删除生产",
+    "重置生产",
+    "覆盖生产",
+    "清空生产",
+    "delete from",
+)
+
 
 class RiskAssessor:
     """理解式风险评估器"""
@@ -33,6 +54,15 @@ class RiskAssessor:
                 all_risks.append(
                     Risk("历史失败经验", level, f"类似操作曾失败{len(similar_failures)}次")
                 )
+
+        # F4b-⑳ 意图级风险（确认门禁触发面）：破坏性/不可逆操作意图无文件轴也须可见。
+        # 修前 risk 只看文件/经验——无 repo_root 的调用面（ai_groups 执行面 think 恒不带）
+        # target_files 恒空→overall 恒 low→confirm_required 构造上不可达=确认门禁永不触发。
+        prompt_text = f"{intent.user_prompt} {getattr(task_ctx, 'user_input', '') or ''}"
+        if any(w in prompt_text for w in _DESTRUCTIVE_KEYWORDS):
+            all_risks.append(
+                Risk("破坏性操作意图", "high", "含删除/清空/格式化等不可逆操作，建议人工确认后执行")
+            )
 
         overall = self._aggregate(all_risks)
         recommendation = self._recommend(all_risks)
@@ -72,6 +102,8 @@ class RiskAssessor:
         return "low"
 
     def _recommend(self, risks: list[Risk]) -> str:
+        if any(r.title == "破坏性操作意图" for r in risks):
+            return "目标含不可逆破坏性操作（删除/清空/格式化等），建议人工确认后执行"
         if any(r.level == "critical" for r in risks):
             return "风险过高，建议人工审查后执行"
         if any(r.level == "high" for r in risks):
