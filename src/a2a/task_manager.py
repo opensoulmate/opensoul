@@ -16,6 +16,7 @@ from src.a2a.models import (
     DEFAULT_AGENT_CARD,
     A2AError,
     AgentCard,
+    Artifact,
     ErrorCode,
     Message,
     Task,
@@ -148,6 +149,115 @@ def _task_snapshot_payload(task: Task) -> dict:
     return {"task": task.wire()}
 
 
+def _artifact_update_payload(
+    task: Task, artifact: Artifact, part: dict, *, append: bool, last_chunk: bool
+) -> dict:
+    """任务 artifact 分块事件（StreamResponse 单键 {"artifactUpdate"}，§4.2.2）。
+
+    字段逐键照抄 spec §4.2.2 TaskArtifactUpdateEvent（camelCase §5.5）：
+    taskId/contextId/artifact（REQUIRED）+ append/lastChunk（optional bool——本实现
+    每块显式给出真值，无"未设置"歧义）；metadata 未设置整键省略（proto3 JSON 语义）。
+    artifact 帧内只带本块增量 part（§4.2.2 append 原文："the content of this artifact
+    should be appended to a previously sent artifact with the same ID"——增量语义，
+    非全量重发），part=v1.0 平铺 oneof 形（{"text": ...}，F4b-⑭ 纪律）。
+    """
+    wire_artifact: dict = {"artifactId": artifact.artifactId, "parts": [part]}
+    if artifact.name:
+        wire_artifact["name"] = artifact.name
+    return {
+        "artifactUpdate": {
+            "taskId": task.id,
+            "contextId": task.contextId,
+            "artifact": wire_artifact,
+            "append": append,
+            "lastChunk": last_chunk,
+        }
+    }
+
+
+class LLMStreamError(RuntimeError):
+    """LLM 流式生成中途故障（F4b-⑯b）：已发分块不可撤回——如实让任务失败可见。
+
+    刻意不是 TimeoutError 子类：run_processing 的 25s 超时降级（把"AI处理超时"文本
+    当成功回复）只适用于零分块路径；一旦已对外发过 artifactUpdate 分块，再把降级文本
+    当成功回复=流与终稿互相矛盾（谎报 ok，F1 语义收口同款纪律）。发块后故障必须走
+    failed（错误进 status.message 不进 history，F4b-⑧）。
+    """
+
+
+class _ArtifactChunkStream:
+    """LLM 生成文本 → TaskArtifactUpdateEvent token 级分块发射（F4b-⑯b）。
+
+    - 延迟一拍发射（pending buffer）：下一块到来（或收尾）才知道当前块是否最后一块
+      ——lastChunk 语义精确（§4.2.2 "the final chunk of the artifact"），禁先发后翻转。
+    - append 语义精确：首块 append=False（新建同 ID artifact），后续块 True（追加）。
+    - 发射时机=累积时机：块进 task.artifacts 真源与订阅广播同刻——SubscribeToTask
+      中途订阅的首帧快照（§3.1.6 防信息丢失）恰含已生成部分，后续 append 块续上。
+    - history 契约零变化（F4b-⑧ 消息入史恰一次）：分块只走 artifacts/流广播。
+    """
+
+    def __init__(self, manager: "TaskManager", task: Task, *, name: str = "response"):
+        self._manager = manager
+        self._task = task
+        self._name = name
+        self._artifact: Artifact | None = None
+        self._pending: str | None = None
+        self._emitted = 0
+
+    @property
+    def committed(self) -> bool:
+        """已对外发过块（不可撤回）——中途故障的降级/失败分流依据。"""
+        return self._emitted > 0
+
+    @property
+    def artifact(self) -> Artifact | None:
+        return self._artifact
+
+    def push(self, delta: str) -> None:
+        """收一个 token 增量（空串不 fabricate 块）。"""
+        if not delta:
+            return
+        if self._pending is not None:
+            self._emit(self._pending, first=self._emitted == 0, last=False)
+        self._pending = delta
+
+    def close(self) -> None:
+        """收尾：剩余块以 lastChunk=True 发出；零块则不 fabricate artifact。"""
+        if self._pending is not None:
+            self._emit(self._pending, first=self._emitted == 0, last=True)
+            self._pending = None
+
+    def _emit(self, delta: str, *, first: bool, last: bool) -> None:
+        part = {"text": delta}
+        if self._artifact is None:
+            self._artifact = Artifact(name=self._name, parts=[part])
+            self._task.artifacts.append(self._artifact)
+        else:
+            self._artifact.parts.append(part)
+        self._emitted += 1
+        self._manager._emit_stream(
+            self._task,
+            _artifact_update_payload(
+                self._task, self._artifact, part, append=not first, last_chunk=last
+            ),
+        )
+
+
+def _sse_delta_text(frame: dict) -> str:
+    """OpenAI 形 SSE 帧 → 本块文本增量（choices[0].delta.content）。
+
+    非文本帧（usage 收尾帧/无 content/形状不符）返回空串不 fabricate 块；多 choice
+    只取 choice[0]（chat 单回复语义，如实边界记录，禁静默把多 choice 混成一文）。
+    """
+    try:
+        choices = frame.get("choices") or []
+        delta = choices[0].get("delta") or {}
+    except (AttributeError, IndexError, KeyError, TypeError):
+        return ""
+    content = delta.get("content")
+    return content if isinstance(content, str) else ""
+
+
 class TaskManager:
     """In-memory task manager for A2A protocol with real service integration."""
 
@@ -262,6 +372,15 @@ class TaskManager:
         await self._dispatch_push(task, payload)
 
     # === 真流式事件总线（A2A v1.0 SendStreamingMessage/SubscribeToTask，§9.4）===
+
+    def has_stream_subscribers(self, task_id: str) -> bool:
+        """该任务是否有活跃流订阅者（F4b-⑯b token 级分块的启用条件）。
+
+        有订阅者=有人实时观看 → LLM 走真流式逐块发射 artifactUpdate；无订阅者走既有
+        整段路径（字节零变化）。SendStreamingMessage 先订阅后启动处理，处理期间恒有
+        订阅者；SendMessage（非流式）无人观看即无分块。
+        """
+        return bool(self._stream_subs.get(task_id))
 
     def subscribe_stream(self, task_id: str, *, send_current: bool = False) -> asyncio.Queue:
         """订阅任务事件流：返回队列（元素=(StreamResponse 载荷, 是否收尾帧)）。
@@ -628,11 +747,19 @@ class TaskManager:
             return f"图谱查询出错：{str(e)}\n\n请确保图谱数据库已启动。"
 
     async def _handle_chat(self, text: str, task: Task) -> str:
-        """AI chat using real LLM proxy or ACP fallback."""
+        """AI chat using real LLM proxy or ACP fallback.
+
+        token 级增量（F4b-⑯b）：有活跃流订阅者（has_stream_subscribers）时真流式消费
+        上游 SSE，逐 delta 发 TaskArtifactUpdateEvent 分块；无订阅者走既有整段路径
+        （字节零变化）。失败分流以"已发块不可撤回"为界：
+        - 发块前失败 → 既有 ACP 降级语义零变化（无痕可撤，连 pending 块也不出）
+        - 发块后故障 → LLMStreamError 让任务 failed 可见（禁降级文本与已发流互相矛盾）
+        """
         # 离线stub模型（agno全隔离测试范式 + CAMEL"能程序化验证的绝不靠LLM"）：
         # metadata.llm_mode=stub 时零网络确定性应答——集成测试/离线演示不打真实LLM
         if task.metadata.get("llm_mode") == "stub":
             return f"[stub-llm] 收到您的消息：{text}\n\n（确定性离线应答，未调用真实LLM）"
+        stream = _ArtifactChunkStream(self, task) if self.has_stream_subscribers(task.id) else None
         try:
             import httpx
 
@@ -662,6 +789,16 @@ class TaskManager:
                 if text_parts:
                     messages.append({"role": role, "content": "\n".join(text_parts)})
 
+            if stream is not None:
+                # 内层预算 20s < run_processing 外层 25s：流式故障在本层先归口
+                # （超时→按 committed 分流降级/失败），不落进外层"超时文本当成功回复"面
+                return await asyncio.wait_for(
+                    self._chat_stream(
+                        task, messages, stream, api_key=api_key, base_url=base_url, model=model
+                    ),
+                    timeout=20.0,
+                )
+
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.post(
                     f"{base_url}/chat/completions",
@@ -683,11 +820,80 @@ class TaskManager:
                     return await asyncio.wait_for(self._handle_acp_chat(text, task), timeout=10.0)
 
         except Exception as e:
+            if stream is not None and stream.committed:
+                # 已发分块不可撤回：剩余块 lastChunk 收尾（客户端不悬挂）后如实失败
+                stream.close()
+                raise LLMStreamError(f"LLM stream interrupted: {e}") from e
             logger.error(f"Chat handler error: {e}")
             try:
                 return await asyncio.wait_for(self._handle_acp_chat(text, task), timeout=10.0)
             except TimeoutError:
                 return f"收到您的消息：{text}\n\nAI服务超时，请检查服务配置。"
+
+    async def _chat_stream(
+        self,
+        task: Task,
+        messages: list,
+        stream: _ArtifactChunkStream,
+        *,
+        api_key: str,
+        base_url: str,
+        model: str,
+    ) -> str:
+        """真流式消费上游 chat/completions，逐 delta 发 artifactUpdate 分块（F4b-⑯b）。
+
+        按上游真实响应形态消费（F4b-① gland 同纪律，禁猜形态）：
+        - text/event-stream → 逐帧取 delta.content（token 级增量），[DONE] 即止，
+          注释/心跳/非 data 行忽略，坏帧如实抛（JSONDecodeError 不吞=禁静默跳块）
+        - application/json（上游忽略 stream:true 回整段）→ 整段作单块
+          （append=False/lastChunk=True）——不硬造伪增量
+        - 其余 content-type 如实抛（禁猜形态）；非 200 首字节前如实抛
+        返回=逐块拼接全文（与非流式 content 同一契约）。
+        """
+        import httpx
+
+        parts: list[str] = []
+        async with httpx.AsyncClient(timeout=15) as client:
+            async with client.stream(
+                "POST",
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 2048,
+                    "stream": True,
+                },
+            ) as resp:
+                if resp.status_code != 200:
+                    body = await resp.aread()
+                    raise RuntimeError(f"LLM API error {resp.status_code}: {body[:200]!r}")
+                ctype = resp.headers.get("content-type", "")
+                if ctype.startswith("text/event-stream"):
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        payload = line[len("data:") :].strip()
+                        if payload == "[DONE]":
+                            break
+                        if not payload:
+                            continue
+                        frame = json.loads(payload)  # 坏帧如实抛禁静默跳块
+                        delta = _sse_delta_text(frame)
+                        if delta:
+                            parts.append(delta)
+                            stream.push(delta)
+                elif ctype.startswith("application/json"):
+                    obj = json.loads(await resp.aread())
+                    content = obj["choices"][0]["message"]["content"]
+                    if isinstance(content, str) and content:
+                        parts.append(content)
+                        stream.push(content)
+                else:
+                    raise RuntimeError(f"Unsupported upstream content-type: {ctype!r}")
+        stream.close()
+        return "".join(parts)
 
     async def _handle_acp_chat(self, text: str, task: Task) -> str:
         """Fallback chat using ACP proxy service."""
