@@ -241,7 +241,7 @@ class TestSendStreamingFrameFace:
         assert c.status == 200
         assert c.headers["content-type"].startswith("text/event-stream")
         # 帧序（§3.1.2 Task lifecycle stream，F4b-⑯c 修齐）= 首帧 Task 全量快照
-        # → working 迁移 → 终态迁移 → 终态全量快照（Final completion indicator，收流）
+        # → working 迁移 → 终态迁移 → 终态全量快照（§11.7 MAY 快照；完成指示=收流）
         assert len(frames) == 4
         r0 = _assert_v10_frame(frames[0], "f-1")
         r1 = _assert_v10_frame(frames[1], "f-1")

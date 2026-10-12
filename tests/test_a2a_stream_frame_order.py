@@ -9,8 +9,11 @@ SubscribeToTask 已合规（send_current 首帧快照）零变化。
 
 收口：SendStreamingMessage 订阅即入队订阅时点全量快照作首帧（first_frame_ends
 =False——首帧恒信息帧，收流仍由处理的终态收尾快照驱动，禁提前收流）。
-帧序文法（§3.1.2 + Outputs「Final completion indicator」）：
+帧序文法（§3.1.2 + §11.7 MAY 可选终态快照）：
 [Task 首帧] [零或多 statusUpdate/artifactUpdate] [终态 Task 快照] 收流。
+（收尾快照=§11.7「MAY optionally resend a final Task snapshot before closing」
+明文许可；「Final completion indicator」=收流本身非收尾快照——F4b-⑯f 两读
+判定+⑯c 归因勘误。）
 
 真栈非 mock：直驱真 ASGI FastAPI 路由层 + 双向门闩（test_a2a_streaming_methods
 同款 harness）。
@@ -168,7 +171,7 @@ def _assert_task_lifecycle_grammar(frames, rid):
     - 「followed by zero or more TaskStatusUpdateEvent or TaskArtifactUpdateEvent」
       ——中段禁再出现 Task/Message
     - 「MUST close when the task reaches a terminal state」——末帧=终态 Task
-      快照（Outputs「Final completion indicator」）后收流
+      快照（§11.7 MAY 可选终态快照；完成指示=收流本身，F4b-⑯f 判定）后收流
     """
     assert frames, "流无帧"
     first = _assert_envelope(frames[0], rid)
@@ -258,7 +261,7 @@ class TestSendStreamingFrameOrder:
         assert kinds == ["statusUpdate", "statusUpdate"]
         assert frames[1]["result"]["statusUpdate"]["status"]["state"] == "TASK_STATE_WORKING"
         assert frames[2]["result"]["statusUpdate"]["status"]["state"] == "TASK_STATE_COMPLETED"
-        # 终稿快照照旧（Final completion indicator 契约零变化）
+        # 终稿快照照旧（§11.7 MAY 终态快照契约零变化，F4b-⑯f 判定）
         assert [m["role"] for m in final_task["history"]] == ["ROLE_USER", "ROLE_AGENT"]
 
     @pytest.mark.asyncio

@@ -283,8 +283,9 @@ async def _send_message_impl(params: dict) -> Task:
 # whats-new-v1.md）。v1.0 无 final 字段（0.x 已移除，「Leverage protocol binding
 # specific stream closure mechanism instead」）：终态由**收流**表示——帧序=Task
 # 全量快照首帧（§3.1.2「the stream MUST begin with the Task object」）→ 零或多
-# 状态迁移/artifact 事件 → 终态全量快照（§3.1.2 Outputs「Final completion
-# indicator」）后收流。
+# 状态迁移/artifact 事件 → 终态全量快照（§11.7「MAY optionally resend a final
+# Task snapshot before closing」明文许可的可选帧）后收流。收尾快照非「Final
+# completion indicator」——完成指示=收流本身（F4b-⑯f 两读判定收口+⑯c 归因勘误）。
 
 
 class _StreamSpec:
