@@ -100,16 +100,12 @@ class TestMethodNotFound:
     def test_unimplemented_v10_method_is_method_not_found(self, app_client):
         """未实现的方法归 -32601（§9 文案 'does not exist or is not available'）。
 
-        用例方法随 F4b-⑫ 契约更新：原用 GetExtendedAgentCard，该方法现已实现且按
-        §3.3.4 在能力位 false 时回 -32004（见 test_a2a_readonly_methods）；改用
-        仍未实现的 SubscribeToTask 后，F4b-⑮ 起它也随 §3.3.4 能力门回 -32004
-        （能力位 false 时规范强制该码）——故"未实现→-32601"断言语义改由真未知
-        方法（非能力门名单）保持，SubscribeToTask 另断 -32004。
+        用例方法随契约演进更新：原用 GetExtendedAgentCard（F4b-⑫ 已实现）、
+        SubscribeToTask（F4b-⑯ 真流式已实现）——"未实现→-32601"断言语义由真未知
+        方法（非能力门名单）保持；方法面至此 §5.3 全实现，无"已声明未实现"残留。
         """
         data = _rpc(app_client, "no/such/method", {"id": "some-task"})
         assert _code(data) == ErrorCode.METHOD_NOT_FOUND
-        data = _rpc(app_client, "SubscribeToTask", {"id": "some-task"})
-        assert _code(data) == ErrorCode.UNSUPPORTED_OPERATION  # §3.3.4 Streaming
 
 
 class TestTaskNotFound:

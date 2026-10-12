@@ -26,16 +26,18 @@ def app_client():
 
 
 class TestStreamingDeclarationHonesty:
-    """声明诚实性：真实 RPC 面（仅 tasks/send|get|cancel）禁报 streaming=true。"""
+    """声明诚实性：发布值恒等于真实 RPC 流式方法面。"""
 
-    def test_streaming_false_on_current_surface(self, app_client):
-        """修前发布 true（谎报）；现按实现如实 False。"""
+    def test_streaming_true_after_streaming_methods_registered(self, app_client):
+        """契约随 F4b-⑯ 更新：SendStreamingMessage/SubscribeToTask 真流式已实现，
+        streaming 随注册派生 True（修前无流式方法=如实 False，F4b-⑤ 声明诚实性
+        语义不变：发布值仍禁高于实现）。"""
         caps = app_client.get("/.well-known/agent.json").json()["capabilities"]
-        assert caps["streaming"] is False
+        assert caps["streaming"] is True
 
     def test_streaming_supported_reflects_real_surface(self):
-        """streaming_supported() 是声明单一真值：当前无流式方法=如实 False。"""
-        assert a2a_api.streaming_supported() is False
+        """streaming_supported() 是声明单一真值：流式两方法真注册=如实 True。"""
+        assert a2a_api.streaming_supported() is True
 
     def test_streaming_matches_rpc_surface_invariant(self, app_client):
         """发布值恒等于 streaming_supported()（禁漂移不变量）。"""
@@ -54,10 +56,15 @@ class TestStreamingDerivationDriftProof:
         assert caps["streaming"] is True
 
     def test_tasks_send_subscribe_also_counts_then_removal_false(self, monkeypatch):
-        """tasks/sendSubscribe（旧草案流式方法）同样算流式；移除后回 False。"""
+        """tasks/sendSubscribe（旧草案流式方法）同样算流式；**全部**流式方法移除后
+        回 False（真值随实现面走，禁硬编码）。契约随 F4b-⑯ 更新：真流式两方法已
+        注册，单独删旧线名不再回 False——须删净全部流式方法才 False。"""
         monkeypatch.setitem(a2a_api.RPC_HANDLERS, "tasks/sendSubscribe", lambda params: None)
         assert a2a_api.streaming_supported() is True
         monkeypatch.delitem(a2a_api.RPC_HANDLERS, "tasks/sendSubscribe")
+        assert a2a_api.streaming_supported() is True  # 真流式方法仍在=不虚报
+        monkeypatch.delitem(a2a_api.RPC_HANDLERS, "SendStreamingMessage")
+        monkeypatch.delitem(a2a_api.RPC_HANDLERS, "SubscribeToTask")
         assert a2a_api.streaming_supported() is False
 
     def test_default_agent_card_no_hardcoded_streaming_claim(self):

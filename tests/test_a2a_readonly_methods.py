@@ -95,14 +95,12 @@ class TestMethodFace:
         assert "tasks/list" not in a2a_api.RPC_HANDLERS
         assert "agent/getAuthenticatedExtendedCard" not in a2a_api.RPC_HANDLERS
 
-    def test_unimplemented_methods_stay_honest(self, app_client):
-        """流式两方法仍未实现=禁注册空壳；错误面随 F4b-⑮ §3.3.4 能力门收口
-        （能力位 false 时 -32004 而非 -32601）；推送配置四方法已实现（F4b-⑮）
-        不在此列。"""
+    def test_streaming_methods_registered_and_unknown_stays_honest(self, app_client):
+        """契约随 F4b-⑯ 更新：流式两方法已真注册（JSON-RPC-over-SSE 真流式，见
+        test_a2a_streaming_methods）；"未实现→-32601 如实不冒充"语义由真未知方法
+        （非能力门名单）保持——禁注册空壳仍守恒（注册的必须是真现）。"""
         for method in ("SendStreamingMessage", "SubscribeToTask"):
-            assert method not in a2a_api.RPC_HANDLERS
-            body = rpc(client=app_client, method=method, params={"id": "x"})
-            assert body["error"]["code"] == -32004  # §3.3.4 UnsupportedOperation
+            assert method in a2a_api.RPC_HANDLERS
         body = rpc(client=app_client, method="tasks/list", params={})
         assert body["error"]["code"] == -32601  # 真未知方法不受能力门影响
 
@@ -363,10 +361,10 @@ class TestZeroRegression:
         listed = rpc(app_client, "ListTasks")["result"]
         assert [t["id"] for t in listed["tasks"]] == [task_id]
 
-    def test_streaming_and_push_capabilities_still_false(self, app_client, clean_tasks):
+    def test_capabilities_still_match_derivation(self, app_client, clean_tasks):
         caps = app_client.get("/.well-known/agent-card.json").json()["capabilities"]
-        assert caps["streaming"] is False
-        # 契约随 F4b-⑮ 更新：推送配置四方法已真注册，pushNotifications 派生 True
-        # （真能做才宣称）；守恒不变量=发布值恒等于派生值（禁硬编码 bool）。
+        # 契约随 F4b-⑯ 更新：流式两方法已真注册，streaming 派生 True（真能做才宣称）；
+        # pushNotifications 随 F4b-⑮ 派生 True。守恒不变量=发布值恒等于派生值（禁硬编码 bool）。
+        assert caps["streaming"] is a2a_api.streaming_supported()
         assert caps["pushNotifications"] is a2a_api.push_notifications_supported()
-        assert a2a_api.streaming_supported() is False
+        assert a2a_api.streaming_supported() is True

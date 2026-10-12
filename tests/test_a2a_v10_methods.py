@@ -190,7 +190,8 @@ class TestStreamingDerivationV10Names:
             monkeypatch.delitem(a2a_api.RPC_HANDLERS, name)
         assert a2a_api.streaming_supported() is False
 
-    def test_streaming_false_on_real_surface(self, app_client):
-        """真实面（无任何流式方法）仍如实 False——本拍只对齐方法名，未实现流式。"""
+    def test_streaming_true_on_real_surface(self, app_client):
+        """真实面（真流式两方法已注册）如实 True——契约随 F4b-⑯ 更新：
+        JSON-RPC-over-SSE 真流式落地（见 test_a2a_streaming_methods）。"""
         caps = app_client.get("/.well-known/agent.json").json()["capabilities"]
-        assert caps["streaming"] is False
+        assert caps["streaming"] is True

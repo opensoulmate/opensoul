@@ -122,6 +122,32 @@ def _decode_page_token(token) -> tuple[datetime, str]:
     return ts, tid
 
 
+# 终态全集：进入终态即交互周期收束（流式收尾快照 + 推送 {"task"} 全量，同一真源）。
+_TERMINAL_STATES = ("completed", "failed", "canceled", "rejected")
+
+
+def _status_update_payload(task: Task) -> dict:
+    """状态迁移事件（StreamResponse 单键 {"statusUpdate"}，§4.1.5 TaskStatusUpdateEvent）。
+
+    v1.0 形（whats-new-v1.md）：判别式=oneof 成员名本身，无 kind 判别键、无 final
+    字段（0.x final 已移除——v1.0 由传输层收流表示终态）；status 走 Task.wire()
+    单点派生（TASK_STATE_*/ROLE_*，禁第二套枚举）。推送 webhook 与 SSE 流共用本
+    载荷（F4b-⑮ §4.3.3 同形，单点防两套）。
+    """
+    return {
+        "statusUpdate": {
+            "taskId": task.id,
+            "contextId": task.contextId,
+            "status": task.wire()["status"],
+        }
+    }
+
+
+def _task_snapshot_payload(task: Task) -> dict:
+    """全量任务快照（StreamResponse 单键 {"task"}）。"""
+    return {"task": task.wire()}
+
+
 class TaskManager:
     """In-memory task manager for A2A protocol with real service integration."""
 
@@ -135,6 +161,11 @@ class TaskManager:
         self.push_configs: dict[str, dict[str, dict]] = {}
         # webhook 投递留痕（失败也留痕禁静默）：tests/live 取证回读口。
         self.push_delivery_log: list[dict] = []
+        # 真流式事件总线（F4b-⑯）：task_id → 订阅队列列表。多并发流同收同序事件
+        # （v1.0「Multiple concurrent streams allowed; all receive same ordered
+        # events」）；队列元素=(StreamResponse 载荷 dict, 是否收尾帧)。与 tasks 同为
+        # 进程内真源（重启即清，与既有 in-memory 任务边界一致）。
+        self._stream_subs: dict[str, list[asyncio.Queue]] = {}
 
     def get_agent_card(self) -> AgentCard:
         return self.agent_card
@@ -224,17 +255,52 @@ class TaskManager:
         """
         if not self.push_configs.get(task.id):
             return
-        if task.status.state in ("completed", "failed", "canceled", "rejected"):
-            payload: dict = {"task": task.wire()}
+        if task.status.state in _TERMINAL_STATES:
+            payload = _task_snapshot_payload(task)
         else:
-            payload = {
-                "statusUpdate": {
-                    "taskId": task.id,
-                    "contextId": task.contextId,
-                    "status": task.wire()["status"],
-                }
-            }
+            payload = _status_update_payload(task)
         await self._dispatch_push(task, payload)
+
+    # === 真流式事件总线（A2A v1.0 SendStreamingMessage/SubscribeToTask，§9.4）===
+
+    def subscribe_stream(self, task_id: str, *, send_current: bool = False) -> asyncio.Queue:
+        """订阅任务事件流：返回队列（元素=(StreamResponse 载荷, 是否收尾帧)）。
+
+        - 多个订阅者并发共存，同收同序事件（v1.0 明文允许并发流）
+        - send_current=True（SubscribeToTask）：入队一条当前状态全量快照——已终态
+          即收尾帧（订阅即收流），非终态为信息帧（后续迁移事件继续推）
+        """
+        q: asyncio.Queue = asyncio.Queue()
+        self._stream_subs.setdefault(task_id, []).append(q)
+        if send_current:
+            task = self.tasks.get(task_id)
+            if task is not None:
+                q.put_nowait((_task_snapshot_payload(task), task.status.state in _TERMINAL_STATES))
+        return q
+
+    def unsubscribe_stream(self, task_id: str, q: asyncio.Queue) -> None:
+        """退订（调用方收流/断联时收尾）；空订阅表随删防泄漏。"""
+        subs = self._stream_subs.get(task_id)
+        if not subs:
+            return
+        try:
+            subs.remove(q)
+        except ValueError:
+            return
+        if not subs:
+            self._stream_subs.pop(task_id, None)
+
+    def _emit_stream(self, task: Task, payload: dict, *, end: bool = False) -> None:
+        """向该任务全部订阅队列广播（put_nowait 非阻塞，处理本体不受订阅方拖累）。"""
+        for q in list(self._stream_subs.get(task.id, ())):
+            q.put_nowait((payload, end))
+
+    def emit_stream_end(self, task: Task) -> None:
+        """收尾快照（end=True）：流式交互周期收束帧（v1.0 由收流表示终态）。
+
+        失败路径也必发（api._stream_run 兜底）——禁悬挂打开的流。
+        """
+        self._emit_stream(task, _task_snapshot_payload(task), end=True)
 
     def list_tasks(
         self,
@@ -338,6 +404,7 @@ class TaskManager:
         """
         task.status = TaskStatus(state="working")
         await self._notify_push(task)  # 状态迁移即任务更新 → webhook（§4.3.3）
+        self._emit_stream(task, _status_update_payload(task))  # 流式：working 迁移事件
 
         try:
             # Extract text from message parts
@@ -376,6 +443,8 @@ class TaskManager:
             )
 
         await self._notify_push(task)  # 终态（completed/failed）→ {"task"} 全量投递
+        self._emit_stream(task, _status_update_payload(task))  # 流式：终态迁移事件
+        self.emit_stream_end(task)  # 流式：收尾快照（end）→ 订阅流收束
         return task
 
     async def get_task(self, task_id: str) -> Task | None:
@@ -389,6 +458,8 @@ class TaskManager:
             return None
         task.status = TaskStatus(state="canceled")
         await self._notify_push(task)  # 取消=终态迁移，同样走推送（§4.3.3）
+        self._emit_stream(task, _status_update_payload(task))  # 流式：canceled 迁移事件
+        self.emit_stream_end(task)  # 流式：取消即交互周期收束，订阅流收尾
         return task
 
     def _extract_text(self, message: Message) -> str:

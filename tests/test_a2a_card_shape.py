@@ -19,6 +19,7 @@ spec MUST accurately declare）+双 well-known 路径同口同形（单真源禁
 import pytest
 from fastapi.testclient import TestClient
 
+from src.a2a import api as a2a_api
 from src.a2a.models import DEFAULT_AGENT_CARD, AgentCard, AgentInterface
 from src.a2a.task_manager import task_manager
 from src.main import app
@@ -123,14 +124,15 @@ class TestWellKnownPaths:
         assert new == old
 
     def test_capabilities_face_zero_regression(self, app_client):
-        """F4b-⑤⑥ 能力声明面零回归：键集=实现面、streaming/extendedAgentCard 派生 False。
+        """F4b-⑤⑥ 能力声明面零回归：键集=实现面、extendedAgentCard 派生 False。
 
         键集随 F4b-⑫ 契约更新（AgentCapabilities 补 §4.4.3 extendedAgentCard 字段，
-        默认 False=不虚报）。
+        默认 False=不虚报）；streaming 断言随 F4b-⑯ 更新（真流式两方法已注册→派生
+        True）——守恒不变量=发布值恒等于派生值（禁硬编码 bool）。
         """
         caps = app_client.get("/.well-known/agent-card.json").json()["capabilities"]
         assert set(caps.keys()) == {"streaming", "pushNotifications", "extendedAgentCard"}
-        assert caps["streaming"] is False
+        assert caps["streaming"] is a2a_api.streaming_supported()
         assert caps["extendedAgentCard"] is False
 
     def test_set_agent_card_custom_flows_through_fold(self, app_client):

@@ -172,8 +172,14 @@ class TestCapabilityDerivation:
             env = rpc(app_client, method, params)
             assert env["error"]["code"] == -32003, method  # §3.3.4 PushNotificationNotSupported
 
-    def test_streaming_gate_now_spec_compliant(self, app_client, clean_tasks):
-        """§3.3.4：streaming=false 时流式操作回 -32004（修前 -32601=live 规范违规）。"""
+    def test_streaming_gate_when_capability_absent(self, app_client, monkeypatch, clean_tasks):
+        """§3.3.4：streaming=false 时流式操作回 -32004（修前 -32601=live 规范违规）。
+
+        契约随 F4b-⑯ 更新：真流式两方法已注册（能力派生 True，真实面不再走此门）——
+        拆掉全部流式方法模拟能力缺席，验证门本身仍在位（未来拆方法时自动恢复拦截）。"""
+        monkeypatch.delitem(a2a_api.RPC_HANDLERS, "SendStreamingMessage")
+        monkeypatch.delitem(a2a_api.RPC_HANDLERS, "SubscribeToTask")
+        assert a2a_api.streaming_supported() is False
         for method in (
             "SendStreamingMessage",
             "SubscribeToTask",
@@ -195,7 +201,7 @@ class TestCapabilityDerivation:
         assert a2a_api.streaming_supported() is True
         assert rpc(app_client, "SubscribeToTask", {"id": "t"})["result"] == {"subscribed": True}
         # 能力 True 后未注册的流式方法归 -32601（能力门不再拦截）
-        assert rpc(app_client, "SendStreamingMessage", {})["error"]["code"] == -32601
+        assert rpc(app_client, "message/stream", {})["error"]["code"] == -32601
 
 
 class TestPushConfigCrud:

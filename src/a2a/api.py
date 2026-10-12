@@ -6,10 +6,13 @@ Implements:
 - POST /a2a - JSON-RPC 2.0 endpoint
 """
 
+import asyncio
 import base64
+import json
+import logging
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import ValidationError
 
 from src.a2a.models import (
@@ -24,6 +27,7 @@ from src.a2a.models import (
 from src.a2a.task_manager import task_manager
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/.well-known/agent-card.json")
@@ -93,7 +97,11 @@ async def a2a_endpoint(request: Request):
         # 但照常执行——spec 语义是 Client 对 Response 无兴趣，不是对执行无兴趣
         # （fire-and-forget 语义），成败都不回响应（失败也不回=同一条 MUST NOT）。
         try:
-            await handle_rpc(rpc_request)
+            result = await handle_rpc(rpc_request)
+            if isinstance(result, _StreamSpec):
+                # 流式方法的 Notification：照常执行（处理已在后台跑）但 MUST NOT
+                # reply——回收未消费的订阅队列防泄漏（事件照发、无人收）
+                task_manager.unsubscribe_stream(result.task_id, result.queue)
         except Exception:
             # Notification 禁回错误（§5 MUST NOT reply），失败静默是规范要求非瞒报
             pass
@@ -101,6 +109,10 @@ async def a2a_endpoint(request: Request):
 
     try:
         result = await handle_rpc(rpc_request)
+        if isinstance(result, _StreamSpec):
+            # 流式方法（SendStreamingMessage/SubscribeToTask）：响应体即 SSE 流
+            # （§9.4.2 HTTP 200 text/event-stream），非普通 JSON-RPC 单响应
+            return _sse_response(result, rpc_request.id)
         return JSONResponse(
             status_code=200,
             content=JSONRPCResponse(id=rpc_request.id, result=result).envelope(),
@@ -158,6 +170,20 @@ async def handle_rpc(request: JSONRPCRequest):
     return await handler(params)
 
 
+def _check_history_length(history_length):
+    """historyLength 合法性（未提供=None/合法值原样）；非法值（负数/bool/非 int）
+    如实 -32602 禁静默当未提供。流式口在开流前校验（开流后已无法改状态码回错误），
+    非流式口在 _apply_history_limit 内校验——同一校验单一源。
+    """
+    if history_length is None:
+        return None
+    if isinstance(history_length, bool) or not isinstance(history_length, int):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid historyLength: {history_length!r}")
+    if history_length < 0:
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid historyLength: {history_length!r}")
+    return history_length
+
+
 def _apply_history_limit(task_dump: dict, history_length) -> dict:
     """按 A2A v1.0 §3.2.4 historyLength 语义收口 Task.history 返回面。
 
@@ -167,12 +193,9 @@ def _apply_history_limit(task_dump: dict, history_length) -> dict:
     非法值（负数/bool/非 int）如实拒绝，禁静默当未提供。
     只改返回 dump，不改 task_manager 内存任务本体（history 是真源，禁裁剪污染）。
     """
+    history_length = _check_history_length(history_length)
     if history_length is None:
         return task_dump
-    if isinstance(history_length, bool) or not isinstance(history_length, int):
-        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid historyLength: {history_length!r}")
-    if history_length < 0:
-        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid historyLength: {history_length!r}")
     task_dump = dict(task_dump)  # 纯函数：不改调用方 dump，只改返回值
     if history_length == 0:
         task_dump.pop("history", None)
@@ -253,6 +276,119 @@ async def _send_message_impl(params: dict) -> Task:
         _register_inline_push(task.id, inline_push)
         task = await task_manager.run_processing(task, message)
     return task
+
+
+# === 真流式方法（A2A v1.0 §5.3 SendStreamingMessage / SubscribeToTask，§9.4）===
+# JSON-RPC-over-SSE 传输层（§9.4.2）：HTTP 200 text/event-stream，每个 SSE data 帧
+# =一个 JSON-RPC 2.0 响应包络（id 保真回显请求 id），result=StreamResponse 单键
+# （{"statusUpdate"}|{"artifactUpdate"}|{"task"}，判别式=oneof 成员名本身——
+# whats-new-v1.md）。v1.0 无 final 字段（0.x 已移除，「Leverage protocol binding
+# specific stream closure mechanism instead」）：终态由**收流**表示——帧序=状态
+# 迁移事件 + 终态全量快照后收流。
+
+
+class _StreamSpec:
+    """流式方法返回哨兵：handle_rpc 正常返回，端点检测到哨兵改走 SSE 传输层。
+
+    错误仍在开流前以普通 JSON-RPC 错误响应如实回（错误面契约不变，禁伪 SSE）；
+    queue=订阅队列（元素=(载荷, 是否收尾帧)），收流/Notification 丢弃时由调用方
+    退订防泄漏。
+    """
+
+    def __init__(self, task_id: str, queue, history_length=None):
+        self.task_id = task_id
+        self.queue = queue
+        self.history_length = history_length
+
+
+async def _stream_run(task_id: str, coro) -> None:
+    """流式处理执行体：处理在后台跑（流消费与处理并行），失败也必发收尾快照——
+    禁悬挂打开的流（run_processing 内部已吞异常置 failed 并自发达收尾；本口兜底
+    其外的异常面，如续接指向任务恰消失）。
+    """
+    try:
+        await coro
+    except Exception as e:
+        logger.error(f"stream processing failed: {e}")
+        task = task_manager.tasks.get(task_id)
+        if task is not None:
+            task_manager.emit_stream_end(task)
+
+
+def _sse_response(spec: _StreamSpec, rpc_id) -> StreamingResponse:
+    """SSE 传输层（§9.4.2）：逐帧 data: <JSON-RPC 包络>，终态快照（end）后收流。"""
+
+    async def gen():
+        try:
+            while True:
+                payload, end = await spec.queue.get()
+                if (
+                    spec.history_length is not None
+                    and isinstance(payload, dict)
+                    and "task" in payload
+                ):
+                    # 收尾快照=返回的 Task：historyLength 同 _apply_history_limit 语义
+                    payload = {"task": _apply_history_limit(payload["task"], spec.history_length)}
+                env = JSONRPCResponse(id=rpc_id, result=payload).envelope()
+                yield f"data: {json.dumps(env, ensure_ascii=False)}\n\n"
+                if end:
+                    break
+        finally:
+            # 收流/客户端断联都退订（空订阅表随删防泄漏）
+            task_manager.unsubscribe_stream(spec.task_id, spec.queue)
+
+    return StreamingResponse(
+        gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"}
+    )
+
+
+async def handle_send_streaming_message(params: dict) -> _StreamSpec:
+    """v1.0 SendStreamingMessage（§5.3/§9.4.2）—— 发消息并订阅实时更新（SSE）。
+
+    Request: Same as SendMessage（§9.4.2）——任务续接双源（v1.0 message.taskId /
+    旧草案顶层 id）、随发送推送配置双源、historyLength 双源（收尾快照 history 收口）
+    全部走与 SendMessage 同一取参口（单一源）。与非流式口的差别只在交付面：
+    处理在后台跑、状态迁移逐帧推、终态快照后收流（v1.0 收流=终态指示）。
+    """
+    message_data = params.get("message", {})
+    message = Message(**message_data)  # params 校验失败 → -32602（端点归口）
+    metadata = params.get("metadata") or {}
+    task_id = params.get("id") or message_data.get("taskId")
+    inline_push = _inline_push_config(params)
+    # 开流前校验（开流后已无法改状态码回错误）——与 _apply_history_limit 同一校验口
+    history_length = _check_history_length(_history_length_from_params(params))
+
+    if task_id:
+        # Continue existing task —— 订阅先于启动处理：处理中的迁移事件一帧不丢
+        task = await task_manager.get_task(task_id)
+        if not task:
+            # §5.4 TaskNotFoundError(-32001)，与 SendMessage 续接同码同文案
+            raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+        _register_inline_push(task.id, inline_push)
+        queue = task_manager.subscribe_stream(task.id)
+        coro = task_manager.process_task(task.id, message, metadata=metadata)
+    else:
+        task = await task_manager.create_task(message, metadata=metadata)
+        _register_inline_push(task.id, inline_push)
+        queue = task_manager.subscribe_stream(task.id)
+        coro = task_manager.run_processing(task, message)
+    asyncio.create_task(_stream_run(task.id, coro))
+    return _StreamSpec(task.id, queue, history_length=history_length)
+
+
+async def handle_subscribe_to_task(params: dict) -> _StreamSpec:
+    """v1.0 SubscribeToTask（§5.3/§9.4.6）—— 订阅既有任务的更新流（同 SSE 形）。
+
+    首帧=当前状态全量快照（已终态即收尾帧=订阅即收流），随后状态迁移事件，终态
+    快照后收流。params=SubscribeToTaskRequest 形（id REQUIRED，tenant 收下不解释）。
+    """
+    task_id = params.get("id")
+    if not task_id or not isinstance(task_id, str):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid id: {task_id!r}")
+    if not await task_manager.get_task(task_id):
+        raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+    queue = task_manager.subscribe_stream(task_id, send_current=True)
+    return _StreamSpec(task_id, queue)
 
 
 async def handle_send_message(params: dict) -> dict:
@@ -478,6 +614,12 @@ RPC_HANDLERS = {
     "CancelTask": handle_task_cancel,
     "ListTasks": handle_list_tasks,
     "GetExtendedAgentCard": handle_get_extended_agent_card,
+    # 真流式两方法（§9.4.2/§9.4.6，F4b-⑯）——JSON-RPC-over-SSE 传输层真落地；
+    # 注册即 streaming_supported() 自动 True（声明从实现派生，能力门自动放行）。
+    # 无 0.x 旧线名别名（message/stream、tasks/sendSubscribe 本实现从未有过，F4b-⑮
+    # 同纪律：无历史契约可保）——旧名仍回 -32601 如实不冒充。
+    "SendStreamingMessage": handle_send_streaming_message,
+    "SubscribeToTask": handle_subscribe_to_task,
     # 推送配置四方法（§3.1.7-3.1.10 / §5.3）——v1.0 名一等注册；无 0.x 旧线名
     # 别名（本实现此前从未有过推送面，无历史契约可保，deprecated 勿新增消费方）
     "CreateTaskPushNotificationConfig": handle_create_task_push_notification_config,
@@ -541,12 +683,12 @@ def extended_agent_card_supported() -> bool:
     return task_manager.has_extended_agent_card()
 
 
-# === 未实现方法面（§3.3.4 能力门收口，禁冒充）===
-# v1.0 §5.3 方法映射表仅剩 SendStreamingMessage/SubscribeToTask 未实现：两者需要
-# JSON-RPC-over-SSE 传输层（§9.1 Streaming: text/event-stream）+ 任务增量事件发射，
-# 是"真流式"大件留待拍。其错误面已随 §3.3.4 Capability Validation 收口（handle_rpc
-# 能力门）：capabilities.streaming=false（未实现故派生 False）时两操作如实回
-# UnsupportedOperationError(-32004) 而非 -32601——修前恒 -32601 是 live 规范违规。
-# 真注册流式方法后 streaming_supported() 自动 True、能力门自动放行（声明从实现派生）。
-# 推送配置四方法已实现（本拍 F4b-⑮）：任务状态迁移=真实更新事件（working→statusUpdate、
-# 终态→task 全量）真投 webhook，非空壳。
+# === 能力门收口（§3.3.4，禁冒充）===
+# v1.0 §5.3 方法映射表至此全数有真实现（F4b-⑯ 真流式两方法收口最后一块）：
+# SendStreamingMessage/SubscribeToTask = JSON-RPC-over-SSE 真传输层（§9.4.2：
+# data 帧=JSON-RPC 包络 + StreamResponse 单键；v1.0 收流=终态指示，无 final 字段），
+# streaming_supported() 随注册自动 True（声明从实现派生）。0.x 旧线名 message/stream、
+# tasks/sendSubscribe 未注册（本实现从未有过，无历史契约可保）——归 -32601 如实
+# 不冒充；能力门在流式能力 False 时仍拦 -32004（未来拆方法时自动恢复拦截）。
+# 未实现方法面仅剩：SendMessageConfiguration.acceptedOutputModes·returnImmediately
+# 等收下不解释字段（语义未定义面另拍）与 gRPC/REST binding（本仓 JSONRPC only）。

@@ -205,9 +205,10 @@ class AgentInterface(BaseModel):
 
 
 class AgentCapabilities(BaseModel):
-    # capabilities.streaming = 支持 message/stream 等流式 RPC。默认 False=不虚报：
-    # 实际发布值由 api.streaming_supported() 按真实 RPC 方法面派生（见 api.py），
-    # 加了 message/stream 进 RPC_HANDLERS 才会 True —— 声明与实现禁漂移（F4b-⑤）。
+    # capabilities.streaming = 支持流式 RPC（SendStreamingMessage/SubscribeToTask 等）。
+    # 默认 False=不虚报：实际发布值由 api.streaming_supported() 按真实 RPC 方法面派生
+    # （见 api.py），流式方法真注册进 RPC_HANDLERS 才会 True（F4b-⑯ 已真注册）——
+    # 声明与实现禁漂移（F4b-⑤）。
     streaming: bool = False
     # pushNotifications（§4.4.3）：是否支持推送通知配置（§3.1.7-3.1.10 四操作）。
     # 默认 False=不虚报：实际发布值由 api.push_notifications_supported() 按真实 RPC
