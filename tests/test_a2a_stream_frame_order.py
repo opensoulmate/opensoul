@@ -23,10 +23,18 @@ import pytest
 from fastapi import FastAPI
 
 from src.a2a.api import router as a2a_router
+from src.a2a.models import TaskStatus
 from src.a2a.task_manager import task_manager
 
 STUB = {"llm_mode": "stub"}
 _END = object()
+
+
+def _reopen(task_id):
+    """§6.3 多轮正典：终态任务不再接受消息（F4b-⑯d 终态拒收）——续接前置回
+    input-required（客户端继续 input-required 任务=规范多轮路径）。"""
+    task_manager.tasks[task_id].status = TaskStatus(state="input-required")
+
 
 _TERMINAL = (
     "TASK_STATE_COMPLETED",
@@ -256,7 +264,8 @@ class TestSendStreamingFrameOrder:
     @pytest.mark.asyncio
     async def test_continuation_first_frame_is_subscription_truth(self):
         """续接首帧=订阅时点真态（新消息入史在订阅后=「at the time of subscription」
-        字面语义），终稿快照含全史 4 条——首帧/终稿各自如实，禁 fabricate。"""
+        字面语义），终稿快照含全史 4 条——首帧/终稿各自如实，禁 fabricate。
+        续接走 §6.3 input-required 路径（F4b-⑯d 终态拒收）。"""
         app = _make_app()
         c1 = await _SseClient(
             _rpc(
@@ -267,6 +276,7 @@ class TestSendStreamingFrameOrder:
         ).collect(app)
         task_id = c1.frame_list[0]["result"]["task"]["id"]
 
+        _reopen(task_id)  # 终态拒收（F4b-⑯d）：续接走 §6.3 input-required 路径
         c2 = await _SseClient(
             _rpc(
                 "SendStreamingMessage",
@@ -277,8 +287,8 @@ class TestSendStreamingFrameOrder:
         frames = c2.frame_list
         first_task, final_task = _assert_task_lifecycle_grammar(frames, "fo-2b")
         assert first_task["id"] == task_id  # 续接同任务
-        # 订阅时点真态：前轮已终态（completed）+ 新消息尚未入史（history 恰 2 条）
-        assert first_task["status"]["state"] == "TASK_STATE_COMPLETED"
+        # 订阅时点真态：input-required 待续（§6.3）+ 新消息尚未入史（history 恰 2 条）
+        assert first_task["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
         assert [m["role"] for m in first_task["history"]] == ["ROLE_USER", "ROLE_AGENT"]
         # 终稿快照含新消息（history 恰 4 条，F4b-⑧ 契约零变化）
         assert [m["role"] for m in final_task["history"]] == [
@@ -302,6 +312,7 @@ class TestSendStreamingFrameOrder:
         ).collect(app)
         task_id = c1.frame_list[0]["result"]["task"]["id"]
 
+        _reopen(task_id)  # 终态拒收（F4b-⑯d）：续接走 §6.3 input-required 路径
         c2 = await _SseClient(
             _rpc(
                 "SendStreamingMessage",
@@ -318,6 +329,7 @@ class TestSendStreamingFrameOrder:
         assert first_task["history"][0]["role"] == "ROLE_AGENT"  # 最近 N=全量后缀
         assert len(final_task["history"]) == 1
 
+        _reopen(task_id)  # 终态拒收（F4b-⑯d）：续接走 §6.3 input-required 路径
         c3 = await _SseClient(
             _rpc(
                 "SendStreamingMessage",

@@ -25,10 +25,17 @@ from fastapi import FastAPI
 
 from src.a2a import api as a2a_api
 from src.a2a.api import router as a2a_router
+from src.a2a.models import TaskStatus
 from src.a2a.task_manager import task_manager
 
 STUB = {"llm_mode": "stub"}
 _END = object()  # 收流哨兵（区别于任何真实帧）
+
+
+def _reopen(task_id):
+    """§6.3 多轮正典：终态任务不再接受消息（F4b-⑯d 终态拒收）——续接前置回
+    input-required（客户端继续 input-required 任务=规范多轮路径）。"""
+    task_manager.tasks[task_id].status = TaskStatus(state="input-required")
 
 
 def _make_app() -> FastAPI:
@@ -431,6 +438,7 @@ class TestSendStreamingEdges:
         ).collect(app)
         task_id = c.frame_list[-1]["result"]["task"]["id"]
 
+        _reopen(task_id)  # 终态拒收（F4b-⑯d）：续接走 §6.3 input-required 路径
         c2 = await _SseClient(
             _rpc(
                 "SendStreamingMessage",

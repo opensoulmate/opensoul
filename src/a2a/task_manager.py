@@ -492,14 +492,63 @@ class TaskManager:
         return page, next_token, total
 
     async def create_task(self, message: Message, metadata: dict | None = None) -> Task:
-        """Create a new task from a user message. metadata=A2A TaskSendParams.metadata。"""
+        """Create a new task from a user message. metadata=A2A TaskSendParams.metadata。
+
+        contextId 采纳（§3.4.3 Context Continuity「Clients MAY use contextId without
+        taskId to start a new task within an existing conversation context」）：客户端
+        带 contextId 不带 taskId=在既有会话上下文内开新任务，任务取该 contextId；
+        未带则生成新上下文并回填入史消息（与 ensure_accepts_message 推断同语义：
+        入史消息携带其任务的 contextId）。
+        """
         task = Task(
             status=TaskStatus(state="submitted"),
             history=[message],
             metadata=dict(metadata or {}),
+            contextId=message.contextId or "",
         )
+        if not message.contextId:
+            message.contextId = task.contextId
         self.tasks[task.id] = task
         logger.info(f"Task created: {task.id}")
+        return task
+
+    async def ensure_accepts_message(self, task_id: str, message: Message) -> Task:
+        """续接准入单一收口（SendMessage/SendStreamingMessage/旧线名共用路由缝）：
+
+        1. 存在性（§3.4.2）：不存在 → TaskNotFoundError(-32001)（与 process_task
+           续接 raise 点同码同文案）
+        2. contextId 一致性（§3.4.3「Agents MUST reject messages containing
+           mismatching contextId and taskId」）：双给且不等 → InvalidParamsError
+           (-32602)——修前静默接受越上下文续接（live 修前实证）
+        3. contextId 推断（§3.4.3「Agents MUST infer contextId from the task if
+           only taskId is provided」）：只给 taskId → 回填 message.contextId=任务
+           上下文（入史消息携带其任务的 contextId，与 create_task 回填同语义）
+        4. 终态拒收（§3.1.1/§3.1.2 Errors「Messages sent to Tasks that are in a
+           terminal state (COMPLETED/FAILED/CANCELED/REJECTED) cannot accept
+           further messages」）→ UnsupportedOperationError(-32004)——修前终态任务
+           被照常续接重跑（live 修前实证 history 3→4），a2a-python 参考实现
+           (#215 "raise error for tasks in terminal states") 同款。
+
+        检查序=存在性→一致性→推断→终态（请求参数一致性先于目标态，同 historyLength
+        开流前校验纪律）。终态拒收后多轮正典=§6.3 input-required 续接 / §3.4.3
+        contextId 新任务续上下文。
+        """
+        task = self.tasks.get(task_id)
+        if not task:
+            raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+        if message.contextId and task.contextId and message.contextId != task.contextId:
+            raise A2AError(
+                ErrorCode.INVALID_PARAMS,
+                f"Message contextId {message.contextId!r} does not match task "
+                f"contextId {task.contextId!r}",
+            )
+        if not message.contextId:
+            message.contextId = task.contextId
+        if task.status.state in _TERMINAL_STATES:
+            raise A2AError(
+                ErrorCode.UNSUPPORTED_OPERATION,
+                f"Task {task.id} is in terminal state: {task.status.state}",
+            )
         return task
 
     async def process_task(

@@ -261,12 +261,10 @@ async def _send_message_impl(params: dict) -> Task:
     inline_push = _inline_push_config(params)
 
     if task_id:
-        # Continue existing task —— 先取任务再处理：inline 推送配置须在处理前登记，
-        # 处理中的状态更新才投得到（§3.1.7 随发送注册）
-        task = await task_manager.get_task(task_id)
-        if not task:
-            # §5.4 TaskNotFoundError(-32001)（与 process_task 续接 raise 点同码同文案）
-            raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+        # Continue existing task —— 续接准入单一收口（存在性/contextId 一致性/推断/
+        # 终态拒收，见 task_manager.ensure_accepts_message）；inline 推送配置须在
+        # 处理前登记，处理中的状态更新才投得到（§3.1.7 随发送注册）
+        task = await task_manager.ensure_accepts_message(task_id, message)
         _register_inline_push(task.id, inline_push)
         task = await task_manager.process_task(task_id, message, metadata=metadata)
     else:
@@ -363,11 +361,10 @@ async def handle_send_streaming_message(params: dict) -> _StreamSpec:
     history_length = _check_history_length(_history_length_from_params(params))
 
     if task_id:
-        # Continue existing task —— 订阅先于启动处理：处理中的迁移事件一帧不丢
-        task = await task_manager.get_task(task_id)
-        if not task:
-            # §5.4 TaskNotFoundError(-32001)，与 SendMessage 续接同码同文案
-            raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+        # Continue existing task —— 续接准入在开流前单一收口（存在性/contextId 一致性/
+        # 推断/终态拒收，与 _send_message_impl 同一 ensure_accepts_message；错误如实
+        # JSON-RPC 回禁伪 SSE）；订阅先于启动处理：处理中的迁移事件一帧不丢
+        task = await task_manager.ensure_accepts_message(task_id, message)
         _register_inline_push(task.id, inline_push)
         queue = task_manager.subscribe_stream(task.id, send_current=True, first_frame_ends=False)
         coro = task_manager.process_task(task.id, message, metadata=metadata)

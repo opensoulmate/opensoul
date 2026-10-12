@@ -16,11 +16,17 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from src.a2a.models import Message
+from src.a2a.models import Message, TaskStatus
 from src.a2a.task_manager import task_manager
 from src.main import app
 
 STUB = {"llm_mode": "stub"}
+
+
+def _reopen(task_id):
+    """§6.3 多轮正典：终态任务不再接受消息（F4b-⑯d 终态拒收）——续接前置回
+    input-required（客户端继续 input-required 任务=规范多轮路径）。"""
+    task_manager.tasks[task_id].status = TaskStatus(state="input-required")
 
 
 def _msg(text="hello history", **extra):
@@ -89,6 +95,7 @@ class TestContinuationNoDuplicates:
     def test_two_rounds_exactly_four_messages(self, app_client):
         first = _rpc(app_client, "SendMessage", {"message": _msg("round-1"), "metadata": STUB})
         task_id = first["result"]["task"]["id"]
+        _reopen(task_id)  # 终态拒收（F4b-⑯d）：续接走 §6.3 input-required 路径
         second = _rpc(
             app_client,
             "SendMessage",
@@ -107,6 +114,7 @@ class TestContinuationNoDuplicates:
         first = _rpc(app_client, "SendMessage", {"message": _msg("t-1"), "metadata": STUB})
         task_id = first["result"]["task"]["id"]
         for i in (2, 3):
+            _reopen(task_id)  # 终态拒收（F4b-⑯d）：续接走 §6.3 input-required 路径
             _rpc(
                 app_client,
                 "SendMessage",
