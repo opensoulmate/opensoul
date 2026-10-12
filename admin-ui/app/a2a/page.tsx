@@ -24,7 +24,6 @@ interface AgentSkill {
 interface AgentCapabilities {
   streaming: boolean;
   pushNotifications: boolean;
-  stateTransitionHistory: boolean;
 }
 
 interface AgentCard {
@@ -148,7 +147,6 @@ function AgentCardView({ card }: { card: AgentCard }) {
               {[
                 { key: 'streaming', label: '流式传输', value: card.capabilities.streaming },
                 { key: 'push', label: '推送通知', value: card.capabilities.pushNotifications },
-                { key: 'history', label: '状态历史', value: card.capabilities.stateTransitionHistory },
               ].map((cap) => (
                 <Badge key={cap.key} className={`gap-1 ${
                     cap.value

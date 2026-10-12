@@ -72,6 +72,29 @@ async def handle_rpc(request: JSONRPCRequest):
     return await handler(params)
 
 
+def _apply_history_limit(task_dump: dict, history_length) -> dict:
+    """按 A2A v1.0 §3.2.4 historyLength 语义收口 Task.history 返回面。
+
+    - 未提供：不设限（维持既有全量返回契约，服务端默认量=全部）
+    - 0：不返回历史（history 字段 SHOULD 被省略）
+    - >0：至多最近 N 条（§3.1.3 MUST NOT 超发——修前忽略参数恒全量=协议违规）
+    非法值（负数/bool/非 int）如实拒绝，禁静默当未提供。
+    只改返回 dump，不改 task_manager 内存任务本体（history 是真源，禁裁剪污染）。
+    """
+    if history_length is None:
+        return task_dump
+    if isinstance(history_length, bool) or not isinstance(history_length, int):
+        raise ValueError(f"Invalid historyLength: {history_length!r}")
+    if history_length < 0:
+        raise ValueError(f"Invalid historyLength: {history_length!r}")
+    task_dump = dict(task_dump)  # 纯函数：不改调用方 dump，只改返回值
+    if history_length == 0:
+        task_dump.pop("history", None)
+    elif "history" in task_dump:
+        task_dump["history"] = list(task_dump["history"])[-history_length:]
+    return task_dump
+
+
 async def handle_task_send(params: dict) -> dict:
     """Handle tasks/send - create or continue a task."""
     task_id = params.get("id")
@@ -80,6 +103,10 @@ async def handle_task_send(params: dict) -> dict:
     # A2A TaskSendParams.metadata → task.metadata（协议标准字段；
     # llm_mode=stub 供集成测试/离线演示走确定性应答，不打真实LLM）
     metadata = params.get("metadata") or {}
+    # historyLength 双源收口：v1.0 SendMessageConfiguration.historyLength 优先，
+    # 旧草案 TaskSendParams 顶层 historyLength 兜底（同 §3.2.4 语义）
+    configuration = params.get("configuration") or {}
+    history_length = configuration.get("historyLength", params.get("historyLength"))
 
     if task_id:
         # Continue existing task
@@ -89,7 +116,7 @@ async def handle_task_send(params: dict) -> dict:
         task = await task_manager.create_task(message, metadata=metadata)
         task = await task_manager.process_task(task.id, message)
 
-    return task.model_dump(exclude_none=True)
+    return _apply_history_limit(task.model_dump(exclude_none=True), history_length)
 
 
 async def handle_task_get(params: dict) -> dict:
@@ -102,7 +129,7 @@ async def handle_task_get(params: dict) -> dict:
     if not task:
         raise ValueError(f"Task not found: {task_id}")
 
-    return task.model_dump(exclude_none=True)
+    return _apply_history_limit(task.model_dump(exclude_none=True), params.get("historyLength"))
 
 
 async def handle_task_cancel(params: dict) -> dict:

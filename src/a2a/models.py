@@ -29,7 +29,12 @@ class AgentCapabilities(BaseModel):
     # 加了 message/stream 进 RPC_HANDLERS 才会 True —— 声明与实现禁漂移（F4b-⑤）。
     streaming: bool = False
     pushNotifications: bool = False
-    stateTransitionHistory: bool = True
+    # stateTransitionHistory（0.x 字段）已移除（F4b-⑥）：A2A v1.0 §4.4.3 的
+    # AgentCapabilities 只有 streaming/pushNotifications/extensions/extendedAgentCard，
+    # stateTransitionHistory 是 0.x 废弃字段——协议自身无任何 API 可取回状态迁移
+    # 历史（a2aproject/A2A#1228，v1.0 落实移除）；且本实现从未暴露状态迁移历史
+    # （Task.history 是消息历史非状态迁移历史），修前默认 True=对外谎报+废弃协议
+    # 字段。按"协议必须用最新标准版、拒绝废弃协议"移除，禁复活。
 
 
 class AgentCard(BaseModel):
