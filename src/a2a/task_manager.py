@@ -18,6 +18,7 @@ from src.a2a.models import (
     Message,
     Task,
     TaskStatus,
+    part_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -298,11 +299,17 @@ class TaskManager:
         return task
 
     def _extract_text(self, message: Message) -> str:
-        """Extract text from message parts."""
+        """Extract text from message parts.
+
+        三形统一读取（part_text，F4b-⑭）：v1.0 平铺 {"text":...} / 0.3 {"kind":"text"} /
+        legacy {"type":"text"} 同收。修前只认 type=="text"——v1.0 客户端按 §4.1.6 发
+        {"text":...} 被静默丢弃（提取文本为空、prompt 变空=真断点）。
+        """
         texts = []
         for part in message.parts:
-            if part.get("type") == "text":
-                texts.append(part.get("text", ""))
+            text = part_text(part)
+            if text is not None:
+                texts.append(text)
         return "\n".join(texts)
 
     async def _process_message(self, text: str, task: Task) -> str:
@@ -485,7 +492,9 @@ class TaskManager:
             ]
             for msg in task.history[-10:]:  # Last 10 messages for context
                 role = "user" if msg.role == "user" else "assistant"
-                text_parts = [p.get("text", "") for p in msg.parts if p.get("type") == "text"]
+                # 三形统一读取（part_text，F4b-⑭）：v1.0 客户端消息历史进 LLM 上下文
+                # 修前被 type=="text" 过滤吞掉（同 _extract_text 断点）
+                text_parts = [t for p in msg.parts if (t := part_text(p)) is not None]
                 if text_parts:
                     messages.append({"role": role, "content": "\n".join(text_parts)})
 

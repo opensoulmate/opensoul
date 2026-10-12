@@ -81,10 +81,100 @@ def _normalize_role(value: Any) -> Any:
     return value
 
 
+# === v1.0 Part wire shape (F4b-⑭) ===
+#
+# A2A v1.0 Part（spec §1.4：spec/a2a.proto 是唯一规范定义；§4.1.6 字段表）：oneof content
+# {text | raw | url | data} + metadata/filename/mediaType —— ProtoJSON 下 oneof 成员名
+# 即判别式，wire 上无 kind 无 type 判别字段（kind 是 0.3 形，v1.0 §A.2.1「Kind
+# Discriminator Removed」已移除；type 是 0.2 代/文档混用误形，a2aproject/A2A#1365）。
+# 修前本实现出线 part 用 {"type":"text","text":...}=两代都不是的第三形（v1.0 客户端无从
+# 识别），且文本提取只认 type=="text"——v1.0 客户端发 {"text":...} 被静默丢弃（真断点：
+# prompt 变空）。
+#
+# 设计（声明从实现派生 + 单点出口，F4b-⑤/envelope/wire() 同哲学）：wire() 唯一出口把
+# 出线 part 派生成 v1.0 平铺 oneof 形；输入三形兼容统一走 part_text 读取；未知判别值
+# 不 fabricate——原样透传（off-spec 如实暴露，⑬ 未知枚举同款纪律）。
+_PART_ONEOF_KEYS = ("text", "raw", "url", "data")
+_PART_EXTRA_KEYS = ("metadata", "filename", "mediaType")
+
+
+def _part_to_wire(part: Any) -> Any:
+    """单个 part → v1.0 平铺 oneof 形（返回新 dict 不就地改，真源保护同 _apply_history_limit）。
+
+    - 已是 v1.0 形（无 type/kind 判别键）→ 原样浅拷贝（含只带 metadata 的 part）
+    - 带判别键（0.3 kind / legacy type）→ 按判别值派生成 v1.0 形，判别键不出线：
+      text→{"text"}、data→{"data"}、file→{"raw"|"url", mediaType, filename}
+      （0.3→1.0 字段映射照抄 a2a-js migration-guide 对照表：FilePart.file.mimeType→
+       Part.mediaType、file.name→Part.filename、file.uri→content url、file.bytes→content raw）
+    - 未知判别值 / 非 dict / 已知判别值但无可映射内容：原样透传（off-spec 如实暴露，
+      禁 fabricate 内容成员，⑬ 未知枚举同款纪律）
+    """
+    if not isinstance(part, dict):
+        return part
+    disc = part.get("type", part.get("kind"))
+    if disc is None:
+        return dict(part)
+    out: dict[str, Any] = {}
+    if disc == "text":
+        if "text" in part:
+            out["text"] = part["text"]
+    elif disc == "data":
+        if "data" in part:
+            out["data"] = part["data"]
+    elif disc == "file":
+        file = part.get("file")
+        if isinstance(file, dict):
+            if "bytes" in file:
+                out["raw"] = file["bytes"]
+            elif "uri" in file:
+                out["url"] = file["uri"]
+            if "mimeType" in file:
+                out["mediaType"] = file["mimeType"]
+            if "name" in file:
+                out["filename"] = file["name"]
+    else:
+        return dict(part)
+    for k in _PART_EXTRA_KEYS:
+        if k in part:
+            out[k] = part[k]
+    if not out:
+        return dict(part)
+    return out
+
+
+def _parts_to_wire(parts: Any) -> Any:
+    """parts 列表逐项派生 v1.0 形（非列表原样透传不猜形态）。"""
+    if isinstance(parts, list):
+        return [_part_to_wire(p) for p in parts]
+    return parts
+
+
+def part_text(part: Any) -> str | None:
+    """从任意受理形态的 part 提取文本（v1.0 平铺 / 0.3 kind / legacy type 三形统一读取）。
+
+    - v1.0（spec §4.1.6/proto Part）：判别式=oneof 成员名本身，{"text": "..."} 即文本 part
+    - 0.3：{"kind": "text", "text": "..."}；legacy（本实现内部形）：{"type": "text", ...}
+    - 非文本 part（file/data/未知判别）与非 dict 返回 None——不是文本就不是文本，
+      禁把 data part 的 data 当文本；文本值非 str（off-spec 输入）同样 None（无法入文）。
+    """
+    if not isinstance(part, dict):
+        return None
+    disc = part.get("type", part.get("kind"))
+    if disc is not None:
+        if disc != "text":
+            return None
+        v = part.get("text", "")
+        return v if isinstance(v, str) else None
+    v = part.get("text")
+    return v if isinstance(v, str) else None
+
+
 def _message_wire(d: dict[str, Any]) -> dict[str, Any]:
-    """单条 Message dump 的 role → v1.0 形（就地改返回 dict，不动内存本体）。"""
+    """单条 Message dump 的 role → v1.0 形 + parts → v1.0 平铺 oneof 形（就地改返回 dict，不动内存本体）。"""
     if "role" in d:
         d["role"] = _role_to_wire(d["role"])
+    if "parts" in d:
+        d["parts"] = _parts_to_wire(d["parts"])
     return d
 
 
@@ -178,6 +268,13 @@ class Message(BaseModel):
     messageId: str = ""
     taskId: str | None = None
     contextId: str | None = None
+    # v1.0 proto Message 可选成员（F4b-⑭）：metadata(Struct) / extensions /
+    # referenceTaskIds。缺省 None=未设置（wire 面整键省略，proto3 JSON 未设置成员
+    # 不出现）。修前 pydantic 默认 extra=ignore 把 v1.0 客户端发的这三键静默丢弃
+    # （存不进也回不出，F4b-② LLMRequest.stream 静默忽略同型）。
+    metadata: dict[str, Any] | None = None
+    extensions: list[str] | None = None
+    referenceTaskIds: list[str] | None = None
 
     @field_validator("role", mode="before")
     @classmethod
@@ -197,6 +294,9 @@ class Artifact(BaseModel):
     description: str | None = None
     parts: list[dict[str, Any]]
     artifactId: str = ""
+    # v1.0 proto Artifact 可选成员 metadata/extensions（F4b-⑭），语义同 Message 三键
+    metadata: dict[str, Any] | None = None
+    extensions: list[str] | None = None
 
     def __init__(self, **data):
         if not data.get("artifactId"):
@@ -248,6 +348,9 @@ class Task(BaseModel):
         for m in d.get("history", []) or []:
             if isinstance(m, dict):
                 _message_wire(m)
+        for a in d.get("artifacts", []) or []:
+            if isinstance(a, dict) and "parts" in a:
+                a["parts"] = _parts_to_wire(a["parts"])
         return d
 
 

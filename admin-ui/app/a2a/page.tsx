@@ -48,7 +48,17 @@ interface AgentCard {
 
 interface Message {
   role: string;
-  parts: { type: string; text?: string }[];
+  // v1.0 Part（F4b-⑭）：平铺 oneof {text|raw|url|data}+metadata/filename/mediaType，
+  // 判别式=成员名本身（无 type/kind 判别键）
+  parts: {
+    text?: string;
+    raw?: string;
+    url?: string;
+    data?: unknown;
+    metadata?: Record<string, unknown>;
+    filename?: string;
+    mediaType?: string;
+  }[];
   messageId: string;
   taskId?: string;
   contextId?: string;
@@ -259,7 +269,7 @@ function TaskDetail({ task, onCancel }: { task: Task; onCancel: (id: string) => 
           <div className="space-y-1.5 max-h-[300px] overflow-auto">
             {task.history.map((msg, i) => {
               const isUser = msg.role === 'ROLE_USER';
-              const text = msg.parts.filter(p => p.type === 'text').map(p => p.text).join('\n');
+              const text = msg.parts.filter(p => typeof p.text === 'string').map(p => p.text).join('\n');
               return (
                 <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] rounded-lg px-2.5 py-1.5 text-xs ${
@@ -281,7 +291,7 @@ function TaskDetail({ task, onCancel }: { task: Task; onCancel: (id: string) => 
           {task.status.message && (
             <div className="rounded border border-border bg-muted/30 p-2 text-[10px]">
               <span className="text-muted-foreground">最终状态消息: </span>
-              {task.status.message.parts.filter(p => p.type === 'text').map(p => p.text).join('\n')}
+              {task.status.message.parts.filter(p => typeof p.text === 'string').map(p => p.text).join('\n')}
             </div>
           )}
         </div>
@@ -294,7 +304,7 @@ function TaskDetail({ task, onCancel }: { task: Task; onCancel: (id: string) => 
 
 function RPCPanel({ onResult }: { onResult: (log: RPCLog) => void }) {
   const [method, setMethod] = useState('tasks/send');
-  const [paramsText, setParamsText] = useState('{\n  "message": {\n    "role": "user",\n    "parts": [{"type": "text", "text": "你好"}]\n  }\n}');
+  const [paramsText, setParamsText] = useState('{\n  "message": {\n    "role": "user",\n    "parts": [{"text": "你好"}]\n  }\n}');
   const [sending, setSending] = useState(false);
 
   const methods = [
@@ -367,7 +377,7 @@ function RPCPanel({ onResult }: { onResult: (log: RPCLog) => void }) {
                   } else if (m.value === 'tasks/cancel') {
                     setParamsText('{\n  "id": "task-id-here"\n}');
                   } else {
-                    setParamsText('{\n  "message": {\n    "role": "user",\n    "parts": [{"type": "text", "text": "你好"}]\n  }\n}');
+                    setParamsText('{\n  "message": {\n    "role": "user",\n    "parts": [{"text": "你好"}]\n  }\n}');
                   }
                 }}
                 className={`px-2.5 py-1.5 text-[10px] rounded-lg border transition-colors ${

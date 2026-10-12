@@ -351,12 +351,13 @@ class TestA2ATaskLifecycle:
         # Should have more history messages now
         assert len(result2.get("history", [])) >= 4  # 2 user + 2 agent
         # 两次agent回复都走stub确定性应答（本测试全程零外部LLM）
+        # wire 面 part 为 v1.0 平铺 oneof 形（F4b-⑭）：判别式=成员名，无 type/kind 键
         agent_replies = [
             p["text"]
             for m in result2["history"]
             if m["role"] == "ROLE_AGENT"
             for p in m["parts"]
-            if p.get("type") == "text"
+            if "text" in p
         ]
         assert agent_replies and all(t.startswith("[stub-llm]") for t in agent_replies)
 
