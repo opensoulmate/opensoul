@@ -6,7 +6,7 @@ Implements:
 """
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from src.a2a.models import (
@@ -36,36 +36,59 @@ async def agent_card():
 
 @router.post("/a2a")
 async def a2a_endpoint(request: Request):
-    """A2A JSON-RPC 2.0 endpoint."""
+    """A2A JSON-RPC 2.0 endpoint.
+
+    包络语义（JSON-RPC 2.0 §5，F4b-⑩）：
+    - id 无法检测（Parse error/Invalid Request）→ 响应 id MUST be Null（修前伪造成 0）
+    - id 能检测（String/Number/Null）→ 保真回显
+    - id 缺席=Notification → MUST NOT reply（修前当 Invalid Request 回错误响应）；
+      但照常执行（spec：无兴趣的是 Response 不是执行）
+    """
     try:
         body = await request.json()
     except Exception as e:
-        # §9 JSONParseError(-32700)：收到的不是合法 JSON
+        # §9 JSONParseError(-32700)：收到的不是合法 JSON（id 无从检测→Null）
         return JSONResponse(
             status_code=200,
             content=JSONRPCResponse(
-                id=0, error={"code": ErrorCode.PARSE_ERROR, "message": f"Parse error: {e}"}
-            ).model_dump(exclude_none=True),
+                id=None, error={"code": ErrorCode.PARSE_ERROR, "message": f"Parse error: {e}"}
+            ).envelope(),
         )
+
+    # Notification 判别（§5：Request 对象不带 id 成员=Notification）——
+    # 缺席与显式 null 是两回事，必须在模型解析前按原始 body 键集判别。
+    has_id = isinstance(body, dict) and "id" in body
 
     try:
         rpc_request = JSONRPCRequest(**body)
     except Exception as e:
         # §9 InvalidRequestError(-32600)：JSON 合法但不是合法 Request 对象
-        # （修前与解析失败同走 -32700：两种不同规范错被并成一种）
+        # （修前与解析失败同走 -32700：两种不同规范错被并成一种；
+        #   id 无从检测/Request 非法→Null，修前伪造成 0）
         return JSONResponse(
             status_code=200,
             content=JSONRPCResponse(
-                id=0,
+                id=None,
                 error={"code": ErrorCode.INVALID_REQUEST, "message": f"Invalid Request: {e}"},
-            ).model_dump(exclude_none=True),
+            ).envelope(),
         )
+
+    if not has_id:
+        # §5 Notification（合法 Request 形状但 id 缺席）：MUST NOT reply to a Notification。
+        # 但照常执行——spec 语义是 Client 对 Response 无兴趣，不是对执行无兴趣
+        # （fire-and-forget 语义），成败都不回响应（失败也不回=同一条 MUST NOT）。
+        try:
+            await handle_rpc(rpc_request)
+        except Exception:
+            # Notification 禁回错误（§5 MUST NOT reply），失败静默是规范要求非瞒报
+            pass
+        return Response(status_code=204)
 
     try:
         result = await handle_rpc(rpc_request)
         return JSONResponse(
             status_code=200,
-            content=JSONRPCResponse(id=rpc_request.id, result=result).model_dump(exclude_none=True),
+            content=JSONRPCResponse(id=rpc_request.id, result=result).envelope(),
         )
     except A2AError as e:
         # §5.4 规范码随异常带出（修前所有 handler 错误统一兜底 -32603）
@@ -73,7 +96,7 @@ async def a2a_endpoint(request: Request):
             status_code=200,
             content=JSONRPCResponse(
                 id=rpc_request.id, error=e.to_error().model_dump(exclude_none=True)
-            ).model_dump(exclude_none=True),
+            ).envelope(),
         )
     except ValidationError as e:
         # §9 InvalidParamsError(-32602)：params 结构校验失败（如 message 缺 role/parts）
@@ -82,14 +105,14 @@ async def a2a_endpoint(request: Request):
             content=JSONRPCResponse(
                 id=rpc_request.id,
                 error={"code": ErrorCode.INVALID_PARAMS, "message": f"Invalid parameters: {e}"},
-            ).model_dump(exclude_none=True),
+            ).envelope(),
         )
     except Exception as e:
         return JSONResponse(
             status_code=200,
             content=JSONRPCResponse(
                 id=rpc_request.id, error={"code": ErrorCode.INTERNAL_ERROR, "message": str(e)}
-            ).model_dump(exclude_none=True),
+            ).envelope(),
         )
 
 

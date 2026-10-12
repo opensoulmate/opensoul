@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # === Agent Card ===
 
@@ -109,16 +109,46 @@ class Task(BaseModel):
 
 class JSONRPCRequest(BaseModel):
     jsonrpc: str = "2.0"
-    id: str | int
+    # spec §5：id MUST contain a String, Number, or NULL value。
+    # 缺省 None=成员缺席（Notification 判别在端点按 "id" in body——缺席与显式 null 是两回事）；
+    # 显式 null 合法且响应回显 null。值必须保真回显（MUST be the same value）。
+    id: str | int | float | None = None
     method: str
     params: dict[str, Any] = {}
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _id_string_number_or_null(cls, v):
+        # bool 在 Python 是 int 子类（True 会被 lax 联合静默改写成 1=id 值被篡改），
+        # 但 JSON true/false 不是 Number——before 校验拒之，保 id 保真（spec §5）。
+        if isinstance(v, bool):
+            raise ValueError("id must be a string, number, or null")
+        return v
 
 
 class JSONRPCResponse(BaseModel):
     jsonrpc: str = "2.0"
-    id: str | int
+    # spec §5：id 是 REQUIRED 成员——无法检测时 MUST be Null（键必须在场值为 null，
+    # 禁缺席禁伪造成 0）；能检测时保真回显。
+    id: str | int | float | None = None
     result: Any = None
     error: dict[str, Any] | None = None
+
+    def envelope(self) -> dict[str, Any]:
+        """JSON-RPC 2.0 响应包络单一构造口（F4b-⑩ 成员语义收口）。
+
+        修前 model_dump(exclude_none=True)：id=None 被吞=id 键缺席（规范要求在场为 Null）、
+        成功响应 result=None 也被吞=既无 result 也无 error 的非法包络。本方法按规范收口：
+        - id 恒在场（Null 也序列化为 "id": null）
+        - 成员互斥：error 在场只回 error（result MUST NOT be included）；
+          成功=result 恒在场（REQUIRED on success，值为 None 也是 "result": null）
+        """
+        env: dict[str, Any] = {"jsonrpc": self.jsonrpc, "id": self.id}
+        if self.error is not None:
+            env["error"] = self.error
+        else:
+            env["result"] = self.result
+        return env
 
 
 class JSONRPCError(BaseModel):
