@@ -1,10 +1,11 @@
 import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, Query
 from pydantic import BaseModel
 
 from src.services.search import fulltext_search, hybrid_search, semantic_search
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -66,9 +67,16 @@ async def search_get(
     user_id: str = Query("default", description="User ID (UUID or username)"),
     mode: str = Query("hybrid", description="Search mode: semantic, fulltext, hybrid"),
     limit: int = Query(10, ge=1, le=50),
+    authorization: str | None = Header(None),
 ):
-    """Full-text + vector hybrid search via GET."""
-    uid = _resolve_user_id(user_id)
+    """Full-text + vector hybrid search via GET.
+
+    身份轴收口：user_id 从认证派生（bind_identity），自报值只可确认派生绑定
+    ——认证请求自报他人档案=403（冒读面收口）；匿名保留自报（既有本地多
+    档案语义，F3b-② 契约）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
     if mode == "semantic":
         results = await semantic_search(q, uid, limit)
     elif mode == "fulltext":
@@ -79,9 +87,14 @@ async def search_get(
 
 
 @router.post("/")
-async def search_post(req: SearchRequest, user_id: str = "default"):
-    """Search via POST body."""
-    uid = _resolve_user_id(user_id)
+async def search_post(
+    req: SearchRequest,
+    user_id: str = "default",
+    authorization: str | None = Header(None),
+):
+    """Search via POST body. 身份轴同 GET（bind_identity 派生，禁自报冒读）。"""
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
     if req.mode == "semantic":
         results = await semantic_search(req.query, uid, req.limit)
     elif req.mode == "fulltext":
@@ -94,10 +107,10 @@ async def search_post(req: SearchRequest, user_id: str = "default"):
 # ── Unified Search — searches across multiple subsystems ──────
 
 
-async def _search_knowledge(query: str, limit: int) -> list[dict]:
-    """Search knowledge base."""
+async def _search_knowledge(query: str, limit: int, uid: UUID) -> list[dict]:
+    """Search knowledge base（uid=身份派生的档案键，修前硬编码 'default'）。"""
     try:
-        results = await hybrid_search(query, _resolve_user_id("default"), limit)
+        results = await hybrid_search(query, uid, limit)
         return [{**r, "source": "knowledge", "icon": "📚"} for r in results]
     except Exception:
         return []
@@ -189,15 +202,15 @@ async def _search_agents(query: str, limit: int) -> list[dict]:
         return []
 
 
-async def _search_courses(query: str, limit: int) -> list[dict]:
-    """Search learning courses."""
+async def _search_courses(query: str, limit: int, tenant_id: str) -> list[dict]:
+    """Search learning courses（tenant_id=身份派生租户；修前缺省系统视图=跨租户泄露）。"""
     try:
         from src.learn.course_engine import CourseEngine
 
         engine = CourseEngine()
         query_lower = query.lower()
         matches = []
-        for course in engine.list_courses():
+        for course in engine.list_courses(tenant_id=tenant_id):
             title = course.title.lower()
             desc = course.description.lower()
             tags = " ".join(course.tags).lower()
@@ -373,17 +386,27 @@ async def unified_search(
         description="Comma-separated sources: knowledge,files,events,agents,courses,trajectory,cron,gene,echo,all",
     ),
     limit: int = Query(10, ge=1, le=50),
+    user_id: str = Query("default", description="User ID (UUID or username)"),
+    authorization: str | None = Header(None),
 ):
     """Unified search across all subsystems: knowledge, files, events, agents, courses, trajectory, cron, gene, echo.
 
     Returns results grouped by source with relevance ranking.
+
+    身份轴收口：user/tenant 从认证派生（bind_identity），自报值只可确认派生绑定
+    ——认证请求自报他人档案=403；匿名保留自报（既有本地多档案语义）。知识子搜索
+    用派生档案键（修前硬编码 'default'）、课程子搜索用派生租户过滤（修前系统视图
+    =跨租户泄露）。其余子搜索（files/events/agents/trajectory/cron/gene/echo）的
+    存储层无 user/tenant 轴，保持系统视图（诚实边界）。
     """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
     source_list = [s.strip() for s in sources.split(",")]
     search_all = "all" in source_list
 
     tasks = {}
     if search_all or "knowledge" in source_list:
-        tasks["knowledge"] = _search_knowledge(q, limit)
+        tasks["knowledge"] = _search_knowledge(q, limit, uid)
     if search_all or "files" in source_list:
         tasks["files"] = _search_files(q, limit)
     if search_all or "events" in source_list:
@@ -391,7 +414,7 @@ async def unified_search(
     if search_all or "agents" in source_list:
         tasks["agents"] = _search_agents(q, limit)
     if search_all or "courses" in source_list:
-        tasks["courses"] = _search_courses(q, limit)
+        tasks["courses"] = _search_courses(q, limit, identity.tenant_id)
     if search_all or "trajectory" in source_list:
         tasks["trajectory"] = _search_trajectory(q, limit)
     if search_all or "cron" in source_list:
