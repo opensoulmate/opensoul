@@ -123,10 +123,15 @@ class TestWellKnownPaths:
         assert new == old
 
     def test_capabilities_face_zero_regression(self, app_client):
-        """F4b-⑤⑥ 能力声明面零回归：键集恰 {streaming,pushNotifications}、streaming 派生 False。"""
+        """F4b-⑤⑥ 能力声明面零回归：键集=实现面、streaming/extendedAgentCard 派生 False。
+
+        键集随 F4b-⑫ 契约更新（AgentCapabilities 补 §4.4.3 extendedAgentCard 字段，
+        默认 False=不虚报）。
+        """
         caps = app_client.get("/.well-known/agent-card.json").json()["capabilities"]
-        assert set(caps.keys()) == {"streaming", "pushNotifications"}
+        assert set(caps.keys()) == {"streaming", "pushNotifications", "extendedAgentCard"}
         assert caps["streaming"] is False
+        assert caps["extendedAgentCard"] is False
 
     def test_set_agent_card_custom_flows_through_fold(self, app_client):
         """自定义卡真流经发布口（含 fold）——发布形状不只对 DEFAULT 成立。"""

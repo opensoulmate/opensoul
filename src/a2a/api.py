@@ -33,12 +33,15 @@ async def agent_card():
     两个路径走同一发布口同一形状（published() 单真源），禁两套卡。
 
     capabilities.streaming 由 streaming_supported() 按真实 RPC 方法面派生（单一源）：
-    本端点是 agent card 唯一发布口，声明恒等于实现，禁漂移。发布形状=AgentCard
+    capabilities.extendedAgentCard 由 extended_agent_card_supported() 按扩展卡真配置
+    派生（§4.4.3 "supports providing"，真能给才宣称）——本端点是 agent card 唯一
+    发布口，声明恒等于实现，禁漂移。发布形状=AgentCard
     .published()（v1.0 卡面：supportedInterfaces 一等、0.x 顶层 url/protocolVersion
     只进不出，F4b-⑪）。
     """
     card = task_manager.get_agent_card().model_copy(deep=True)
     card.capabilities.streaming = streaming_supported()
+    card.capabilities.extendedAgentCard = extended_agent_card_supported()
     return card.published()
 
 
@@ -248,6 +251,70 @@ async def handle_task_cancel(params: dict) -> dict:
     return task.model_dump(exclude_none=True)
 
 
+async def handle_list_tasks(params: dict) -> dict:
+    """v1.0 ListTasks（spec §3.1.4 / §9.4.4）—— 任务列表：过滤 + 游标分页 + 倒序。
+
+    响应形状逐键照抄 ListTasksResponse：tasks / nextPageToken（恒在场，末页空串
+    ""，spec MUST always be present）/ pageSize（本响应用的页大小=生效上限，非
+    实际条数）/ totalSize（分页前总数）。查询语义在 task_manager.list_tasks
+    （过滤/排序/keyset 游标），本层只做 wire 形状收口：
+    - historyLength：逐任务收口（与 GetTask 同一 _apply_history_limit 语义）
+    - includeArtifacts 缺省 False 时 artifacts 必须整键省略（spec 明文：不得以
+      空数组或 null 出现）；True 时带真实内容
+    - params.tenant 收下不解释（§3.1.4 opaque routing identifier，本部署单端点
+      无路由选择，AgentInterface.tenant 未设=无匹配约束）
+    """
+    include_artifacts = params.get("includeArtifacts")
+    if include_artifacts is None:
+        include_artifacts = False
+    if not isinstance(include_artifacts, bool):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid includeArtifacts: {include_artifacts!r}")
+    history_length = params.get("historyLength")
+    page_size = params.get("pageSize")
+    if page_size is None:
+        page_size = 50  # spec 缺省；合法性（1..100）由 list_tasks 如实校验
+
+    tasks, next_token, total = task_manager.list_tasks(
+        context_id=params.get("contextId"),
+        status=params.get("status"),
+        status_after=params.get("statusTimestampAfter"),
+        page_size=page_size,
+        page_token=params.get("pageToken"),
+    )
+
+    dumps = []
+    for task in tasks:
+        d = _apply_history_limit(task.model_dump(exclude_none=True), history_length)
+        if not include_artifacts:
+            d.pop("artifacts", None)
+        dumps.append(d)
+    return {
+        "tasks": dumps,
+        "nextPageToken": next_token,
+        "pageSize": page_size,
+        "totalSize": total,
+    }
+
+
+async def handle_get_extended_agent_card(params: dict) -> dict:
+    """v1.0 GetExtendedAgentCard（spec §3.1.11 / §9.4.8）—— 扩展 Agent Card。
+
+    §3.3.4 能力校验（逐条 MUST）：能力位 false/缺席 → UnsupportedOperationError
+    (-32004)；宣称支持但未配置 → ExtendedAgentCardNotConfiguredError(-32007)；
+    否则返回完整 AgentCard（published() 卡面唯一发布形状，与 well-known 同形，
+    禁两套卡）。params.tenant 收下不解释（同 ListTasks）。
+    """
+    if not extended_agent_card_supported():
+        raise A2AError(ErrorCode.UNSUPPORTED_OPERATION, "Extended agent card is not supported")
+    card = task_manager.get_extended_agent_card()
+    if card is None:
+        # §3.3.4：宣称支持但未配置（配置在发布卡之后被清除的竞态）
+        raise A2AError(
+            ErrorCode.EXTENDED_AGENT_CARD_NOT_CONFIGURED, "Extended agent card is not configured"
+        )
+    return card.published()
+
+
 # === RPC 方法面（单一源）===
 # 已实现的 JSON-RPC 方法注册表。capabilities.streaming 派生自此表（见
 # streaming_supported）——加/删方法此处即唯一改动点，agent card 声明自动跟随，
@@ -264,6 +331,8 @@ RPC_HANDLERS = {
     "SendMessage": handle_send_message,
     "GetTask": handle_task_get,
     "CancelTask": handle_task_cancel,
+    "ListTasks": handle_list_tasks,
+    "GetExtendedAgentCard": handle_get_extended_agent_card,
     # 0.2/0.3 旧线名（重叠期别名，deprecated）
     "tasks/send": handle_task_send,
     "tasks/get": handle_task_get,
@@ -288,3 +357,26 @@ def streaming_supported() -> bool:
     streaming 位的唯一来源，实现里没有 message/stream 就不会对外宣称流式。
     """
     return any(m in RPC_HANDLERS for m in STREAMING_RPC_METHODS)
+
+
+def extended_agent_card_supported() -> bool:
+    """capabilities.extendedAgentCard 的单一真值：仅当扩展卡真配置才 True。
+
+    §4.4.3 语义="supports providing an extended agent card when authenticated"
+    ——真能给才宣称（默认未配置=不虚报，配置后自动 True）。与 streaming 的派生
+    刻意不同源：streaming 的"实现"=流式方法真注册（注册即可流），扩展卡的
+    "实现"=扩展卡真存在（注册了方法但无卡可给≠能提供扩展卡）；两者同一条原则
+    ——声明从实现派生，禁硬编码 bool。
+    """
+    return task_manager.has_extended_agent_card()
+
+
+# === 未实现方法面（如实 Method not found，禁冒充）===
+# v1.0 §5.3 方法映射表另有 SendStreamingMessage/SubscribeToTask 与推送配置四方法
+# （CreateTaskPushNotificationConfig/GetTaskPushNotificationConfig/
+#  ListTaskPushNotificationConfigs/DeleteTaskPushNotificationConfig）未实现：
+# 本实现任务在 SendMessage 调用内同步完成（无后台任务生命周期），订阅/推送没有
+# 真实更新事件可投递，先实现等于造"wired but not functional"空壳；且 §3.3.4 要求
+# 能力未声明时这些操作回 -32004/-32003 而非 -32601——那须先把 streaming_supported()
+# 的派生从"方法注册"改成"真流式实现"，属 SubscribeToTask/推送配置实现拍的伴随件。
+# 未实现=如实 -32601（Method not found，§9 "does not exist or is not available"）。

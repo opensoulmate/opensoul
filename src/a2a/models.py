@@ -44,6 +44,11 @@ class AgentCapabilities(BaseModel):
     # 加了 message/stream 进 RPC_HANDLERS 才会 True —— 声明与实现禁漂移（F4b-⑤）。
     streaming: bool = False
     pushNotifications: bool = False
+    # extendedAgentCard（§4.4.3）：是否支持在认证后提供扩展 Agent Card。默认 False=
+    # 不虚报：实际发布值由 api.extended_agent_card_supported() 按"扩展卡真配置"派生
+    # （§4.4.3 语义=supports providing，真能给才宣称——F4b-⑤ streaming 同哲学），
+    # 未配置即 False，配置后自动 True，声明与实现禁漂移。
+    extendedAgentCard: bool = False
     # stateTransitionHistory（0.x 字段）已移除（F4b-⑥）：A2A v1.0 §4.4.3 的
     # AgentCapabilities 只有 streaming/pushNotifications/extensions/extendedAgentCard，
     # stateTransitionHistory 是 0.x 废弃字段——协议自身无任何 API 可取回状态迁移

@@ -98,8 +98,13 @@ class TestMethodNotFound:
         assert _code(data) == ErrorCode.METHOD_NOT_FOUND
 
     def test_unimplemented_v10_method_is_method_not_found(self, app_client):
-        """未实现的方法归 -32601（§9 文案 'does not exist or is not available'）。"""
-        data = _rpc(app_client, "GetExtendedAgentCard", {})
+        """未实现的方法归 -32601（§9 文案 'does not exist or is not available'）。
+
+        用例方法随 F4b-⑫ 契约更新：原用 GetExtendedAgentCard，该方法现已实现且按
+        §3.3.4 在能力位 false 时回 -32004（见 test_a2a_readonly_methods）；改用
+        仍未实现的 SubscribeToTask 保持同一断言语义。
+        """
+        data = _rpc(app_client, "SubscribeToTask", {"id": "some-task"})
         assert _code(data) == ErrorCode.METHOD_NOT_FOUND
 
 

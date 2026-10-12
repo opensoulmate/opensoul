@@ -65,18 +65,22 @@ class TestStateTransitionHistoryDeclarationRemoved:
         """发布卡面 capabilities 逐键 = v1.0 实现面，无 stateTransitionHistory（修前 True=谎报）。"""
         caps = app_client.get("/.well-known/agent.json").json()["capabilities"]
         assert "stateTransitionHistory" not in caps
-        assert set(caps.keys()) == {"streaming", "pushNotifications"}
+        assert set(caps.keys()) == {"streaming", "pushNotifications", "extendedAgentCard"}
 
     def test_model_drops_deprecated_field(self):
         """AgentCapabilities 模型本身不再携带 0.x 废弃字段（禁复活）。"""
         assert "stateTransitionHistory" not in AgentCapabilities.model_fields
-        assert set(AgentCapabilities.model_fields.keys()) == {"streaming", "pushNotifications"}
+        assert set(AgentCapabilities.model_fields.keys()) == {
+            "streaming",
+            "pushNotifications",
+            "extendedAgentCard",
+        }
 
     def test_default_agent_card_roundtrip_honest(self):
         """DEFAULT_AGENT_CARD 序列化同样零废弃字段（发布口/默认卡同真源）。"""
         caps = DEFAULT_AGENT_CARD.model_dump()["capabilities"]
         assert "stateTransitionHistory" not in caps
-        assert set(caps.keys()) == {"streaming", "pushNotifications"}
+        assert set(caps.keys()) == {"streaming", "pushNotifications", "extendedAgentCard"}
 
     def test_deprecated_kwarg_not_accepted_as_claim(self):
         """调用方带 stateTransitionHistory=True 也不能变出声明（字段被忽略，不进序列化）。"""
