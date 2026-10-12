@@ -417,15 +417,16 @@ class TestApiContract:
 
 class TestWsFace:
     def test_ws_row_attribution_and_cross_tenant_delivery(self, collab_env, client):
-        client.post(
+        r = client.post(
             "/api/collab/register", json={"agent_id": "ws-a", "name": "WA"}, headers=_auth(1)
         )
+        tok_a = r.json()["token"]  # F3b-④：注册身份开会话须持 register 签发 token
         client.post(
             "/api/collab/register", json={"agent_id": "ws-b", "name": "WB"}, headers=_auth(2)
         )
         db = collab_env.DB_PATH
 
-        with client.websocket_connect("/api/collab/ws/agent/ws-a") as ws:
+        with client.websocket_connect(f"/api/collab/ws/agent/ws-a?token={tok_a}") as ws:
             # 同租户/未注册目标：正常落库（发方 agent 行租户=tenant-a）
             ws.send_json(
                 {"event": "message", "to_agent": "ghost-t", "type": "query", "payload": {}}

@@ -1,5 +1,6 @@
 """Agent Collaboration Protocol — registration, messaging, handoff, WebSocket channel."""
 
+import hmac
 import json
 import logging
 import os
@@ -473,9 +474,53 @@ async def get_agent_status(authorization: str | None = Header(None)):
 # ── 5. WebSocket /ws/agent/{agent_id} ─────────────────────────────────
 
 
+def _ws_presented_token(websocket: WebSocket) -> str:
+    """WS 身份凭证取参双源（F3b-④）：`?token=` query（浏览器 WS 无法自设头，主口）优先，
+    Authorization: Bearer 头（非浏览器客户端）兜底。"""
+    token = (websocket.query_params.get("token") or "").strip()
+    if token:
+        return token
+    auth = websocket.headers.get("authorization") or ""
+    if auth[:7].lower() == "bearer ":
+        return auth[7:].strip()
+    return ""
+
+
+def _ws_token_verdict(conn: sqlite3.Connection, agent_id: str, provided: str) -> bool | None:
+    """WS 身份证明判定（F3b-④ agent_id 顶号面收口，单一判定口）。
+
+    - agent 行存在 → 该身份已注册，claim 它必须持 register 签发的 agents.token
+      （修前 token 签发后全仓零消费=死凭证）：缺失/不匹配 = False，握手拒绝——
+      修前任意人可顶号（改该行 status/last_seen、以其名义落消息、劫持
+      _ws_connections 投递）。
+    - agent 行不存在 → None（未注册 agent_id 保留既有语义：无注册身份可顶，行归属
+      'default' 兜底与 HTTP /message 未注册语义同轴）。
+    """
+    row = conn.execute("SELECT token FROM agents WHERE agent_id = ?", (agent_id,)).fetchone()
+    if row is None:
+        return None
+    expected = str(row["token"] or "")
+    return bool(provided) and hmac.compare_digest(provided, expected)
+
+
 @router.websocket("/ws/agent/{agent_id}")
 async def agent_ws(websocket: WebSocket, agent_id: str):
-    """Real-time bidirectional channel for an agent."""
+    """Real-time bidirectional channel for an agent.
+
+    F3b-④：agent 身份轴收口——claim 注册身份必须持 register 签发 token
+    （_ws_presented_token 双源取参 → _ws_token_verdict 单一判定），未注册
+    agent_id 保留既有语义。
+    """
+    conn = _get_db()
+    try:
+        verdict = _ws_token_verdict(conn, agent_id, _ws_presented_token(websocket))
+    finally:
+        conn.close()
+    if verdict is False:
+        logger.warning("Agent WS rejected: invalid/missing token for registered agent %s", agent_id)
+        # 握手拒绝（accept 前 close）：顶号者拿不到通道，不改行、不进 _ws_connections
+        await websocket.close(code=1008, reason="invalid agent token")
+        return
     await websocket.accept()
     _ws_connections[agent_id] = websocket
     logger.info("Agent WS connected: %s", agent_id)
