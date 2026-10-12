@@ -294,16 +294,17 @@ class TestMessageIsolation:
         assert rows and rows[0]["tenant_id"] == "tenant-b"  # 未注册 agent_id 语义不变
 
     def test_message_cross_tenant_parties_denied(self, collab_env, client):
-        client.post(
+        r_reg = client.post(
             "/api/collab/register", json={"agent_id": "agent-a1", "name": "A1"}, headers=_auth(1)
         )
+        tok_a1 = r_reg.json()["token"]  # F3b-⑤：claim 注册身份发消息须持 register 签发 token
         db = collab_env.DB_PATH
         before = len(_rows(db, "SELECT id FROM agent_messages"))
         # 冒名发方（from=他租户 agent）与跨租户收方（to=他租户 agent）都 403
         r1 = client.post(
             "/api/collab/message",
             json={"from_agent": "agent-a1", "to_agent": "ghost", "type": "task"},
-            headers=_auth(2),
+            headers={**_auth(2), "X-Agent-Token": tok_a1},
         )
         r2 = client.post(
             "/api/collab/message",
@@ -316,7 +317,7 @@ class TestMessageIsolation:
         r3 = client.post(
             "/api/collab/message",
             json={"from_agent": "agent-a1", "to_agent": "ghost", "type": "task"},
-            headers=_auth(1),
+            headers={**_auth(1), "X-Agent-Token": tok_a1},
         )
         assert r3.status_code == 200
 

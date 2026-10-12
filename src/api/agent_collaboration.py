@@ -304,12 +304,22 @@ async def register_agent(req: AgentRegisterRequest, authorization: str | None = 
 
 
 @router.post("/message", response_model=MessageResponse)
-async def send_message(req: MessageRequest, authorization: str | None = Header(None)):
+async def send_message(
+    req: MessageRequest,
+    authorization: str | None = Header(None),
+    x_agent_token: str | None = Header(None),
+):
     """Send a message between agents; persisted to SQLite and forwarded via WebSocket if online.
 
     F3b-③c-2②d：消息行归属租户=身份派生（bind_identity 禁自报）；收发双方已注册
     agent 行须同租户（跨租户冒名/跨租户投递=403 带真因，禁静默写入/投递），未注册
-    agent_id 保留既有语义（行归调用方租户）。"""
+    agent_id 保留既有语义（行归调用方租户）。
+    F3b-⑤：from_agent 身份轴收口——from_agent 是身份 claim，claim 注册身份必须持
+    register 签发 token（X-Agent-Token 头单一取参源——HTTP 客户端都能设头无需 query
+    双源，且 query 会把 token 带进访问日志；与 Authorization 的 JWT 租户轴刻意分开
+    两条身份轴互不顶替）。缺/错 token=403 零副作用（不落库不投递），修前 from_agent
+    自报任意冒名落库+以其名义投递。未注册 from_agent 保留既有语义（无注册身份可顶）。
+    """
     if req.type not in ("task", "result", "query"):
         raise HTTPException(status_code=400, detail="type must be task | result | query")
 
@@ -321,6 +331,17 @@ async def send_message(req: MessageRequest, authorization: str | None = Header(N
 
     conn = _get_db()
     try:
+        # F3b-⑤：身份证明先于一切授权检查（先证身份再谈租户）
+        verdict = _agent_token_verdict(conn, req.from_agent, (x_agent_token or "").strip())
+        if verdict is False:
+            logger.warning(
+                "Agent message rejected: invalid/missing token for registered agent %s",
+                req.from_agent,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"invalid agent token for registered agent {req.from_agent}",
+            )
         for party in (req.from_agent, req.to_agent):
             party_tenant = _agent_row_tenant(conn, party)
             if party_tenant is None:
@@ -486,13 +507,13 @@ def _ws_presented_token(websocket: WebSocket) -> str:
     return ""
 
 
-def _ws_token_verdict(conn: sqlite3.Connection, agent_id: str, provided: str) -> bool | None:
-    """WS 身份证明判定（F3b-④ agent_id 顶号面收口，单一判定口）。
+def _agent_token_verdict(conn: sqlite3.Connection, agent_id: str, provided: str) -> bool | None:
+    """agent 身份证明判定（单一判定口，F3b-④ WS 面 + F3b-⑤ HTTP /message 面共用）。
 
     - agent 行存在 → 该身份已注册，claim 它必须持 register 签发的 agents.token
-      （修前 token 签发后全仓零消费=死凭证）：缺失/不匹配 = False，握手拒绝——
-      修前任意人可顶号（改该行 status/last_seen、以其名义落消息、劫持
-      _ws_connections 投递）。
+      （修前 token 签发后全仓零消费=死凭证）：缺失/不匹配 = False——修前任意人可
+      顶号（WS：改该行 status/last_seen、以其名义落消息、劫持 _ws_connections 投递；
+      HTTP /message：from_agent 自报冒名落库+以其名义投递）。
     - agent 行不存在 → None（未注册 agent_id 保留既有语义：无注册身份可顶，行归属
       'default' 兜底与 HTTP /message 未注册语义同轴）。
     """
@@ -508,12 +529,12 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
     """Real-time bidirectional channel for an agent.
 
     F3b-④：agent 身份轴收口——claim 注册身份必须持 register 签发 token
-    （_ws_presented_token 双源取参 → _ws_token_verdict 单一判定），未注册
+    （_ws_presented_token 双源取参 → _agent_token_verdict 单一判定），未注册
     agent_id 保留既有语义。
     """
     conn = _get_db()
     try:
-        verdict = _ws_token_verdict(conn, agent_id, _ws_presented_token(websocket))
+        verdict = _agent_token_verdict(conn, agent_id, _ws_presented_token(websocket))
     finally:
         conn.close()
     if verdict is False:
