@@ -167,6 +167,17 @@ async def handle_rpc(request: JSONRPCRequest):
         # （§9 标准文案："does not exist or is not available"）
         raise A2AError(ErrorCode.METHOD_NOT_FOUND, f"Method not found: {method}")
 
+    # §5 params 结构化校验的第二段（Request 校验面）：Array（by-position）是合法
+    # Request 形状——不是 -32600 Invalid Request（修前被误判，Request 对象本身合法）；
+    # 但 A2A v1.0（spec/a2a.proto）每个 RPC 方法的 params 都是单个请求消息对象=
+    # by-name，by-position 形不被任何方法接受→归 -32602 Invalid params（§9 "Invalid
+    # method parameter(s)"），与 -32600（Request 对象非法）分开禁混码。
+    if isinstance(params, list):
+        raise A2AError(
+            ErrorCode.INVALID_PARAMS,
+            "Invalid params: A2A methods take by-name (object) parameters",
+        )
+
     return await handler(params)
 
 

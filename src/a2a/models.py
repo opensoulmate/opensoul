@@ -393,13 +393,37 @@ class Task(BaseModel):
 
 
 class JSONRPCRequest(BaseModel):
-    jsonrpc: str = "2.0"
+    # spec §5：jsonrpc 是 MUST 成员且 "MUST be exactly \"2.0\""（Request 校验面——
+    # F4b-⑩ 留档「jsonrpc 成员值不校验，"1.0" 仍被当合法」）。修前缺省 "2.0" =
+    # 缺失成员被静默补成合法请求（fabricate）；现缺失/非字符串/异值一律
+    # Invalid Request(-32600)。声明从实现派生：值校验在 _jsonrpc_exactly_2_0。
+    jsonrpc: str
     # spec §5：id MUST contain a String, Number, or NULL value。
     # 缺省 None=成员缺席（Notification 判别在端点按 "id" in body——缺席与显式 null 是两回事）；
     # 显式 null 合法且响应回显 null。值必须保真回显（MUST be the same value）。
     id: str | int | float | None = None
     method: str
-    params: dict[str, Any] = {}
+    # spec §5：params 若在场必须是结构化值——by-name（JSON Object）或 by-position
+    # （JSON Array）；标量/null 在场=Request 非法（"MAY be omitted" ≠ "MAY be null"）。
+    # 两种结构化形都是合法 Request（修前数组被误判 -32600 Invalid Request），
+    # by-position 归方法层 -32602（见 api.handle_rpc：A2A 方法参数恒 by-name 单对象）。
+    params: dict[str, Any] | list[Any] = {}
+
+    @field_validator("jsonrpc", mode="before")
+    @classmethod
+    def _jsonrpc_exactly_2_0(cls, v):
+        # §5 "MUST be exactly \"2.0\""：非字符串（数字 2.0 等）与异值（"1.0"）同拒。
+        if not isinstance(v, str) or v != "2.0":
+            raise ValueError('jsonrpc must be exactly "2.0"')
+        return v
+
+    @field_validator("method", mode="before")
+    @classmethod
+    def _method_must_be_string(cls, v):
+        # §5 method MUST be a String——数字/bool 拒（显式收口自证，禁依赖框架不强转的行为）。
+        if not isinstance(v, str):
+            raise ValueError("method must be a string")
+        return v
 
     @field_validator("id", mode="before")
     @classmethod
