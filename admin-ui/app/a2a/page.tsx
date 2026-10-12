@@ -26,12 +26,20 @@ interface AgentCapabilities {
   pushNotifications: boolean;
 }
 
+interface AgentInterface {
+  url: string;
+  protocolBinding: string;
+  protocolVersion: string;
+  tenant?: string;
+}
+
 interface AgentCard {
   name: string;
   description: string;
-  url: string;
   version: string;
-  protocolVersion: string;
+  // v1.0 卡面（F4b-⑪）：0.x 顶层 url/protocolVersion 只进不出，
+  // 端点/协议版本改从 supportedInterfaces[] 取（首个=首选接口）。
+  supportedInterfaces: AgentInterface[];
   capabilities: AgentCapabilities;
   skills: AgentSkill[];
   defaultInputModes: string[];
@@ -119,7 +127,7 @@ function AgentCardView({ card }: { card: AgentCard }) {
         <Globe className="w-4 h-4 text-primary" />
         <span className="text-sm font-medium flex-1">Agent Card</span>
         <Badge variant="default">
-          v{card.protocolVersion}
+          v{card.supportedInterfaces?.[0]?.protocolVersion ?? '-'}
         </Badge>
         {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
       </Button>
@@ -132,7 +140,7 @@ function AgentCardView({ card }: { card: AgentCard }) {
             </div>
             <div>
               <div className="text-[10px] text-muted-foreground mb-1">端点</div>
-              <div className="text-xs font-mono text-muted-foreground">{card.url}</div>
+              <div className="text-xs font-mono text-muted-foreground">{card.supportedInterfaces?.[0]?.url ?? '-'}</div>
             </div>
             <div className="sm:col-span-2">
               <div className="text-[10px] text-muted-foreground mb-1">描述</div>
@@ -468,7 +476,7 @@ export default function A2APage() {
 
   const fetchCard = useCallback(async () => {
     try {
-      const res = await fetch('/.well-known/agent.json');
+      const res = await fetch('/.well-known/agent-card.json');
       if (res.ok) {
         const data = await res.json();
         setCard(data);
@@ -560,7 +568,7 @@ export default function A2APage() {
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1">
             <Globe className="w-3.5 h-3.5" />协议版本
           </div>
-          <div className="text-sm font-medium">A2A v{card?.protocolVersion || '-'}</div>
+          <div className="text-sm font-medium">A2A v{card?.supportedInterfaces?.[0]?.protocolVersion || '-'}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1">

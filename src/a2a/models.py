@@ -23,6 +23,21 @@ class AgentSkill(BaseModel):
     examples: list[str] = []
 
 
+class AgentInterface(BaseModel):
+    """v1.0 §4.4.6 AgentInterface —— 协议绑定一等声明（supportedInterfaces 元素）。
+
+    v1.0 卡面形状（a2aproject/A2A docs/whats-new-v1.md BREAKING）：supportedInterfaces[]
+    取代 0.x 顶层 url/preferredTransport/additionalInterfaces，protocolVersion 移入
+    每个接口（Major.Minor 形如 "1.0"，spec §3.6 卡面版本号不带 patch）。每个元素必须
+    如实声明该 url 上真实提供的绑定（spec：MUST accurately declare）。
+    """
+
+    url: str
+    protocolBinding: str = "JSONRPC"
+    protocolVersion: str = "1.0"
+    tenant: str | None = None
+
+
 class AgentCapabilities(BaseModel):
     # capabilities.streaming = 支持 message/stream 等流式 RPC。默认 False=不虚报：
     # 实际发布值由 api.streaming_supported() 按真实 RPC 方法面派生（见 api.py），
@@ -40,13 +55,37 @@ class AgentCapabilities(BaseModel):
 class AgentCard(BaseModel):
     name: str
     description: str
-    url: str
+    # 0.x 顶层 url/protocolVersion：只进不出（accepted on input, never emitted）。
+    # v1.0 卡面 schema 无此二键（whats-new-v1.md：url→supportedInterfaces[0].url、
+    # protocolVersion→AgentInterface.protocolVersion）；继续吐出=卡片不过 v1.0 schema
+    # （官方 TCK CARD-EXT-001 同型违规）。发布形状唯一出口=published()。
+    url: str = ""
     version: str = "1.0.0"
     protocolVersion: str = "1.0.0"
     capabilities: AgentCapabilities = AgentCapabilities()
+    supportedInterfaces: list[AgentInterface] = []
     skills: list[AgentSkill] = []
     defaultInputModes: list[str] = ["text"]
     defaultOutputModes: list[str] = ["text"]
+
+    def published(self) -> dict[str, Any]:
+        """v1.0 卡面唯一发布形状（声明从实现派生，F4b-⑤/envelope 同哲学）。
+
+        - url/protocolVersion（0.x 顶层字段）只进不出，见字段注释
+        - supportedInterfaces 未显式声明的旧形自定义卡（set_agent_card 只带 url 进来）
+          fold 成单接口行：url→supportedInterfaces[0].url。本实现 JSON-RPC 端点恒在
+          <base>/a2a（src/a2a/api.py POST /a2a），故 fold 目标补 /a2a 后缀——接口
+          url 必须是绑定真实所在（spec：MUST accurately declare）。url 已带 /a2a
+          后缀不重复补；url 为空不 fabricate 接口行（空声明如实留空，禁编造 URL）。
+        """
+        d = self.model_dump(exclude_none=True)
+        d.pop("url", None)
+        d.pop("protocolVersion", None)
+        if not d.get("supportedInterfaces") and self.url:
+            base = self.url.rstrip("/")
+            endpoint = base if base.endswith("/a2a") else f"{base}/a2a"
+            d["supportedInterfaces"] = [AgentInterface(url=endpoint).model_dump(exclude_none=True)]
+        return d
 
 
 # === Task Models ===

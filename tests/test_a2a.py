@@ -23,7 +23,12 @@ class TestAgentCardDiscovery:
         resp = client.get("/.well-known/agent.json")
         data = resp.json()
         assert "name" in data
-        assert "url" in data
+        # v1.0 卡面形状（F4b-⑪）：url/protocolVersion 移入 supportedInterfaces[]，
+        # 顶层 0.x 字段只进不出（whats-new-v1.md BREAKING）
+        assert "url" not in data
+        assert "protocolVersion" not in data
+        assert "supportedInterfaces" in data
+        assert data["supportedInterfaces"][0]["protocolBinding"] == "JSONRPC"
         assert "skills" in data
         assert "version" in data
 

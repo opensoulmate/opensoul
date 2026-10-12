@@ -1,7 +1,8 @@
 """A2A Protocol API endpoints for OpenSoul.
 
 Implements:
-- GET /.well-known/agent.json - Agent Card discovery
+- GET /.well-known/agent-card.json - Agent Card discovery（v1.0 注册路径）
+- GET /.well-known/agent.json - 旧路径别名（重叠期，同一发布口同一形状）
 - POST /a2a - JSON-RPC 2.0 endpoint
 """
 
@@ -22,16 +23,23 @@ from src.a2a.task_manager import task_manager
 router = APIRouter()
 
 
+@router.get("/.well-known/agent-card.json")
 @router.get("/.well-known/agent.json")
 async def agent_card():
     """A2A Agent Card discovery endpoint.
 
+    发布路径双收（重叠期）：v1.0 注册路径 /.well-known/agent-card.json 为主口
+    （0.3 起推荐、v1.0 标准位），旧路径 /.well-known/agent.json 保留为别名——
+    两个路径走同一发布口同一形状（published() 单真源），禁两套卡。
+
     capabilities.streaming 由 streaming_supported() 按真实 RPC 方法面派生（单一源）：
-    本端点是 agent card 唯一发布口，声明恒等于实现，禁漂移。
+    本端点是 agent card 唯一发布口，声明恒等于实现，禁漂移。发布形状=AgentCard
+    .published()（v1.0 卡面：supportedInterfaces 一等、0.x 顶层 url/protocolVersion
+    只进不出，F4b-⑪）。
     """
     card = task_manager.get_agent_card().model_copy(deep=True)
     card.capabilities.streaming = streaming_supported()
-    return card.model_dump()
+    return card.published()
 
 
 @router.post("/a2a")
