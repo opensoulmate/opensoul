@@ -19,6 +19,14 @@ def _isolate_nest_db(tmp_path, monkeypatch):
     monkeypatch.setenv("NEST_DB", str(tmp_path / "nest.db"))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_learn_db(tmp_path, monkeypatch):
+    """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
+    单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试
+    绝不写生产 learn.db。显式指定 LEARN_DB/显式 db_path 的测试按其覆盖为准。"""
+    monkeypatch.setenv("LEARN_DB", str(tmp_path / "learn.db"))
+
+
 @pytest.fixture(scope="session")
 def base_url():
     return BASE_URL

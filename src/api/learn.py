@@ -1,16 +1,27 @@
-"""OpenLearn API — 学习系统：课程管理、章节学习、测验、进度追踪。"""
+"""OpenLearn API — 学习系统：课程管理、章节学习、测验、进度追踪。
+
+F3b-③c-2②b：课程/章节数据面按认证派生租户隔离（bind_identity，匿名='default'）——
+13 个业务端点派生租户流入引擎闸门（跨租户→403 带真因，禁静默 not_found/假成功）；
+/stats 恒按派生租户过滤（禁泄露全局分布）；/health 是引擎健康面（系统视图，不闸）。
+"""
 
 import json
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
-from src.learn.course_engine import CourseEngine
+from src.learn.course_engine import CourseAccessDenied, CourseEngine
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
 # ── Singletons ─────────────────────────────────────────────
 engine = CourseEngine()
+
+
+def _deny(exc: CourseAccessDenied) -> HTTPException:
+    """跨租户拒绝→403（reason 如实带真因，禁静默当 not_found/假成功）。"""
+    return HTTPException(status_code=403, detail=exc.reason)
 
 
 # ── Request Schemas ─────────────────────────────────────────
@@ -100,15 +111,23 @@ def _chapter_dict(ch) -> dict:
 
 
 @router.get("/courses")
-async def list_courses(status: str = Query(default=None)):
-    """List all courses, optionally filtered by status."""
-    courses = engine.list_courses(status=status)
+async def list_courses(status: str = Query(default=None), authorization: str | None = Header(None)):
+    """List all courses, optionally filtered by status.
+
+    F3b-③c-2②b：恒按派生租户过滤（匿名='default' 只见 default 行）。
+    """
+    identity = bind_identity(authorization)
+    courses = engine.list_courses(status=status, tenant_id=identity.tenant_id)
     return {"courses": [_course_dict(c) for c in courses], "count": len(courses)}
 
 
 @router.post("/courses")
-async def create_course(req: CourseCreateRequest):
-    """Create a new course."""
+async def create_course(req: CourseCreateRequest, authorization: str | None = Header(None)):
+    """Create a new course.
+
+    F3b-③c-2②b：课程行归属=调用方派生租户（bind_identity 禁自报）。
+    """
+    identity = bind_identity(authorization)
     course = engine.create_course(
         title=req.title,
         description=req.description,
@@ -117,6 +136,7 @@ async def create_course(req: CourseCreateRequest):
         domain=req.domain,
         knowledge_ids=req.knowledge_ids,
         generated_by=req.generated_by,
+        tenant_id=identity.tenant_id,
     )
     return _course_dict(course)
 
@@ -129,8 +149,12 @@ class AIGenerateRequest(BaseModel):
 
 
 @router.post("/courses/generate")
-async def generate_course(req: AIGenerateRequest):
-    """AI-generate a course outline with chapters and quiz questions."""
+async def generate_course(req: AIGenerateRequest, authorization: str | None = Header(None)):
+    """AI-generate a course outline with chapters and quiz questions.
+
+    F3b-③c-2②b：生成课程行归属=调用方派生租户（章节行=课程行继承）。
+    """
+    identity = bind_identity(authorization)
     try:
         from src.api.gland import _ensure_bootstrapped, gateway
 
@@ -187,6 +211,7 @@ async def generate_course(req: AIGenerateRequest):
             tags=[req.topic],
             topics=[req.topic],
             generated_by="ai",
+            tenant_id=identity.tenant_id,
         )
 
         # Add chapters
@@ -196,6 +221,7 @@ async def generate_course(req: AIGenerateRequest):
                 title=ch_data.get("title", f"Chapter {i + 1}"),
                 content=ch_data.get("content", ""),
                 quiz=ch_data.get("quiz", []),
+                tenant_id=identity.tenant_id,
             )
 
         return _course_dict(course)
@@ -207,9 +233,16 @@ async def generate_course(req: AIGenerateRequest):
 
 
 @router.get("/courses/{course_id}")
-async def get_course(course_id: str):
-    """Get full course detail including chapters."""
-    course = engine.get_course(course_id)
+async def get_course(course_id: str, authorization: str | None = Header(None)):
+    """Get full course detail including chapters.
+
+    F3b-③c-2②b：by-ID 闸门真执行（跨租户→403 带真因，禁静默当 not_found）。
+    """
+    identity = bind_identity(authorization)
+    try:
+        course = engine.get_course(course_id, tenant_id=identity.tenant_id)
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
     if not course:
         raise HTTPException(404, "Course not found")
     data = _course_dict(course)
@@ -218,19 +251,33 @@ async def get_course(course_id: str):
 
 
 @router.put("/courses/{course_id}")
-async def update_course(course_id: str, req: CourseUpdateRequest):
+async def update_course(
+    course_id: str, req: CourseUpdateRequest, authorization: str | None = Header(None)
+):
     """Update course metadata."""
+    identity = bind_identity(authorization)
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
-    course = engine.update_course(course_id, **updates)
+    try:
+        course = engine.update_course(course_id, tenant_id=identity.tenant_id, **updates)
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
     if not course:
         raise HTTPException(404, "Course not found")
     return _course_dict(course)
 
 
 @router.delete("/courses/{course_id}")
-async def delete_course(course_id: str):
-    """Delete a course and all its chapters."""
-    if not engine.delete_course(course_id):
+async def delete_course(course_id: str, authorization: str | None = Header(None)):
+    """Delete a course and all its chapters.
+
+    F3b-③c-2②b：跨租户恒 403 禁删他租户课程（行存活），级联按行租户键清。
+    """
+    identity = bind_identity(authorization)
+    try:
+        deleted = engine.delete_course(course_id, tenant_id=identity.tenant_id)
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
+    if not deleted:
         raise HTTPException(404, "Course not found")
     return {"status": "deleted"}
 
@@ -239,36 +286,78 @@ async def delete_course(course_id: str):
 
 
 @router.post("/courses/{course_id}/chapters")
-async def add_chapter(course_id: str, req: ChapterCreateRequest):
-    """Add a chapter to a course."""
-    chapter = engine.add_chapter(course_id, title=req.title, content=req.content, quiz=req.quiz)
+async def add_chapter(
+    course_id: str, req: ChapterCreateRequest, authorization: str | None = Header(None)
+):
+    """Add a chapter to a course.
+
+    F3b-③c-2②b：章节行=课程行继承租户（by-ID 课程闸门真执行）。
+    """
+    identity = bind_identity(authorization)
+    try:
+        chapter = engine.add_chapter(
+            course_id,
+            title=req.title,
+            content=req.content,
+            quiz=req.quiz,
+            tenant_id=identity.tenant_id,
+        )
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
     if not chapter:
         raise HTTPException(404, "Course not found")
     return _chapter_dict(chapter)
 
 
 @router.put("/courses/{course_id}/chapters/{chapter_id}")
-async def update_chapter(course_id: str, chapter_id: str, req: ChapterUpdateRequest):
+async def update_chapter(
+    course_id: str,
+    chapter_id: str,
+    req: ChapterUpdateRequest,
+    authorization: str | None = Header(None),
+):
     """Update a chapter's content."""
+    identity = bind_identity(authorization)
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
-    chapter = engine.update_chapter(course_id, chapter_id, **updates)
+    try:
+        chapter = engine.update_chapter(
+            course_id, chapter_id, tenant_id=identity.tenant_id, **updates
+        )
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
     if not chapter:
         raise HTTPException(404, "Chapter not found")
     return _chapter_dict(chapter)
 
 
 @router.delete("/courses/{course_id}/chapters/{chapter_id}")
-async def delete_chapter(course_id: str, chapter_id: str):
+async def delete_chapter(course_id: str, chapter_id: str, authorization: str | None = Header(None)):
     """Delete a chapter."""
-    if not engine.delete_chapter(course_id, chapter_id):
+    identity = bind_identity(authorization)
+    try:
+        deleted = engine.delete_chapter(course_id, chapter_id, tenant_id=identity.tenant_id)
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
+    if not deleted:
         raise HTTPException(404, "Chapter not found")
     return {"status": "deleted"}
 
 
 @router.post("/courses/{course_id}/chapters/{chapter_id}/mark")
-async def mark_chapter(course_id: str, chapter_id: str, req: MarkChapterRequest):
+async def mark_chapter(
+    course_id: str,
+    chapter_id: str,
+    req: MarkChapterRequest,
+    authorization: str | None = Header(None),
+):
     """Mark a chapter as completed/incomplete."""
-    chapter = engine.mark_chapter(course_id, chapter_id, req.completed)
+    identity = bind_identity(authorization)
+    try:
+        chapter = engine.mark_chapter(
+            course_id, chapter_id, req.completed, tenant_id=identity.tenant_id
+        )
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
     if not chapter:
         raise HTTPException(404, "Chapter not found")
     return _chapter_dict(chapter)
@@ -278,9 +367,13 @@ async def mark_chapter(course_id: str, chapter_id: str, req: MarkChapterRequest)
 
 
 @router.get("/courses/{course_id}/chapters/{chapter_id}/quiz")
-async def get_quiz(course_id: str, chapter_id: str):
+async def get_quiz(course_id: str, chapter_id: str, authorization: str | None = Header(None)):
     """Get quiz questions for a chapter."""
-    quiz = engine.get_quiz(course_id, chapter_id)
+    identity = bind_identity(authorization)
+    try:
+        quiz = engine.get_quiz(course_id, chapter_id, tenant_id=identity.tenant_id)
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
     if quiz is None:
         raise HTTPException(404, "Chapter not found")
     return {
@@ -298,9 +391,18 @@ async def get_quiz(course_id: str, chapter_id: str):
 
 
 @router.post("/courses/{course_id}/chapters/{chapter_id}/quiz")
-async def set_quiz(course_id: str, chapter_id: str, req: QuizSubmitRequest):
+async def set_quiz(
+    course_id: str,
+    chapter_id: str,
+    req: QuizSubmitRequest,
+    authorization: str | None = Header(None),
+):
     """Set/replace quiz questions for a chapter."""
-    quiz = engine.add_quiz(course_id, chapter_id, req.questions)
+    identity = bind_identity(authorization)
+    try:
+        quiz = engine.add_quiz(course_id, chapter_id, req.questions, tenant_id=identity.tenant_id)
+    except CourseAccessDenied as exc:
+        raise _deny(exc) from exc
     if quiz is None:
         raise HTTPException(404, "Chapter not found")
     return {
@@ -321,14 +423,22 @@ async def set_quiz(course_id: str, chapter_id: str, req: QuizSubmitRequest):
 
 
 @router.get("/stats")
-async def learn_stats():
-    """Get learning statistics."""
-    return engine.stats()
+async def learn_stats(authorization: str | None = Header(None)):
+    """Get learning statistics.
+
+    F3b-③c-2②b：恒按派生租户过滤（禁泄露全局分布）。
+    """
+    identity = bind_identity(authorization)
+    return engine.stats(tenant_id=identity.tenant_id)
 
 
 @router.get("/health")
 async def learn_health():
-    """Health check for OpenLearn."""
+    """Health check for OpenLearn.
+
+    F3b-③c-2②b：引擎健康面=系统视图（全局统计不闸，与 proactive /status、
+    checkpoint health 同边界；业务统计走 /stats 恒按派生租户过滤）。
+    """
     stats = engine.stats()
     return {
         "status": "ok",

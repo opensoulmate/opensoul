@@ -42,6 +42,7 @@ class ResourceType(StrEnum):
         "timeline_event"  # F3b-③c-2①（2026-10-12）：时间线事件面（timeline.db events 表）
     )
     PROACTIVE_EVENT = "proactive_event"  # F3b-③c-2②a（2026-10-12）：主动行为事件面（proactive.db proactive_events 表）
+    COURSE = "course"  # F3b-③c-2②b（2026-10-12）：学习课程面（learn.db courses/chapters 表）
 
 
 @dataclass
@@ -126,6 +127,9 @@ class IsolationEngine:
         ),
         ResourceType.PROACTIVE_EVENT: IsolationPolicy(
             ResourceType.PROACTIVE_EVENT, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.COURSE: IsolationPolicy(
+            ResourceType.COURSE, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 
