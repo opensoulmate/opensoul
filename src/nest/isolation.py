@@ -43,6 +43,12 @@ class ResourceType(StrEnum):
     )
     PROACTIVE_EVENT = "proactive_event"  # F3b-③c-2②a（2026-10-12）：主动行为事件面（proactive.db proactive_events 表）
     COURSE = "course"  # F3b-③c-2②b（2026-10-12）：学习课程面（learn.db courses/chapters 表）
+    ENTERPRISE_USER = (
+        "enterprise_user"  # F3b-③c-2②c（2026-10-12）：企业身份面（enterprise.db users 行）
+    )
+    ENTERPRISE_AUDIT = (
+        "enterprise_audit"  # F3b-③c-2②c（2026-10-12）：企业审计面（enterprise.db audit_log 表）
+    )
 
 
 @dataclass
@@ -130,6 +136,12 @@ class IsolationEngine:
         ),
         ResourceType.COURSE: IsolationPolicy(
             ResourceType.COURSE, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.ENTERPRISE_USER: IsolationPolicy(
+            ResourceType.ENTERPRISE_USER, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.ENTERPRISE_AUDIT: IsolationPolicy(
+            ResourceType.ENTERPRISE_AUDIT, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 
