@@ -223,9 +223,12 @@ class TestThinkEmotionWiring:
         from src.api.brain import ThinkRequest, think
 
         req = ThinkRequest(user_input="帮我修复一个 bug", session_id="t1")
-        assert req.agent_confidence == 0.8
+        # F4b-㉕ 契约随更新：未声明=None（派生哨兵），生效信心仍回落 0.8 缺省
+        assert req.agent_confidence is None
         result = asyncio.run(think(req))
         assert set(result["decision"]) == {"edit_mode", "execute_mode", "confirm_prompt"}
-        # 缺省信心 0.8 + 中性情绪 + 低风险 → auto（决策面过 adjust 后契约稳定零误伤）
+        assert result["agent_confidence"] == 0.8
+        # 未声明→派生（无账本回落 0.8 信心充足）+ 中性情绪 + 低风险 → auto
+        # （决策面过 adjust 后契约稳定零误伤）
         assert result["decision"]["execute_mode"] == "auto"
         assert result["decision"]["confirm_prompt"] is None

@@ -10,6 +10,7 @@
 - nerve: 事件总线
 """
 
+import logging
 import os
 import time
 
@@ -17,6 +18,8 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from src.services.tenant_binding import bind_identity
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -30,9 +33,11 @@ class ThinkRequest(BaseModel):
     user_input: str = ""
     repo_root: str = ""
     session_id: str = ""
-    # F4b-㉒：Agent 自身判断信心（0~1，缺省 0.8=信心充足）——情感驱动决策的低信心轴，
-    # 由调用方声明（think 自身无内生信心源，不伪造派生）；越界如实 422 拒
-    agent_confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    # F4b-㉕ agent_confidence 生产源派生：调用方可显式声明（0~1，越界如实 422 拒），
+    # 未声明=None（派生哨兵）→ 从元认知账本真源派生（derive_agent_confidence：
+    # 成败观测经验收缩；无观测回落 0.8"信心充足"=行为契约零变化）；声明优先
+    # 不被派生顶替（F4b-㉒ 声明轴语义延续）
+    agent_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class VerifyRequest(BaseModel):
@@ -67,7 +72,7 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     """认知思考：调用已有模块完成意图理解+风险评估+策略决策"""
     # F3b-② 身份派生收口：tenant 声明只可确认绑定、不得矛盾（本端点不消费
     # tenant，收口在声明面；进程内直调不带 authorization=匿名语义，A1 接线不变）
-    bind_identity(authorization, req.tenant_id)
+    identity = bind_identity(authorization, req.tenant_id)
     from src.cortex.project_memory import ProjectMemory
     from src.cortex.reflector import Reflector
     from src.cortex.risk_assessor import RiskAssessor
@@ -134,6 +139,21 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     else:
         execute_mode, confirm_prompt = "auto", None
 
+    # 5a'. F4b-㉕ agent_confidence 生产源派生：声明优先；未声明从元认知账本真源
+    # 派生（成败观测经验收缩，无观测回落 0.8 缺省=行为契约零变化）。账本不可读
+    # 不阻断思考，回落缺省并留痕可见。
+    from src.database.postgres import db_pool
+    from src.mirror.metacognition import Metacognition, derive_agent_confidence
+
+    meta = Metacognition(db_pool, identity.tenant_id, req.agent_id)
+    effective_confidence = req.agent_confidence
+    if effective_confidence is None:
+        try:
+            effective_confidence = derive_agent_confidence(await meta.confidence_stats())
+        except Exception as e:
+            logger.warning("agent_confidence 派生失败（不阻断思考），回落缺省 0.8: %s", e)
+            effective_confidence = 0.8
+
     # 5b. 情感驱动决策（mind模块，F4b-㉒ 接线——修前 adjust_decision 全仓零调用点）：
     # 情绪/信心影响决策权重：负面情绪+低信心收紧门禁（auto→confirm_required）、
     # 正面情绪+高信心可放宽到 auto；deny 风险底线不被放宽（adjust_decision 自身语义）。
@@ -146,9 +166,24 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
             confirm_prompt=confirm_prompt,
         ),
         user_emotion=emotion_result.primary_emotion,
-        agent_confidence=req.agent_confidence,
+        agent_confidence=effective_confidence,
     )
     execute_mode, confirm_prompt = decision.execute_mode, decision.confirm_prompt
+
+    # 5c. F4b-㉕ 决策落元认知账本（log_decision 修前全仓零调用点=wired-but-not-
+    # functional，与 emotion_decision 同型）：决策+自评信心入账=校准对比的决策轴；
+    # 记账失败不阻断思考但必须可见。
+    try:
+        await meta.log_decision(
+            decision=execute_mode,
+            reasoning=(
+                f"goal={goal}, risk={risk.overall_level}, "
+                f"emotion={emotion_result.primary_emotion}, files={target_files}"
+            ),
+            confidence=effective_confidence,
+        )
+    except Exception as e:
+        logger.warning("元认知决策记账失败（不阻断思考）: %s", e)
 
     # 6. 存入短期记忆（hippo模块）
     if req.session_id:
@@ -198,6 +233,8 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
             "confidence": emotion_result.confidence,
             "sentiment": emotion_result.sentiment,
         },
+        # F4b-㉕ 生效信心（加性契约键）：声明值或账本派生值，可观测低信心收紧真因
+        "agent_confidence": effective_confidence,
         "memory_count": len(session_memories),
     }
 
@@ -206,7 +243,7 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
 async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
     """执行验证：反思+记忆+事件"""
     # F3b-② 身份派生收口（同 think：声明面收口，本端点不消费 tenant）
-    bind_identity(authorization, req.tenant_id)
+    identity = bind_identity(authorization, req.tenant_id)
     # 1. 存入短期记忆
     store.add(
         session_id=req.task_id,
@@ -223,6 +260,20 @@ async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
         await emit("brain", "verify", f"🔍 {status}: {req.action[:100]}", req.result)
     except Exception:
         pass
+
+    # 3. F4b-㉕ 结果落元认知账本（log_outcome 修前全仓零调用点=wired-but-not-
+    # functional）：成败观测=agent_confidence 生产源派生的真源轴（think 未声明
+    # 信心经 derive_agent_confidence 消费本账本）；记账失败不阻断验证但必须可见。
+    try:
+        from src.database.postgres import db_pool
+        from src.mirror.metacognition import Metacognition
+
+        await Metacognition(db_pool, identity.tenant_id, req.agent_id).log_outcome(
+            decision=req.action[:200] or "unspecified",
+            outcome="success" if req.result.get("success") else "failure",
+        )
+    except Exception as e:
+        logger.warning("元认知结果记账失败（不阻断验证）: %s", e)
 
     return {"status": "verified", "memorized": True}
 
@@ -487,6 +538,9 @@ async def metacognition(
         "recent_decisions": await meta.reflect_recent(),
         "blind_spots": await meta.get_blind_spots(),
         "calibration": await meta.get_confidence_calibration(),
+        # F4b-㉕ 派生真源统计（加性契约键）：think/verify 两写点落账的决策/成败轴，
+        # derive_agent_confidence 的消费面
+        "confidence_source": await meta.confidence_stats(),
     }
 
 

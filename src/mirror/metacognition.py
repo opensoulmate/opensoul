@@ -15,6 +15,27 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def derive_agent_confidence(stats: dict, prior: float = 0.8, prior_strength: float = 2.0) -> float:
+    """agent_confidence 生产源派生（F4b-㉕）：从元认知账本真源派生未声明信心。
+
+    真源=本 agent 的成败观测（verify 落账的 outcome 行），非字面推断非语义理解：
+    - 无成败观测 → prior 0.8"信心充足"（F4b-㉒ 缺省行为契约零变化）
+    - 有观测 → Laplace 经验收缩 (successes + prior_strength*prior) / (outcomes +
+      prior_strength)——样本越多越信观测成功率（如实标注：经验收缩非统计推断，
+      prior/prior_strength 是人为选定的先验与强度）；连续失败把信心压到 0.5 以下
+      → F4b-㉒ 低信心收紧在生产真源上可达（修前调用方恒不声明=恒 0.8 恒不可达）。
+    自评信心（decision 行）刻意不进派生：信心派生自评=自我循环（信心生信心）；
+    自评只进校准对比（get_confidence_calibration 预测信心 vs 实际成功率）。
+    min/max 是 0~1 契约归一（stats 来自 SQL 聚合 successes<=outcomes 结构上成立）。
+    """
+    outcomes = int(stats.get("outcomes") or 0)
+    successes = int(stats.get("successes") or 0)
+    if outcomes <= 0:
+        return prior
+    derived = (successes + prior_strength * prior) / (outcomes + prior_strength)
+    return round(min(max(derived, 0.0), 1.0), 3)
+
+
 class Metacognition:
     """元认知引擎 — 自我审视、自我纠错"""
 
@@ -136,6 +157,37 @@ class Metacognition:
             "high_confidence_count": len(high_conf),
             "high_confidence_success_rate": round(success_rate, 2),
             "calibration": "good" if abs(avg_conf - success_rate) < 0.2 else "miscalibrated",
+        }
+
+    async def confidence_stats(self) -> dict:
+        """agent_confidence 生产源真源统计（F4b-㉕）。
+
+        账本两轴：decision 行=think 落账的自评信心（confidence 列）、outcome 行=
+        verify 落账的实际成败（outcome='success'/'failure'）——派生只消费成败轴
+        （derive_agent_confidence docstring），自评轴供校准对比。
+        """
+        await self._ensure_table()
+        empty = {"decisions": 0, "outcomes": 0, "successes": 0, "avg_confidence": None}
+        if not self.db:
+            return empty
+        row = await self.db.fetchrow(
+            """SELECT
+                 SUM(CASE WHEN event_type = 'decision' THEN 1 ELSE 0 END) AS decisions,
+                 SUM(CASE WHEN event_type = 'outcome' THEN 1 ELSE 0 END) AS outcomes,
+                 SUM(CASE WHEN event_type = 'outcome' AND outcome = 'success' THEN 1 ELSE 0 END) AS successes,
+                 AVG(CASE WHEN event_type = 'decision' THEN confidence END) AS avg_confidence
+               FROM metacognition_log
+               WHERE tenant_id = ? AND agent_id = ?""",
+            (self.tenant_id, self.agent_id),
+        )
+        if row is None:
+            return empty
+        avg_conf = row["avg_confidence"]
+        return {
+            "decisions": int(row["decisions"] or 0),
+            "outcomes": int(row["outcomes"] or 0),
+            "successes": int(row["successes"] or 0),
+            "avg_confidence": round(float(avg_conf), 3) if avg_conf is not None else None,
         }
 
     async def get_stats(self) -> dict:
