@@ -8,8 +8,9 @@
 - §9.4.2：HTTP 200 text/event-stream，每个 SSE data 帧 = 一个 JSON-RPC 2.0 响应
   包络（id 保真回显），result = StreamResponse 单键（{"statusUpdate"}|{"task"}，
   判别式=oneof 成员名本身，whats-new-v1.md）。
-- v1.0 无 final 字段（0.x 已移除）：终态由**收流**表示——帧序 = 状态迁移事件 +
-  终态全量快照后收流。
+- v1.0 无 final 字段（0.x 已移除）：终态由**收流**表示——帧序（F4b-⑯c 随
+  §3.1.2 修齐）= 首帧 Task 全量快照（MUST begin with the Task object）→ 状态
+  迁移事件 → 终态全量快照后收流。
 - 事件总线：状态迁移逐帧推（working/终态），多并发流同收同序事件。
 
 真栈非 mock：直驱真 ASGI FastAPI 路由层（test_llm_completions_stream 同款）+ 双向
@@ -232,18 +233,25 @@ class TestSendStreamingFrameFace:
 
         assert c.status == 200
         assert c.headers["content-type"].startswith("text/event-stream")
-        # 帧序 = working 迁移 → 终态迁移 → 全量快照（收流）
-        assert len(frames) == 3
+        # 帧序（§3.1.2 Task lifecycle stream，F4b-⑯c 修齐）= 首帧 Task 全量快照
+        # → working 迁移 → 终态迁移 → 终态全量快照（Final completion indicator，收流）
+        assert len(frames) == 4
         r0 = _assert_v10_frame(frames[0], "f-1")
         r1 = _assert_v10_frame(frames[1], "f-1")
         r2 = _assert_v10_frame(frames[2], "f-1")
-        assert set(r0) == {"statusUpdate"}
+        r3 = _assert_v10_frame(frames[3], "f-1")
+        assert set(r0) == {"task"}  # §3.1.2「MUST begin with the Task object」
         assert set(r1) == {"statusUpdate"}
-        assert set(r2) == {"task"}
-        assert set(r0["statusUpdate"]) == {"taskId", "contextId", "status"}
-        assert r0["statusUpdate"]["status"]["state"] == "TASK_STATE_WORKING"
-        assert r1["statusUpdate"]["status"]["state"] == "TASK_STATE_COMPLETED"
-        snap = r2["task"]
+        assert set(r2) == {"statusUpdate"}
+        assert set(r3) == {"task"}
+        # 首帧=订阅时点真态（create_task 已落首条消息，state=submitted）
+        assert r0["task"]["status"]["state"] == "TASK_STATE_SUBMITTED"
+        assert [m["role"] for m in r0["task"]["history"]] == ["ROLE_USER"]
+        assert r0["task"]["id"] == r3["task"]["id"]
+        assert set(r1["statusUpdate"]) == {"taskId", "contextId", "status"}
+        assert r1["statusUpdate"]["status"]["state"] == "TASK_STATE_WORKING"
+        assert r2["statusUpdate"]["status"]["state"] == "TASK_STATE_COMPLETED"
+        snap = r3["task"]
         assert snap["status"]["state"] == "TASK_STATE_COMPLETED"
         # 消息历史 [user, agent] 且枚举/平铺 part 全 v1.0 形
         assert [m["role"] for m in snap["history"]] == ["ROLE_USER", "ROLE_AGENT"]
@@ -320,22 +328,27 @@ class TestTrueIncrementalDelivery:
             _rpc("SendStreamingMessage", {"message": _msg(), "metadata": dict(STUB)}, rid="inc-1")
         ).start(app)
 
-        # 门闩：处理被挂住时首帧（working）必须已经到达——缓冲/伪流式实现下
-        # 首帧永不出现，wait_for 超时即失败（控制组语义内建）
+        # 首帧=Task 全量快照（§3.1.2），且在处理完成前就到达（订阅时点交付）
         first = await c.next_frame(timeout=6)
         _assert_v10_frame(first, "inc-1")
-        assert first["result"]["statusUpdate"]["status"]["state"] == "TASK_STATE_WORKING"
+        assert set(first["result"]) == {"task"}
+        assert not gate.finished  # 处理仍未完成 = 首帧非收尾快照
+        # 门闩：处理被挂住时 working 帧必须已经到达——缓冲/伪流式实现下
+        # 该帧永不出现，wait_for 超时即失败（控制组语义内建）
+        second = await c.next_frame(timeout=6)
+        _assert_v10_frame(second, "inc-1")
+        assert second["result"]["statusUpdate"]["status"]["state"] == "TASK_STATE_WORKING"
         assert gate.entered.is_set()
-        assert not gate.finished  # 处理仍未完成 = 首帧确系增量交付
+        assert not gate.finished  # 处理仍未完成 = working 帧确系增量交付
 
         gate.release.set()
-        frames = [first]
+        frames = [first, second]
         while True:
             item = await c.next_frame(timeout=8)
             if item is _END:
                 break
             frames.append(item)
-        assert _frame_kinds(frames) == ["statusUpdate", "statusUpdate", "task"]
+        assert _frame_kinds(frames) == ["task", "statusUpdate", "statusUpdate", "task"]
         assert gate.finished
 
 
@@ -350,8 +363,10 @@ class TestSubscribeToTask:
         sender = _SseClient(
             _rpc("SendStreamingMessage", {"message": _msg(), "metadata": dict(STUB)}, rid="sub-a")
         ).start(app)
-        first = await sender.next_frame(timeout=6)  # working 帧=处理真在跑
-        task_id = first["result"]["statusUpdate"]["taskId"]
+        first = await sender.next_frame(timeout=6)  # 首帧=Task 快照（§3.1.2）
+        task_id = first["result"]["task"]["id"]
+        working = await sender.next_frame(timeout=6)  # working 帧=处理真在跑
+        assert working["result"]["statusUpdate"]["status"]["state"] == "TASK_STATE_WORKING"
 
         sub_b = _SseClient(_rpc("SubscribeToTask", {"id": task_id}, rid="sub-b")).start(app)
         sub_c = _SseClient(_rpc("SubscribeToTask", {"id": task_id}, rid="sub-c")).start(app)
@@ -359,11 +374,11 @@ class TestSubscribeToTask:
         c_first = await sub_c.next_frame(timeout=6)
         gate.release.set()
 
-        a = [first] + await _all_frames(sender)  # 首帧已消费，并回全序
+        a = [first, working] + await _all_frames(sender)  # 前两帧已消费，并回全序
         b = [b_first] + await _all_frames(sub_b)  # 同上：订阅时点快照并回
         c = [c_first] + await _all_frames(sub_c)
-        # 发送方：working 迁移 + 终态迁移 + 快照
-        assert _frame_kinds(a) == ["statusUpdate", "statusUpdate", "task"]
+        # 发送方：首帧快照 + working 迁移 + 终态迁移 + 快照（F4b-⑯c 帧序修齐）
+        assert _frame_kinds(a) == ["task", "statusUpdate", "statusUpdate", "task"]
         # 两订阅方：同序同形（v1.0「all receive same ordered events」）——
         # 首帧为订阅时点快照，随后与发送方同批事件
         assert _frame_kinds(b) == ["task", "statusUpdate", "task"]
@@ -491,8 +506,9 @@ class TestCancelDuringSubscription:
         sender = _SseClient(
             _rpc("SendStreamingMessage", {"message": _msg(), "metadata": dict(STUB)}, rid="cx-1")
         ).start(app)
-        first = await sender.next_frame(timeout=6)  # working 帧=处理真在跑
-        task_id = first["result"]["statusUpdate"]["taskId"]
+        first = await sender.next_frame(timeout=6)  # 首帧=Task 快照（§3.1.2）
+        task_id = first["result"]["task"]["id"]
+        await sender.next_frame(timeout=6)  # working 帧=处理真在跑
 
         sub = _SseClient(_rpc("SubscribeToTask", {"id": task_id}, rid="cx-2")).start(app)
         await sub.next_frame(timeout=6)  # 订阅时点快照

@@ -261,7 +261,8 @@ class TestTokenIncrementalChunks:
 
         assert latch_timeouts == []  # 缓冲即死锁（控制组语义内建）
         kinds = [_frame_kind(f) for f in frames]
-        assert kinds == ["statusUpdate"] + ["artifactUpdate"] * 4 + ["statusUpdate", "task"]
+        # 帧序（F4b-⑯c）：首帧 Task 快照（§3.1.2）→ working → 4 分块 → 终态 → 快照
+        assert kinds == ["task", "statusUpdate"] + ["artifactUpdate"] * 4 + ["statusUpdate", "task"]
         assert seen["texts"] == ["He", "llo ", "world", "!"]
         # 到达时间戳严格递增（真逐帧交付非一整块）
         assert all(b > a for a, b in zip(times, times[1:]))
@@ -303,8 +304,8 @@ class TestTokenIncrementalChunks:
             assert set(g) == {"taskId", "contextId", "artifact", "append", "lastChunk"}
             assert set(g["artifact"]) == {"artifactId", "name", "parts"}
             assert g["artifact"]["name"] == "response"
-        task_id = frames[0]["result"]["statusUpdate"]["taskId"]
-        context_id = frames[0]["result"]["statusUpdate"]["contextId"]
+        task_id = frames[0]["result"]["task"]["id"]  # 首帧=Task 快照（F4b-⑯c）
+        context_id = frames[0]["result"]["task"]["contextId"]
         assert all(g["taskId"] == task_id and g["contextId"] == context_id for g in got)
         # append：首块 False（新建）、后续 True（同 ID 追加）；lastChunk 恰末块 True
         assert [g["append"] for g in got] == [False, True, True]
@@ -412,7 +413,7 @@ class TestSubscribeCatchUp:
             main_task = asyncio.create_task(consume_main())
             # 门闩开（d1 块已到达）后中途订阅
             await asyncio.wait_for(f1.wait(), timeout=10)
-            task_id = c.frame_list[0]["result"]["statusUpdate"]["taskId"]
+            task_id = c.frame_list[0]["result"]["task"]["id"]  # 首帧=Task 快照（F4b-⑯c）
             s = _SseClient(_rpc("SubscribeToTask", {"id": task_id}, rid="sub-1"))
             sub_run = asyncio.create_task(s._run(app))
             frames, _ = await main_task
@@ -591,7 +592,8 @@ class TestZeroDriftFaces:
         frames, _ = await _consume(c)
         await asyncio.wait_for(run, timeout=10)
 
-        assert [_frame_kind(f) for f in frames] == ["statusUpdate", "statusUpdate", "task"]
+        # F4b-⑯c 帧序修齐：首帧 Task 快照 + F4b-⑯ 既有事件序零变化
+        assert [_frame_kind(f) for f in frames] == ["task", "statusUpdate", "statusUpdate", "task"]
         assert frames[-1]["result"]["task"]["artifacts"] == []
 
     @pytest.mark.asyncio

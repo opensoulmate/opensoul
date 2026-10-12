@@ -283,8 +283,10 @@ async def _send_message_impl(params: dict) -> Task:
 # =一个 JSON-RPC 2.0 响应包络（id 保真回显请求 id），result=StreamResponse 单键
 # （{"statusUpdate"}|{"artifactUpdate"}|{"task"}，判别式=oneof 成员名本身——
 # whats-new-v1.md）。v1.0 无 final 字段（0.x 已移除，「Leverage protocol binding
-# specific stream closure mechanism instead」）：终态由**收流**表示——帧序=状态
-# 迁移事件 + 终态全量快照后收流。
+# specific stream closure mechanism instead」）：终态由**收流**表示——帧序=Task
+# 全量快照首帧（§3.1.2「the stream MUST begin with the Task object」）→ 零或多
+# 状态迁移/artifact 事件 → 终态全量快照（§3.1.2 Outputs「Final completion
+# indicator」）后收流。
 
 
 class _StreamSpec:
@@ -348,7 +350,9 @@ async def handle_send_streaming_message(params: dict) -> _StreamSpec:
     Request: Same as SendMessage（§9.4.2）——任务续接双源（v1.0 message.taskId /
     旧草案顶层 id）、随发送推送配置双源、historyLength 双源（收尾快照 history 收口）
     全部走与 SendMessage 同一取参口（单一源）。与非流式口的差别只在交付面：
-    处理在后台跑、状态迁移逐帧推、终态快照后收流（v1.0 收流=终态指示）。
+    帧序随 §3.1.2 Task lifecycle stream——首帧=Task 全量快照（「MUST begin with
+    the Task object」，订阅时点真态），随后状态迁移/artifact 事件逐帧推，终态
+    快照后收流（v1.0 收流=终态指示）。
     """
     message_data = params.get("message", {})
     message = Message(**message_data)  # params 校验失败 → -32602（端点归口）
@@ -365,12 +369,12 @@ async def handle_send_streaming_message(params: dict) -> _StreamSpec:
             # §5.4 TaskNotFoundError(-32001)，与 SendMessage 续接同码同文案
             raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
         _register_inline_push(task.id, inline_push)
-        queue = task_manager.subscribe_stream(task.id)
+        queue = task_manager.subscribe_stream(task.id, send_current=True, first_frame_ends=False)
         coro = task_manager.process_task(task.id, message, metadata=metadata)
     else:
         task = await task_manager.create_task(message, metadata=metadata)
         _register_inline_push(task.id, inline_push)
-        queue = task_manager.subscribe_stream(task.id)
+        queue = task_manager.subscribe_stream(task.id, send_current=True, first_frame_ends=False)
         coro = task_manager.run_processing(task, message)
     asyncio.create_task(_stream_run(task.id, coro))
     return _StreamSpec(task.id, queue, history_length=history_length)

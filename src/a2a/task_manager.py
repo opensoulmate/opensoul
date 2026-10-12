@@ -382,19 +382,28 @@ class TaskManager:
         """
         return bool(self._stream_subs.get(task_id))
 
-    def subscribe_stream(self, task_id: str, *, send_current: bool = False) -> asyncio.Queue:
+    def subscribe_stream(
+        self, task_id: str, *, send_current: bool = False, first_frame_ends: bool = True
+    ) -> asyncio.Queue:
         """订阅任务事件流：返回队列（元素=(StreamResponse 载荷, 是否收尾帧)）。
 
         - 多个订阅者并发共存，同收同序事件（v1.0 明文允许并发流）
-        - send_current=True（SubscribeToTask）：入队一条当前状态全量快照——已终态
-          即收尾帧（订阅即收流），非终态为信息帧（后续迁移事件继续推）
+        - send_current=True：入队订阅时点全量快照作**首帧**（v1.0 §3.1.2 Task
+          lifecycle stream「the stream MUST begin with the Task object」/§3.1.6
+          「MUST return a Task object as the first event in the stream, representing
+          the current state of the task at the time of subscription」——首帧即订阅
+          时点真态，防 GetTask→订阅间丢信息）
+        - first_frame_ends：首帧可否单独收流——SubscribeToTask 订阅已终态任务=恰一帧
+          即收流（True）；SendStreamingMessage 首帧恒信息帧（False）——处理还在后头，
+          收流由处理的终态收尾快照驱动，禁提前收流
         """
         q: asyncio.Queue = asyncio.Queue()
         self._stream_subs.setdefault(task_id, []).append(q)
         if send_current:
             task = self.tasks.get(task_id)
             if task is not None:
-                q.put_nowait((_task_snapshot_payload(task), task.status.state in _TERMINAL_STATES))
+                terminal = task.status.state in _TERMINAL_STATES
+                q.put_nowait((_task_snapshot_payload(task), first_frame_ends and terminal))
         return q
 
     def unsubscribe_stream(self, task_id: str, q: asyncio.Queue) -> None:
