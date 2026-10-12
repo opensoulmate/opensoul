@@ -127,7 +127,10 @@ class JSONRPCError(BaseModel):
     data: Any = None
 
 
-# === Error Codes ===
+# === Error Codes（A2A v1.0 §5.4 Error Code Mappings + §9 标准 JSON-RPC 码）===
+# §9 标准码：JSONParseError -32700 / InvalidRequestError -32600 / MethodNotFoundError
+# -32601 / InvalidParamsError -32602 / InternalError -32603；§5.4 A2A 专有码区间
+# -32001..-32099 逐型映射。本表=规范全集逐值照抄，测试逐值对照锁定（声明恒等于规范）。
 class ErrorCode:
     PARSE_ERROR = -32700
     INVALID_REQUEST = -32600
@@ -139,6 +142,33 @@ class ErrorCode:
     PUSH_NOTIFICATION_NOT_SUPPORTED = -32003
     UNSUPPORTED_OPERATION = -32004
     CONTENT_TYPE_NOT_SUPPORTED = -32005
+    INVALID_AGENT_RESPONSE = -32006
+    EXTENDED_AGENT_CARD_NOT_CONFIGURED = -32007
+    EXTENSION_SUPPORT_REQUIRED = -32008
+    VERSION_NOT_SUPPORTED = -32009
+
+
+class A2AError(ValueError):
+    """带 §5.4 规范错误码的协议错误 —— raise 点=语义条件已知处，端点归口成 error 对象。
+
+    修前所有 handler 错误统一 raise ValueError→端点兜底 INTERNAL_ERROR(-32603)：
+    TaskNotFound 被吞成 -32603、Method not found 被吞成 -32603，客户端按规范码分流
+    （重试/提示/建任务）无从谈起。本类把"是哪个错"的判断放回条件已知的 raise 点
+    （声明从实现派生，F4b-⑤ 同哲学），端点只搬运不猜码。
+    继承 ValueError：修前全部 raise ValueError，既有调用点/测试按 ValueError 捕获的
+    契约不变（test_a2a_history_face pytest.raises(ValueError) 锁死面）；本类只给同一
+    异常带上规范错误码。
+    """
+
+    def __init__(self, code: int, message: str, data: Any = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.data = data
+
+    def to_error(self) -> JSONRPCError:
+        """→ JSON-RPC error 对象（§9 error.code/message[/data] 契约）。"""
+        return JSONRPCError(code=self.code, message=self.message, data=self.data)
 
 
 # === Default Agent Card ===

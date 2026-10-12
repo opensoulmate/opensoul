@@ -9,7 +9,9 @@ from uuid import UUID
 
 from src.a2a.models import (
     DEFAULT_AGENT_CARD,
+    A2AError,
     AgentCard,
+    ErrorCode,
     Message,
     Task,
     TaskStatus,
@@ -63,7 +65,9 @@ class TaskManager:
         """
         task = self.tasks.get(task_id)
         if not task:
-            raise ValueError(f"Task not found: {task_id}")
+            # §5.4 TaskNotFoundError(-32001)：SendMessage 续接指向不存在任务
+            # 如实报此码（修前 -32603），端点归口见 api.a2a_endpoint
+            raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
         if metadata:
             task.metadata.update(metadata)
 

@@ -7,8 +7,10 @@ Implements:
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from src.a2a.models import (
+    A2AError,
     ErrorCode,
     JSONRPCRequest,
     JSONRPCResponse,
@@ -37,8 +39,8 @@ async def a2a_endpoint(request: Request):
     """A2A JSON-RPC 2.0 endpoint."""
     try:
         body = await request.json()
-        rpc_request = JSONRPCRequest(**body)
     except Exception as e:
+        # §9 JSONParseError(-32700)：收到的不是合法 JSON
         return JSONResponse(
             status_code=200,
             content=JSONRPCResponse(
@@ -47,10 +49,40 @@ async def a2a_endpoint(request: Request):
         )
 
     try:
+        rpc_request = JSONRPCRequest(**body)
+    except Exception as e:
+        # §9 InvalidRequestError(-32600)：JSON 合法但不是合法 Request 对象
+        # （修前与解析失败同走 -32700：两种不同规范错被并成一种）
+        return JSONResponse(
+            status_code=200,
+            content=JSONRPCResponse(
+                id=0,
+                error={"code": ErrorCode.INVALID_REQUEST, "message": f"Invalid Request: {e}"},
+            ).model_dump(exclude_none=True),
+        )
+
+    try:
         result = await handle_rpc(rpc_request)
         return JSONResponse(
             status_code=200,
             content=JSONRPCResponse(id=rpc_request.id, result=result).model_dump(exclude_none=True),
+        )
+    except A2AError as e:
+        # §5.4 规范码随异常带出（修前所有 handler 错误统一兜底 -32603）
+        return JSONResponse(
+            status_code=200,
+            content=JSONRPCResponse(
+                id=rpc_request.id, error=e.to_error().model_dump(exclude_none=True)
+            ).model_dump(exclude_none=True),
+        )
+    except ValidationError as e:
+        # §9 InvalidParamsError(-32602)：params 结构校验失败（如 message 缺 role/parts）
+        return JSONResponse(
+            status_code=200,
+            content=JSONRPCResponse(
+                id=rpc_request.id,
+                error={"code": ErrorCode.INVALID_PARAMS, "message": f"Invalid parameters: {e}"},
+            ).model_dump(exclude_none=True),
         )
     except Exception as e:
         return JSONResponse(
@@ -68,7 +100,9 @@ async def handle_rpc(request: JSONRPCRequest):
 
     handler = RPC_HANDLERS.get(method)
     if not handler:
-        raise ValueError(f"Method not found: {method}")
+        # §9 MethodNotFoundError(-32601)（修前 -32603）；未实现的方法也归此码
+        # （§9 标准文案："does not exist or is not available"）
+        raise A2AError(ErrorCode.METHOD_NOT_FOUND, f"Method not found: {method}")
 
     return await handler(params)
 
@@ -85,9 +119,9 @@ def _apply_history_limit(task_dump: dict, history_length) -> dict:
     if history_length is None:
         return task_dump
     if isinstance(history_length, bool) or not isinstance(history_length, int):
-        raise ValueError(f"Invalid historyLength: {history_length!r}")
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid historyLength: {history_length!r}")
     if history_length < 0:
-        raise ValueError(f"Invalid historyLength: {history_length!r}")
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid historyLength: {history_length!r}")
     task_dump = dict(task_dump)  # 纯函数：不改调用方 dump，只改返回值
     if history_length == 0:
         task_dump.pop("history", None)
@@ -156,11 +190,12 @@ async def handle_task_get(params: dict) -> dict:
     """Handle tasks/get - retrieve task status."""
     task_id = params.get("id")
     if not task_id:
-        raise ValueError("Missing task id")
+        raise A2AError(ErrorCode.INVALID_PARAMS, "Missing task id")
 
     task = await task_manager.get_task(task_id)
     if not task:
-        raise ValueError(f"Task not found: {task_id}")
+        # §5.4 TaskNotFoundError(-32001)（修前 -32603）
+        raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
 
     return _apply_history_limit(task.model_dump(exclude_none=True), params.get("historyLength"))
 
@@ -169,11 +204,15 @@ async def handle_task_cancel(params: dict) -> dict:
     """Handle tasks/cancel - cancel a task."""
     task_id = params.get("id")
     if not task_id:
-        raise ValueError("Missing task id")
+        raise A2AError(ErrorCode.INVALID_PARAMS, "Missing task id")
 
+    # §5.4 两型必须分开（修前 cancel_task 双 None 合并成一个"cannot be canceled"）：
+    # 任务不存在=TaskNotFoundError(-32001)，已终态不可取消=TaskNotCancelableError(-32002)
+    if not await task_manager.get_task(task_id):
+        raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
     task = await task_manager.cancel_task(task_id)
     if not task:
-        raise ValueError(f"Task cannot be canceled: {task_id}")
+        raise A2AError(ErrorCode.TASK_NOT_CANCELABLE, f"Task cannot be canceled: {task_id}")
 
     return task.model_dump(exclude_none=True)
 
