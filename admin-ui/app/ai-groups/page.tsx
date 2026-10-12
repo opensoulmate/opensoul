@@ -76,6 +76,7 @@ const TASK_STATUSES: Record<string, { label: string; color: string; icon: typeof
   assigned: { label: '已分配', color: tone('accent'), icon: CheckCircle },
   executing: { label: '执行中', color: tone('primary'), icon: Play },
   reviewing: { label: '评审中', color: tone('warning'), icon: Eye },
+  awaiting_confirm: { label: '待确认', color: tone('warning'), icon: AlertCircle },
   scored: { label: '已评分', color: tone('info'), icon: Star },
   completed: { label: '已完成', color: tone('success'), icon: CheckCircle },
   failed: { label: '失败', color: tone('destructive'), icon: AlertCircle },
@@ -104,6 +105,7 @@ export default function AIGroupsPage() {
   const [selectedTask, setSelectedTask] = useState<GroupTask | null>(null);
   const [discussionMessages, setDiscussionMessages] = useState<DiscussionMessage[]>([]);
   const [showDiscussion, setShowDiscussion] = useState(false);
+  const [confirmNote, setConfirmNote] = useState('');
 
   // Create form state
   const [newName, setNewName] = useState('');
@@ -247,6 +249,24 @@ export default function AIGroupsPage() {
     }
   };
 
+  // F4b-㉓ 看板确认按钮：awaiting_confirm 任务的人工裁决口（确认放行/拒绝），
+  // 对齐 POST /api/ai-groups/{gid}/tasks/{tid}/confirm（approved+note）。
+  const handleConfirmTask = async (taskId: string, approved: boolean) => {
+    if (!selectedGroup) return;
+    try {
+      await apiFetch(`/api/ai-groups/${selectedGroup.id}/tasks/${taskId}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, note: confirmNote }),
+      });
+      setConfirmNote('');
+      setSelectedTask(null);
+      await fetchGroupDetail(selectedGroup.id);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
   const fetchDiscussion = async (taskId: string) => {
     if (!selectedGroup) return;
     try {
@@ -307,6 +327,18 @@ export default function AIGroupsPage() {
                   </Button>
                 </>
               )}
+              {selectedTask.status === 'awaiting_confirm' && (
+                <>
+                  <Button onClick={() => handleConfirmTask(selectedTask.id, true)}
+                    variant="chip-sm" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
+                    <CheckCircle className="w-3.5 h-3.5" />确认放行
+                  </Button>
+                  <Button onClick={() => handleConfirmTask(selectedTask.id, false)}
+                    variant="chip-sm" className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20">
+                    <X className="w-3.5 h-3.5" />拒绝
+                  </Button>
+                </>
+              )}
               <Button onClick={() => fetchDiscussion(selectedTask.id)} variant="secondary" className="gap-1">
                 <MessageSquare className="w-3.5 h-3.5" />讨论
               </Button>
@@ -314,8 +346,15 @@ export default function AIGroupsPage() {
           </div>
           {selectedTask.result && (
             <div className="mt-3">
-              <div className="text-xs text-muted-foreground mb-1">执行结果</div>
+              <div className="text-xs text-muted-foreground mb-1">{selectedTask.status === 'awaiting_confirm' ? '确认提示' : '执行结果'}</div>
               <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedTask.result}</pre>
+            </div>
+          )}
+          {selectedTask.status === 'awaiting_confirm' && (
+            <div className="mt-3">
+              <label className="text-xs text-muted-foreground mb-1 block">裁决说明（可选，拒绝时作为原因）</label>
+              <input className="w-full px-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
+                value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} placeholder="人工裁决备注..." />
             </div>
           )}
           {selectedTask.assigned_agent_id && (
@@ -479,7 +518,7 @@ export default function AIGroupsPage() {
               return (
                 <div key={task.id}
                   className="px-4 py-3 flex items-center justify-between hover:bg-muted/30 cursor-pointer"
-                  onClick={() => { setSelectedTask(task); }}>
+                  onClick={() => { setConfirmNote(''); setSelectedTask(task); }}>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm truncate">{task.goal}</div>
                     <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
