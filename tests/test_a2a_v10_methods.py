@@ -84,7 +84,7 @@ class TestV10SendMessageShape:
         assert set(result.keys()) == {"task"}, "SendMessage result 必须是 {task} 包裹体"
         task = result["task"]
         assert task["id"]
-        assert task["status"]["state"] in ("completed", "failed")
+        assert task["status"]["state"] in ("TASK_STATE_COMPLETED", "TASK_STATE_FAILED")
         assert "history" in task
 
     def test_wrapped_task_shape_matches_legacy_bare_dump(self, app_client):
@@ -125,7 +125,7 @@ class TestV10Continuation:
         task = second["result"]["task"]
         assert task["id"] == task_id, "message.taskId 续接必须回同一任务而非新建"
         assert len(task.get("history", [])) > n0, "续接必须追加消息"
-        assert task["history"][-1]["role"] == "agent"
+        assert task["history"][-1]["role"] == "ROLE_AGENT"
 
     def test_continuation_missing_task_fails_visible(self, app_client):
         """message.taskId 指向不存在任务=如实失败，禁静默新建任务。"""
@@ -170,7 +170,7 @@ class TestV10GetCancel:
         task = asyncio.run(task_manager.create_task(Message(**_msg()), metadata=STUB))
         data = _rpc(app_client, "CancelTask", {"id": task.id})
         assert data["result"]["id"] == task.id
-        assert data["result"]["status"]["state"] == "canceled"
+        assert data["result"]["status"]["state"] == "TASK_STATE_CANCELED"
 
     def test_v10_missing_id_errors_are_visible(self, app_client):
         for method in ("GetTask", "CancelTask"):

@@ -87,7 +87,7 @@ class TestNonStreamingRoutingRegression:
         assert resp.status_code == 200
         data = resp.json()
         assert "result" in data
-        assert data["result"]["status"]["state"] in ("completed", "failed")
+        assert data["result"]["status"]["state"] in ("TASK_STATE_COMPLETED", "TASK_STATE_FAILED")
 
     def test_unknown_method_still_rejected(self, app_client):
         resp = app_client.post(

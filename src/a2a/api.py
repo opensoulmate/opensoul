@@ -203,9 +203,7 @@ async def handle_send_message(params: dict) -> dict:
     故取 task 分支（{"task": {...}}），禁回裸 Task（那会与 v1.0 契约漂移）。
     """
     task = await _send_message_impl(params)
-    dump = _apply_history_limit(
-        task.model_dump(exclude_none=True), _history_length_from_params(params)
-    )
+    dump = _apply_history_limit(task.wire(), _history_length_from_params(params))
     return {"task": dump}
 
 
@@ -215,9 +213,7 @@ async def handle_task_send(params: dict) -> dict:
     既有契约=裸 Task dump 保持不变（既有客户端/测试零破坏）；废弃勿新增消费方。
     """
     task = await _send_message_impl(params)
-    return _apply_history_limit(
-        task.model_dump(exclude_none=True), _history_length_from_params(params)
-    )
+    return _apply_history_limit(task.wire(), _history_length_from_params(params))
 
 
 async def handle_task_get(params: dict) -> dict:
@@ -231,7 +227,7 @@ async def handle_task_get(params: dict) -> dict:
         # §5.4 TaskNotFoundError(-32001)（修前 -32603）
         raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
 
-    return _apply_history_limit(task.model_dump(exclude_none=True), params.get("historyLength"))
+    return _apply_history_limit(task.wire(), params.get("historyLength"))
 
 
 async def handle_task_cancel(params: dict) -> dict:
@@ -248,7 +244,7 @@ async def handle_task_cancel(params: dict) -> dict:
     if not task:
         raise A2AError(ErrorCode.TASK_NOT_CANCELABLE, f"Task cannot be canceled: {task_id}")
 
-    return task.model_dump(exclude_none=True)
+    return task.wire()
 
 
 async def handle_list_tasks(params: dict) -> dict:
@@ -284,7 +280,7 @@ async def handle_list_tasks(params: dict) -> dict:
 
     dumps = []
     for task in tasks:
-        d = _apply_history_limit(task.model_dump(exclude_none=True), history_length)
+        d = _apply_history_limit(task.wire(), history_length)
         if not include_artifacts:
             d.pop("artifacts", None)
         dumps.append(d)

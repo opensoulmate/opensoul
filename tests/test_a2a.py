@@ -109,7 +109,7 @@ class TestA2AEndpoint:
         result = data["result"]
         assert "id" in result
         assert "status" in result
-        assert result["status"]["state"] in ("completed", "failed")
+        assert result["status"]["state"] in ("TASK_STATE_COMPLETED", "TASK_STATE_FAILED")
 
     def test_task_get_not_found(self, client):
         resp = client.post(
@@ -165,7 +165,10 @@ class TestA2ASkillRouting:
         assert resp.status_code == 200
         data = resp.json()
         result = data.get("result", {})
-        assert result.get("status", {}).get("state") in ("completed", "failed")
+        assert result.get("status", {}).get("state") in (
+            "TASK_STATE_COMPLETED",
+            "TASK_STATE_FAILED",
+        )
         # Verify response contains knowledge-related content
         if result.get("status", {}).get("message"):
             text = result["status"]["message"]["parts"][0]["text"]
@@ -191,7 +194,10 @@ class TestA2ASkillRouting:
         assert resp.status_code == 200
         data = resp.json()
         result = data.get("result", {})
-        assert result.get("status", {}).get("state") in ("completed", "failed")
+        assert result.get("status", {}).get("state") in (
+            "TASK_STATE_COMPLETED",
+            "TASK_STATE_FAILED",
+        )
 
     def test_graph_skill_triggered(self, client):
         """'图谱' tag should route to graph handler."""
@@ -213,7 +219,10 @@ class TestA2ASkillRouting:
         assert resp.status_code == 200
         data = resp.json()
         result = data.get("result", {})
-        assert result.get("status", {}).get("state") in ("completed", "failed")
+        assert result.get("status", {}).get("state") in (
+            "TASK_STATE_COMPLETED",
+            "TASK_STATE_FAILED",
+        )
 
     def test_chat_fallback(self, client):
         """Messages without matching tags should fallback to chat."""
@@ -235,7 +244,10 @@ class TestA2ASkillRouting:
         assert resp.status_code == 200
         data = resp.json()
         result = data.get("result", {})
-        assert result.get("status", {}).get("state") in ("completed", "failed")
+        assert result.get("status", {}).get("state") in (
+            "TASK_STATE_COMPLETED",
+            "TASK_STATE_FAILED",
+        )
         # stub接线证据：应答携带确定性marker=服务端llm_mode=stub分支真实生效（且零外部LLM）
         reply = result["status"]["message"]["parts"][0]["text"]
         assert reply.startswith("[stub-llm]")
@@ -278,7 +290,7 @@ class TestA2ATaskLifecycle:
         assert get_resp.status_code == 200
         get_data = get_resp.json()
         assert get_data["result"]["id"] == task_id
-        assert get_data["result"]["status"]["state"] == "completed"
+        assert get_data["result"]["status"]["state"] == "TASK_STATE_COMPLETED"
 
         # Step 3: Cancel should fail (already completed)
         cancel_resp = client.post(
@@ -342,7 +354,7 @@ class TestA2ATaskLifecycle:
         agent_replies = [
             p["text"]
             for m in result2["history"]
-            if m["role"] == "agent"
+            if m["role"] == "ROLE_AGENT"
             for p in m["parts"]
             if p.get("type") == "text"
         ]

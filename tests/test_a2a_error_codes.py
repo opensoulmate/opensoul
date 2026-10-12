@@ -146,7 +146,10 @@ class TestTaskNotCancelable:
     def test_completed_task_cancel_is_not_cancelable(self, app_client):
         data = _rpc(app_client, "SendMessage", {"message": _msg(), "metadata": STUB})
         task_id = data["result"]["task"]["id"]
-        assert data["result"]["task"]["status"]["state"] in ("completed", "failed")
+        assert data["result"]["task"]["status"]["state"] in (
+            "TASK_STATE_COMPLETED",
+            "TASK_STATE_FAILED",
+        )
         cancel = _rpc(app_client, "CancelTask", {"id": task_id})
         assert _code(cancel) == ErrorCode.TASK_NOT_CANCELABLE
 
@@ -161,7 +164,7 @@ class TestTaskNotCancelable:
         task = asyncio.run(task_manager.create_task(Message(**_msg()), metadata=STUB))
         data = _rpc(app_client, "CancelTask", {"id": task.id})
         assert "result" in data
-        assert data["result"]["status"]["state"] == "canceled"
+        assert data["result"]["status"]["state"] == "TASK_STATE_CANCELED"
 
 
 class TestInvalidParams:

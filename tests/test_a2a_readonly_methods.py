@@ -362,7 +362,7 @@ class TestZeroRegression:
         task_id = created["task"]["id"]
         got = rpc(app_client, "GetTask", {"id": task_id})["result"]
         assert got["id"] == task_id
-        assert got["status"]["state"] == "completed"
+        assert got["status"]["state"] == "TASK_STATE_COMPLETED"
         listed = rpc(app_client, "ListTasks")["result"]
         assert [t["id"] for t in listed["tasks"]] == [task_id]
 

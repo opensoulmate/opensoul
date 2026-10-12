@@ -94,12 +94,12 @@ function shortId(id: string) {
 }
 
 const STATE_CONFIG: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
-  submitted: { label: '已提交', color: tone('info'), icon: Clock },
-  working: { label: '处理中', color: tone('warning'), icon: Loader2 },
-  'input-required': { label: '需要输入', color: tone('accent'), icon: MessageSquare },
-  completed: { label: '已完成', color: tone('success'), icon: CheckCircle },
-  failed: { label: '失败', color: tone('destructive'), icon: XCircle },
-  canceled: { label: '已取消', color: tone('muted'), icon: Ban },
+  TASK_STATE_SUBMITTED: { label: '已提交', color: tone('info'), icon: Clock },
+  TASK_STATE_WORKING: { label: '处理中', color: tone('warning'), icon: Loader2 },
+  TASK_STATE_INPUT_REQUIRED: { label: '需要输入', color: tone('accent'), icon: MessageSquare },
+  TASK_STATE_COMPLETED: { label: '已完成', color: tone('success'), icon: CheckCircle },
+  TASK_STATE_FAILED: { label: '失败', color: tone('destructive'), icon: XCircle },
+  TASK_STATE_CANCELED: { label: '已取消', color: tone('muted'), icon: Ban },
 };
 
 function StateBadge({ state }: { state: string }) {
@@ -107,7 +107,7 @@ function StateBadge({ state }: { state: string }) {
   const Icon = cfg.icon;
   return (
     <Badge className={`gap-1 ${cfg.color}`}>
-      <Icon className={`w-3 h-3 ${state === 'working' ? 'animate-spin' : ''}`} />
+      <Icon className={`w-3 h-3 ${state === 'TASK_STATE_WORKING' ? 'animate-spin' : ''}`} />
       {cfg.label}
     </Badge>
   );
@@ -231,7 +231,7 @@ function TaskDetail({ task, onCancel }: { task: Task; onCancel: (id: string) => 
             {task.history.length} 条消息 · {formatTime(task.status.timestamp)}
           </div>
         </div>
-        {task.status.state === 'working' && (
+        {task.status.state === 'TASK_STATE_WORKING' && (
           <Button
             onClick={(e) => { e.stopPropagation(); onCancel(task.id); }}
             variant="chip-xs" className="bg-red-500/10 text-red-500 hover:bg-red-500/20"
@@ -258,7 +258,7 @@ function TaskDetail({ task, onCancel }: { task: Task; onCancel: (id: string) => 
           {/* Message History */}
           <div className="space-y-1.5 max-h-[300px] overflow-auto">
             {task.history.map((msg, i) => {
-              const isUser = msg.role === 'user';
+              const isUser = msg.role === 'ROLE_USER';
               const text = msg.parts.filter(p => p.type === 'text').map(p => p.text).join('\n');
               return (
                 <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -511,7 +511,7 @@ export default function A2APage() {
       const data = await res.json();
       if (data.result) {
         setTasks((prev) =>
-          prev.map((t) => t.id === taskId ? { ...t, status: { ...t.status, state: 'canceled' } } : t)
+          prev.map((t) => t.id === taskId ? { ...t, status: { ...t.status, state: 'TASK_STATE_CANCELED' } } : t)
         );
       }
     } catch (e: any) {
@@ -634,7 +634,7 @@ export default function A2APage() {
               />
             </div>
             <div className="flex gap-1">
-              {['all', 'working', 'completed', 'failed', 'canceled'].map((s) => (
+              {['all', 'TASK_STATE_WORKING', 'TASK_STATE_COMPLETED', 'TASK_STATE_FAILED', 'TASK_STATE_CANCELED'].map((s) => (
                 <Button
                   key={s}
                   onClick={() => setStateFilter(s)}

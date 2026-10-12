@@ -54,7 +54,7 @@ class TestNewTaskHistoryOnce:
     def test_send_message_new_task_history_exactly_two(self, app_client):
         data = _rpc(app_client, "SendMessage", {"message": _msg(), "metadata": STUB})
         history = data["result"]["task"]["history"]
-        assert [m["role"] for m in history] == ["user", "agent"], (
+        assert [m["role"] for m in history] == ["ROLE_USER", "ROLE_AGENT"], (
             f"新任务历史应恰 [user, agent]，实得 {[m['role'] for m in history]}"
         )
         assert len(_ids(history)) == len(set(_ids(history))), "messageId 不得重复入史"
@@ -67,20 +67,20 @@ class TestNewTaskHistoryOnce:
             {"message": _msg("once only"), "metadata": STUB},
         )
         history = data["result"]["task"]["history"]
-        texts = [p.get("text", "") for m in history if m["role"] == "user" for p in m["parts"]]
+        texts = [p.get("text", "") for m in history if m["role"] == "ROLE_USER" for p in m["parts"]]
         assert texts == ["once only"], f"首条用户消息应恰入史一次，实得 {texts}"
 
     def test_legacy_tasks_send_same_integrity(self, app_client):
         """旧线名裸 Task 契约下同样恰入史一次（两代共用执行体）。"""
         data = _rpc(app_client, "tasks/send", {"message": _msg("legacy once"), "metadata": STUB})
         history = data["result"]["history"]
-        assert [m["role"] for m in history] == ["user", "agent"]
+        assert [m["role"] for m in history] == ["ROLE_USER", "ROLE_AGENT"]
         assert len(_ids(history)) == len(set(_ids(history)))
 
     def test_agent_reply_recorded_once(self, app_client):
         data = _rpc(app_client, "SendMessage", {"message": _msg(), "metadata": STUB})
         history = data["result"]["task"]["history"]
-        assert sum(1 for m in history if m["role"] == "agent") == 1
+        assert sum(1 for m in history if m["role"] == "ROLE_AGENT") == 1
 
 
 class TestContinuationNoDuplicates:
@@ -95,9 +95,12 @@ class TestContinuationNoDuplicates:
             {"message": _msg("round-2", taskId=task_id), "metadata": STUB},
         )
         history = second["result"]["task"]["history"]
-        assert [m["role"] for m in history] == ["user", "agent", "user", "agent"], (
-            f"两轮应恰 4 条 [u,a,u,a]，实得 {[m['role'] for m in history]}"
-        )
+        assert [m["role"] for m in history] == [
+            "ROLE_USER",
+            "ROLE_AGENT",
+            "ROLE_USER",
+            "ROLE_AGENT",
+        ], f"两轮应恰 4 条 [u,a,u,a]，实得 {[m['role'] for m in history]}"
         assert len(_ids(history)) == len(set(_ids(history))), "多轮历史不得有重复 messageId"
 
     def test_three_rounds_texts_unique_in_order(self, app_client):
@@ -111,7 +114,9 @@ class TestContinuationNoDuplicates:
             )
         got = _rpc(app_client, "GetTask", {"id": task_id})
         history = got["result"]["history"]
-        user_texts = [p.get("text", "") for m in history if m["role"] == "user" for p in m["parts"]]
+        user_texts = [
+            p.get("text", "") for m in history if m["role"] == "ROLE_USER" for p in m["parts"]
+        ]
         assert user_texts == ["t-1", "t-2", "t-3"], f"用户消息按序恰各一次，实得 {user_texts}"
 
     def test_true_source_matches_response(self, app_client):

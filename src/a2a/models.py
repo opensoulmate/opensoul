@@ -12,6 +12,82 @@ from uuid import uuid4
 
 from pydantic import BaseModel, field_validator
 
+# === v1.0 Enum wire shape (F4b-⑬) ===
+#
+# A2A v1.0 序列化面（proto-first / ProtoJSON，spec §5.5 JSON 字段命名 + §6.1 响应示例）：
+# TaskState / Role 的 JSON 值是 SCREAMING_SNAKE_CASE（"TASK_STATE_WORKING" / "ROLE_USER"），
+# 非 0.x 小写连字符形（"working" / "user"）——a2a-python v1.0 迁移文档「Enum values:
+# snake_case → SCREAMING_SNAKE_CASE」硬证（TaskState.submitted → TASK_STATE_SUBMITTED、
+# Role.user → ROLE_USER，ProtoJSON 按 enum 名序列化）。修前本实现 Task.status.state 与
+# Message.role 以 0.x 小写形直接 model_dump 进 wire = 全域序列化面漂移（卡面声明
+# protocolVersion 1.0.0 却吐 0.x 枚举形）。
+#
+# 设计（声明从实现派生 + 单点出口，F4b-⑤/envelope 同哲学）：内部表示保留归一小写形
+# （内部逻辑与测试稳定），wire() 单点派生 v1.0 形，全响应面唯一出口；输入双形兼容
+# （"user"/"ROLE_USER" 同收）。枚举值逐键照抄规范（§4.1.3 TaskState 全集 / Role），
+# 未知值不 fabricate 前缀——原样透传（off-spec 如实暴露，禁静默改写成不存在的枚举）。
+
+# §4.1.3 TaskState 全集：内部归一小写连字符形 → v1.0 SCREAMING_SNAKE 枚举值。
+_TASK_STATE_TO_WIRE = {
+    "unspecified": "TASK_STATE_UNSPECIFIED",
+    "submitted": "TASK_STATE_SUBMITTED",
+    "working": "TASK_STATE_WORKING",
+    "input-required": "TASK_STATE_INPUT_REQUIRED",
+    "completed": "TASK_STATE_COMPLETED",
+    "failed": "TASK_STATE_FAILED",
+    "canceled": "TASK_STATE_CANCELED",
+    "rejected": "TASK_STATE_REJECTED",
+    "auth-required": "TASK_STATE_AUTH_REQUIRED",
+}
+
+# Role 枚举：内部 'user'/'agent' → v1.0 'ROLE_USER'/'ROLE_AGENT'（§6.1）。
+_ROLE_TO_WIRE = {
+    "user": "ROLE_USER",
+    "agent": "ROLE_AGENT",
+}
+
+
+def _state_to_wire(state: str) -> str:
+    """内部归一小写形 → v1.0 TASK_STATE_*。已是 TASK_STATE_* 原样回（幂等禁双前缀）。
+
+    未知值（不在 §4.1.3 全集）不 fabricate 前缀——原样透传，如实暴露 off-spec。
+    """
+    if state.startswith("TASK_STATE_"):
+        return state
+    return _TASK_STATE_TO_WIRE.get(state, state)
+
+
+def _role_to_wire(role: str) -> str:
+    """内部 'user'/'agent' → v1.0 ROLE_*。已是 ROLE_* 原样回（幂等）。
+
+    A2A Role 仅 USER/AGENT/UNSPECIFIED；未知 role 不 fabricate ROLE_* 前缀——原样透传。
+    """
+    if role.startswith("ROLE_"):
+        return role
+    return _ROLE_TO_WIRE.get(role, role)
+
+
+def _normalize_role(value: Any) -> Any:
+    """Message.role 输入双形归一（v1.0 形 'ROLE_USER' → 内部 'user'）。
+
+    保证内部消费（_process_message 的 msg.role == \"user\" LLM 角色映射）对 v1.0 客户端
+    发的 ROLE_USER 仍正确；未知值原样保留（禁静默改写）。
+    """
+    if isinstance(value, str):
+        if value in ("ROLE_USER", "USER", "user"):
+            return "user"
+        if value in ("ROLE_AGENT", "AGENT", "agent"):
+            return "agent"
+    return value
+
+
+def _message_wire(d: dict[str, Any]) -> dict[str, Any]:
+    """单条 Message dump 的 role → v1.0 形（就地改返回 dict，不动内存本体）。"""
+    if "role" in d:
+        d["role"] = _role_to_wire(d["role"])
+    return d
+
+
 # === Agent Card ===
 
 
@@ -97,11 +173,18 @@ class AgentCard(BaseModel):
 
 
 class Message(BaseModel):
-    role: str  # "user" or "agent"
+    role: str  # 内部归一 "user"/"agent"；wire 面以 ROLE_* 呈现（见 _role_to_wire）
     parts: list[dict[str, Any]]
     messageId: str = ""
     taskId: str | None = None
     contextId: str | None = None
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _role_dual_shape(cls, v):
+        # v1.0 客户端发 "ROLE_USER" 归一到内部 "user"（输入双形兼容，F4b-⑬），
+        # 保证 _process_message 的 LLM 角色映射与内部消费正确。
+        return _normalize_role(v)
 
     def __init__(self, **data):
         if not data.get("messageId"):
@@ -146,6 +229,26 @@ class Task(BaseModel):
         if not data.get("contextId"):
             data["contextId"] = str(uuid4())
         super().__init__(**data)
+
+    def wire(self) -> dict[str, Any]:
+        """v1.0 序列化面唯一出口（F4b-⑬）：Task/Message/TaskStatus 的枚举值以 v1.0
+        SCREAMING_SNAKE_CASE（TASK_STATE_*/ROLE_*）呈现（spec §5.5/§6.1）。
+
+        只改返回 dict 不改内存本体（内部保留归一小写形，F4b-⑫ _apply_history_limit 同款
+        「只改返回 dump 不污染真源」纪律）。全响应面（SendMessage/tasks_send/tasks_get/
+        tasks_cancel/ListTasks）唯一经此口出，禁再有 model_dump 直出枚举值的第二条路。
+        """
+        d = self.model_dump(exclude_none=True)
+        st = d.get("status")
+        if isinstance(st, dict):
+            if "state" in st:
+                st["state"] = _state_to_wire(st["state"])
+            if isinstance(st.get("message"), dict):
+                _message_wire(st["message"])
+        for m in d.get("history", []) or []:
+            if isinstance(m, dict):
+                _message_wire(m)
+        return d
 
 
 # === JSON-RPC Models ===
