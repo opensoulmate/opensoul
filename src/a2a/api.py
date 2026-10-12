@@ -121,9 +121,10 @@ async def _send_message_impl(params: dict) -> Task:
         # Continue existing task
         task = await task_manager.process_task(task_id, message, metadata=metadata)
     else:
-        # Create new task
+        # Create new task —— 首条消息已由 create_task 入史（history=[message]），
+        # 处理不得重复入史（F4b-⑧ 修前 create_task+process_task 同一消息双 append）
         task = await task_manager.create_task(message, metadata=metadata)
-        task = await task_manager.process_task(task.id, message)
+        task = await task_manager.run_processing(task, message)
     return task
 
 

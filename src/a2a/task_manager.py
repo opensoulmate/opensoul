@@ -56,15 +56,29 @@ class TaskManager:
     async def process_task(
         self, task_id: str, message: Message, metadata: dict | None = None
     ) -> Task:
-        """Process a task - send message and get response."""
+        """Process a task - send message and get response.
+
+        续接语义：新消息入史（恰一次）+处理。新任务首条消息不走本口（create_task
+        已入史），走 run_processing —— 见 _send_message_impl。
+        """
         task = self.tasks.get(task_id)
         if not task:
             raise ValueError(f"Task not found: {task_id}")
         if metadata:
             task.metadata.update(metadata)
 
-        # Add user message to history
+        # Add user message to history（每条消息恰入史一次，F4b-⑧）
         task.history.append(message)
+        return await self.run_processing(task, message)
+
+    async def run_processing(self, task: Task, message: Message) -> Task:
+        """执行处理并把 agent 回复入史；message 不入史——入史责任在调用方。
+
+        新任务首条消息已由 create_task 入史（history=[message]，A2A §3.1.2 任务
+        历史以用户消息开头），处理不得再入史。修前 _send_message_impl 新任务路径
+        create_task+process_task 同一消息双 append（live 实证 hist=2 user+1 agent
+        =首条用户消息重复记录，多轮上下文也把首条喂两遍）。
+        """
         task.status = TaskStatus(state="working")
 
         try:
