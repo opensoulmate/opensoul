@@ -126,6 +126,16 @@ def _decode_page_token(token) -> tuple[datetime, str]:
 # 终态全集：进入终态即交互周期收束（流式收尾快照 + 推送 {"task"} 全量，同一真源）。
 _TERMINAL_STATES = ("completed", "failed", "canceled", "rejected")
 
+# 中断态全集（§11.7 Streaming「until the task reaches a terminal or interrupted
+# state, at which point the stream closes」；a2a-python TaskState.is_interrupted()
+# 同集合 INPUT_REQUIRED/AUTH_REQUIRED）：任务暂停等待用户输入——非终态（用户可续接，
+# §6.3 message.taskId 多轮正典），但流在此收束。auth-required 本实现暂无产生面
+# （如实记），列入是收流语义本然（同为中断态）。
+_INTERRUPTED_STATES = ("input-required", "auth-required")
+
+# 收流态=终态+中断态（§11.7：stream closes at terminal or interrupted state）。
+_STREAM_END_STATES = _TERMINAL_STATES + _INTERRUPTED_STATES
+
 
 def _status_update_payload(task: Task) -> dict:
     """状态迁移事件（StreamResponse 单键 {"statusUpdate"}，§4.1.5 TaskStatusUpdateEvent）。
@@ -183,6 +193,30 @@ class LLMStreamError(RuntimeError):
     当成功回复=流与终稿互相矛盾（谎报 ok，F1 语义收口同款纪律）。发块后故障必须走
     failed（错误进 status.message 不进 history，F4b-⑧）。
     """
+
+
+class TaskInputRequired(Exception):
+    """处理层 → 任务 input-required 的产生信号（F4b-⑱ 产生面）。
+
+    agent 本轮无法继续、需要用户补充输入时由处理层 raise，run_processing 归口到
+    TaskManager.require_input（唯一产生口）：问题以 agent 消息入史（恰一次，
+    F4b-⑧ 入史纪律）+ 状态置 input-required（中断态：非终态可续接 §6.3，流在此
+    收束 §11.7）。刻意与 LLMStreamError 分开——那是"生成中途故障必须 failed 可见"，
+    这是"正常暂停等用户输入"，不是错误（不 fabricated 成功也不 failed）。
+    """
+
+    def __init__(self, question: str):
+        super().__init__(question)
+        self.question = question
+
+
+# 产生面真实触发（F4b-⑱）：消息无可提取文本（空 parts / 仅图片 / 仅文件 / 仅 data
+# part——part_text 三形只认文本）→ agent 无法在本轮继续，如实暂停等用户补充文字输入。
+# 修前此处拿空 prompt 硬跑 LLM（llm_mode=stub 则回显空消息）→ fabricated completed。
+_NO_TEXT_QUESTION = (
+    "您的消息里没有可处理的文字内容（图片/文件/结构化数据暂不支持直接处理）。"
+    "请补充文字说明后继续，我会接着处理。"
+)
 
 
 class _ArtifactChunkStream:
@@ -482,17 +516,19 @@ class TaskManager:
           「MUST return a Task object as the first event in the stream, representing
           the current state of the task at the time of subscription」——首帧即订阅
           时点真态，防 GetTask→订阅间丢信息）
-        - first_frame_ends：首帧可否单独收流——SubscribeToTask 订阅已终态任务=恰一帧
-          即收流（True）；SendStreamingMessage 首帧恒信息帧（False）——处理还在后头，
-          收流由处理的终态收尾快照驱动，禁提前收流
+        - first_frame_ends：首帧可否单独收流——SubscribeToTask 订阅已收束态（终态/
+          中断态，§11.7「terminal or interrupted state…stream closes」）任务=恰一帧
+          即收流（True，修前只认终态：订阅已 input-required 的中断态任务首帧后流
+          悬挂）；SendStreamingMessage 首帧恒信息帧（False）——处理还在后头，收流由
+          处理的收尾快照驱动，禁提前收流
         """
         q: asyncio.Queue = asyncio.Queue()
         self._stream_subs.setdefault(task_id, []).append(q)
         if send_current:
             task = self.tasks.get(task_id)
             if task is not None:
-                terminal = task.status.state in _TERMINAL_STATES
-                q.put_nowait((_task_snapshot_payload(task), first_frame_ends and terminal))
+                ends = first_frame_ends and task.status.state in _STREAM_END_STATES
+                q.put_nowait((_task_snapshot_payload(task), ends))
         return q
 
     def unsubscribe_stream(self, task_id: str, q: asyncio.Queue) -> None:
@@ -673,6 +709,26 @@ class TaskManager:
         task = self.record_message(task_id, message, metadata=metadata)
         return await self.run_processing(task, message)
 
+    def require_input(self, task: Task, question: str) -> Task:
+        """input-required 唯一产生口（F4b-⑱ 产生面）：agent 问句入史 + 状态置中断态。
+
+        - 问句以 agent 消息入史恰一次（F4b-⑧ 入史纪律；与 completed 路径 agent_msg
+          同款：status.message 指同一消息对象，禁双入史）
+        - 状态= input-required（§4.1.3 中断态）：非终态——ensure_accepts_message 照常
+          收用户回答（§6.3 message.taskId 续接，多轮正典生产可达）；流在此收束
+          （§11.7「terminal or interrupted」，收尾推送/流式快照由 run_processing
+          统一收尾路径发出，与 completed/failed 同一收尾）
+        """
+        agent_msg = Message(
+            role="agent",
+            parts=[{"type": "text", "text": question}],
+            taskId=task.id,
+            contextId=task.contextId,
+        )
+        task.history.append(agent_msg)
+        task.status = TaskStatus(state="input-required", message=agent_msg)
+        return task
+
     async def run_processing(self, task: Task, message: Message) -> Task:
         """执行处理并把 agent 回复入史；message 不入史——入史责任在调用方。
 
@@ -680,6 +736,10 @@ class TaskManager:
         历史以用户消息开头），处理不得再入史。修前 _send_message_impl 新任务路径
         create_task+process_task 同一消息双 append（live 实证 hist=2 user+1 agent
         =首条用户消息重复记录，多轮上下文也把首条喂两遍）。
+
+        三态收口（F4b-⑱）：completed（正常回复）/ failed（处理故障）/ input-required
+        （TaskInputRequired——agent 问句入史后暂停等用户补充输入，§6.3 续接可达）；
+        三态共用同一收尾路径（推送 + 流式收束）。
         """
         task.status = TaskStatus(state="working")
         await self._notify_push(task)  # 状态迁移即任务更新 → webhook（§4.3.3）
@@ -688,6 +748,12 @@ class TaskManager:
         try:
             # Extract text from message parts
             user_text = self._extract_text(message)
+
+            # F4b-⑱ 产生面真实触发：无可提取文本（空 parts/仅图片/仅文件/仅 data
+            # part）→ agent 本轮无法继续，如实暂停等用户补充输入（修前拿空 prompt
+            # 硬跑 LLM、llm_mode=stub 则回显空消息=fabricated completed）
+            if not user_text.strip():
+                raise TaskInputRequired(_NO_TEXT_QUESTION)
 
             # Process based on skills — 端到端总预算25s（失败三级降级/kilocode）：
             # 任一处理层挂死都在客户端30s预算内优雅收场，不再有无界等待
@@ -710,6 +776,11 @@ class TaskManager:
             task.history.append(agent_msg)
             task.status = TaskStatus(state="completed", message=agent_msg)
 
+        except TaskInputRequired as e:
+            # 中断态归口（F4b-⑱）：正常暂停等用户输入，非故障——不 fabricated 成功
+            # 也不 failed；状态迁移本体走唯一产生口，收尾（推送/流式收束）与
+            # completed/failed 走同一收尾路径（下）
+            self.require_input(task, e.question)
         except Exception as e:
             logger.error(f"Task processing failed: {e}")
             task.status = TaskStatus(
@@ -721,9 +792,11 @@ class TaskManager:
                 ),
             )
 
-        await self._notify_push(task)  # 终态（completed/failed）→ {"task"} 全量投递
-        self._emit_stream(task, _status_update_payload(task))  # 流式：终态迁移事件
-        self.emit_stream_end(task)  # 流式：收尾快照（end）→ 订阅流收束
+        await self._notify_push(
+            task
+        )  # 终态（completed/failed）→ {"task"} 全量投递；input-required（中断态，非终态）→ {"statusUpdate"}
+        self._emit_stream(task, _status_update_payload(task))  # 流式：状态迁移事件
+        self.emit_stream_end(task)  # 流式：收尾快照（end）→ 订阅流收束（终态/中断态同款，§11.7）
         return task
 
     async def get_task(self, task_id: str) -> Task | None:

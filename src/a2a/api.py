@@ -386,8 +386,9 @@ async def handle_send_streaming_message(params: dict) -> _StreamSpec:
 async def handle_subscribe_to_task(params: dict) -> _StreamSpec:
     """v1.0 SubscribeToTask（§5.3/§9.4.6）—— 订阅既有任务的更新流（同 SSE 形）。
 
-    首帧=当前状态全量快照（已终态即收尾帧=订阅即收流），随后状态迁移事件，终态
-    快照后收流。params=SubscribeToTaskRequest 形（id REQUIRED，tenant 收下不解释）。
+    首帧=当前状态全量快照（已收束态——终态/中断态（§11.7）——即收尾帧=订阅即收流），
+    随后状态迁移事件，收尾快照后收流。params=SubscribeToTaskRequest 形（id REQUIRED，
+    tenant 收下不解释）。
     """
     task_id = params.get("id")
     if not task_id or not isinstance(task_id, str):
