@@ -172,7 +172,8 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
 
     # 5c. F4b-㉕ 决策落元认知账本（log_decision 修前全仓零调用点=wired-but-not-
     # functional，与 emotion_decision 同型）：决策+自评信心入账=校准对比的决策轴；
-    # 记账失败不阻断思考但必须可见。
+    # 记账失败不阻断思考但必须可见。ref=配对键（F4b-㉖）：ai_groups 同一 task_id
+    # 双写点（think session_id=verify task_id）→ get_confidence_calibration 配对校准。
     try:
         await meta.log_decision(
             decision=execute_mode,
@@ -181,6 +182,7 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
                 f"emotion={emotion_result.primary_emotion}, files={target_files}"
             ),
             confidence=effective_confidence,
+            ref=req.session_id or "",
         )
     except Exception as e:
         logger.warning("元认知决策记账失败（不阻断思考）: %s", e)
@@ -264,6 +266,7 @@ async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
     # 3. F4b-㉕ 结果落元认知账本（log_outcome 修前全仓零调用点=wired-but-not-
     # functional）：成败观测=agent_confidence 生产源派生的真源轴（think 未声明
     # 信心经 derive_agent_confidence 消费本账本）；记账失败不阻断验证但必须可见。
+    # ref=配对键（F4b-㉖）：与 think 决策行同键配对（ai_groups 同一 task_id）。
     try:
         from src.database.postgres import db_pool
         from src.mirror.metacognition import Metacognition
@@ -271,6 +274,7 @@ async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
         await Metacognition(db_pool, identity.tenant_id, req.agent_id).log_outcome(
             decision=req.action[:200] or "unspecified",
             outcome="success" if req.result.get("success") else "failure",
+            ref=req.task_id or "",
         )
     except Exception as e:
         logger.warning("元认知结果记账失败（不阻断验证）: %s", e)

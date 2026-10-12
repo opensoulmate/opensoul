@@ -36,6 +36,89 @@ def derive_agent_confidence(stats: dict, prior: float = 0.8, prior_strength: flo
     return round(min(max(derived, 0.0), 1.0), 3)
 
 
+def compute_confidence_calibration(
+    decision_rows: list[dict],
+    outcome_rows: list[dict],
+    high_threshold: float = 0.7,
+    tolerance: float = 0.2,
+) -> dict:
+    """F4b-㉖ 配对校准纯函数：把决策行（预测信心）与成败行（实际结果）按 ref 配成
+    校准观测，计算"预测信心 vs 实际成功率"。
+
+    配对语义（因果如实，禁虚构配对）：
+    - 每条成败行配「同 ref 且 (created_at, id) 不晚于它」的最近一条决策行——
+      结果归属于产生它之前最近的决策（多轮 think/verify 各自配对不乱串）
+    - 一决策可配多成败（同决策下多次 verify=同一预测的多次观测，如实各计）
+    - 空 ref（无配对键）/无前置决策的成败行 → 不配对如实计数，绝不硬凑
+    - 成败精确串 'success' 才计成功（F4b-㉕ 禁 '%success%' 子串误计纪律延续），
+      其他 outcome 串只进分母
+    返回契约：既有键（avg_confidence=配对观测的平均预测信心、high_confidence_count/
+    high_confidence_success_rate=高信心配对观测的计数/成功率（修前恒 0）、
+    calibration）+加性键（actual_success_rate、paired、unpaired_decisions、
+    unpaired_outcomes）。配不出任何对=calibration 'no_data'（校准无从谈起，
+    禁拿无配对数据硬算）。
+    """
+
+    def _key(row: dict) -> tuple[float, int]:
+        return (float(row.get("created_at") or 0), int(row.get("id") or 0))
+
+    def _ref(row: dict) -> str:
+        return str(row.get("ref") or "").strip()
+
+    decs = sorted(decision_rows, key=_key)
+    outs = sorted(outcome_rows, key=_key)
+    pairs: list[tuple[dict, dict]] = []
+    used_decision_ids: set[tuple[float, int]] = set()
+    unpaired_outcomes = 0
+    for o in outs:
+        if not _ref(o):
+            unpaired_outcomes += 1
+            continue
+        match = None
+        for d in decs:
+            if _ref(d) != _ref(o):
+                continue
+            if _key(d) <= _key(o):
+                match = d
+            else:
+                break  # decs 已按时间升序，后续只会更晚
+        if match is None:
+            unpaired_outcomes += 1
+            continue
+        used_decision_ids.add(_key(match))
+        pairs.append((match, o))
+
+    result = {
+        "avg_confidence": 0,
+        "high_confidence_count": 0,
+        "high_confidence_success_rate": 0,
+        "calibration": "no_data",
+        "actual_success_rate": 0,
+        "paired": len(pairs),
+        "unpaired_decisions": len(decs) - len(used_decision_ids),
+        "unpaired_outcomes": unpaired_outcomes,
+    }
+    if not pairs:
+        return result
+
+    confidences = [float(d["confidence"]) for d, _ in pairs]
+    avg_conf = sum(confidences) / len(confidences)
+    successes = sum(1 for _, o in pairs if (o.get("outcome") or "") == "success")
+    success_rate = successes / len(pairs)
+    high = [(d, o) for d, o in pairs if float(d["confidence"]) > high_threshold]
+    high_success = sum(1 for _, o in high if (o.get("outcome") or "") == "success")
+    result.update(
+        {
+            "avg_confidence": round(avg_conf, 2),
+            "high_confidence_count": len(high),
+            "high_confidence_success_rate": round(high_success / len(high), 2) if high else 0,
+            "calibration": "good" if abs(avg_conf - success_rate) < tolerance else "miscalibrated",
+            "actual_success_rate": round(success_rate, 2),
+        }
+    )
+    return result
+
+
 class Metacognition:
     """元认知引擎 — 自我审视、自我纠错"""
 
@@ -60,40 +143,60 @@ class Metacognition:
                     confidence REAL,
                     outcome TEXT,
                     lesson TEXT,
+                    ref TEXT,
                     created_at REAL NOT NULL
                 )
             """)
+            # F4b-㉖ schema 自愈（C1 幂等模式）：F4b-㉕ 前形态的老库缺 ref 配对键列，
+            # CREATE TABLE IF NOT EXISTS 不会给已存在表补列 → 幂等补列。
+            cols = await self.db.fetch("PRAGMA table_info(metacognition_log)")
+            if cols and "ref" not in {row["name"] for row in cols}:
+                await self.db.execute("ALTER TABLE metacognition_log ADD COLUMN ref TEXT")
         self._initialized = True
 
-    async def log_decision(self, decision: str, reasoning: str, confidence: float):
-        """记录一个决策及其推理过程"""
+    async def log_decision(self, decision: str, reasoning: str, confidence: float, ref: str = ""):
+        """记录一个决策及其推理过程。
+
+        ref=配对键（F4b-㉖）：think.session_id ↔ verify.task_id 同键双写点
+        （ai_groups 同一 task_id）→ get_confidence_calibration 按 ref 把决策行的
+        预测信心与成败行的实际结果配成校准观测；空 ref=无配对键，如实不配对。
+        """
         await self._ensure_table()
         if not self.db:
             return
         await self.db.execute(
             """INSERT INTO metacognition_log
-               (tenant_id, agent_id, event_type, decision, reasoning, confidence, created_at)
-               VALUES (?, ?, 'decision', ?, ?, ?, ?)""",
+               (tenant_id, agent_id, event_type, decision, reasoning, confidence, ref, created_at)
+               VALUES (?, ?, 'decision', ?, ?, ?, ?, ?)""",
             (
                 self.tenant_id,
                 self.agent_id,
                 decision[:500],
                 reasoning[:1000],
                 confidence,
+                ref or None,
                 time.time(),
             ),
         )
 
-    async def log_outcome(self, decision: str, outcome: str, lesson: str = ""):
-        """记录决策的结果和教训"""
+    async def log_outcome(self, decision: str, outcome: str, lesson: str = "", ref: str = ""):
+        """记录决策的结果和教训。ref=配对键（F4b-㉖，见 log_decision docstring）。"""
         await self._ensure_table()
         if not self.db:
             return
         await self.db.execute(
             """INSERT INTO metacognition_log
-               (tenant_id, agent_id, event_type, decision, outcome, lesson, created_at)
-               VALUES (?, ?, 'outcome', ?, ?, ?, ?)""",
-            (self.tenant_id, self.agent_id, decision[:500], outcome, lesson[:500], time.time()),
+               (tenant_id, agent_id, event_type, decision, outcome, lesson, ref, created_at)
+               VALUES (?, ?, 'outcome', ?, ?, ?, ?, ?)""",
+            (
+                self.tenant_id,
+                self.agent_id,
+                decision[:500],
+                outcome,
+                lesson[:500],
+                ref or None,
+                time.time(),
+            ),
         )
 
     async def reflect_recent(self, limit: int = 10) -> list[dict]:
@@ -128,36 +231,36 @@ class Metacognition:
         return [{"area": row["decision"], "fail_count": row["fail_count"]} for row in rows]
 
     async def get_confidence_calibration(self) -> dict:
-        """校准信心：预测信心 vs 实际成功率"""
+        """校准信心：预测信心 vs 实际成功率（F4b-㉖ 配对缺陷收口）。
+
+        修前结构缺陷（F4b-㉕ 留档）：decision 行（confidence 有值/outcome NULL）与
+        outcome 行（outcome 有值/confidence NULL）两行无配对键，而旧实现按单行同时读
+        confidence+outcome（WHERE confidence IS NOT NULL 选出的行 outcome 恒 NULL）
+        → high_confidence_success_rate 恒 0 → calibration 恒 'miscalibrated'。
+        现按 ref 配对键把两轴配成校准观测（compute_confidence_calibration 纯函数）。
+        窗口如实：最近各 50 行内配对，窗口外不虚构；配不出对如实报 no_data+计数。
+        """
         await self._ensure_table()
         if not self.db:
-            return {"avg_confidence": 0, "calibration": "no_data"}
-        rows = await self.db.fetch(
-            """SELECT confidence, outcome
+            return compute_confidence_calibration([], [])
+        dec_rows = await self.db.fetch(
+            """SELECT id, ref, confidence, created_at
                FROM metacognition_log
-               WHERE tenant_id = ? AND agent_id = ? AND confidence IS NOT NULL
-               ORDER BY created_at DESC LIMIT 50""",
+               WHERE tenant_id = ? AND agent_id = ? AND event_type = 'decision'
+                 AND confidence IS NOT NULL
+               ORDER BY created_at DESC, id DESC LIMIT 50""",
             (self.tenant_id, self.agent_id),
         )
-        if not rows:
-            return {"avg_confidence": 0, "calibration": "no_data"}
-
-        confidences = [r["confidence"] for r in rows]
-        avg_conf = sum(confidences) / len(confidences)
-
-        # 简单校准：高信心决策的成功率
-        high_conf = [r for r in rows if r["confidence"] and r["confidence"] > 0.7]
-        high_conf_success = sum(
-            1 for r in high_conf if r["outcome"] and "success" in str(r["outcome"])
+        out_rows = await self.db.fetch(
+            """SELECT id, ref, outcome, created_at
+               FROM metacognition_log
+               WHERE tenant_id = ? AND agent_id = ? AND event_type = 'outcome'
+               ORDER BY created_at DESC, id DESC LIMIT 50""",
+            (self.tenant_id, self.agent_id),
         )
-        success_rate = high_conf_success / len(high_conf) if high_conf else 0
-
-        return {
-            "avg_confidence": round(avg_conf, 2),
-            "high_confidence_count": len(high_conf),
-            "high_confidence_success_rate": round(success_rate, 2),
-            "calibration": "good" if abs(avg_conf - success_rate) < 0.2 else "miscalibrated",
-        }
+        return compute_confidence_calibration(
+            [dict(row) for row in dec_rows], [dict(row) for row in out_rows]
+        )
 
     async def confidence_stats(self) -> dict:
         """agent_confidence 生产源真源统计（F4b-㉕）。
