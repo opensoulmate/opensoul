@@ -14,7 +14,7 @@ import os
 import time
 
 from fastapi import APIRouter, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.services.tenant_binding import bind_identity
 
@@ -30,6 +30,9 @@ class ThinkRequest(BaseModel):
     user_input: str = ""
     repo_root: str = ""
     session_id: str = ""
+    # F4b-㉒：Agent 自身判断信心（0~1，缺省 0.8=信心充足）——情感驱动决策的低信心轴，
+    # 由调用方声明（think 自身无内生信心源，不伪造派生）；越界如实 422 拒
+    agent_confidence: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
 class VerifyRequest(BaseModel):
@@ -69,7 +72,8 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     from src.cortex.reflector import Reflector
     from src.cortex.risk_assessor import RiskAssessor
     from src.mind.emotion import EmotionAnalyzer
-    from src.models.cognitive import Intent, TaskContext
+    from src.mind.emotion_decision import EmotionDrivenDecision
+    from src.models.cognitive import Decision, Intent, TaskContext
 
     # 1. 情绪识别（mind模块）
     emotion = EmotionAnalyzer()
@@ -129,6 +133,22 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
         confirm_prompt = f"需要确认：{risk.recommendation}"
     else:
         execute_mode, confirm_prompt = "auto", None
+
+    # 5b. 情感驱动决策（mind模块，F4b-㉒ 接线——修前 adjust_decision 全仓零调用点）：
+    # 情绪/信心影响决策权重：负面情绪+低信心收紧门禁（auto→confirm_required）、
+    # 正面情绪+高信心可放宽到 auto；deny 风险底线不被放宽（adjust_decision 自身语义）。
+    decision = EmotionDrivenDecision().adjust_decision(
+        Decision(
+            intent=intent,
+            risk=risk,
+            edit_mode=edit_mode,
+            execute_mode=execute_mode,
+            confirm_prompt=confirm_prompt,
+        ),
+        user_emotion=emotion_result.primary_emotion,
+        agent_confidence=req.agent_confidence,
+    )
+    execute_mode, confirm_prompt = decision.execute_mode, decision.confirm_prompt
 
     # 6. 存入短期记忆（hippo模块）
     if req.session_id:
