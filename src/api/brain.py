@@ -74,8 +74,10 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     # tenant，收口在声明面；进程内直调不带 authorization=匿名语义，A1 接线不变）
     identity = bind_identity(authorization, req.tenant_id)
     from src.cortex.project_memory import ProjectMemory
-    from src.cortex.reflector import Reflector
     from src.cortex.risk_assessor import RiskAssessor
+    from src.database.postgres import db_pool
+    from src.learn.experience import ExperienceMemory
+    from src.learn.long_term import ADVISORY_SCOPE
     from src.mind.emotion import EmotionAnalyzer
     from src.mind.emotion_decision import EmotionDrivenDecision
     from src.models.cognitive import Decision, Intent, TaskContext
@@ -122,9 +124,14 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     )
 
     # 4. 风险评估（cortex模块）
+    # F4b-㉚ 失败经验风险轴接线：修前第二参硬编码 None（全仓唯一构造点）=
+    # 「历史失败经验」消费缝构造上不可达、ExperienceMemory 修前全仓零实例。
+    # 真源口径 ADVISORY_SCOPE（default/default）= experience_collect 采集口径
+    # （学习产出在哪写就去哪读，F2b-②c-1 单一源；按 req.agent_id 读恒空集——
+    # 生产行 agent_id 全 'default'，接线了≠跑通了）。
     assessor = RiskAssessor(
         ProjectMemory(req.repo_root) if req.repo_root else None,
-        None,
+        ExperienceMemory(db_pool, *ADVISORY_SCOPE),
     )
     task_ctx = TaskContext(user_input=req.user_input, intent=intent)
     risk = await assessor.assess(intent, task_ctx)
@@ -141,8 +148,7 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
 
     # 5a'. F4b-㉕ agent_confidence 生产源派生：声明优先；未声明从元认知账本真源
     # 派生（成败观测经验收缩，无观测回落 0.8 缺省=行为契约零变化）。账本不可读
-    # 不阻断思考，回落缺省并留痕可见。
-    from src.database.postgres import db_pool
+    # 不阻断思考，回落缺省并留痕可见。（db_pool 已在本函数顶部导入，F4b-㉚）
     from src.mirror.metacognition import Metacognition, derive_agent_confidence
 
     meta = Metacognition(db_pool, identity.tenant_id, req.agent_id)

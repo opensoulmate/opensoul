@@ -289,7 +289,9 @@ def classify_error_type(error: str) -> str:
 # 重合率（**字面**相关度，非语义 embedding，如实标注）取相关候选 top-k。
 # 宁缺勿滥：无关策略注入 prompt 是噪声还会误导执行，重合率低于门槛=零注入。
 
-_RELEVANCE_THRESHOLD = 0.15
+# 字面相关度门槛（单一源，禁手抄漂移——F4b-㉗ 纪律）：get_recommendations_for_prompt
+# 兜底检索与 experience._compute_relevance（F4b-㉚ 失败经验风险轴）共用同算法同门槛。
+LITERAL_OVERLAP_THRESHOLD = 0.15
 _RELEVANCE_CANDIDATES = 200
 
 
@@ -299,6 +301,20 @@ def _char_bigrams(text: str) -> set[str]:
     if len(s) < 2:
         return {s} if s else set()
     return {s[i : i + 2] for i in range(len(s) - 1)}
+
+
+def literal_overlap(a: str, b: str) -> float:
+    """字面相关度（0~1）：两段话术的字符二元组 Jaccard 重合率。
+
+    两段各自归一（normalize_intent_key，写/查同一真源）后比较；如实标注是
+    **字面**匹配非语义 embedding。F2b-② 兜底检索与 F4b-㉚ 失败经验风险轴
+    共用本函数（单一源禁两套算法漂移，门槛见 LITERAL_OVERLAP_THRESHOLD）。
+    """
+    left = _char_bigrams(normalize_intent_key(a))
+    right = _char_bigrams(normalize_intent_key(b))
+    if not left or not right:
+        return 0.0
+    return len(left.intersection(right)) / len(left.union(right))
 
 
 def format_advisory_for_prompt(recs: list | None, top_k: int = 3) -> str:
@@ -662,7 +678,7 @@ class LongTermLearning:
         语义（与 get_recommendations 同一读真源/同一准入，不造第二套）：
         1) 精确命中优先：直接复用 get_recommendations（normalize 同 key）；
         2) 无精确命中 → 字面相关度兜底：全量候选按字符二元组重合率（Jaccard）
-           排序，达 _RELEVANCE_THRESHOLD 才算相关（宁缺勿滥，无关=零注入）。
+           排序，达 LITERAL_OVERLAP_THRESHOLD 才算相关（宁缺勿滥，无关=零注入）。
         如实标注：相关度是**字面**匹配（字符二元组），非语义 embedding。
         """
         if not intent_summary:
@@ -690,11 +706,8 @@ class LongTermLearning:
             return []
         scored = []
         for row in rows:
-            key_bigrams = _char_bigrams(row["pattern_key"])
-            if not key_bigrams:
-                continue
-            overlap = len(target & key_bigrams) / len(target | key_bigrams)
-            if overlap >= _RELEVANCE_THRESHOLD:
+            overlap = literal_overlap(intent_summary, row["pattern_key"])
+            if overlap >= LITERAL_OVERLAP_THRESHOLD:
                 scored.append((overlap, row["confidence"] or 0.0, row))
         scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
         return [

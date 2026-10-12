@@ -48,7 +48,13 @@ class RiskAssessor:
             )
 
         if self.experience:
-            similar_failures = await self.experience.get_similar_failures(intent)
+            # F4b-㉚ 故障可见不阻断（F2b-②c-1 纪律）：历史失败经验是增强轴，读取
+            # 故障跳过该轴但风险评估照常（静默吞=盲区，logger 留真因可见）。
+            try:
+                similar_failures = await self.experience.get_similar_failures(intent)
+            except Exception as e:
+                logger.warning("历史失败经验读取失败（不阻断风险评估）: %s", e)
+                similar_failures = []
             if similar_failures:
                 level = "high" if len(similar_failures) >= 3 else "medium"
                 all_risks.append(
