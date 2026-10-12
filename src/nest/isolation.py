@@ -49,6 +49,7 @@ class ResourceType(StrEnum):
     ENTERPRISE_AUDIT = (
         "enterprise_audit"  # F3b-③c-2②c（2026-10-12）：企业审计面（enterprise.db audit_log 表）
     )
+    AGENT_MESSAGE = "agent_message"  # F3b-③c-2②d（2026-10-12）：agent 协作消息面（agent_collaboration.db agent_messages 表）
 
 
 @dataclass
@@ -142,6 +143,9 @@ class IsolationEngine:
         ),
         ResourceType.ENTERPRISE_AUDIT: IsolationPolicy(
             ResourceType.ENTERPRISE_AUDIT, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.AGENT_MESSAGE: IsolationPolicy(
+            ResourceType.AGENT_MESSAGE, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 
