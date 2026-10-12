@@ -13,6 +13,7 @@ from src.a2a.models import (
     JSONRPCRequest,
     JSONRPCResponse,
     Message,
+    Task,
 )
 from src.a2a.task_manager import task_manager
 
@@ -95,18 +96,26 @@ def _apply_history_limit(task_dump: dict, history_length) -> dict:
     return task_dump
 
 
-async def handle_task_send(params: dict) -> dict:
-    """Handle tasks/send - create or continue a task."""
-    task_id = params.get("id")
+def _history_length_from_params(params: dict):
+    """historyLength 取参双源（F4b-⑥ 语义延续）：v1.0 SendMessageConfiguration.historyLength
+    优先、旧草案 TaskSendParams 顶层 historyLength 兜底。"""
+    configuration = params.get("configuration") or {}
+    return configuration.get("historyLength", params.get("historyLength"))
+
+
+async def _send_message_impl(params: dict) -> Task:
+    """SendMessage/tasks/send 共用执行体：建任务或续任务+处理，返回 Task 本体。
+
+    任务续接双源（F4b-⑦）：旧草案 TaskSendParams 顶层 id、v1.0 SendMessageRequest
+    无顶层 id —— 续接骑在 message.taskId 上（spec §6.3 多轮示例）。响应形状不在
+    本层决定（v1.0 与旧线名各自包装，见 handle_send_message/handle_task_send）。
+    """
     message_data = params.get("message", {})
     message = Message(**message_data)
-    # A2A TaskSendParams.metadata → task.metadata（协议标准字段；
+    # A2A metadata → task.metadata（协议标准字段；
     # llm_mode=stub 供集成测试/离线演示走确定性应答，不打真实LLM）
     metadata = params.get("metadata") or {}
-    # historyLength 双源收口：v1.0 SendMessageConfiguration.historyLength 优先，
-    # 旧草案 TaskSendParams 顶层 historyLength 兜底（同 §3.2.4 语义）
-    configuration = params.get("configuration") or {}
-    history_length = configuration.get("historyLength", params.get("historyLength"))
+    task_id = params.get("id") or message_data.get("taskId")
 
     if task_id:
         # Continue existing task
@@ -115,8 +124,31 @@ async def handle_task_send(params: dict) -> dict:
         # Create new task
         task = await task_manager.create_task(message, metadata=metadata)
         task = await task_manager.process_task(task.id, message)
+    return task
 
-    return _apply_history_limit(task.model_dump(exclude_none=True), history_length)
+
+async def handle_send_message(params: dict) -> dict:
+    """v1.0 SendMessage —— 返回 SendMessageResponse（oneof task|message）。
+
+    spec §9.4.1：result 是 SendMessageResponse 包裹体而非裸 Task；本实现恒产 Task
+    故取 task 分支（{"task": {...}}），禁回裸 Task（那会与 v1.0 契约漂移）。
+    """
+    task = await _send_message_impl(params)
+    dump = _apply_history_limit(
+        task.model_dump(exclude_none=True), _history_length_from_params(params)
+    )
+    return {"task": dump}
+
+
+async def handle_task_send(params: dict) -> dict:
+    """旧草案 tasks/send（0.2/0.3 旧线名，Appendix A.2 重叠期服务端 MAY 接受旧形）。
+
+    既有契约=裸 Task dump 保持不变（既有客户端/测试零破坏）；废弃勿新增消费方。
+    """
+    task = await _send_message_impl(params)
+    return _apply_history_limit(
+        task.model_dump(exclude_none=True), _history_length_from_params(params)
+    )
 
 
 async def handle_task_get(params: dict) -> dict:
@@ -149,15 +181,33 @@ async def handle_task_cancel(params: dict) -> dict:
 # 已实现的 JSON-RPC 方法注册表。capabilities.streaming 派生自此表（见
 # streaming_supported）——加/删方法此处即唯一改动点，agent card 声明自动跟随，
 # 不必记得改第二处（否则正是 F4b-⑤ 修的声明漂移 bug 会复发）。
+#
+# 方法名两代并收（F4b-⑦）：v1.0 JSON-RPC 绑定（spec §9.1）是 PascalCase 方法名
+# （§5.3 方法映射表：SendMessage/GetTask/CancelTask）——protocolVersion 声明
+# 1.0.0 就必须应答 v1.0 方法名（修前只认 0.2 草案 tasks/* 旧线名，v1.0 客户端按
+# 卡面 protocolVersion 调 SendMessage 拿 Method not found=与 1.0.0 漂移）。
+# 0.2/0.3 旧线名按 Appendix A.2（重叠期服务端 MAY 接受旧形、新旧并收）保留为
+# 别名：返回旧契约形状（裸 Task），既有客户端/测试零破坏；废弃勿新增消费方。
 RPC_HANDLERS = {
+    # v1.0 正典名（spec §5.3/§9.4）
+    "SendMessage": handle_send_message,
+    "GetTask": handle_task_get,
+    "CancelTask": handle_task_cancel,
+    # 0.2/0.3 旧线名（重叠期别名，deprecated）
     "tasks/send": handle_task_send,
     "tasks/get": handle_task_get,
     "tasks/cancel": handle_task_cancel,
 }
 
-# A2A 流式 RPC 方法名（message/stream=v1.0、tasks/sendSubscribe=旧草案）。
-# 命中任一即视为支持流式。
-STREAMING_RPC_METHODS = ("message/stream", "tasks/sendSubscribe")
+# A2A 流式 RPC 方法名（多代并收同上）：v1.0 SendStreamingMessage/SubscribeToTask、
+# 0.3 message/stream、0.2 tasks/sendSubscribe。命中任一即视为支持流式——派生名单
+# 覆盖方法名各代，防"按 v1.0 名实现流式却因旧名单漏认"的二次漂移。
+STREAMING_RPC_METHODS = (
+    "SendStreamingMessage",
+    "SubscribeToTask",
+    "message/stream",
+    "tasks/sendSubscribe",
+)
 
 
 def streaming_supported() -> bool:
