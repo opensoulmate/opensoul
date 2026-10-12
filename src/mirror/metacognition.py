@@ -14,6 +14,12 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# 成败轴规范串单一源（F4b-㉗）：写点（brain verify）与全部读面分类（
+# compute_confidence_calibration/confidence_stats/get_blind_spots）共用，
+# 禁各处字面抄写漂移。判法=精确串（F4b-㉕/㉖ 纪律：禁 LIKE 子串误计）。
+SUCCESS_OUTCOME = "success"
+FAILURE_OUTCOME = "failure"
+
 
 def derive_agent_confidence(stats: dict, prior: float = 0.8, prior_strength: float = 2.0) -> float:
     """agent_confidence 生产源派生（F4b-㉕）：从元认知账本真源派生未声明信心。
@@ -103,10 +109,10 @@ def compute_confidence_calibration(
 
     confidences = [float(d["confidence"]) for d, _ in pairs]
     avg_conf = sum(confidences) / len(confidences)
-    successes = sum(1 for _, o in pairs if (o.get("outcome") or "") == "success")
+    successes = sum(1 for _, o in pairs if (o.get("outcome") or "") == SUCCESS_OUTCOME)
     success_rate = successes / len(pairs)
     high = [(d, o) for d, o in pairs if float(d["confidence"]) > high_threshold]
-    high_success = sum(1 for _, o in high if (o.get("outcome") or "") == "success")
+    high_success = sum(1 for _, o in high if (o.get("outcome") or "") == SUCCESS_OUTCOME)
     result.update(
         {
             "avg_confidence": round(avg_conf, 2),
@@ -214,19 +220,31 @@ class Metacognition:
         return [dict(row) for row in rows]
 
     async def get_blind_spots(self) -> list[dict]:
-        """识别盲区：经常失败的领域"""
+        """识别盲区：经常失败的领域（F4b-㉗ 子串匹配收口）。
+
+        修前 outcome LIKE '%fail%' 子串匹配与家族精确串纪律（F4b-㉕/㉖：
+        'success'/'failure' 精确串、禁子串误计）相悖，三类漂移：①子串假阳——
+        'failproof'/'no-fail'/'fail-safe' 等含 'fail' 的非失败串被误计失败
+        ②LIKE 大小写不敏感（'FAILURE' 被计）与 'success' 轴 BINARY 精确不对称
+        ③同一 outcome 轴三种判法（本函数子串 vs 其余两面精确串）。
+        现按成败轴单一源常量 FAILURE_OUTCOME 精确串计失败（声明从实现派生：
+        与写点 brain verify 同一真源常量）。
+        诚实边界：非规范串（'failed'/'fail'/'error'/'timeout'/'FAILURE' 等）
+        如实不计失败（宁窄勿滥，F4b-㉔ 闭集精确匹配纪律；生产写点只写
+        'success'/'failure' 两规范串，生产数据分类语义零变化）。
+        """
         await self._ensure_table()
         if not self.db:
             return []
         rows = await self.db.fetch(
             """SELECT decision, COUNT(*) as fail_count
                FROM metacognition_log
-               WHERE tenant_id = ? AND agent_id = ? AND event_type = 'outcome' AND outcome LIKE '%fail%'
+               WHERE tenant_id = ? AND agent_id = ? AND event_type = 'outcome' AND outcome = ?
                GROUP BY decision
                HAVING fail_count >= 2
                ORDER BY fail_count DESC
                LIMIT 5""",
-            (self.tenant_id, self.agent_id),
+            (self.tenant_id, self.agent_id, FAILURE_OUTCOME),
         )
         return [{"area": row["decision"], "fail_count": row["fail_count"]} for row in rows]
 
@@ -277,11 +295,11 @@ class Metacognition:
             """SELECT
                  SUM(CASE WHEN event_type = 'decision' THEN 1 ELSE 0 END) AS decisions,
                  SUM(CASE WHEN event_type = 'outcome' THEN 1 ELSE 0 END) AS outcomes,
-                 SUM(CASE WHEN event_type = 'outcome' AND outcome = 'success' THEN 1 ELSE 0 END) AS successes,
+                 SUM(CASE WHEN event_type = 'outcome' AND outcome = ? THEN 1 ELSE 0 END) AS successes,
                  AVG(CASE WHEN event_type = 'decision' THEN confidence END) AS avg_confidence
                FROM metacognition_log
                WHERE tenant_id = ? AND agent_id = ?""",
-            (self.tenant_id, self.agent_id),
+            (SUCCESS_OUTCOME, self.tenant_id, self.agent_id),
         )
         if row is None:
             return empty

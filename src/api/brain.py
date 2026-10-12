@@ -269,11 +269,12 @@ async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
     # ref=配对键（F4b-㉖）：与 think 决策行同键配对（ai_groups 同一 task_id）。
     try:
         from src.database.postgres import db_pool
-        from src.mirror.metacognition import Metacognition
+        from src.mirror.metacognition import FAILURE_OUTCOME, SUCCESS_OUTCOME, Metacognition
 
         await Metacognition(db_pool, identity.tenant_id, req.agent_id).log_outcome(
             decision=req.action[:200] or "unspecified",
-            outcome="success" if req.result.get("success") else "failure",
+            # F4b-㉗ 成败轴单一源常量（禁字面抄写漂移）：与读面分类同源
+            outcome=SUCCESS_OUTCOME if req.result.get("success") else FAILURE_OUTCOME,
             ref=req.task_id or "",
         )
     except Exception as e:
