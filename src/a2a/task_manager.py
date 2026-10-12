@@ -230,6 +230,28 @@ class TaskCancelled(Exception):
         self.ack = ack
 
 
+class TaskServiceUnavailable(Exception):
+    """处理层 → 任务 failed 的服务降级通知信号（F4b-㉘ 内层降级文本完成态语义收口）。
+
+    复核定性（F4b-⑲ 诚实边界①留档件"内层三级降级文本仍以 completed 回复——留档
+    另拍可复核"，复核即切片本体）：内层三级降级（LLM 失败→ACP 兜底→兜底也失败/
+    超时/空回复）修前 return 降级文本→run_processing 当正常回复标 completed——降级
+    文本内容是"服务故障通知+请检查配置"而非对用户问题的回答，与 F4b-⑲ 已裁决的
+    "AI处理超时…请稍后重试" fabricated completed 完全同型。同型同判（F4b-㉗ 成败轴
+    纪律）：降级通知≠成功回复，任务没干成活不标 completed。failed 的 status.message
+    同样把通知送达客户端（⑲ 先例）=UX 零损失、机器可读面如实。
+
+    与 TaskInputRequired/TaskCancelled 同族（处理层→任务状态的产生信号），
+    run_processing 唯一归口：state=failed、notice 进 status.message 不进 history
+    （F4b-⑧ 错误不入史）。与 LLMStreamError 刻意分开：那是"生成中途故障"（已发
+    分块不可撤回），这是"服务没给出回答"（无痕可撤，发块前失败路径）。
+    """
+
+    def __init__(self, notice: str):
+        super().__init__(notice)
+        self.notice = notice
+
+
 # 产生面真实触发（F4b-⑱）：消息无可提取文本（空 parts / 仅图片 / 仅文件 / 仅 data
 # part——part_text 三形只认文本）→ agent 无法在本轮继续，如实暂停等用户补充文字输入。
 # 修前此处拿空 prompt 硬跑 LLM（llm_mode=stub 则回显空消息）→ fabricated completed。
@@ -529,6 +551,10 @@ class TaskManager:
     # 端到端处理总预算（s）——run_processing 超时语义单一源（F4b-⑲）；
     # 类属性供测试短缩（真实 wait_for 计时语义不动）。
     PROCESS_BUDGET_S = 25.0
+
+    # ACP 兜底预算（s）——_handle_chat 三处 wait_for 兜底超时单一源（F4b-㉘，
+    # PROCESS_BUDGET_S 同款纪律：类属性供测试短缩，真实计时语义不动）。
+    ACP_FALLBACK_BUDGET_S = 10.0
 
     def __init__(self):
         self.tasks: dict[str, Task] = {}
@@ -902,9 +928,10 @@ class TaskManager:
         create_task+process_task 同一消息双 append（live 实证 hist=2 user+1 agent
         =首条用户消息重复记录，多轮上下文也把首条喂两遍）。
 
-        三态收口（F4b-⑱）：completed（正常回复）/ failed（处理故障/预算超时——失败
-        可见禁降级谎报，F4b-⑲）/ input-required（TaskInputRequired——agent 问句入史
-        后暂停等用户补充输入，§6.3 续接可达）；三态共用同一收尾路径（推送+流式收束）。
+        三态收口（F4b-⑱）：completed（正常回复）/ failed（处理故障/预算超时/服务
+        降级通知——失败可见禁降级谎报，F4b-⑲/㉘）/ input-required（TaskInputRequired
+        ——agent 问句入史后暂停等用户补充输入，§6.3 续接可达）；三态共用同一收尾
+        路径（推送+流式收束）。
         """
         task.status = TaskStatus(state="working")
         await self._notify_push(task)  # 状态迁移即任务更新 → webhook（§4.3.3）
@@ -948,6 +975,21 @@ class TaskManager:
             # 禁当查询参数 fabricate 结果；也不 completed——没干的活不标成功
             # （F4b-⑲ fabricated completed 同型纪律）。状态迁移本体走唯一产生口。
             self.cancel_by_user(task, e.ack)
+        except TaskServiceUnavailable as e:
+            # 服务降级通知归口（F4b-㉘，F4b-⑲ 诚实边界①留档复核件）：内层三级降级
+            # 文本≠成功回复——修前降级文本当正常回复标 completed（⑲ fabricated
+            # completed 同型）。失败可见：state=failed、通知进 status.message 不进
+            # history（F4b-⑧）；通知照样送达客户端（status.message）=UX 零损失。
+            logger.error(f"Task processing degraded: {e.notice}")
+            task.status = TaskStatus(
+                state="failed",
+                message=Message(
+                    role="agent",
+                    parts=[{"type": "text", "text": e.notice}],
+                    taskId=task.id,
+                    contextId=task.contextId,
+                ),
+            )
         except TimeoutError:
             # 预算超时收口（F4b-⑲，F4b-⑱ 留档⑤）：25s 总预算耗尽=处理被强制取消、
             # 未产出真实回复——修前把"AI处理超时…请稍后重试"降级文本当成功回复入史
@@ -1104,10 +1146,15 @@ class TaskManager:
 
         except TimeoutError:
             logger.warning("Knowledge handler timed out")
-            return f"知识库查询超时：「{text}」\n\n请确保数据库和向量搜索服务已启动。"
+            # 降级通知≠回答（F4b-㉘）：查询没跑成不标 completed
+            raise TaskServiceUnavailable(
+                f"知识库查询超时：「{text}」\n\n请确保数据库和向量搜索服务已启动。"
+            )
         except Exception as e:
             logger.error(f"Knowledge handler error: {e}")
-            return f"知识库查询出错：{str(e)}\n\n请确保数据库和向量搜索服务已启动。"
+            raise TaskServiceUnavailable(
+                f"知识库查询出错：{str(e)}\n\n请确保数据库和向量搜索服务已启动。"
+            ) from e
 
     async def _handle_search(self, text: str, task: Task) -> str:
         """Search using real OpenSoul search service (hybrid semantic + fulltext)."""
@@ -1136,6 +1183,17 @@ class TaskManager:
             elif isinstance(fulltext_results, list):
                 ft_list = fulltext_results
 
+            # 两条腿全失败=查询根本没跑成（F4b-㉘）：修前静默落"未找到匹配结果"
+            # 标 completed=fabricated 空结果（服务故障伪装成真实空答案）。单腿失败
+            # 或双腿真跑空→"未找到"是真实回答，completed 不变（宁窄勿滥）。
+            if isinstance(semantic_results, BaseException) and isinstance(
+                fulltext_results, BaseException
+            ):
+                raise TaskServiceUnavailable(
+                    f"搜索出错：语义搜索与全文搜索均失败"
+                    f"（{semantic_results}；{fulltext_results}）\n\n请确保搜索服务已配置。"
+                )
+
             lines = [f"搜索结果：「{text}」\n"]
 
             if sem_list:
@@ -1159,9 +1217,12 @@ class TaskManager:
 
             return "\n".join(lines)
 
+        except TaskServiceUnavailable:
+            # 本函数自己产生的终局信号（双腿全失败），不走出错降级改写（F4b-㉘）
+            raise
         except Exception as e:
             logger.error(f"Search handler error: {e}")
-            return f"搜索出错：{str(e)}\n\n请确保搜索服务已配置。"
+            raise TaskServiceUnavailable(f"搜索出错：{str(e)}\n\n请确保搜索服务已配置。") from e
 
     async def _handle_graph(self, text: str, task: Task) -> str:
         """Query knowledge graph using real OpenSoul graph service."""
@@ -1201,10 +1262,13 @@ class TaskManager:
 
         except TimeoutError:
             logger.warning("Graph handler timed out")
-            return f"图谱查询超时：「{text}」\n\n请确保图谱数据库已启动。"
+            # 降级通知≠回答（F4b-㉘）：查询没跑成不标 completed
+            raise TaskServiceUnavailable(f"图谱查询超时：「{text}」\n\n请确保图谱数据库已启动。")
         except Exception as e:
             logger.error(f"Graph handler error: {e}")
-            return f"图谱查询出错：{str(e)}\n\n请确保图谱数据库已启动。"
+            raise TaskServiceUnavailable(
+                f"图谱查询出错：{str(e)}\n\n请确保图谱数据库已启动。"
+            ) from e
 
     async def _handle_chat(self, text: str, task: Task) -> str:
         """AI chat using real LLM proxy or ACP fallback.
@@ -1214,7 +1278,9 @@ class TaskManager:
         （字节零变化）。多 choice（F4b-⑰）：主 choice（index 0）=回复文本（history
         契约零变化），非主 choice 一律物化为独立 artifact（name="response-{index}"）
         不静默丢。失败分流以"已发块不可撤回"为界：
-        - 发块前失败 → 既有 ACP 降级语义零变化（无痕可撤，连 pending 块也不出）
+        - 发块前失败 → 走 ACP 兜底链；兜底也失败=TaskServiceUnavailable→failed
+          可见（F4b-㉘ 降级通知≠回答，修前降级文本标 completed；无痕可撤，连
+          pending 块也不出）
         - 发块后故障 → LLMStreamError 让任务 failed 可见（禁降级文本与已发流互相矛盾）
         """
         # 离线stub模型（agno全隔离测试范式 + CAMEL"能程序化验证的绝不靠LLM"）：
@@ -1234,7 +1300,9 @@ class TaskManager:
 
             if not api_key or not base_url:
                 # Fallback to ACP/hermes if no LLM configured
-                return await asyncio.wait_for(self._handle_acp_chat(text, task), timeout=10.0)
+                return await asyncio.wait_for(
+                    self._handle_acp_chat(text, task), timeout=self.ACP_FALLBACK_BUDGET_S
+                )
 
             # Build conversation history from task
             messages = [
@@ -1284,8 +1352,15 @@ class TaskManager:
                     logger.warning(f"LLM API error {resp.status_code}, falling back to ACP")
                     # 与异常路径同款wait_for——此前这里裸await无界（httpx 120s），
                     # 外部LLM故障时拖穿客户端30s预算（test_chat_fallback ReadTimeout根因）
-                    return await asyncio.wait_for(self._handle_acp_chat(text, task), timeout=10.0)
+                    return await asyncio.wait_for(
+                        self._handle_acp_chat(text, task), timeout=self.ACP_FALLBACK_BUDGET_S
+                    )
 
+        except TaskServiceUnavailable:
+            # 服务降级=终局信号（F4b-㉘）：ACP 已宣告不可用，不再重试 fallback
+            # （修前会拿降级通知再走一遍 except Exception 的兜底=同请求双打 ACP），
+            # 直达 run_processing 唯一归口。
+            raise
         except Exception as e:
             if stream is not None and stream.committed:
                 # 已发分块不可撤回：剩余块 lastChunk 收尾（客户端不悬挂）后如实失败
@@ -1293,9 +1368,15 @@ class TaskManager:
                 raise LLMStreamError(f"LLM stream interrupted: {e}") from e
             logger.error(f"Chat handler error: {e}")
             try:
-                return await asyncio.wait_for(self._handle_acp_chat(text, task), timeout=10.0)
+                return await asyncio.wait_for(
+                    self._handle_acp_chat(text, task), timeout=self.ACP_FALLBACK_BUDGET_S
+                )
             except TimeoutError:
-                return f"收到您的消息：{text}\n\nAI服务超时，请检查服务配置。"
+                # 降级通知≠回答（F4b-㉘）：三级降级全耗尽（LLM 失败→ACP 超时），
+                # 修前 return 降级文本标 completed=fabricated completed（⑲ 同型）。
+                # 通知去 echo（"收到您的消息"是回复口吻，失败通知不是回复；⑲ 测试
+                # 已判 echo 为修前缺陷面）。
+                raise TaskServiceUnavailable("AI服务超时，请检查服务配置。")
         finally:
             # 任何 unwind（含外层预算超时取消——CancelledError 不经上面 except
             # Exception）已发块不悬挂：剩余块 lastChunk 收尾（F4b-⑯b"客户端不悬挂"
@@ -1378,25 +1459,30 @@ class TaskManager:
         return "".join(parts)
 
     async def _handle_acp_chat(self, text: str, task: Task) -> str:
-        """Fallback chat using ACP proxy service."""
+        """Fallback chat using ACP proxy service.
+
+        降级通知≠回答（F4b-㉘）：ACP 也给不出回复（空 content/异常）时修前 return
+        降级文本被 run_processing 当正常回复标 completed=fabricated completed
+        （F4b-⑲ 同型）——现 raise TaskServiceUnavailable 走 failed 归口。raise 点
+        移出 try（防被本函数 except Exception 自捕获改写真因）。
+        """
         try:
             import httpx
 
-            # socket超时与调用方10s wait_for预算对齐（原120s让取消与socket互相打架）
+            # socket超时与调用方wait_for预算对齐（原120s让取消与socket互相打架）
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
                     "http://localhost:8092/acp/send",
                     json={"text": text, "session_id": str(task.id)},
                 )
                 data = resp.json()
-                response = data.get("content", "")
-                if response:
-                    return response
-            return f"收到您的消息：{text}\n\nAI服务暂时不可用，请检查LLM配置或hermes服务。"
-
         except Exception as e:
             logger.error(f"ACP proxy error: {e}")
-            return f"收到您的消息：{text}\n\nAI服务暂时不可用（{str(e)}），请检查服务配置。"
+            raise TaskServiceUnavailable(f"AI服务暂时不可用（{str(e)}），请检查服务配置。") from e
+        response = data.get("content", "")
+        if response:
+            return response
+        raise TaskServiceUnavailable("AI服务暂时不可用，请检查LLM配置或hermes服务。")
 
     async def _handle_default(self, text: str, task: Task) -> str:
         return await self._handle_chat(text, task)
