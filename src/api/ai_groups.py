@@ -1789,16 +1789,13 @@ async def _run_task_chain(group_id: str, parent_task_id: str, discuss_after: boo
 async def _learned_advisory_for(run_goal: str) -> tuple[str, int]:
     """F2b-② 推荐回流取数口：learned_patterns → 执行 prompt 建议块（条数可观测）。
 
-    与 proactive pattern_extract / POST /api/brain/learn 共用 LongTermLearning
-    同一读真源；tenant/agent 取 "default"/"default" = experience_collect 采集
-    口径（学习产出在哪写就去哪读）。返回 (建议块, 条数)，无推荐=("", 0) 零注入。
+    读真源/口径已收编 src.learn.long_term.learned_advisory_for 单一源
+    （F2b-②b chat/ws_chat 对话面同口）；本函数保留为 ai_groups 模块接缝。
+    返回 (建议块, 条数)，无推荐=("", 0) 零注入。
     """
-    from src.database.postgres import db_pool
-    from src.learn.long_term import LongTermLearning, format_advisory_for_prompt
+    from src.learn.long_term import learned_advisory_for
 
-    learning = LongTermLearning(db_pool, "default", "default")
-    recs = await learning.get_recommendations_for_prompt(run_goal, top_k=3)
-    return format_advisory_for_prompt(recs), len(recs)
+    return await learned_advisory_for(run_goal)
 
 
 async def _execute_task_impl(

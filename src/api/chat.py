@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from src.config import settings
 from src.cortex.loop_guard import LoopGuard
 from src.cortex.token_attribution import (
+    KIND_IMPROVEMENT,
     KIND_MEMORY,
     KIND_MESSAGE,
     KIND_RAG,
@@ -75,6 +76,24 @@ def _get_memory_context(query: str) -> str:
     except Exception as exc:
         logger.debug("hippo memory context unavailable: %s", exc)
         return ""
+
+
+async def _get_learned_advisory(query: str) -> tuple[str, bool]:
+    """F2b-②b 推荐回流对话面：learned_patterns → prompt 软建议块（条数可观测）。
+
+    取数口=src.learn.long_term.learned_advisory_for 单一源（与任务执行面同口径）。
+    返回 (建议块, 取数是否失败)。学习层故障不阻断 chat 但必须可见
+    （F2b-②"禁静默"纪律：learned-context-error 日志 + 调用方可见面）；
+    无推荐=("", False) 零注入（宁缺勿滥，无关建议是噪声）。
+    """
+    try:
+        from src.learn.long_term import learned_advisory_for
+
+        block, _n = await learned_advisory_for(query)
+        return block, False
+    except Exception as exc:
+        logger.warning("learned-context-error: %s", exc)
+        return "", True
 
 
 def _redact_outbound(text: str) -> str:
@@ -273,11 +292,12 @@ def _attribute_chat_context(
     provider: str = "",
     session_key: str = "",
     actual_prompt_tokens: int | None = None,
+    advisory: str = "",
 ) -> dict | None:
     """P1: 上下文逐项token归因（claude-code SDKContextUsage移植）。
 
-    每次LLM请求把上下文构成逐项记账：hippo记忆逐条 / RAG chunk逐块 / 用户问题，
-    并按模型窗口计算percentage与over_limit（hard_limit vs compaction_window）。
+    每次LLM请求把上下文构成逐项记账：hippo记忆逐条 / RAG chunk逐块 / 用户问题
+    （F2b-②b 起含学习建议块逐行），并按模型窗口计算percentage与over_limit（hard_limit vs compaction_window）。
     观测性旁路：任何失败只debug日志，不阻断chat主路径（fail-safe）。
     """
     try:
@@ -290,6 +310,17 @@ def _attribute_chat_context(
                         kind=KIND_MEMORY,
                         name=f"hippo_memory[{i}]",
                         source="hippo.long_term_memory",
+                        tokens=estimate_tokens(ln),
+                    )
+                )
+        if advisory:
+            adv_lines = [ln for ln in advisory.splitlines() if ln.strip()]
+            for i, ln in enumerate(adv_lines):
+                items.append(
+                    ContextItem(
+                        kind=KIND_IMPROVEMENT,
+                        name=f"learned_advisory[{i}]",
+                        source="learn.long_term",
                         tokens=estimate_tokens(ln),
                     )
                 )
@@ -365,8 +396,12 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
 
     if not results:
         yield f"data: {json.dumps({'type': 'info', 'content': 'RAG检索不可用，直接使用LLM回答。'})}\n\n"
+        # F2b-②b 推荐回流对话面：learned_patterns → prompt 软建议块（无关=零注入）
+        advisory, adv_failed = await _get_learned_advisory(question)
+        if adv_failed:
+            yield f"data: {json.dumps({'type': 'info', 'content': '学习建议获取失败（不影响回答）。'})}\n\n"
         # 降级：不返回error，继续走LLM路径（模型路由接线：按mode选target+备target重试）
-        prompt = question
+        prompt = f"{question}\n\n{advisory}" if advisory else question
         attempts, _meta = _route_llm_targets(question)
         # P0-6决策延迟回填：路由决策先记pending，真实结果在本请求内回填同一条目
         dec_id = _route_decision_begin(question, _meta, attempts)
@@ -378,6 +413,7 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
             model=(attempts[0].get("model") if attempts else None),
             provider=(attempts[0].get("provider", "") if attempts else ""),
             session_key=str(user_id),
+            advisory=advisory,
         )
         attempt_log: list = []
         last_exc: Exception | None = None
@@ -453,12 +489,17 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
 
     # P0-6: 注入hippo三因子记忆上下文
     memory_ctx = _get_memory_context(question)
+    # F2b-②b 推荐回流对话面：learned_patterns → prompt 软建议块（无关=零注入）
+    advisory, adv_failed = await _get_learned_advisory(question)
+    if adv_failed:
+        yield f"data: {json.dumps({'type': 'info', 'content': '学习建议获取失败（不影响回答）。'})}\n\n"
 
     # Send sources first
     yield f"data: {json.dumps({'type': 'sources', 'content': sources})}\n\n"
 
     prompt = f"""Based on the following context, answer the question. If the context doesn't contain enough information, say so.
 {memory_ctx}
+{advisory}
 Context:
 {context}
 
@@ -481,6 +522,7 @@ Answer:"""
         model=(attempts[0].get("model") if attempts else None),
         provider=(attempts[0].get("provider", "") if attempts else ""),
         session_key=str(user_id),
+        advisory=advisory,
     )
     attempt_log = []
     last_exc: Exception | None = None
@@ -581,9 +623,13 @@ async def chat(req: ChatRequest, user_id: UUID):
 
     # P0-6: 注入hippo三因子记忆上下文
     memory_ctx = _get_memory_context(req.question)
+    # F2b-②b 推荐回流对话面：learned_patterns → prompt 软建议块（无关=零注入；
+    # 取数失败=learned-context-error 日志可见，非流式无 SSE 面故只有日志可见面）
+    advisory, _adv_failed = await _get_learned_advisory(req.question)
 
     prompt = f"""Based on the following context, answer the question. If the context doesn't contain enough information, say so.
 {memory_ctx}
+{advisory}
 Context:
 {context}
 
@@ -642,6 +688,7 @@ Answer:"""
         or (attempts[0].get("provider", "") if attempts else ""),
         session_key=str(user_id),
         actual_prompt_tokens=nonstream_usage,
+        advisory=advisory,
     )
     if answer is None:
         return {

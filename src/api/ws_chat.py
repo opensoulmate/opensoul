@@ -445,6 +445,24 @@ async def run_agent_proxy(
             entry["status"] = "failed"  # 兜底：异常路径不留 running 假象
 
 
+async def _get_learned_advisory(text: str) -> tuple[str, bool]:
+    """F2b-②b 推荐回流对话面：learned_patterns → 发给 agent 的 prompt 软建议块。
+
+    取数口=src.learn.long_term.learned_advisory_for 单一源（与任务执行/chat 面同口径）。
+    返回 (建议块, 取数是否失败)。学习层故障不阻断对话但必须可见
+    （F2b-②"禁静默"纪律：learned-context-error 日志 + info 帧）；
+    无推荐=("", False) 零注入（宁缺勿滥，无关建议是噪声）。
+    """
+    try:
+        from src.learn.long_term import learned_advisory_for
+
+        block, _n = await learned_advisory_for(text)
+        return block, False
+    except Exception as exc:
+        logger.warning("learned-context-error: %s", exc)
+        return "", True
+
+
 @router.websocket("/chat")
 async def chat_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time chat.
@@ -455,6 +473,7 @@ async def chat_websocket(websocket: WebSocket):
     - Server sends: {"type": "chunk", "text": "..."} (streaming chunks)
     - Server sends: {"type": "agent_event", "event": "output|stderr|tool_call|heartbeat", "text": "..."}
       (agent_proxy 模式过程可见事件；stdout 响应行走 chunk，其余事件走此帧不混入响应文本)
+    - Server sends: {"type": "info", "message": "..."} (过程提示，如学习建议获取失败；未知 type 客户端忽略即兼容)
     - Server sends: {"type": "done", "text": "...", "source": "..."} (final response)
     - Server sends: {"type": "error", "message": "..."} (on error)
     """
@@ -499,6 +518,17 @@ async def chat_websocket(websocket: WebSocket):
                 if not text:
                     await websocket.send_json({"type": "error", "message": "Empty message"})
                     continue
+
+                # F2b-②b 推荐回流对话面：learned_patterns → 发给 agent 的 prompt 软建议块
+                # （ws_chat 无 system 通道，建议块随消息文本送达且自带"以任务要求为准"
+                # 免责；无关=零注入。取数失败可见不阻断：info 帧 + 日志）
+                advisory, adv_failed = await _get_learned_advisory(text)
+                if adv_failed:
+                    await websocket.send_json(
+                        {"type": "info", "message": "学习建议获取失败（不影响对话）。"}
+                    )
+                if advisory:
+                    text = f"{text}\n\n{advisory}"
 
                 # Signal thinking
                 await websocket.send_json({"type": "thinking"})

@@ -701,3 +701,19 @@ class LongTermLearning:
             (self.tenant_id, self.agent_id),
         )
         return {"patterns": count}
+
+
+async def learned_advisory_for(intent: str, top_k: int = 3) -> tuple[str, int]:
+    """推荐回流通用取数口（F2b-②b：任务执行/chat/ws_chat 对话面共用单一口径）。
+
+    与 proactive pattern_extract / POST /api/brain/learn 共用 LongTermLearning
+    同一读真源；tenant/agent 取 "default"/"default" = experience_collect 采集
+    口径（学习产出在哪写就去哪读）。返回 (建议块, 条数)，无推荐=("", 0) 零注入。
+    异常如实抛出不吞——降级可见性是消费方的事（F2b-②"故障不阻断但必须可见"
+    由各消费面以自己的可见面落实），此处禁静默吞故障造"无推荐"假象。
+    """
+    from src.database.postgres import db_pool
+
+    learning = LongTermLearning(db_pool, "default", "default")
+    recs = await learning.get_recommendations_for_prompt(intent, top_k=top_k)
+    return format_advisory_for_prompt(recs), len(recs)
