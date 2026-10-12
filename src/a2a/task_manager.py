@@ -218,6 +218,60 @@ _NO_TEXT_QUESTION = (
     "请补充文字说明后继续，我会接着处理。"
 )
 
+# ── 技能参数缺失触发件（F4b-㉑ input-required 产生面深化第二件） ────────────────
+# 查询型技能把消息文本当查询参数消费（_handle_knowledge/_handle_search 直接拿
+# 消息文本当查询串）；文本只剩触发词（+寒暄填充）时=参数缺失——修前拿触发词硬跑
+# 查询 fabricate 结果（「搜索」→搜「搜索」回"未找到"）。chat（自由对话）/graph
+# （无参概览）不消费查询参数不触发（宁窄勿滥，F4b-⑳ 关键词纪律同款）。
+# 声明留实现侧不进卡面：AgentSkill 是 v1.0 §4.4.7 规范字段集，加非规范字段=卡面
+# 漂移（F4b-⑪ 纪律）。
+_SKILL_QUERY_PARAM = {
+    "knowledge": "查询内容",
+    "search": "搜索关键词",
+}
+
+# 寒暄/填充词（闭集字面匹配非语义理解）：残余参数=去掉触发词后再剥填充词，
+# 空串=参数缺失。宁窄勿滥——漏判沿用旧路径，不误伤有参数的调用。
+_SKILL_FILLER_WORDS = (
+    "一下",
+    "查询",
+    "搜索",
+    "看看",
+    "帮我",
+    "帮忙",
+    "麻烦",
+    "谢谢",
+    "多谢",
+    "请",
+    "查",
+    "搜",
+    "找",
+    "看",
+)
+
+# §6.3 续接回填路由记忆（Task.metadata 键，加性契约）：问的是技能参数时记下
+# skill_id，用户回答=参数回填同一技能执行。
+_PENDING_SKILL_KEY = "_pending_skill_id"
+
+
+def _strip_fillers(text: str) -> str:
+    """剥寒暄填充词+空白标点（最长优先防「查询」被「查」拆出「询」残渣）。"""
+    for w in sorted(_SKILL_FILLER_WORDS, key=len, reverse=True):
+        text = text.replace(w, "")
+    return text.strip(" \t\r\n,，。.！!？?：:；;、~…—-")
+
+
+def _skill_residual(text: str, tag: str) -> str:
+    """技能调用残余参数：文本去掉触发词（大小写不敏感首现）+填充词后的实质内容。
+
+    空串=参数缺失（触发词/寒暄之外没有任何实质内容）。
+    """
+    if tag:
+        idx = text.lower().find(tag.lower())
+        if idx >= 0:
+            text = text[:idx] + text[idx + len(tag) :]
+    return _strip_fillers(text)
+
 
 class _ArtifactChunkStream:
     """LLM 生成文本 → TaskArtifactUpdateEvent token 级分块发射（F4b-⑯b）。
@@ -852,12 +906,44 @@ class TaskManager:
                 texts.append(text)
         return "\n".join(texts)
 
+    def _skill_param_question(self, skill_id: str) -> str:
+        """技能参数缺失问句（F4b-㉑）：按 skill_id 查卡面名，首问/再问同一文案源。"""
+        name = skill_id
+        for s in self.agent_card.skills:
+            if s.id == skill_id:
+                name = s.name
+                break
+        param = _SKILL_QUERY_PARAM.get(skill_id, "参数")
+        return (
+            f"技能「{name}」需要{param}才能执行：请补充您要{param}的具体内容后继续，我会接着处理。"
+        )
+
     async def _process_message(self, text: str, task: Task) -> str:
-        """Process a message and return response using skill routing."""
+        """Process a message and return response using skill routing.
+
+        F4b-㉑ 技能参数缺失触发件（input-required 产生面深化第二件）：
+        - 查询型技能（_SKILL_QUERY_PARAM）匹配到触发词、但去掉触发词/寒暄后无
+          实质内容=参数缺失 → TaskInputRequired 问用户要参数，禁拿触发词硬跑查询
+          fabricate 结果（修前「搜索」→搜「搜索」回"未找到"）。
+        - §6.3 续接回填：问的是技能参数时用户回答=参数（task.metadata 路由记忆），
+          直接回填同一技能执行——回答通常不含触发词，按普通路由会掉进 LLM chat
+          到不了提问的技能=参数永远送不达。pending 消费一次即清；回答仍无实质
+          内容=再问（不丢不重，F4b-⑱ 同语义）。
+        """
+        pending = task.metadata.pop(_PENDING_SKILL_KEY, "")
+        if pending:
+            if _strip_fillers(text):
+                return await self._handle_skill(pending, text, task)
+            task.metadata[_PENDING_SKILL_KEY] = pending
+            raise TaskInputRequired(self._skill_param_question(pending))
+
         # Default: echo back with skill routing
         for skill in self.agent_card.skills:
             for tag in skill.tags:
                 if tag.lower() in text.lower():
+                    if skill.id in _SKILL_QUERY_PARAM and not _skill_residual(text, tag):
+                        task.metadata[_PENDING_SKILL_KEY] = skill.id
+                        raise TaskInputRequired(self._skill_param_question(skill.id))
                     return await self._handle_skill(skill.id, text, task)
 
         # No skill match — use LLM chat as fallback
