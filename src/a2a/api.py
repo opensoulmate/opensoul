@@ -349,7 +349,8 @@ async def handle_send_streaming_message(params: dict) -> _StreamSpec:
     旧草案顶层 id）、随发送推送配置双源、historyLength 双源（收尾快照 history 收口）
     全部走与 SendMessage 同一取参口（单一源）。与非流式口的差别只在交付面：
     帧序随 §3.1.2 Task lifecycle stream——首帧=Task 全量快照（「MUST begin with
-    the Task object」，订阅时点真态），随后状态迁移/artifact 事件逐帧推，终态
+    the Task object」，订阅时点真态；续接首帧与新任务首帧对称：均含刚发出的
+    新消息——入史先于订阅，F4b-⑯e），随后状态迁移/artifact 事件逐帧推，终态
     快照后收流（v1.0 收流=终态指示）。
     """
     message_data = params.get("message", {})
@@ -363,11 +364,15 @@ async def handle_send_streaming_message(params: dict) -> _StreamSpec:
     if task_id:
         # Continue existing task —— 续接准入在开流前单一收口（存在性/contextId 一致性/
         # 推断/终态拒收，与 _send_message_impl 同一 ensure_accepts_message；错误如实
-        # JSON-RPC 回禁伪 SSE）；订阅先于启动处理：处理中的迁移事件一帧不丢
+        # JSON-RPC 回禁伪 SSE）；入史先于订阅（F4b-⑯e 续接首帧对称化：首帧快照含刚
+        # 发出的新消息，与新任务首帧 create_task 已入史对称——修前订阅先于入史，
+        # 续接首帧 history 缺新消息=不对称），订阅先于启动处理：处理中的迁移事件
+        # 一帧不丢
         task = await task_manager.ensure_accepts_message(task_id, message)
         _register_inline_push(task.id, inline_push)
+        task = task_manager.record_message(task.id, message, metadata=metadata)
         queue = task_manager.subscribe_stream(task.id, send_current=True, first_frame_ends=False)
-        coro = task_manager.process_task(task.id, message, metadata=metadata)
+        coro = task_manager.run_processing(task, message)
     else:
         task = await task_manager.create_task(message, metadata=metadata)
         _register_inline_push(task.id, inline_push)

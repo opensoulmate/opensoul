@@ -308,7 +308,13 @@ class TestA2ATaskLifecycle:
         assert "error" in cancel_data
 
     def test_multi_turn_conversation(self, client):
-        """Test sending multiple messages to the same task."""
+        """Test multi-turn conversation flow.
+
+        F4b-⑯d 后契约：终态任务拒收新消息（-32004，§3.1.1/§3.1.2）——同任务多轮
+        仅非终态可达（生产无 input-required 产生面），多轮正典=§3.4.3 同 contextId
+        新任务续上下文。同任务 history 累积（[u,a,u,a]）由进程内测试面覆盖
+        （test_a2a_continuation_first_frame / test_a2a_history_integrity）。
+        """
         # First message
         resp1 = client.post(
             "/a2a",
@@ -326,9 +332,12 @@ class TestA2ATaskLifecycle:
             },
         )
         assert resp1.status_code == 200
-        task_id = resp1.json()["result"]["id"]
+        result1 = resp1.json()["result"]
+        task_id = result1["id"]
+        context_id = result1["contextId"]
+        assert [m["role"] for m in result1["history"]] == ["ROLE_USER", "ROLE_AGENT"]
 
-        # Second message to same task
+        # Second message to same task → 终态拒收（F4b-⑯d；修前照常重跑=协议违规）
         resp2 = client.post(
             "/a2a",
             json={
@@ -346,15 +355,38 @@ class TestA2ATaskLifecycle:
             },
         )
         assert resp2.status_code == 200
-        result2 = resp2.json()["result"]
-        assert result2["id"] == task_id
-        # Should have more history messages now
-        assert len(result2.get("history", [])) >= 4  # 2 user + 2 agent
+        env2 = resp2.json()
+        assert env2["error"]["code"] == -32004
+        assert task_id in env2["error"]["message"]
+
+        # 多轮正典（§3.4.3）：同 contextId 新任务续上下文
+        resp3 = client.post(
+            "/a2a",
+            json={
+                "jsonrpc": "2.0",
+                "id": "multi-3",
+                "method": "tasks/send",
+                "params": {
+                    "metadata": {"llm_mode": "stub"},
+                    "message": {
+                        "role": "user",
+                        "contextId": context_id,
+                        "parts": [{"type": "text", "text": "能详细说说吗"}],
+                    },
+                },
+            },
+        )
+        assert resp3.status_code == 200
+        result3 = resp3.json()["result"]
+        assert result3["id"] != task_id
+        assert result3["contextId"] == context_id  # §3.4.3 contextId 采纳
+        assert [m["role"] for m in result3["history"]] == ["ROLE_USER", "ROLE_AGENT"]
+
         # 两次agent回复都走stub确定性应答（本测试全程零外部LLM）
         # wire 面 part 为 v1.0 平铺 oneof 形（F4b-⑭）：判别式=成员名，无 type/kind 键
         agent_replies = [
             p["text"]
-            for m in result2["history"]
+            for m in list(result1["history"]) + list(result3["history"])
             if m["role"] == "ROLE_AGENT"
             for p in m["parts"]
             if "text" in p

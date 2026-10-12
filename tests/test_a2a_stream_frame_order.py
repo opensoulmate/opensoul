@@ -262,10 +262,12 @@ class TestSendStreamingFrameOrder:
         assert [m["role"] for m in final_task["history"]] == ["ROLE_USER", "ROLE_AGENT"]
 
     @pytest.mark.asyncio
-    async def test_continuation_first_frame_is_subscription_truth(self):
-        """续接首帧=订阅时点真态（新消息入史在订阅后=「at the time of subscription」
-        字面语义），终稿快照含全史 4 条——首帧/终稿各自如实，禁 fabricate。
-        续接走 §6.3 input-required 路径（F4b-⑯d 终态拒收）。"""
+    async def test_continuation_first_frame_symmetric_with_new_task(self):
+        """续接首帧与新任务首帧对称（F4b-⑯e）：首帧快照含刚发出的新消息（入史
+        先于订阅），与新任务首帧 history=[user] 同语义——修前订阅先于入史，
+        续接首帧缺新消息与新任务首帧不对称。state 仍订阅时点真值（处理未启动
+        =input-required），终稿快照含全史 4 条。续接走 §6.3 input-required 路径
+        （F4b-⑯d 终态拒收）。"""
         app = _make_app()
         c1 = await _SseClient(
             _rpc(
@@ -287,9 +289,14 @@ class TestSendStreamingFrameOrder:
         frames = c2.frame_list
         first_task, final_task = _assert_task_lifecycle_grammar(frames, "fo-2b")
         assert first_task["id"] == task_id  # 续接同任务
-        # 订阅时点真态：input-required 待续（§6.3）+ 新消息尚未入史（history 恰 2 条）
+        # 对称化（F4b-⑯e）：首帧含刚发出的新消息（history 恰 3 条，尾条=turn-2）
         assert first_task["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
-        assert [m["role"] for m in first_task["history"]] == ["ROLE_USER", "ROLE_AGENT"]
+        assert [m["role"] for m in first_task["history"]] == [
+            "ROLE_USER",
+            "ROLE_AGENT",
+            "ROLE_USER",
+        ]
+        assert first_task["history"][-1]["parts"] == [{"text": "turn-2"}]
         # 终稿快照含新消息（history 恰 4 条，F4b-⑧ 契约零变化）
         assert [m["role"] for m in final_task["history"]] == [
             "ROLE_USER",
@@ -326,7 +333,8 @@ class TestSendStreamingFrameOrder:
         ).collect(app)
         first_task, final_task = _assert_task_lifecycle_grammar(c2.frame_list, "fo-3b")
         assert len(first_task["history"]) == 1  # 首帧同样不超发
-        assert first_task["history"][0]["role"] == "ROLE_AGENT"  # 最近 N=全量后缀
+        # 最近 N=全量后缀：对称化（F4b-⑯e）后首帧全史含新消息 [u,a,u]，尾 1 条=新消息
+        assert first_task["history"][0]["role"] == "ROLE_USER"
         assert len(final_task["history"]) == 1
 
         _reopen(task_id)  # 终态拒收（F4b-⑯d）：续接走 §6.3 input-required 路径

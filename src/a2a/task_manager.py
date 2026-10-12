@@ -515,7 +515,7 @@ class TaskManager:
     async def ensure_accepts_message(self, task_id: str, message: Message) -> Task:
         """续接准入单一收口（SendMessage/SendStreamingMessage/旧线名共用路由缝）：
 
-        1. 存在性（§3.4.2）：不存在 → TaskNotFoundError(-32001)（与 process_task
+        1. 存在性（§3.4.2）：不存在 → TaskNotFoundError(-32001)（与 record_message
            续接 raise 点同码同文案）
         2. contextId 一致性（§3.4.3「Agents MUST reject messages containing
            mismatching contextId and taskId」）：双给且不等 → InvalidParamsError
@@ -551,13 +551,14 @@ class TaskManager:
             )
         return task
 
-    async def process_task(
-        self, task_id: str, message: Message, metadata: dict | None = None
-    ) -> Task:
-        """Process a task - send message and get response.
+    def record_message(self, task_id: str, message: Message, metadata: dict | None = None) -> Task:
+        """续接消息入史（恰一次）——入史权与处理权分离（F4b-⑧ 入史权拆分，F4b-⑯e）。
 
-        续接语义：新消息入史（恰一次）+处理。新任务首条消息不走本口（create_task
-        已入史），走 run_processing —— 见 _send_message_impl。
+        流式续接路由缝须在「入史」与「处理」之间订阅：首帧快照才含刚发出的新
+        消息，续接首帧与新任务首帧对称（F4b-⑯e——修前订阅先于入史，续接首帧
+        history 缺新消息，而新任务首帧 create_task 已入史=不对称）。非流式续接
+        走 process_task=本口+run_processing（契约不变）。agent 回复入史在
+        run_processing；错误进 status.message 不入史（F4b-⑧）。
         """
         task = self.tasks.get(task_id)
         if not task:
@@ -569,6 +570,18 @@ class TaskManager:
 
         # Add user message to history（每条消息恰入史一次，F4b-⑧）
         task.history.append(message)
+        return task
+
+    async def process_task(
+        self, task_id: str, message: Message, metadata: dict | None = None
+    ) -> Task:
+        """Process a task - send message and get response.
+
+        续接语义：新消息入史（恰一次，record_message）+处理（run_processing）。
+        新任务首条消息不走本口（create_task 已入史）；流式续接拆开走
+        record_message→订阅→run_processing（F4b-⑯e 续接首帧对称化）。
+        """
+        task = self.record_message(task_id, message, metadata=metadata)
         return await self.run_processing(task, message)
 
     async def run_processing(self, task: Task, message: Message) -> Task:
