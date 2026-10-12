@@ -138,6 +138,16 @@ BUILTIN_HARD_DENY = [
     ("terminal", "chown -R /"),
 ]
 
+# 毁机/毁盘硬规则的锚定正则（P0-10 终验实证）：只命中目标为根的毁灭形，
+# 不误伤 rm -rf /tmp/x / chmod -R 777 /home/x 等普通绝对路径操作（→ 走 ask 人工可批）。
+# 与 acp-proxy permission_gate._DEGRADED_HARD_PATTERNS 同源锚定语义。
+_ANCHORED_ROOT_RES = {
+    "rm -rf /": re.compile(r"\brm\s+-rf\s+/(?:\s|$|\*)"),
+    "rm -rf /*": re.compile(r"\brm\s+-rf\s+/(?:\s|$|\*)"),
+    "chmod -R 777 /": re.compile(r"\bchmod\s+-R\s+777\s+/(?:\s|$|\*)"),
+    "chown -R /": re.compile(r"\bchown\s+-R\s+/(?:\s|$|\*)"),
+}
+
 # 普通ask：敏感操作需人工确认（session来源allow规则可覆盖 — kilocode findLast）
 BUILTIN_ASK = [
     # shell提权/系统管理/出网（供应链攻击面 — SUMMARY.md行业信号7）
@@ -256,6 +266,13 @@ def match_rule(rule_content: str | None, tool_name: str, tool_input: dict) -> bo
         cmd = _shell_command_of(tool_input)
         if not cmd:
             return False
+        anchored = _ANCHORED_ROOT_RES.get(rule_content)
+        if anchored is not None:
+            # 毁机/毁盘目标锚定（P0-10 终验实证根因修复）：子串匹配会把
+            # "rm -rf /tmp/x" 误判成 "rm -rf /" 毁机 → 过度硬否决（合法删除
+            # 无法人工批准）。硬规则只锚定目标本身（"/"、"/*"、"/ --no-preserve-root"），
+            # 普通绝对路径删除回落到 builtin ask（删库类强制 ask，人工可批）。
+            return bool(anchored.search(cmd))
         if rule_content.endswith(":*") or rule_content.endswith(" *"):
             # 前缀通配："git:*" 匹配 "git push origin main"
             prefix = rule_content.rstrip("*").rstrip(":").rstrip()

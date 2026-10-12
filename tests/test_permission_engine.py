@@ -209,6 +209,34 @@ class TestLayering:
         assert len(BUILTIN_HARD_DENY) >= 5
         assert len(BUILTIN_ASK) >= 10
 
+    # ── P0-10 毁机硬规则锚定（终验实证回归） ──
+
+    def test_hard_deny_anchored_root_only(self):
+        """毁机硬规则只锚定根目标：rm -rf /tmp/x 不得被 'rm -rf /' 子串误伤成 hard deny"""
+        e = make_engine(PermissionMode.BYPASS)
+        d = e.check("terminal", {"command": "rm -rf /tmp/p010_db"})
+        # 不是 hard 否决；回落 builtin ask（删库类强制 ask，人工可批）
+        assert d.behavior == PermissionBehavior.ASK
+        assert d.requires_human is True
+
+    def test_hard_deny_root_forms_still_blocked(self):
+        """根毁灭形（/、/*、--no-preserve-root）仍 hard deny，BYPASS 不可覆盖"""
+        e = make_engine(PermissionMode.BYPASS)
+        for cmd in ("rm -rf /", "rm -rf /*", "rm -rf / --no-preserve-root"):
+            d = e.check("terminal", {"command": cmd})
+            assert d.behavior == PermissionBehavior.DENY, cmd
+            assert "HARD" in d.message, cmd
+
+    def test_hard_deny_anchored_chmod_chown(self):
+        """chmod/chown 同类锚定：/tmp 目标走 ask，根目标 hard deny"""
+        e = make_engine(PermissionMode.BYPASS)
+        d = e.check("terminal", {"command": "chmod -R 777 /tmp/p010_x"})
+        assert d.behavior == PermissionBehavior.ASK
+        d = e.check("terminal", {"command": "chmod -R 777 /"})
+        assert d.behavior == PermissionBehavior.DENY
+        d = e.check("terminal", {"command": "chown -R /"})
+        assert d.behavior == PermissionBehavior.DENY
+
 
 # ── 建议生成（AgentScope _generate_suggestions） ────────────────
 
