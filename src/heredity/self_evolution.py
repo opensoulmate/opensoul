@@ -13,6 +13,8 @@ import re
 import time
 from typing import Optional
 
+from src.learn.long_term import classify_error_type, learned_failure_fixes_for
+
 logger = logging.getLogger(__name__)
 
 # 提案生命周期（2026-10-05轮，LobeChat declareSelfFeedbackIntent去重语义）：
@@ -21,6 +23,15 @@ logger = logging.getLogger(__name__)
 # 运行都无条件INSERT。治理三件套：签名去重（无新证据不复读）+ 新鲜度窗口
 # （陈旧已修复模式不再进入分析）+ 存量归档（compact_duplicate_logs）。
 FRESH_PATTERN_WINDOW_S = 7 * 86400  # 失败模式活跃度窗口：last_seen超窗=不再提案
+
+# 既有规则文案（无学习推荐时的回落，字面保留=契约零变化）：syntax/timeout
+# 有专属规则，其余类别（permission/not_found/other）一律"增加前置检查"——
+# 修前内联判断链语义原样收编（判断键=classify_error_type 单一源）。
+_RULE_RECOMMENDATIONS = {
+    "syntax_error": "执行前做语法检查",
+    "timeout": "增加超时时间或分步执行",
+}
+_DEFAULT_RULE_RECOMMENDATION = "增加前置检查"
 
 
 class SelfEvolution:
@@ -107,6 +118,11 @@ class SelfEvolution:
                 "meta": {
                     "pattern_key": pattern.get("pattern_key", ""),
                     "count": pattern["count"],
+                    # F2b-②c-1 推荐回流可观测：建议来源/错误类别/学习读取故障真因
+                    # （meta 加性键——_row_signature 不读 meta，去重语义零变化）
+                    "error_class": pattern.get("error_class", ""),
+                    "recommendation_source": pattern.get("recommendation_source", ""),
+                    "learned_error": pattern.get("learned_error", ""),
                 },
             }
             evolution["signature"] = self._row_signature(
@@ -218,23 +234,52 @@ class SelfEvolution:
             # 190行复读的两个bug都是3周前已修复的历史错误
             if agg["last_seen"] < cutoff:
                 continue
-            recommendation = "增加前置检查"
-            if "syntax" in error.lower():
-                recommendation = "执行前做语法检查"
-            elif "timeout" in error.lower():
-                recommendation = "增加超时时间或分步执行"
+            error_class = classify_error_type(error)
+            advice = await self._recommendation_for(error, error_class)
             patterns.append(
                 {
                     "error_type": error[:100],
                     "pattern_key": error,
                     "count": cnt,
                     "last_seen": agg["last_seen"],
-                    "recommendation": recommendation,
+                    "recommendation": advice["recommendation"],
+                    # F2b-②c-1 推荐回流可观测：建议来源/错误类别/学习读取故障真因
+                    "error_class": error_class,
+                    "recommendation_source": advice["source"],
+                    "learned_error": advice.get("learned_error", ""),
                 }
             )
             if len(patterns) >= 5:
                 break
         return patterns
+
+    async def _recommendation_for(self, error: str, error_class: str) -> dict:
+        """失败规避建议（F2b-②c-1 推荐回流 evolve 面）——learned_patterns 已学习
+        修复优先，无学习推荐/学习读取故障→回落既有规则文案（无学习数据时契约
+        零变化）。
+
+        学习层是增强面：读取故障绝不阻断进化分析，但必须可见（learned_error
+        带真因进 meta，F2b-②"故障不阻断但必须可见"纪律，禁静默吞）。
+        """
+        try:
+            fixes = await learned_failure_fixes_for(error, self.db)
+        except Exception as e:
+            logger.warning(f"[self-evolution] learned failure fixes read failed: {e}")
+            return {
+                "recommendation": _RULE_RECOMMENDATIONS.get(
+                    error_class, _DEFAULT_RULE_RECOMMENDATION
+                ),
+                "source": "rule",
+                "learned_error": f"{type(e).__name__}: {e}",
+            }
+        if fixes:
+            # 已学习修复建议真回流进化提案（与 format_advisory_for_prompt 的
+            # failure 渲染同款取前2条；条数少于2如实全给）
+            return {"recommendation": "；".join(fixes[:2]), "source": "learned_patterns"}
+        return {
+            "recommendation": _RULE_RECOMMENDATIONS.get(error_class, _DEFAULT_RULE_RECOMMENDATION),
+            "source": "rule",
+        }
 
     async def _analyze_feedback(self) -> dict:
         """分析用户反馈趋势"""

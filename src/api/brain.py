@@ -491,7 +491,8 @@ async def evolve(
     for evo in evolutions:
         kind = KIND_MAP.get(evo.get("type", ""), "policy_adjustment")
         # 去重键=_digest(kind, title)（evolution_loop.declare_intent:490）。
-        # failure模式的action文本全部相同（"自动规避: 增加前置检查"）——只用
+        # failure模式的action文本同类相同（"自动规避: …"；F2b-②c-1 后随学习
+        # 建议取值可变）——只用
         # action做title会让不同失败模式（不同reason）互相误判duplicate，
         # 4条不同发现在live实证中被折叠成1条（证据丢失）。title携带reason后
         # digest按发现内容去重：同一发现重复declare→duplicate，不同发现各建单。

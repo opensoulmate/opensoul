@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import time
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +255,31 @@ def admit_intent(raw: str) -> tuple[bool, str]:
     if len(_CJK_RE.findall(key)) < 2 and len(key.replace(" ", "")) < 4:
         return False, "too_short"
     return True, "ok"
+
+
+# ── 失败类别分类法（learned_patterns failure 行 pattern_key 的单一源）──────
+# 供提取侧（_extract_failure_patterns）与消费侧（heredity/self_evolution
+# 进化提案推荐回流 F2b-②c-1）共用，禁字面抄写漂移（F4b-㉗ 纪律）。
+# 落点在本模块而非 experience_collector：后者 import 本模块（is_system_turn_
+# intent），反向 import 即循环。
+
+
+def classify_error_type(error: str) -> str:
+    """失败error → 错误类别（syntax_error/timeout/permission/not_found/other）。
+
+    提取/消费同键：learned_patterns failure 行的 pattern_key 即此分类，
+    evolve 面按同一分类回查已学习修复建议才对得上。
+    """
+    low = (error or "").lower()
+    if "syntax" in low:
+        return "syntax_error"
+    if "timeout" in low:
+        return "timeout"
+    if "permission" in low:
+        return "permission"
+    if "not found" in low:
+        return "not_found"
+    return "other"
 
 
 # ── F2b-② 推荐回流执行：字面相关度检索 + prompt 纯函数格式化 ──────────────
@@ -540,17 +565,8 @@ class LongTermLearning:
         failure_types: dict[str, dict] = {}
         for row in rows:
             error = row["error"] or "unknown"
-            # 归类错误
-            if "syntax" in error.lower():
-                error_type = "syntax_error"
-            elif "timeout" in error.lower():
-                error_type = "timeout"
-            elif "permission" in error.lower():
-                error_type = "permission"
-            elif "not found" in error.lower():
-                error_type = "not_found"
-            else:
-                error_type = "other"
+            # 归类错误（classify_error_type 单一源：evolve 面推荐回流同键可对上）
+            error_type = classify_error_type(error)
 
             if error_type not in failure_types:
                 failure_types[error_type] = {"count": 0, "fixes": []}
@@ -692,6 +708,30 @@ class LongTermLearning:
             for _overlap, _conf, row in scored[:top_k]
         ]
 
+    async def get_failure_fixes(self, error: str) -> list[str]:
+        """失败error → learned_patterns 已学习修复建议（F2b-②c-1 推荐回流 evolve 面）。
+
+        同一读真源（learned_patterns 表/同 tenant·agent 口径），分类键=
+        classify_error_type 单一源（与提取侧同键才对得上）。无学习行/无有效
+        修复建议→[]（消费方回落既有规则文案，禁硬凑）；异常如实抛不静默吞
+        （learned_advisory_for 同契约，降级可见性归消费方）。
+        """
+        await self._ensure_table()
+        if not self.db:
+            return []
+        key = classify_error_type(error)
+        rows = await self.db.fetch(
+            """SELECT pattern_data FROM learned_patterns
+               WHERE tenant_id = ? AND agent_id = ?
+               AND pattern_type = 'failure' AND pattern_key = ?
+               ORDER BY confidence DESC, sample_count DESC LIMIT 1""",
+            (self.tenant_id, self.agent_id, key),
+        )
+        if not rows:
+            return []
+        data = json.loads(rows[0]["pattern_data"] or "{}")
+        return [str(f) for f in (data.get("common_fixes") or []) if f][:3]
+
     async def get_stats(self) -> dict:
         await self._ensure_table()
         if not self.db:
@@ -703,17 +743,37 @@ class LongTermLearning:
         return {"patterns": count}
 
 
+# 推荐回流读口径单一源（F2b-②/②b/②c）：default/default = experience_collect
+# 采集口径——学习产出在哪写就去哪读，禁各消费面手抄口径漂移。
+ADVISORY_SCOPE: tuple[str, str] = ("default", "default")
+
+
 async def learned_advisory_for(intent: str, top_k: int = 3) -> tuple[str, int]:
     """推荐回流通用取数口（F2b-②b：任务执行/chat/ws_chat 对话面共用单一口径）。
 
     与 proactive pattern_extract / POST /api/brain/learn 共用 LongTermLearning
-    同一读真源；tenant/agent 取 "default"/"default" = experience_collect 采集
-    口径（学习产出在哪写就去哪读）。返回 (建议块, 条数)，无推荐=("", 0) 零注入。
+    同一读真源；tenant/agent 取 ADVISORY_SCOPE（default/default）= experience_collect
+    采集口径（学习产出在哪写就去哪读）。返回 (建议块, 条数)，无推荐=("", 0) 零注入。
     异常如实抛出不吞——降级可见性是消费方的事（F2b-②"故障不阻断但必须可见"
     由各消费面以自己的可见面落实），此处禁静默吞故障造"无推荐"假象。
     """
     from src.database.postgres import db_pool
 
-    learning = LongTermLearning(db_pool, "default", "default")
+    learning = LongTermLearning(db_pool, *ADVISORY_SCOPE)
     recs = await learning.get_recommendations_for_prompt(intent, top_k=top_k)
     return format_advisory_for_prompt(recs), len(recs)
+
+
+async def learned_failure_fixes_for(error: str, db_pool: Any = None) -> list[str]:
+    """推荐回流 evolve 面取数口（F2b-②c-1）：失败error → 已学习修复建议。
+
+    口径同 learned_advisory_for（ADVISORY_SCOPE 单一源）；db_pool 可显式注入
+    （SelfEvolution 传自身 db handle=同一数据面，测试走 tmp），缺省取全局池。
+    空列表=无学习推荐（消费方回落规则文案禁硬凑）；异常如实抛禁静默吞。
+    """
+    if db_pool is None:
+        from src.database.postgres import db_pool as _db_pool
+
+        db_pool = _db_pool
+    learning = LongTermLearning(db_pool, *ADVISORY_SCOPE)
+    return await learning.get_failure_fixes(error)
