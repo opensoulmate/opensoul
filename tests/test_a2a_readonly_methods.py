@@ -96,18 +96,15 @@ class TestMethodFace:
         assert "agent/getAuthenticatedExtendedCard" not in a2a_api.RPC_HANDLERS
 
     def test_unimplemented_methods_stay_honest(self, app_client):
-        """流式/推送配置四方法仍未实现=如实 Method not found（-32601），禁注册空壳。"""
-        for method in (
-            "SendStreamingMessage",
-            "SubscribeToTask",
-            "CreateTaskPushNotificationConfig",
-            "GetTaskPushNotificationConfig",
-            "ListTaskPushNotificationConfigs",
-            "DeleteTaskPushNotificationConfig",
-        ):
+        """流式两方法仍未实现=禁注册空壳；错误面随 F4b-⑮ §3.3.4 能力门收口
+        （能力位 false 时 -32004 而非 -32601）；推送配置四方法已实现（F4b-⑮）
+        不在此列。"""
+        for method in ("SendStreamingMessage", "SubscribeToTask"):
             assert method not in a2a_api.RPC_HANDLERS
             body = rpc(client=app_client, method=method, params={"id": "x"})
-            assert body["error"]["code"] == -32601
+            assert body["error"]["code"] == -32004  # §3.3.4 UnsupportedOperation
+        body = rpc(client=app_client, method="tasks/list", params={})
+        assert body["error"]["code"] == -32601  # 真未知方法不受能力门影响
 
 
 class TestListTasksShape:
@@ -369,5 +366,7 @@ class TestZeroRegression:
     def test_streaming_and_push_capabilities_still_false(self, app_client, clean_tasks):
         caps = app_client.get("/.well-known/agent-card.json").json()["capabilities"]
         assert caps["streaming"] is False
-        assert caps["pushNotifications"] is False
+        # 契约随 F4b-⑮ 更新：推送配置四方法已真注册，pushNotifications 派生 True
+        # （真能做才宣称）；守恒不变量=发布值恒等于派生值（禁硬编码 bool）。
+        assert caps["pushNotifications"] is a2a_api.push_notifications_supported()
         assert a2a_api.streaming_supported() is False

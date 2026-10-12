@@ -8,7 +8,9 @@ import base64
 import json
 import logging
 from datetime import UTC, datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
+
+import httpx
 
 from src.a2a.models import (
     DEFAULT_AGENT_CARD,
@@ -17,6 +19,7 @@ from src.a2a.models import (
     ErrorCode,
     Message,
     Task,
+    TaskPushNotificationConfig,
     TaskStatus,
     part_text,
 )
@@ -127,6 +130,11 @@ class TaskManager:
         self.agent_card: AgentCard = DEFAULT_AGENT_CARD
         # 扩展 Agent Card（§3.1.11）：None=未配置（能力位随之 False 不虚报）。
         self.extended_agent_card: AgentCard | None = None
+        # 推送通知配置（§3.1.7-3.1.10）：task_id → config_id → config dict（插入序）。
+        # 与 tasks 同为进程内真源（重启即清，与既有 in-memory 任务边界一致）。
+        self.push_configs: dict[str, dict[str, dict]] = {}
+        # webhook 投递留痕（失败也留痕禁静默）：tests/live 取证回读口。
+        self.push_delivery_log: list[dict] = []
 
     def get_agent_card(self) -> AgentCard:
         return self.agent_card
@@ -145,6 +153,88 @@ class TaskManager:
         """配置/清除扩展卡。配置后 agent card 的 capabilities.extendedAgentCard
         自动跟随为 True（声明从实现派生，api.extended_agent_card_supported）。"""
         self.extended_agent_card = card
+
+    # === 推送通知配置（A2A v1.0 §3.1.7-3.1.10 + §4.3）===
+
+    def create_push_config(self, task_id: str, config: TaskPushNotificationConfig) -> dict:
+        """登记推送配置：id 未给由服务端指派（§3.1.7 "with assigned ID"），
+        taskId 恒绑真任务（调用方查过任务存在）。返回 wire 形 dict（camelCase）。"""
+        cfg = config.model_dump(exclude_none=True)
+        cfg["taskId"] = task_id
+        if not cfg.get("id"):
+            cfg["id"] = str(uuid4())
+        self.push_configs.setdefault(task_id, {})[cfg["id"]] = cfg
+        return dict(cfg)
+
+    def get_push_config(self, task_id: str, config_id: str) -> dict | None:
+        cfg = self.push_configs.get(task_id, {}).get(config_id)
+        return dict(cfg) if cfg else None
+
+    def list_push_configs(self, task_id: str) -> list[dict]:
+        """按登记序返回（翻页稳定序）。"""
+        return [dict(c) for c in self.push_configs.get(task_id, {}).values()]
+
+    def delete_push_config(self, task_id: str, config_id: str) -> bool:
+        """§3.1.10 幂等删除：配置不存在=同一效果（返回 False=本来就没有，不报错）。"""
+        return self.push_configs.get(task_id, {}).pop(config_id, None) is not None
+
+    async def _dispatch_push(self, task: Task, payload: dict) -> None:
+        """§4.3.3 webhook 投递：POST 单键 StreamResponse 载荷到该任务的每个已配置
+        webhook（"MUST attempt delivery at least once for each configured webhook"，
+        每次任务更新对每个配置各投一次）。
+
+        - Authorization: {scheme} {credentials}（§4.3.3；无 authentication 不带）
+        - 失败只留痕 push_delivery_log + warning，绝不影响任务本体（尽力投递）
+        """
+        configs = self.push_configs.get(task.id)
+        if not configs:
+            return
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            for cfg in list(configs.values()):
+                auth = cfg.get("authentication") or {}
+                headers = {"Content-Type": "application/json"}
+                if auth.get("scheme"):
+                    headers["Authorization"] = (
+                        f"{auth['scheme']} {auth.get('credentials') or ''}".rstrip()
+                    )
+                entry = {
+                    "task_id": task.id,
+                    "config_id": cfg.get("id"),
+                    "url": cfg.get("url"),
+                    "payload_key": next(iter(payload), None),
+                }
+                try:
+                    resp = await client.post(cfg["url"], json=payload, headers=headers)
+                    entry["ok"] = 200 <= resp.status_code < 300
+                    entry["status_code"] = resp.status_code
+                except Exception as e:  # 投递失败禁静默：留痕可见，任务本体不受累
+                    entry["ok"] = False
+                    entry["error"] = str(e)
+                self.push_delivery_log.append(entry)
+                if not entry.get("ok"):
+                    logger.warning(f"push delivery failed: {entry}")
+
+    async def _notify_push(self, task: Task) -> None:
+        """任务状态迁移 → webhook 载荷（§4.3.3 恰一键 StreamResponse）：
+
+        - 中间迁移（working 等非终态）={"statusUpdate"}（TaskStatusUpdateEvent：
+          taskId/contextId/status，状态 wire 面与 Task.wire() 同源禁两套枚举）
+        - 终态（completed/failed/canceled/rejected）={"task"}（全量 Task wire，
+          含 artifacts/history 最新全貌）
+        """
+        if not self.push_configs.get(task.id):
+            return
+        if task.status.state in ("completed", "failed", "canceled", "rejected"):
+            payload: dict = {"task": task.wire()}
+        else:
+            payload = {
+                "statusUpdate": {
+                    "taskId": task.id,
+                    "contextId": task.contextId,
+                    "status": task.wire()["status"],
+                }
+            }
+        await self._dispatch_push(task, payload)
 
     def list_tasks(
         self,
@@ -247,6 +337,7 @@ class TaskManager:
         =首条用户消息重复记录，多轮上下文也把首条喂两遍）。
         """
         task.status = TaskStatus(state="working")
+        await self._notify_push(task)  # 状态迁移即任务更新 → webhook（§4.3.3）
 
         try:
             # Extract text from message parts
@@ -284,6 +375,7 @@ class TaskManager:
                 ),
             )
 
+        await self._notify_push(task)  # 终态（completed/failed）→ {"task"} 全量投递
         return task
 
     async def get_task(self, task_id: str) -> Task | None:
@@ -296,6 +388,7 @@ class TaskManager:
         if task.status.state in ("completed", "failed", "canceled"):
             return None
         task.status = TaskStatus(state="canceled")
+        await self._notify_push(task)  # 取消=终态迁移，同样走推送（§4.3.3）
         return task
 
     def _extract_text(self, message: Message) -> str:

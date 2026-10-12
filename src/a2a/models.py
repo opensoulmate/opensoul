@@ -209,6 +209,9 @@ class AgentCapabilities(BaseModel):
     # 实际发布值由 api.streaming_supported() 按真实 RPC 方法面派生（见 api.py），
     # 加了 message/stream 进 RPC_HANDLERS 才会 True —— 声明与实现禁漂移（F4b-⑤）。
     streaming: bool = False
+    # pushNotifications（§4.4.3）：是否支持推送通知配置（§3.1.7-3.1.10 四操作）。
+    # 默认 False=不虚报：实际发布值由 api.push_notifications_supported() 按真实 RPC
+    # 方法面派生（四方法全部真注册才 True，F4b-⑤ streaming 同哲学）——声明与实现禁漂移。
     pushNotifications: bool = False
     # extendedAgentCard（§4.4.3）：是否支持在认证后提供扩展 Agent Card。默认 False=
     # 不虚报：实际发布值由 api.extended_agent_card_supported() 按"扩展卡真配置"派生
@@ -302,6 +305,37 @@ class Artifact(BaseModel):
         if not data.get("artifactId"):
             data["artifactId"] = str(uuid4())
         super().__init__(**data)
+
+
+# === Push Notification Objects（v1.0 §4.3，形状逐键照抄 spec/a2a.proto）===
+
+
+class AuthenticationInfo(BaseModel):
+    """§4.3.2 AuthenticationInfo —— webhook 投递鉴权。
+
+    scheme=IANA HTTP 鉴权方案（Bearer/Basic/Digest…，大小写不敏感 RFC 9110 §11.1，
+    REQUIRED）；credentials 随方案而定（可选）。
+    """
+
+    scheme: str
+    credentials: str | None = None
+
+
+class TaskPushNotificationConfig(BaseModel):
+    """§4.3.1 TaskPushNotificationConfig —— 推送通知配置（wire 字段名 §5.5 camelCase）。
+
+    字段逐键照抄 proto：tenant（opaque routing identifier，收下不解释）/ id（配置
+    唯一 ID；创建时未给由服务端指派——§3.1.7 "Created configuration with assigned
+    ID"）/ taskId（归属任务）/ url（REQUIRED，webhook 地址）/ token（任务/会话级
+    唯一令牌，随配置往返）/ authentication（§4.3.2）。
+    """
+
+    tenant: str | None = None
+    id: str = ""
+    taskId: str = ""
+    url: str
+    token: str | None = None
+    authentication: AuthenticationInfo | None = None
 
 
 class TaskStatus(BaseModel):

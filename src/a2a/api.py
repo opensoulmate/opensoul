@@ -6,6 +6,8 @@ Implements:
 - POST /a2a - JSON-RPC 2.0 endpoint
 """
 
+import base64
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
@@ -17,6 +19,7 @@ from src.a2a.models import (
     JSONRPCResponse,
     Message,
     Task,
+    TaskPushNotificationConfig,
 )
 from src.a2a.task_manager import task_manager
 
@@ -41,6 +44,7 @@ async def agent_card():
     """
     card = task_manager.get_agent_card().model_copy(deep=True)
     card.capabilities.streaming = streaming_supported()
+    card.capabilities.pushNotifications = push_notifications_supported()
     card.capabilities.extendedAgentCard = extended_agent_card_supported()
     return card.published()
 
@@ -132,6 +136,19 @@ async def handle_rpc(request: JSONRPCRequest):
     method = request.method
     params = request.params
 
+    # §3.3.4 Capability Validation（先于派发也先于 Method not found）：能力位
+    # false/缺席时，流式操作 MUST 回 UnsupportedOperationError(-32004)、推送配置
+    # 操作 MUST 回 PushNotificationNotSupportedError(-32003)——而非 -32601（修前
+    # SubscribeToTask/SendStreamingMessage 恒 -32601=live 规范违规）。声明从实现
+    # 派生的另一半：能力 False（未实现）时未实现方法的错误面也随真实能力走。
+    if method in STREAMING_RPC_METHODS and not streaming_supported():
+        raise A2AError(ErrorCode.UNSUPPORTED_OPERATION, f"Streaming is not supported: {method}")
+    if method in PUSH_NOTIFICATION_RPC_METHODS and not push_notifications_supported():
+        raise A2AError(
+            ErrorCode.PUSH_NOTIFICATION_NOT_SUPPORTED,
+            f"Push notifications are not supported: {method}",
+        )
+
     handler = RPC_HANDLERS.get(method)
     if not handler:
         # §9 MethodNotFoundError(-32601)（修前 -32603）；未实现的方法也归此码
@@ -171,6 +188,40 @@ def _history_length_from_params(params: dict):
     return configuration.get("historyLength", params.get("historyLength"))
 
 
+def _inline_push_config(params: dict):
+    """随发送注册推送配置的取参双源（proto SendMessageConfiguration
+    .task_push_notification_config；§3.1.7 "or later by invoking
+    CreateTaskPushNotificationConfig"）：v1.0 configuration 内字段优先、旧草案
+    TaskSendParams 顶层 pushNotificationConfig 兜底——两代都收下，禁静默丢。"""
+    configuration = params.get("configuration") or {}
+    return configuration.get("taskPushNotificationConfig", params.get("pushNotificationConfig"))
+
+
+def _register_inline_push(task_id: str, inline_push) -> None:
+    """登记随发送携带的推送配置（处理前登记，处理中的更新才投得到）。"""
+    if not inline_push:
+        return
+    config = TaskPushNotificationConfig(**inline_push)  # url REQUIRED → -32602
+    task_manager.create_push_config(task_id, config)
+
+
+def _encode_push_page_token(offset: int) -> str:
+    """配置列表游标=不透明串（base64 偏移；分页 MAY，本实现真支持）。"""
+    return base64.urlsafe_b64encode(str(offset).encode("ascii")).decode("ascii").rstrip("=")
+
+
+def _decode_push_page_token(token) -> int:
+    """游标解码；非本端点发出的串如实 -32602 禁静默回第一页（⑫ 同纪律）。"""
+    try:
+        raw = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))
+        offset = int(raw.decode("ascii"))
+        if offset < 0:
+            raise ValueError("negative offset")
+    except Exception:
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid pageToken: {token!r}")
+    return offset
+
+
 async def _send_message_impl(params: dict) -> Task:
     """SendMessage/tasks/send 共用执行体：建任务或续任务+处理，返回 Task 本体。
 
@@ -184,14 +235,22 @@ async def _send_message_impl(params: dict) -> Task:
     # llm_mode=stub 供集成测试/离线演示走确定性应答，不打真实LLM）
     metadata = params.get("metadata") or {}
     task_id = params.get("id") or message_data.get("taskId")
+    inline_push = _inline_push_config(params)
 
     if task_id:
-        # Continue existing task
+        # Continue existing task —— 先取任务再处理：inline 推送配置须在处理前登记，
+        # 处理中的状态更新才投得到（§3.1.7 随发送注册）
+        task = await task_manager.get_task(task_id)
+        if not task:
+            # §5.4 TaskNotFoundError(-32001)（与 process_task 续接 raise 点同码同文案）
+            raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+        _register_inline_push(task.id, inline_push)
         task = await task_manager.process_task(task_id, message, metadata=metadata)
     else:
         # Create new task —— 首条消息已由 create_task 入史（history=[message]），
         # 处理不得重复入史（F4b-⑧ 修前 create_task+process_task 同一消息双 append）
         task = await task_manager.create_task(message, metadata=metadata)
+        _register_inline_push(task.id, inline_push)
         task = await task_manager.run_processing(task, message)
     return task
 
@@ -311,6 +370,96 @@ async def handle_get_extended_agent_card(params: dict) -> dict:
     return card.published()
 
 
+async def handle_create_task_push_notification_config(params: dict) -> dict:
+    """v1.0 CreateTaskPushNotificationConfig（spec §3.1.7 / §5.3）。
+
+    params=TaskPushNotificationConfig 对象本体（proto rpc 签名如此）。url=REQUIRED
+    （缺失 → pydantic ValidationError → 端点归口 -32602）；taskId 必填且任务必须
+    存在（§3.1.7 TaskNotFoundError=-32001）；id 未给由服务端指派（"Created
+    configuration with assigned ID"）。配置生命周期："MUST persist until task
+    completion or explicit deletion"——本实现保留到显式删除（MUST 的超集）。
+    """
+    task_id = params.get("taskId")
+    if not task_id or not isinstance(task_id, str):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid taskId: {task_id!r}")
+    if not await task_manager.get_task(task_id):
+        raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+    config = TaskPushNotificationConfig(**params)  # url REQUIRED → ValidationError→-32602
+    return task_manager.create_push_config(task_id, config)
+
+
+async def handle_get_task_push_notification_config(params: dict) -> dict:
+    """v1.0 GetTaskPushNotificationConfig（spec §3.1.8）。"""
+    task_id, config_id = params.get("taskId"), params.get("id")
+    if not task_id or not isinstance(task_id, str):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid taskId: {task_id!r}")
+    if not config_id or not isinstance(config_id, str):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid id: {config_id!r}")
+    cfg = task_manager.get_push_config(task_id, config_id)
+    if cfg is None:
+        # §3.1.8 错误表原文："TaskNotFoundError: The push notification configuration
+        # does not exist"——规范此型复用 TaskNotFound 码(-32001)，message 如实说明
+        # 缺的是配置，禁谎报成缺任务。
+        raise A2AError(
+            ErrorCode.TASK_NOT_FOUND,
+            f"Push notification config not found: {config_id} (task {task_id})",
+        )
+    return cfg
+
+
+async def handle_list_task_push_notification_configs(params: dict) -> dict:
+    """v1.0 ListTaskPushNotificationConfigs（spec §3.1.9）。
+
+    响应形状逐键照抄 ListTaskPushNotificationConfigsResponse：configs / nextPageToken
+    （恒在场，末页空串——⑫ ListTasksResponse 同纪律）。分页是 MAY，本实现真支持：
+    pageSize=生效上限（正整数，非法值如实 -32602 禁静默当缺省）、pageToken=不透明
+    偏移游标（坏游标禁静默回第一页）。
+    """
+    task_id = params.get("taskId")
+    if not task_id or not isinstance(task_id, str):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid taskId: {task_id!r}")
+    if not await task_manager.get_task(task_id):
+        # §3.1.9：TaskNotFoundError —— 任务不存在
+        raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+
+    page_size = params.get("pageSize")
+    if page_size is not None and (
+        isinstance(page_size, bool) or not isinstance(page_size, int) or page_size < 1
+    ):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid pageSize: {page_size!r}")
+    offset = 0
+    token = params.get("pageToken")
+    if token:
+        offset = _decode_push_page_token(token)
+
+    configs = task_manager.list_push_configs(task_id)
+    if page_size is None:
+        window = configs[offset:]
+        next_token = ""
+    else:
+        window = configs[offset : offset + page_size]
+        next_offset = offset + page_size
+        next_token = _encode_push_page_token(next_offset) if next_offset < len(configs) else ""
+    return {"configs": window, "nextPageToken": next_token}
+
+
+async def handle_delete_task_push_notification_config(params: dict) -> dict:
+    """v1.0 DeleteTaskPushNotificationConfig（spec §3.1.10）。
+
+    幂等（"MUST be idempotent"）：配置不存在=同一效果（成功不报错）；任务不存在
+    如实 TaskNotFoundError(-32001)。返回 google.protobuf.Empty 的 JSON 形={}。
+    """
+    task_id, config_id = params.get("taskId"), params.get("id")
+    if not task_id or not isinstance(task_id, str):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid taskId: {task_id!r}")
+    if not config_id or not isinstance(config_id, str):
+        raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid id: {config_id!r}")
+    if not await task_manager.get_task(task_id):
+        raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
+    task_manager.delete_push_config(task_id, config_id)  # 幂等：False=本来就没有
+    return {}
+
+
 # === RPC 方法面（单一源）===
 # 已实现的 JSON-RPC 方法注册表。capabilities.streaming 派生自此表（见
 # streaming_supported）——加/删方法此处即唯一改动点，agent card 声明自动跟随，
@@ -329,6 +478,12 @@ RPC_HANDLERS = {
     "CancelTask": handle_task_cancel,
     "ListTasks": handle_list_tasks,
     "GetExtendedAgentCard": handle_get_extended_agent_card,
+    # 推送配置四方法（§3.1.7-3.1.10 / §5.3）——v1.0 名一等注册；无 0.x 旧线名
+    # 别名（本实现此前从未有过推送面，无历史契约可保，deprecated 勿新增消费方）
+    "CreateTaskPushNotificationConfig": handle_create_task_push_notification_config,
+    "GetTaskPushNotificationConfig": handle_get_task_push_notification_config,
+    "ListTaskPushNotificationConfigs": handle_list_task_push_notification_configs,
+    "DeleteTaskPushNotificationConfig": handle_delete_task_push_notification_config,
     # 0.2/0.3 旧线名（重叠期别名，deprecated）
     "tasks/send": handle_task_send,
     "tasks/get": handle_task_get,
@@ -355,6 +510,25 @@ def streaming_supported() -> bool:
     return any(m in RPC_HANDLERS for m in STREAMING_RPC_METHODS)
 
 
+# A2A 推送配置四方法（§5.3 名，proto rpc 名逐字照抄）——capabilities.pushNotifications
+# 派生自此名单（见 push_notifications_supported），加/删方法此处即唯一改动点。
+PUSH_NOTIFICATION_RPC_METHODS = (
+    "CreateTaskPushNotificationConfig",
+    "GetTaskPushNotificationConfig",
+    "ListTaskPushNotificationConfigs",
+    "DeleteTaskPushNotificationConfig",
+)
+
+
+def push_notifications_supported() -> bool:
+    """capabilities.pushNotifications 的单一真值：四方法全部真注册才 True。
+
+    四个操作是一体的能力面（§3.1.7-3.1.10），缺一即不完整禁虚报——真能做才宣称
+    （F4b-⑤ streaming / ⑫ extendedAgentCard 同哲学：声明从实现派生，禁硬编码 bool）。
+    """
+    return all(m in RPC_HANDLERS for m in PUSH_NOTIFICATION_RPC_METHODS)
+
+
 def extended_agent_card_supported() -> bool:
     """capabilities.extendedAgentCard 的单一真值：仅当扩展卡真配置才 True。
 
@@ -367,12 +541,12 @@ def extended_agent_card_supported() -> bool:
     return task_manager.has_extended_agent_card()
 
 
-# === 未实现方法面（如实 Method not found，禁冒充）===
-# v1.0 §5.3 方法映射表另有 SendStreamingMessage/SubscribeToTask 与推送配置四方法
-# （CreateTaskPushNotificationConfig/GetTaskPushNotificationConfig/
-#  ListTaskPushNotificationConfigs/DeleteTaskPushNotificationConfig）未实现：
-# 本实现任务在 SendMessage 调用内同步完成（无后台任务生命周期），订阅/推送没有
-# 真实更新事件可投递，先实现等于造"wired but not functional"空壳；且 §3.3.4 要求
-# 能力未声明时这些操作回 -32004/-32003 而非 -32601——那须先把 streaming_supported()
-# 的派生从"方法注册"改成"真流式实现"，属 SubscribeToTask/推送配置实现拍的伴随件。
-# 未实现=如实 -32601（Method not found，§9 "does not exist or is not available"）。
+# === 未实现方法面（§3.3.4 能力门收口，禁冒充）===
+# v1.0 §5.3 方法映射表仅剩 SendStreamingMessage/SubscribeToTask 未实现：两者需要
+# JSON-RPC-over-SSE 传输层（§9.1 Streaming: text/event-stream）+ 任务增量事件发射，
+# 是"真流式"大件留待拍。其错误面已随 §3.3.4 Capability Validation 收口（handle_rpc
+# 能力门）：capabilities.streaming=false（未实现故派生 False）时两操作如实回
+# UnsupportedOperationError(-32004) 而非 -32601——修前恒 -32601 是 live 规范违规。
+# 真注册流式方法后 streaming_supported() 自动 True、能力门自动放行（声明从实现派生）。
+# 推送配置四方法已实现（本拍 F4b-⑮）：任务状态迁移=真实更新事件（working→statusUpdate、
+# 终态→task 全量）真投 webhook，非空壳。
