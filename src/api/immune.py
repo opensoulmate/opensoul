@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from src.immune.access_control import IPAccessControl
@@ -12,6 +12,7 @@ from src.immune.moderator import ContentModerator
 from src.immune.permission_engine import PermissionMode, PermissionService
 from src.immune.rate_limiter import RateLimitConfig, RateLimiter
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
@@ -47,8 +48,12 @@ class RateLimitCheckRequest(BaseModel):
 
 
 @router.post("/moderate")
-async def moderate_text(req: ModerateRequest):
+async def moderate_text(
+    req: ModerateRequest,
+    authorization: str | None = Header(None),
+):
     """Scan text for sensitive data (PII, secrets, etc.)."""
+    identity = bind_identity(authorization)
     result = moderator.moderate(req.text)
 
     if not result.is_safe:
@@ -64,7 +69,8 @@ async def moderate_text(req: ModerateRequest):
                 "type": "content_blocked",
                 "summary": f"⚠️ Content blocked: risk={result.risk_level}, {len(result.findings)} finding(s)",
                 "detail": {"risk_level": result.risk_level, "findings_count": len(result.findings)},
-            }
+            },
+            tenant_id=identity.tenant_id,
         )
         # Push notification for high-risk content
         if result.risk_level in ("high", "critical"):
@@ -192,8 +198,13 @@ async def update_rate_limit_config(
 
 
 @router.post("/ip/blacklist")
-async def blacklist_ip(req: IPActionRequest, request: Request):
+async def blacklist_ip(
+    req: IPActionRequest,
+    request: Request,
+    authorization: str | None = Header(None),
+):
     """Add IP to blacklist."""
+    identity = bind_identity(authorization)
     ip_control.blacklist_add(req.ip, req.reason, req.ttl_seconds)
     audit.log(
         AuditAction.CONFIG_CHANGE,
@@ -208,7 +219,8 @@ async def blacklist_ip(req: IPActionRequest, request: Request):
             "type": "ip_blacklisted",
             "summary": f"🚫 IP blacklisted: {req.ip} — {req.reason}",
             "detail": {"ip": req.ip, "reason": req.reason},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     # Push notification for IP blacklist events
     try:
@@ -360,8 +372,12 @@ class IPBlockRequest(BaseModel):
 
 
 @router.post("/intrusion/inspect")
-async def inspect_request(req: InspectRequest):
+async def inspect_request(
+    req: InspectRequest,
+    authorization: str | None = Header(None),
+):
     """Inspect a request for intrusion patterns (SQL injection, XSS, etc.)."""
+    identity = bind_identity(authorization)
     threats = intrusion.inspect_request(
         ip=req.ip,
         method=req.method,
@@ -382,7 +398,8 @@ async def inspect_request(req: InspectRequest):
                     "type": "intrusion_detected",
                     "summary": f"🚨 {threat.attack_type.value} from {threat.source_ip}: {threat.detail}",
                     "detail": threat.to_dict(),
-                }
+                },
+                tenant_id=identity.tenant_id,
             )
             # Push notification for critical threats
             if threat.threat_level.value == "critical":
@@ -408,8 +425,12 @@ async def inspect_request(req: InspectRequest):
 
 
 @router.post("/intrusion/login-attempt")
-async def record_login_attempt(req: LoginAttemptRequest):
+async def record_login_attempt(
+    req: LoginAttemptRequest,
+    authorization: str | None = Header(None),
+):
     """Record a login attempt for brute-force detection."""
+    identity = bind_identity(authorization)
     threat = intrusion.record_login_attempt(req.ip, req.success)
     if threat:
         push_event(
@@ -419,7 +440,8 @@ async def record_login_attempt(req: LoginAttemptRequest):
                 "type": "brute_force",
                 "summary": f"🔒 Brute force detected from {req.ip}",
                 "detail": threat.to_dict(),
-            }
+            },
+            tenant_id=identity.tenant_id,
         )
         try:
             from src.api.notifications import push_notification
@@ -462,8 +484,12 @@ async def get_blocked_ips():
 
 
 @router.post("/intrusion/block")
-async def block_ip_intrusion(req: IPBlockRequest):
+async def block_ip_intrusion(
+    req: IPBlockRequest,
+    authorization: str | None = Header(None),
+):
     """Manually block an IP via intrusion detection."""
+    identity = bind_identity(authorization)
     intrusion.block_ip(req.ip, reason="manual")
     ip_control.blacklist_add(req.ip, reason="manual_intrusion_block")
     push_event(
@@ -473,7 +499,8 @@ async def block_ip_intrusion(req: IPBlockRequest):
             "type": "ip_blocked",
             "summary": f"🚫 IP manually blocked: {req.ip}",
             "detail": {"ip": req.ip},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     return {"message": f"IP {req.ip} blocked"}
 
@@ -521,12 +548,16 @@ class PermissionModeRequest(BaseModel):
 
 
 @router.post("/permission/check")
-async def permission_check(req: PermissionCheckRequest):
+async def permission_check(
+    req: PermissionCheckRequest,
+    authorization: str | None = Header(None),
+):
     """工具调用前的权限判定 — 返回allow/deny/ask + provenance。
 
     acp-proxy SoulMateAgent在执行每个tool_call前调用此端点；
     deny/ask时决策带rule_source/rule_content（"为什么被拦"）。
     """
+    identity = bind_identity(authorization)
     decision = permission_service.check(
         req.tool_name,
         req.arguments,
@@ -551,7 +582,8 @@ async def permission_check(req: PermissionCheckRequest):
                     "rule_source": decision.rule_source,
                     "mode": decision.mode,
                 },
-            }
+            },
+            tenant_id=identity.tenant_id,
         )
     return decision.to_dict()
 
