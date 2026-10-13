@@ -129,9 +129,12 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     # 真源口径 ADVISORY_SCOPE（default/default）= experience_collect 采集口径
     # （学习产出在哪写就去哪读，F2b-②c-1 单一源；按 req.agent_id 读恒空集——
     # 生产行 agent_id 全 'default'，接线了≠跑通了）。
+    # F4b-㉜：同实例供 5d 相关经验观测面复用（get_relevant_experience 修前全仓
+    # 零消费=wired-but-not-functional 产出面）。
+    experience_memory = ExperienceMemory(db_pool, *ADVISORY_SCOPE)
     assessor = RiskAssessor(
         ProjectMemory(req.repo_root) if req.repo_root else None,
-        ExperienceMemory(db_pool, *ADVISORY_SCOPE),
+        experience_memory,
     )
     task_ctx = TaskContext(user_input=req.user_input, intent=intent)
     risk = await assessor.assess(intent, task_ctx)
@@ -193,6 +196,31 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     except Exception as e:
         logger.warning("元认知决策记账失败（不阻断思考）: %s", e)
 
+    # 5d. F4b-㉜ 相关经验观测面（get_relevant_experience 修前全仓零消费=
+    # wired-but-not-functional 产出面，F4b-㉒/㉕/㉚ 同型）：think 是真实执行
+    # 路径（ai_groups 任务执行每任务调用），把相关历史经验（成败/错误/相关度）
+    # 作为**加性观测键**回出——只观测不决策（execute_mode/confirm 门禁、risk
+    # 语义零变化，经验→prompt 执行回流消费点待拍）；读取故障可见不阻断
+    # （F4b-㉚ 纪律：logger 真因，experience.error 如实带因）。
+    experience_items: list[dict] = []
+    experience_total = 0
+    experience_error = None
+    try:
+        relevant = await experience_memory.get_relevant_experience(intent)
+        experience_total = len(relevant)
+        experience_items = [
+            {
+                "intent_summary": e.intent_summary,
+                "outcome": e.outcome,
+                "error": e.error,
+                "score": round(e.relevance_score, 3),
+            }
+            for e in relevant[:3]
+        ]
+    except Exception as e:
+        experience_error = str(e)
+        logger.warning("相关经验读取失败（不阻断思考）: %s", e)
+
     # 6. 存入短期记忆（hippo模块）
     if req.session_id:
         store.add(
@@ -243,6 +271,13 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
         },
         # F4b-㉕ 生效信心（加性契约键）：声明值或账本派生值，可观测低信心收紧真因
         "agent_confidence": effective_confidence,
+        # F4b-㉜ 相关经验观测键（加性契约键）：top-3 相关历史经验 + 相关总数
+        # （count=相关命中总数、items=前 3 条），故障如实带 error 键（禁静默空表）
+        "experience": {
+            "count": experience_total,
+            "items": experience_items,
+            **({"error": experience_error} if experience_error else {}),
+        },
         "memory_count": len(session_memories),
     }
 

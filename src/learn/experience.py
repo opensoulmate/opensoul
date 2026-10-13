@@ -11,6 +11,10 @@ from src.models.cognitive import Experience, Intent, TaskContext, Verification
 
 logger = logging.getLogger(__name__)
 
+# F4b-㉜ 扫描上界单一源（get_relevant_experience/get_similar_failures 共用，
+# 禁两处字面 LIMIT 漂移——F4b-㉗ 纪律）：按 outcome 类各扫描至多 100 行再评分。
+_QUERY_SCAN_LIMIT = 100
+
 
 class ExperienceMemory:
     """经验记忆：SQLite存储，多租户隔离，支持语义检索、老化衰减。"""
@@ -79,20 +83,35 @@ class ExperienceMemory:
         await self._aging_prune()
 
     async def get_relevant_experience(self, intent: Intent) -> list[Experience]:
-        """获取和当前意图相关的历史经验"""
+        """获取和当前意图相关的历史经验。
+
+        F4b-㉜ 修前=单条混合查询 top-100 近期窗口（F4b-㉚ 边界⑥ 留档件）——与
+        get_similar_failures 修前同型的**跨类截断**：成功行量大（生产 958:22）
+        把失败行挤出混合窗口（生产实证：窗口=最近约 2 天，22 条 failure 全在
+        24 天前，混合窗口内 failure=0）——只有失败补贴才可能过门槛的老失败行
+        结构性查不到=静默丢。现按 outcome 类分窗直查（idx_exp_outcome 真索引）
+        再合并评分：失败类/非失败类各自独立窗口，跨类不再互相挤占（与
+        get_similar_failures 的 outcome 直查同修法同源）。扫描上界如实标注：
+        单类超 _QUERY_SCAN_LIMIT 行时类内更旧的相关行仍会被截断（与
+        get_similar_failures 同一边界，非静默语义——文档化边界）。
+        """
         await self._ensure_table()
         if not self.db:
             return []
 
-        # 按意图类型匹配 + 时间衰减
-        rows = await self.db.fetch(
-            """SELECT action, intent_summary, outcome, error, fix, created_at, relevance_score
-               FROM experiences
-               WHERE tenant_id = ? AND agent_id = ?
-               ORDER BY created_at DESC
-               LIMIT 100""",
-            (self.tenant_id, self.agent_id),
-        )
+        # 按意图类型匹配 + 时间衰减（评分语义零变化，只修扫描面）
+        rows: list = []
+        for outcome_filter in ("outcome = 'failure'", "outcome <> 'failure'"):
+            rows.extend(
+                await self.db.fetch(
+                    f"""SELECT action, intent_summary, outcome, error, fix, created_at, relevance_score
+                        FROM experiences
+                        WHERE tenant_id = ? AND agent_id = ? AND {outcome_filter}
+                        ORDER BY created_at DESC
+                        LIMIT {_QUERY_SCAN_LIMIT}""",
+                    (self.tenant_id, self.agent_id),
+                )
+            )
 
         experiences = []
         for row in rows:
@@ -127,11 +146,11 @@ class ExperienceMemory:
         if not self.db:
             return []
         rows = await self.db.fetch(
-            """SELECT action, intent_summary, outcome, error, fix, created_at, relevance_score
+            f"""SELECT action, intent_summary, outcome, error, fix, created_at, relevance_score
                FROM experiences
                WHERE tenant_id = ? AND agent_id = ? AND outcome = 'failure'
                ORDER BY created_at DESC
-               LIMIT 100""",
+               LIMIT {_QUERY_SCAN_LIMIT}""",
             [self.tenant_id, self.agent_id],
         )
         failures = []
