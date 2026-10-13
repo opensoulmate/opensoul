@@ -558,3 +558,55 @@ def soma_client(tmp_path, monkeypatch):
     app.state.soma_client_registry = tmp_registry
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def vein_client(tmp_path, monkeypatch):
+    """vein API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db 与 data/vein/（gene_client/will_client/mirror_client/
+    pipeline_client/soma_client 同款路线；timeline 测试隔离拆件② live 测试
+    写方收编——test_vein.py 此前走 live :8090，服务进程把 file_uploaded/
+    file_downloaded/file_deleted 事件写生产 timeline.db（2026-10-13 修前
+    实测 7 行/轮=uploaded 3+downloaded 1+deleted 3），且上传/分片会话写生产
+    vein 文件面（files/vein_meta.db/uploads）。测试面=真实 router/handler
+    代码，数据面三层换 tmp：
+    - 文件面：FileStore(root=tmp, db_path=tmp vein_meta.db)（修前缺省
+      ~/opensoul/data/vein/files 与同目录 vein_meta.db）
+    - 分片面：ChunkedUploader(temp_dir=tmp)（修前缺省 ~/opensoul/data/vein/uploads）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位（_isolate_timeline_db）
+      —— push_event 进程内构造 TimelineStore 读 env，事件落本用例 tmp 库
+    cache 内存面每用例 fresh CacheManager（模块单例 monkeypatch 替换）。
+    app.state.vein_client_* 暴露 tmp 真源供隔离护栏断言。
+    src.api.vein 在 fixture 内延迟 import：模块 import 有单例构造副作用
+    （FileStore()/ChunkedUploader() 缺省解析生产路径），不能在 conftest
+    收集期全局 import。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.vein as vein_api
+    from src.timeline.store import default_db_path
+    from src.vein.cache import CacheManager
+    from src.vein.chunked import ChunkedUploader
+    from src.vein.file_store import FileStore
+
+    tmp_root = tmp_path / "vein" / "files"
+    tmp_meta_db = tmp_path / "vein_meta.db"
+    tmp_uploads = tmp_path / "vein" / "uploads"
+    tmp_store = FileStore(root=str(tmp_root), db_path=str(tmp_meta_db))
+    tmp_uploader = ChunkedUploader(temp_dir=str(tmp_uploads))
+    tmp_cache = CacheManager(max_size_mb=256, default_ttl=3600)
+    monkeypatch.setattr(vein_api, "store", tmp_store)
+    monkeypatch.setattr(vein_api, "uploader", tmp_uploader)
+    monkeypatch.setattr(vein_api, "cache", tmp_cache)
+
+    app = FastAPI()
+    app.include_router(vein_api.router, prefix="/api/vein")
+    app.state.vein_client_timeline_db = default_db_path()
+    app.state.vein_client_root = str(tmp_root)
+    app.state.vein_client_meta_db = str(tmp_meta_db)
+    app.state.vein_client_uploads = str(tmp_uploads)
+    app.state.vein_client_store = tmp_store
+    app.state.vein_client_uploader = tmp_uploader
+    with TestClient(app) as c:
+        yield c
