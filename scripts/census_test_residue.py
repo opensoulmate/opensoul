@@ -141,6 +141,24 @@ def classify_manifest(name):
     return "other", "unmatched"
 
 
+def classify_perm_audit(session_id, tool_name):
+    """perm_decision_audit 行残留分类（单一源词表，禁手抄；TL-⑨ 删除工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（测试会话硬标识 / 测试工具名硬标识）、other=不动。
+    词表复用既有硬标识（禁第二套判法）：A_SESSIONS/A_SESSION_PREFIX=TL-③ 清点判法
+    原语义逐字保留；A_RULE_TOOLS=test_dangerous_tool（TL-⑤ perm_rules 失效化同款
+    硬标识，TL-⑤ 留档点名"test_dangerous_tool 历史决策 105 行留拆件②"）。
+    """
+    s = session_id or ""
+    if s in A_SESSIONS:
+        return "A", "A_SESSIONS"
+    if s.startswith(("p0", "py-")):
+        return "A", "A_SESSION_PREFIX"
+    if tool_name in A_RULE_TOOLS:
+        return "A", "A_RULE_TOOLS"
+    return "other", "unmatched"
+
+
 def ro(path: Path) -> sqlite3.Connection:
     assert path.exists(), f"missing: {path}"
     return sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True)
@@ -241,17 +259,32 @@ def census_sqlite(out: dict) -> None:
 def census_permission(out: dict) -> None:
     p = HOME / ".hermes" / "opensoul" / "immune" / "permission.db"
     c = ro(p)
-    sess = c.execute("SELECT session_id,COUNT(*) FROM perm_decision_audit GROUP BY 1").fetchall()
-    a = {s: n for s, n in sess if (s or "") in A_SESSIONS or (s or "").startswith(("p0", "py-"))}
-    u = {s: n for s, n in sess if s not in a and not (s or "").startswith("om-")}
-    real = {s: n for s, n in sess if (s or "").startswith("om-")}
+    rows = c.execute(
+        "SELECT decision_id,session_id,tool_name FROM perm_decision_audit").fetchall()
+    a_by_sess: Counter = Counter()
+    a_by_rule: Counter = Counter()
+    u_by_sess: Counter = Counter()
+    a_ids: list = []
+    real = 0
+    for did, sess, tool in rows:
+        cls, rule = classify_perm_audit(sess, tool)  # 单一源，禁手抄（TL-⑨ 收编）
+        if cls == "A":
+            a_by_sess[sess or ""] += 1
+            a_by_rule[rule] += 1
+            a_ids.append(did)
+        elif (sess or "").startswith("om-"):
+            real += 1
+        else:
+            u_by_sess[sess or ""] += 1
     rules = c.execute("SELECT rule_id,tool_name,source FROM perm_rules WHERE is_deleted=0").fetchall()
     a_rules = [r for r in rules if classify_rule(r[1], r[2])[0] == "A"]
     out["permission"] = {
-        "decision_audit_total": sum(n for _, n in sess),
-        "A_by_session": a, "A_total": sum(a.values()),
-        "U_by_session": u, "U_total": sum(u.values()),
-        "real_om_sessions_total": sum(real.values()),
+        "decision_audit_total": len(rows),
+        "A_by_session": dict(a_by_sess), "A_total": sum(a_by_sess.values()),
+        "A_by_rule": dict(a_by_rule),
+        "A_decision_ids": sorted(a_ids),
+        "U_by_session": dict(u_by_sess), "U_total": sum(u_by_sess.values()),
+        "real_om_sessions_total": real,
         "rules_total_active": len(rules),
         "rules_A": [{"rule_id": r[0], "tool": r[1], "source": r[2]} for r in a_rules],
         "rules_by_source": dict(Counter(r[2] for r in rules)),
