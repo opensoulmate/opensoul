@@ -120,6 +120,16 @@ def classify_knowledge(title: str):
     return "other", "unmatched"
 
 
+def classify_tenant(name):
+    """nest.db tenants 行残留分类（单一源词表，禁手抄；TL-⑦ 删除工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（e2e 探针租户名前缀）、other=不动。
+    """
+    if (name or "").startswith(A_TENANT_PREFIX):
+        return "A", "A_TENANT_PREFIX"
+    return "other", "unmatched"
+
+
 def ro(path: Path) -> sqlite3.Connection:
     assert path.exists(), f"missing: {path}"
     return sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True)
@@ -179,7 +189,7 @@ def census_sqlite(out: dict) -> None:
     tenants = c.execute("SELECT tenant_id,name FROM tenants").fetchall()
     res["nest_tenants"] = {
         "total": len(tenants),
-        "A": [{"tenant_id": t[0], "name": t[1]} for t in tenants if (t[1] or "").startswith(A_TENANT_PREFIX)],
+        "A": [{"tenant_id": t[0], "name": t[1]} for t in tenants if classify_tenant(t[1])[0] == "A"],
     }
     # enterprise.db
     c = ro(REPO / "data" / "enterprise.db")
