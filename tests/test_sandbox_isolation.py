@@ -7,9 +7,13 @@ fail-closed（隔离不可用拒绝执行，绝不宿主直跑）/ API 端点全
 """
 
 import http.server
+import os
 import socket
+import sqlite3
 import threading
 import time
+import uuid
+from pathlib import Path
 
 import pytest
 
@@ -258,15 +262,15 @@ class TestSnapshotFork:
         assert manager.fork_from_snapshot("sandbox-nonexistent", "snap-deadbeef") is None
 
 
-# ── API 端点（直连运行中服务 :8090，重启后验证）────────────────
+# ── API 端点（进程内 mirror_client：真实 router + tmp 数据面，TL-② 拆件①收编）──
 
 
 class TestApi:
-    def test_api_exec_and_isolation(self, client):
-        resp = client.post("/api/mirror/sandboxes", json={"name": "api-iso"})
+    def test_api_exec_and_isolation(self, mirror_client):
+        resp = mirror_client.post("/api/mirror/sandboxes", json={"name": "api-iso"})
         sid = resp.json()["sandbox_id"]
         try:
-            resp = client.post(
+            resp = mirror_client.post(
                 f"/api/mirror/sandboxes/{sid}/exec",
                 json={"command": "echo api-roundtrip"},
             )
@@ -275,82 +279,153 @@ class TestApi:
             assert data["exit_code"] == 0 and "api-roundtrip" in data["stdout"]
             assert data["isolation"] == "bubblewrap"
 
-            resp = client.post(
+            resp = mirror_client.post(
                 f"/api/mirror/sandboxes/{sid}/exec",
                 json={"command": "test -d /home && echo VISIBLE || echo HIDDEN"},
             )
             assert "HIDDEN" in resp.json()["stdout"]
         finally:
-            client.delete(f"/api/mirror/sandboxes/{sid}")
+            mirror_client.delete(f"/api/mirror/sandboxes/{sid}")
 
-    def test_api_network_policy_hot_update(self, client):
+    def test_api_network_policy_hot_update(self, mirror_client):
         with LocalHTTPServer() as srv:
-            resp = client.post("/api/mirror/sandboxes", json={"name": "api-net"})
+            resp = mirror_client.post("/api/mirror/sandboxes", json={"name": "api-net"})
             sid = resp.json()["sandbox_id"]
             try:
                 probe = (
                     'python3 -c "import urllib.request;'
                     f"print(urllib.request.urlopen('http://127.0.0.1:{srv.port}', timeout=3).status)\""
                 )
-                resp = client.post(f"/api/mirror/sandboxes/{sid}/exec", json={"command": probe})
+                resp = mirror_client.post(
+                    f"/api/mirror/sandboxes/{sid}/exec", json={"command": probe}
+                )
                 assert resp.json()["exit_code"] != 0  # 默认 deny
 
-                resp = client.post(
+                resp = mirror_client.post(
                     f"/api/mirror/sandboxes/{sid}/network-policy", json={"policy": "allow"}
                 )
                 assert resp.status_code == 200
-                resp = client.post(f"/api/mirror/sandboxes/{sid}/exec", json={"command": probe})
+                resp = mirror_client.post(
+                    f"/api/mirror/sandboxes/{sid}/exec", json={"command": probe}
+                )
                 assert resp.json()["exit_code"] == 0 and "200" in resp.json()["stdout"]
             finally:
-                client.delete(f"/api/mirror/sandboxes/{sid}")
+                mirror_client.delete(f"/api/mirror/sandboxes/{sid}")
 
-    def test_api_fork_from_snapshot(self, client):
-        resp = client.post("/api/mirror/sandboxes", json={"name": "api-fork-src"})
+    def test_api_fork_from_snapshot(self, mirror_client):
+        resp = mirror_client.post("/api/mirror/sandboxes", json={"name": "api-fork-src"})
         sid = resp.json()["sandbox_id"]
         try:
-            client.post(
+            mirror_client.post(
                 f"/api/mirror/sandboxes/{sid}/exec",
                 json={"command": "echo forked-state > /workspace/state.txt"},
             )
-            resp = client.post(f"/api/mirror/sandboxes/{sid}/snapshot", json={"name": "s1"})
+            resp = mirror_client.post(f"/api/mirror/sandboxes/{sid}/snapshot", json={"name": "s1"})
             snap_id = resp.json()["snapshot_id"]
-            resp = client.post(
+            resp = mirror_client.post(
                 f"/api/mirror/sandboxes/{sid}/fork",
                 json={"snapshot_id": snap_id, "name": "api-fork-child"},
             )
             assert resp.status_code == 200
             child_id = resp.json()["sandbox_id"]
             try:
-                resp = client.post(
+                resp = mirror_client.post(
                     f"/api/mirror/sandboxes/{child_id}/exec",
                     json={"command": "cat /workspace/state.txt"},
                 )
                 assert "forked-state" in resp.json()["stdout"]
             finally:
-                client.delete(f"/api/mirror/sandboxes/{child_id}")
+                mirror_client.delete(f"/api/mirror/sandboxes/{child_id}")
         finally:
-            client.delete(f"/api/mirror/sandboxes/{sid}")
+            mirror_client.delete(f"/api/mirror/sandboxes/{sid}")
 
-    def test_api_policy_validation_and_errors(self, client):
-        resp = client.post("/api/mirror/sandboxes", json={"name": "api-err"})
+    def test_api_policy_validation_and_errors(self, mirror_client):
+        resp = mirror_client.post("/api/mirror/sandboxes", json={"name": "api-err"})
         sid = resp.json()["sandbox_id"]
         try:
-            resp = client.post(
+            resp = mirror_client.post(
                 f"/api/mirror/sandboxes/{sid}/network-policy", json={"policy": "maybe"}
             )
             assert resp.status_code == 400
-            resp = client.post(
+            resp = mirror_client.post(
                 "/api/mirror/sandboxes/sandbox-nonexistent/exec", json={"command": "true"}
             )
             assert resp.status_code == 404
-            resp = client.post(f"/api/mirror/sandboxes/{sid}/pause")
+            resp = mirror_client.post(f"/api/mirror/sandboxes/{sid}/pause")
             assert resp.status_code == 200
-            resp = client.post(f"/api/mirror/sandboxes/{sid}/exec", json={"command": "true"})
+            resp = mirror_client.post(f"/api/mirror/sandboxes/{sid}/exec", json={"command": "true"})
             assert resp.status_code == 409
         finally:
-            client.delete(f"/api/mirror/sandboxes/{sid}")
+            mirror_client.delete(f"/api/mirror/sandboxes/{sid}")
 
-    def test_api_stats_isolation_visible(self, client):
-        resp = client.get("/api/mirror/health")
+    def test_api_stats_isolation_visible(self, mirror_client):
+        resp = mirror_client.get("/api/mirror/health")
         assert resp.status_code == 200
         assert resp.json()["isolation_available"] is True
+
+
+# ── 测试隔离护栏（TL-② 拆件①：live 写方收编）──────────────────
+
+PROD_TIMELINE_DB = str(Path(__file__).resolve().parents[1] / "data" / "timeline.db")
+
+
+def _count_prod_summary(marker: str) -> int:
+    """只读数生产 timeline.db 中含哨兵的行数（file:...?mode=ro URI，绝不写）。"""
+    if not Path(PROD_TIMELINE_DB).exists():
+        return 0
+    con = sqlite3.connect(f"file:{PROD_TIMELINE_DB}?mode=ro", uri=True)
+    try:
+        return con.execute(
+            "SELECT COUNT(*) FROM events WHERE summary LIKE ?", (f"%{marker}%",)
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+
+class TestTl2IsolationGuard:
+    """TL-② 拆件① 隔离护栏：API 事件/沙箱文件面/模板库全落 tmp，生产库零测试行。"""
+
+    def test_api_events_land_in_tmp_timeline_not_production(self, mirror_client):
+        marker = f"tl2-guard-{uuid.uuid4().hex}"
+        resp = mirror_client.post("/api/mirror/sandboxes", json={"name": marker})
+        assert resp.status_code == 200
+        sid = resp.json()["sandbox_id"]
+        try:
+            resp = mirror_client.post(
+                f"/api/mirror/sandboxes/{sid}/exec", json={"command": "echo guard-roundtrip"}
+            )
+            assert resp.status_code == 200 and "guard-roundtrip" in resp.json()["stdout"]
+        finally:
+            mirror_client.delete(f"/api/mirror/sandboxes/{sid}")
+
+        tmp_db = mirror_client.app.state.mirror_client_timeline_db
+        assert tmp_db == os.environ["TIMELINE_DB"]  # 隔离链真源一致（禁只信构造参数）
+        assert tmp_db != PROD_TIMELINE_DB
+        con = sqlite3.connect(f"file:{tmp_db}?mode=ro", uri=True)
+        try:
+            hits = con.execute(
+                "SELECT COUNT(*) FROM events WHERE summary LIKE ?", (f"%{marker}%",)
+            ).fetchone()[0]
+        finally:
+            con.close()
+        assert hits == 1  # sandbox_created 哨兵真落 tmp（进程内真路径真消费）
+        assert _count_prod_summary(marker) == 0  # 生产库零测试行（修前恒落生产）
+
+    def test_sandbox_files_land_in_tmp_dir_not_production(self, mirror_client):
+        sandbox_dir = Path(mirror_client.app.state.mirror_client_sandbox_dir)
+        assert sandbox_dir != Path.home() / ".opensoul" / "sandboxes"
+        resp = mirror_client.post("/api/mirror/sandboxes", json={"name": "tl2-dir-check"})
+        assert resp.status_code == 200
+        sid = resp.json()["sandbox_id"]
+        try:
+            assert (sandbox_dir / sid).exists()  # 沙箱文件面真落 tmp
+        finally:
+            mirror_client.delete(f"/api/mirror/sandboxes/{sid}")
+
+    def test_template_db_is_tmp_not_production(self, mirror_client):
+        tpl_db = Path(mirror_client.app.state.mirror_client_templates_db)
+        prod_db = Path(__file__).resolve().parents[1] / "data" / "mirror" / "templates.db"
+        assert tpl_db != prod_db
+        resp = mirror_client.get("/api/mirror/templates")
+        assert resp.status_code == 200
+        assert tpl_db.exists()  # 模板面真落 tmp 库（seed 面不碰生产）

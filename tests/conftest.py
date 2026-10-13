@@ -374,3 +374,43 @@ def capture_client(tmp_path, monkeypatch):
     app.state.capture_client_db = str(tmp_db)  # 暴露tmp库路径供隔离护栏断言
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def mirror_client(tmp_path, monkeypatch):
+    """mirror API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db 与 ~/.opensoul/sandboxes（gene_client/will_client 同款路线；
+    timeline 测试隔离拆件② live 测试写方收编——test_sandbox_isolation TestApi
+    此前走 live :8090，服务进程把 sandbox_created/exec/fork 事件写生产
+    timeline.db，2026-10-13 修前实测 11 行/轮）。测试面=真实 router/handler
+    代码，数据面三层换 tmp：
+    - sandbox 管理面：SandboxManager(sandbox_dir=tmp)（修前缺省 ~/.opensoul/sandboxes）
+    - 模板面：SandboxTemplateEngine(db_path=tmp)（修前缺省 ~/opensoul/data/mirror/templates.db）
+    - timeline 事件面：TIMELINE_DB autouse 隔离 + 懒缓存复位（_isolate_timeline_db）
+      —— push_event 进程内构造 TimelineStore 读 env，事件落本用例 tmp 库
+    app.state.mirror_client_* 暴露 tmp 路径供隔离护栏断言。
+    src.api.mirror 在 fixture 内延迟 import：模块 import 有单例构造副作用
+    （SandboxManager()/SandboxTemplateEngine() 缺省解析生产路径），不能在
+    conftest 收集期全局 import。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.mirror as mirror_api
+    from src.mirror.sandbox import SandboxManager
+    from src.mirror.templates import SandboxTemplateEngine
+
+    tmp_manager = SandboxManager(sandbox_dir=tmp_path / "sandboxes")
+    tmp_templates = SandboxTemplateEngine(db_path=str(tmp_path / "templates.db"))
+    monkeypatch.setattr(mirror_api, "manager", tmp_manager)
+    monkeypatch.setattr(mirror_api, "template_engine", tmp_templates)
+
+    from src.timeline.store import default_db_path
+
+    app = FastAPI()
+    app.include_router(mirror_api.router, prefix="/api/mirror")
+    app.state.mirror_client_sandbox_dir = str(tmp_manager.sandbox_dir)
+    app.state.mirror_client_templates_db = str(tmp_path / "templates.db")
+    app.state.mirror_client_timeline_db = default_db_path()
+    with TestClient(app) as c:
+        yield c

@@ -1,9 +1,14 @@
-"""Integration tests for OpenMirror (镜像) — sandbox testing."""
+"""Integration tests for OpenMirror (镜像) — sandbox testing.
+
+TL-② 拆件①收编：client(live :8090) → mirror_client（进程内真实 router + tmp
+数据面）——修前每轮全量把 test_sandbox/var_test 2 条 sandbox_created 写生产
+timeline.db，且 /cleanup 对 live 生产沙箱执行过期清理（测试副作用碰生产）。
+"""
 
 
 class TestMirrorHealth:
-    def test_health(self, client):
-        resp = client.get("/api/mirror/health")
+    def test_health(self, mirror_client):
+        resp = mirror_client.get("/api/mirror/health")
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
@@ -11,9 +16,9 @@ class TestMirrorHealth:
 
 
 class TestMirrorSandbox:
-    def test_create_list_delete_sandbox(self, client):
+    def test_create_list_delete_sandbox(self, mirror_client):
         # Create
-        resp = client.post(
+        resp = mirror_client.post(
             "/api/mirror/sandboxes",
             json={
                 "name": "test_sandbox",
@@ -26,20 +31,20 @@ class TestMirrorSandbox:
         sid = data["sandbox_id"]
 
         # List
-        resp = client.get("/api/mirror/sandboxes")
+        resp = mirror_client.get("/api/mirror/sandboxes")
         assert resp.status_code == 200
 
         # Get specific
-        resp = client.get(f"/api/mirror/sandboxes/{sid}")
+        resp = mirror_client.get(f"/api/mirror/sandboxes/{sid}")
         assert resp.status_code == 200
 
         # Delete
-        resp = client.delete(f"/api/mirror/sandboxes/{sid}")
+        resp = mirror_client.delete(f"/api/mirror/sandboxes/{sid}")
         assert resp.status_code == 200
 
-    def test_sandbox_variables(self, client):
+    def test_sandbox_variables(self, mirror_client):
         # Create sandbox
-        resp = client.post(
+        resp = mirror_client.post(
             "/api/mirror/sandboxes",
             json={
                 "name": "var_test",
@@ -50,7 +55,7 @@ class TestMirrorSandbox:
         sid = resp.json()["sandbox_id"]
 
         # Set variable
-        resp = client.post(
+        resp = mirror_client.post(
             f"/api/mirror/sandboxes/{sid}/variables",
             json={
                 "key": "test_var",
@@ -60,14 +65,14 @@ class TestMirrorSandbox:
         assert resp.status_code == 200
 
         # Get variables
-        resp = client.get(f"/api/mirror/sandboxes/{sid}/variables")
+        resp = mirror_client.get(f"/api/mirror/sandboxes/{sid}/variables")
         assert resp.status_code == 200
 
         # Cleanup
-        client.delete(f"/api/mirror/sandboxes/{sid}")
+        mirror_client.delete(f"/api/mirror/sandboxes/{sid}")
 
 
 class TestMirrorCleanup:
-    def test_cleanup(self, client):
-        resp = client.post("/api/mirror/cleanup")
+    def test_cleanup(self, mirror_client):
+        resp = mirror_client.post("/api/mirror/cleanup")
         assert resp.status_code == 200
