@@ -395,6 +395,7 @@ class IntrusionDetector:
     def record_login_attempt(self, ip: str, success: bool, path: str = "/api/login"):
         """Record a login attempt for brute-force detection."""
         now = time.time()
+        threat = None
         with self._lock:
             self._login_attempts[ip].append(now)
             if not success:
@@ -410,8 +411,13 @@ class IntrusionDetector:
                         ThreatLevel.HIGH,
                         f"Brute force: {recent_fails} failed logins in {self.BRUTE_FORCE_WINDOW}s",
                     )
-                    self._record_threats(ip, [threat])
-                    return threat
+        # F3b-⑨b-②b-2 顺手收口（Gate3 逼出的挡路真断点，根因修非守卫）：_record_threats
+        # 自身取 self._lock（非重入 threading.Lock）——原在 with self._lock 内调用=自死锁，
+        # 第 10 次失败登录永久挂死本端点并扣死全局锁（后续 inspect/block/stats 全挂，
+        # 进程内复现实证）。威胁记录移出锁外=原设计语义（报警+计数+自动拉黑）恰一次。
+        if threat is not None:
+            self._record_threats(ip, [threat])
+            return threat
         return None
 
     def get_threats(
