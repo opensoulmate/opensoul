@@ -106,6 +106,20 @@ def classify_rule(tool_name: str, source: str):
     return "other", "unmatched"
 
 
+def classify_knowledge(title: str):
+    """knowledge 行残留分类（单一源词表，禁手抄；TL-⑥ 删除工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（fixture 标题前缀）、B=疑似（需人工裁决）、
+    other=不动。
+    """
+    t = title or ""
+    if t.startswith(A_KNOWLEDGE_TITLES_PREFIX):
+        return "A", "A_KNOWLEDGE_TITLES_PREFIX"
+    if t.startswith(B_KNOWLEDGE_TITLES_PREFIX):
+        return "B", "B_KNOWLEDGE_TITLES_PREFIX"
+    return "other", "unmatched"
+
+
 def ro(path: Path) -> sqlite3.Connection:
     assert path.exists(), f"missing: {path}"
     return sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True)
@@ -151,8 +165,8 @@ def census_sqlite(out: dict) -> None:
         "A": [{"id": u[0], "username": u[1]} for u in users if u[1] in A_USERNAMES or "test" in (u[2] or "")],
     }
     kn = c.execute("SELECT id,title FROM knowledge").fetchall()
-    a_kn = [k for k in kn if k[1] and k[1].startswith(A_KNOWLEDGE_TITLES_PREFIX)]
-    b_kn = [k for k in kn if k[1] and k[1].startswith(B_KNOWLEDGE_TITLES_PREFIX)]
+    a_kn = [k for k in kn if classify_knowledge(k[1])[0] == "A"]
+    b_kn = [k for k in kn if classify_knowledge(k[1])[0] == "B"]
     res["opensoul_knowledge"] = {
         "total": len(kn), "A": len(a_kn), "B": len(b_kn),
         "A_titles": dict(Counter(k[1] for k in a_kn)),

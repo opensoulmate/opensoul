@@ -69,6 +69,8 @@ TL-②-⑥ 收口时刻（2026-10-13 20:30 CST）之后新增 **A 类行 = 0**�
 > 执行记录（2026-10-14，TL-⑤ perm 测试规则失效化）：第 3 项已执行——perm_rules 105 条 test_dangerous_tool 活跃残留规则全部软删（is_deleted=1 可逆非删除；备份 data/backups/perm_rules_pre_deactivate_20261014_010136.db sha256 7b54a5d52df8f6e3a994c376ee55916872d06514b99e35afac016dde0e5166f6、回读活跃 A=0/非 A 43 条零误伤/105 行仍在可回滚，报告 data/deactivate_test_perm_rules_20261014.json）。第 1 项其余（knowledge 391 级联/测试用户 4+2/e2e 租户 2/perm 审计 612/manifests 5/探针组 2）与第 2 项 B 类仍未执行。
 >
 > 勘误（2026-10-14，TL-⑤ 复核）：上文「permission.db **活跃规则** 105 条 test_dangerous_tool + 2 条 p09-probe」多计 2 条——p09-probe 两行在清点时已 is_deleted=1（大概率其探针自带 delete_rule 清痕；清点工具恒只数活跃行，工件 rules_A=105 全为 test_dangerous_tool 为准）；该 2 行现仍软删在场（include_deleted 可回读）。第 3 项实际待失效化=105 条，TL-⑤ 已全数收口。
+>
+> 执行记录（2026-10-14，TL-⑥ 删除执行件②a）：第 1 项中 **knowledge A 类 391 行已级联精确删**（判法单一源 census.classify_knowledge、删前逐行复核、备份 data/backups/opensoul_pre_delete_20261014_013035.db（786 行全库快照 8,507,392B，sha256 62e4d63a3dc35ca2…）、回读：knowledge 786→395=786−391 对平、chunks 734→367、knowledge_tags 2,354→1,181、A 剩 0、非 A 395 含 B 一行不动、orphan 0→0，报告 data/delete_knowledge_test_residue_20261014.json）；外部索引随删（Meilisearch delete-batch，索引 786→395 与 DB 删除逐值吻合；qdrant 零点数=A 行 chunks embedding_id 全空清点实证）。诚实记录：执行时工具的 meili task 轮询自校验步漏带 Authorization 头回 401（报告如实记 ok=False；delete-batch 本体已生效），当拍修复（轮询补头+测试锁死）并对生产重验 ok=True task_status=succeeded。第 1 项其余（测试用户 4+2/e2e 租户 2/perm 审计 612/manifests 5/探针组 2）与第 2 项 B 类仍未执行。
 
 1. **低风险可删（A 类）**：timeline 8,612 行、knowledge 391 行（级联 chunks/tags）、测试用户 4+2、e2e 租户 2、perm 决策审计 612 行、manifests 悬挂 5 条、探针组 A群组/B群组（delete_group 级联）。删前工具已留 event_id 全清单，可按清单精确删+备份。
 2. **须拍板取舍（B 类）**：nerve 风暴 22,030（删=丢 2026-08-18 安全日志史；建议保留）、mirror exec 666、pipeline 421、exports 308。
