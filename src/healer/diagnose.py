@@ -10,6 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Optional
 
 import httpx
 
@@ -111,6 +112,70 @@ _EXTERNAL_DEPS: dict[str, list[str]] = {
 }
 
 
+# ── Health status vocabulary (single source, HEAL-②b-①) ──────
+# 真实产出普查（2026-10-13，全仓 health 端点 + vital Status 枚举）：
+#   健康自报 = "ok"（众器官 health 口）/"healthy"（brain）/"up"（vital Status.UP）
+#   degraded 自报 = "degraded"（main/echo 汇总口、vital Status.DEGRADED）
+#   down 自报 = "down"（vital Status.DOWN 组件级汇总）/"error"（C2 错误回包
+#   200 带 status=error）
+# 判定哲学（HEAL-② 审计③收口）：HTTP 200 只说明健康口可达，器官自报状态才是
+# 健康语义真源——「200 即健康」= 谎报（审计 live 硬证：vital 报 {"status": "down"}
+# 被诊断 healthy=True 零症状）。词表禁各判定点手抄（F4b-㉗ 纪律）。
+
+
+@dataclass(frozen=True)
+class _StatusVerdict:
+    severity: Severity
+    symptom: str
+    root_cause: str
+
+
+_STATUS_HEALTHY = frozenset({"ok", "healthy", "up"})
+
+_STATUS_VERDICTS: dict[str, _StatusVerdict] = {
+    "degraded": _StatusVerdict(
+        Severity.WARNING,
+        "service reports degraded status",
+        "component is running but degraded",
+    ),
+    "down": _StatusVerdict(
+        Severity.CRITICAL,
+        "service reports down status",
+        "component reports down status",
+    ),
+    "error": _StatusVerdict(
+        Severity.CRITICAL,
+        "service reports error status",
+        "component reports error status",
+    ),
+}
+
+
+def _classify_status(status: object) -> _StatusVerdict | None:
+    """判定健康口回包 status 词。None = 健康；非 None = 不健康（带症状/严重度）。
+
+    词表单一源：健康词 → None；degraded → WARNING（既有契约逐字保留）；
+    down 词（down/error）→ CRITICAL；识别不了的非空状态 → WARNING 如实不判
+    健康（禁谎报健康，也不过度定罪 CRITICAL）；显式 null/空串 = 非健康自报，
+    同未识别（缺失键在调用点按 "ok" 缺省，既有契约不变）。
+    """
+    if isinstance(status, str):
+        word = status.strip().lower()
+    else:
+        word = "" if status is None else str(status).strip().lower()
+    if word in _STATUS_HEALTHY:
+        return None
+    verdict = _STATUS_VERDICTS.get(word)
+    if verdict is not None:
+        return verdict
+    shown = word or "<empty>"
+    return _StatusVerdict(
+        Severity.WARNING,
+        f"service reports unrecognized status: {shown}",
+        f"component reports unrecognized status '{shown}'",
+    )
+
+
 class OrganHealer:
     """Auto-diagnose and heal organ failures."""
 
@@ -141,13 +206,16 @@ class OrganHealer:
                     result.severity = Severity.INFO
                     body = resp.json() if "json" in resp.headers.get("content-type", "") else {}
 
-                    # Check for degraded states even with 200
+                    # 状态词表判定（HEAL-②b-①）：200 只代表健康口可达，器官
+                    # 自报状态才是健康语义真源——非健康状态如实判不健康进症状面
+                    # （修前只认 "degraded"，down/error 等被判 healthy=True）
                     status = body.get("status", "ok")
-                    if status == "degraded":
+                    verdict = _classify_status(status)
+                    if verdict is not None:
                         result.healthy = False
-                        result.severity = Severity.WARNING
-                        result.symptoms.append("service reports degraded status")
-                        result.root_cause = "component is running but degraded"
+                        result.severity = verdict.severity
+                        result.symptoms.append(verdict.symptom)
+                        result.root_cause = verdict.root_cause
 
                     result.detail = body
                 else:
