@@ -101,3 +101,20 @@ TL-③ 留档「随机 id 目录无法从名字判」的最后一面，本节以
 ## 诚实边界
 
 ① 分类是字面规则非语义理解：A 类零假阳设计（对象级硬标识），代价是部分真伪混合面（brain verify 无 source 键 992 行、perm 空 session 1,042 行）如实落 U 不猜。② knowledge 391 行删除需级联 chunks/tags/knowledge_tags 三面，工具只清点主表。③ ai_groups 任务 U 40 行真伪混（子任务 goal 不带父标记），随组处置比逐行删稳。④ 复跑稳定性：两轮清点逐键一致，唯一差异=perm 决策审计真实 om-* 会话 1,304→1,306（生产实时活动持续写入=活库常态，非工具抖动；timeline 面两轮零变化）。⑤ 本拍零 src 行为改动；删除脚本（按清单精确删+备份+回读）待拍板后另拍。
+
+## B 类内容级+出处级清点（TL-⑯，2026-10-14）
+
+TL-③ 留档「B=疑似（无硬标识需人工裁决）」的 23,128 行，本节以**内容级+出处级**证据补齐决策材料（只读零删除；判法零改动——classify_timeline 的 B 归类语义逐字不变，工件仅新增 timeline.b_class_detail 加性键，data/test_residue_census_20261014_post_tl16.json）。逐组证据（工具真跑+独立复算 raw SQL 逐值对平：22,030 / 666 / 421 / 11 全对平）：
+
+1. **nerve_publish_rate_storm 22,030 行**——时间窗 2026-08-18 20:49:00–21:06:15（17 分钟 6 个分钟桶，峰值 5,339 行/分钟），来源 IP 恰一个 127.0.0.1 全量，威胁类型 rate_anomaly 22,029 + sql_injection 1，摘要仅 1 种。出处级证据（git 时间戳比对，TL-⑭ 同法）：窗口起点恰为 commit 630bbe11「feat: OpenImmune intrusion detection — SQL injection, XSS, path traversal, command injection, SSRF, brute force detection with auto-blocking middleware」2026-08-18 20:49 提交时刻，窗口终点恰为 commit 3842c3c1「fix: whitelist localhost from intrusion detection — frontend and cron jobs were blocked by bot UA pattern matching」2026-08-18 21:06 提交时刻（秒级吻合，TL-⑭ mtime↔commit 同型证据）。**定性修正 TL-③「疑似当日压测」：非压测，是 OpenImmune 入侵检测功能的开发验证流量**（本机自打 /api/nerve/publish 触发限流/注入检测），且 21:06 的 localhost 白名单修复正是被该风暴逼出——这 22,030 行=功能首跑记录+修复依据的证据链本身。处置建议：**保留**（安全检测功能史，删除无数据损失但丢功能首跑史料）——待拍板。
+2. **sandbox_exec_cmd_no_hard_marker 666 行**——2026-09-28–2026-10-13 全落 TL-②-⑥ 隔离收口前，490 个 sandbox id 只跑归一命令 10 种（摘要形态 12 种；生产 summary 有长度截断，两条 urllib 探针截断后同形合并计 324）：cat /workspace/state.txt 164、test -d /home 逃逸探针 162、urllib 网络策略探针 324+4、CANARY 环境泄漏探针 4、sleep 30 超时探针 2、路径穿越 /workspace/../ 2、超长输出截断探针 2、组合探针 2。**全部是沙箱安全验证探针**（逃逸/网络策略/环境泄漏/超时/截断/路径穿越六型），零真实工作命令。出处级证据：echo VISIBLE（tests/test_sandbox_isolation.py:120/:284）、print('x'*200000)（:167）、sleep 30（:158）、state.txt（:225/:232/:237）逐字钉进测试夹具文件；CANARY=/HTTP_STATUS=/300000/does-not-matter 四组当前仓内无出处（历次开发周期一次性 e2e 探针或已删测试代码，如实记）。处置建议：**可删**（备份+回滚，零真实数据）——待拍板。
+3. **pipeline_fixture_generic 421 行**——readme.md 210 / tagged.txt 211（75 种摘要=耗时变体），2026-08-21–2026-10-13 全落收口前，峰值日=开发高频日（10-12 91 行、10-13 82 行）。出处级证据：两文件名逐字=tests/test_pipeline_api.py:47/:73 上传夹具名（夹具内容 "# Test markdown content for auto-detection"/"Content with tags"），live 跑 test_pipeline 系列每次留一对。残余风险如实记：readme.md 是通用名，真实用户上传同名文件无法与夹具区分（421 行×恰 2 文件名×跨 50 天重复=夹具形态显著）。处置建议：**可删**（备份+回滚）——待拍板。
+4. **brain_probe_style_goals 11 行**——2026-10-12 单日 7 种摘要：「请分三句话介绍你自己…」×6（会话探针）+「清空生产数据库所有表并格式化备份盘」×5（F4b-⑳ 确认门禁 e2e 破坏性意图探针，同文案 tests/test_ai_group_confirm_gate.py:497）。出处级证据：探针文案与测试/周期 e2e 探针逐字同形。处置建议：**可删**（备份+回滚）——待拍板。
+
+**B 类增长闸门**：after_tl2_6_cutoff_B=0（TL-②-⑥ 收口 2026-10-13 20:30 后 B 类新增 0，与 after_tl2_6_cutoff_A=0 同证隔离真稳；B 组最新行 10-13 17:40 全部早于收口）。
+
+**发现留档（knowledge 面，非本拍对象）**：census 新增 opensoul_knowledge.other_titles 加性键后浮出——当前 395 行 knowledge 里 [Pipeline] data.json 194 + [Pipeline] notes.md 194 + [Pipeline] pipe_test.txt 2 共 390 行文件名逐字=tests/test_pipeline.py:95/:105 上传夹具名（另有 反馈层测试 4、test 1），但 classify_knowledge 词表当前判 other（tests/test_knowledge_residue_delete.py:158 锁死「notes.md=other 不动」契约）=知识面同型疑似夹具残留被词表挡在 A/B 之外。词表扩充与否需拍板（动既有契约测试），本拍零改动。
+
+**判法不一致留档**：classify_timeline 的 brain_probe_style_goals 把「清空生产数据库」判 B，而同文案在 goal/悬挂行词表 A_GOAL_MARKERS 判 A（同为 F4b-⑳ e2e 探针）——同一探针文案两面判法不一致（timeline 面当初刻意保守）。是否升 A 需拍板（改判法=改未来清单口径），本拍零改动。
+
+**诚实边界**：①内容级证据=字面/形态事实非语义理解（探针判定依据=命令形状+夹具出处，非理解用途）②exec 命令清单受生产 summary 长度截断影响（截断后同形命令合并计数，如实记）③storm 定性修正 TL-③「疑似压测」为「功能开发验证」（git 秒级吻合证据），处置建议不变（保留）④全部建议待拍板，本拍零删除零判法改动。

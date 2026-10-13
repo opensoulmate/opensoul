@@ -243,6 +243,96 @@ def sandbox_timeline_xref(conn, names) -> dict:
     return out
 
 
+# ---- TL-⑯ B 类内容级清点（只读决策材料，零删除零分类改动）----
+
+EXEC_SUMMARY_RE = re.compile(r"^🧪 Sandbox exec: exit=(-?\d+) (.*)$")
+PIPELINE_NAME_RE = re.compile(r"completed: (\S+)")
+
+
+def b_command_from_summary(summary):
+    """🧪 Sandbox exec 行摘要 → (exit_code, 命令串) 归一（单一源，禁手抄）。
+
+    形如 "🧪 Sandbox exec: exit=0 cat /workspace/state.txt" → (0,
+    "cat /workspace/state.txt")；不匹配该形态原样返回 (None, 摘要)。
+    """
+    m = EXEC_SUMMARY_RE.match(summary or "")
+    if m:
+        return int(m.group(1)), m.group(2)
+    return None, summary or ""
+
+
+def b_class_content_facts(conn) -> dict:
+    """B 类 timeline 行内容级清点（只读决策材料，TL-⑯）。
+
+    对 classify_timeline 判 B 的行逐组产出决策材料：计数/时间窗/摘要清单
+    （capped）+ 组专属事实（storm=来源 IP/威胁类型/分钟峰值；exec=命令清单/
+    退出码/沙箱数；pipeline=文件名分布；brain=目标全文清单）。判法零改动
+    （B 归类语义逐字不变），只加性产出——B 类取舍拍板前的"内容级"面
+    （TL-⑭ sandboxes 内容级清点同哲学：无法从名字判的，用内容事实说话）。
+    """
+    groups: dict = {}
+    for _eid, organ, etype, summary, detail, ts in conn.execute(
+            "SELECT event_id,organ,event_type,summary,COALESCE(detail,''),timestamp"
+            " FROM events"):
+        cls, rule = classify_timeline(organ, etype, summary, detail)
+        if cls == "B":
+            groups.setdefault(rule, []).append((summary or "", detail or "", ts))
+    out = {}
+    for rule, rows in groups.items():
+        tss = [r[2] for r in rows if isinstance(r[2], (int, float))]
+        entry = {
+            "count": len(rows),
+            "distinct_summaries": len(set(r[0] for r in rows)),
+            "top_summaries": [{"summary": s, "count": n} for s, n in
+                              Counter(r[0] for r in rows).most_common(20)],
+        }
+        if tss:
+            entry["first_ts"] = datetime.fromtimestamp(min(tss)).isoformat()
+            entry["last_ts"] = datetime.fromtimestamp(max(tss)).isoformat()
+        if rule == "nerve_publish_rate_storm":
+            ips, threats, minutes = Counter(), Counter(), Counter()
+            for summary, detail, ts in rows:
+                try:
+                    d = json.loads(detail)
+                except Exception:
+                    d = {}
+                ips[str(d.get("ip", "?"))] += 1
+                for t in (d.get("threat_types") or []):
+                    threats[str(t)] += 1
+                if isinstance(ts, (int, float)):
+                    minutes[datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")] += 1
+            entry["source_ips"] = dict(ips.most_common(10))
+            entry["threat_types"] = dict(threats.most_common(10))
+            entry["peak_per_minute"] = max(minutes.values()) if minutes else 0
+            entry["burst_minutes"] = len(minutes)
+        elif rule == "sandbox_exec_cmd_no_hard_marker":
+            cmds, exits, sandbox_ids = Counter(), Counter(), Counter()
+            for summary, detail, ts in rows:
+                code, cmd = b_command_from_summary(summary)
+                cmds[cmd] += 1
+                exits[str(code)] += 1
+                try:
+                    d = json.loads(detail)
+                except Exception:
+                    d = {}
+                sandbox_ids[str(d.get("sandbox_id", "?"))] += 1
+            entry["commands"] = [{"command": c, "count": n}
+                                 for c, n in cmds.most_common(40)]
+            entry["exit_codes"] = dict(exits.most_common(10))
+            entry["distinct_sandbox_ids"] = len(sandbox_ids)
+        elif rule == "pipeline_fixture_generic":
+            names = Counter()
+            for summary, detail, ts in rows:
+                m = PIPELINE_NAME_RE.search(summary)
+                names[m.group(1) if m else "?"] += 1
+            entry["file_names"] = dict(names.most_common(40))
+        elif rule == "brain_probe_style_goals":
+            entry["goals"] = [{"goal": s, "count": n} for s, n in
+                              Counter(r[0] for r in rows).most_common(40)]
+        out[rule] = entry
+    return out
+
+
 def classify_user(username, email=None):
     """users 行残留分类（单一源词表，禁手抄；TL-⑩ 删除工具同源消费）。
 
@@ -361,6 +451,7 @@ def census_timeline(out: dict) -> None:
     counts = {"A": Counter(), "B": Counter(), "U": Counter()}
     assigned: dict[str, set[str]] = {"A": set(), "B": set(), "U": set()}
     late_a = 0
+    late_b = 0
     cutoff = 1791894600.0  # 2026-10-13 20:30 CST = TL-②-⑥ 收口时刻
     for eid, organ, etype, summary, detail, ts in c.execute(
             "SELECT event_id,organ,event_type,summary,COALESCE(detail,''),timestamp FROM events"):
@@ -370,6 +461,8 @@ def census_timeline(out: dict) -> None:
             assigned[cls].add(eid)
         if cls == "A" and ts > cutoff:
             late_a += 1
+        if cls == "B" and ts > cutoff:
+            late_b += 1
     out["timeline"] = {
         "total": total,
         "A": sum(counts["A"].values()),
@@ -383,6 +476,10 @@ def census_timeline(out: dict) -> None:
     }
     # 残留增长闸门：TL-②-⑥ 收口（2026-10-13 20:30 CST）之后新增的 A 类行=隔离仍在漏
     out["timeline"]["after_tl2_6_cutoff_A"] = late_a
+    # B 类同款闸门（TL-⑯：隔离收口后 B 类新增同样应为 0）
+    out["timeline"]["after_tl2_6_cutoff_B"] = late_b
+    # B 类内容级清点（TL-⑯ 加性键：判法零改动，只产出决策材料）
+    out["timeline"]["b_class_detail"] = b_class_content_facts(c)
 
 
 def census_sqlite(out: dict) -> None:
@@ -398,10 +495,12 @@ def census_sqlite(out: dict) -> None:
     kn = c.execute("SELECT id,title FROM knowledge").fetchall()
     a_kn = [k for k in kn if classify_knowledge(k[1])[0] == "A"]
     b_kn = [k for k in kn if classify_knowledge(k[1])[0] == "B"]
+    o_kn = [k for k in kn if classify_knowledge(k[1])[0] == "other"]
     res["opensoul_knowledge"] = {
         "total": len(kn), "A": len(a_kn), "B": len(b_kn),
         "A_titles": dict(Counter(k[1] for k in a_kn)),
         "B_titles": dict(Counter(k[1] for k in b_kn)),
+        "other_titles": dict(Counter(k[1] for k in o_kn).most_common(20)),
     }
     meta = c.execute("SELECT COUNT(*) FROM metacognition_log").fetchone()[0]
     res["opensoul_metacognition_log"] = {"total": meta, "note": "单行 goal=fix_bug 疑似探针（B）"}
