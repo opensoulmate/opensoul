@@ -93,6 +93,8 @@ A_GOAL_MARKERS = ("冒烟测试", "A1认知层接线live验证", "逐块推送�
 B_GOAL_MARKERS = ("用一句话", "请分三句话", "列出3个Linux", "介绍一下Python", "介绍Python的GIL")
 A_MANIFEST_NAME_MARKERS = ("test_backup_integration", "test-sense-backup")
 A_GROUP_NAMES = {"A群组", "B群组"}
+A_EXPORT_NAME_PREFIX = "test-"
+A_EXPORT_ENTRY_NAMES = {"test", "test2"}
 
 
 def classify_rule(tool_name: str, source: str):
@@ -139,6 +141,31 @@ def classify_manifest(name):
     n = name or ""
     if any(m in n for m in A_MANIFEST_NAME_MARKERS):
         return "A", "A_MANIFEST_NAME_MARKERS"
+    return "other", "unmatched"
+
+
+def classify_export(name, raw_text):
+    """exports 导出文件残留分类（单一源词表，禁手抄；TL-⑬ 删除工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（文件名硬标识 / 内容硬标识），other=不动。
+    判据两条（先匹配先得）：
+      1) 文件名硬标识：name 以 'test-' 开头（test-export_export_*.json 探针导出）
+      2) 内容硬标识：JSON 顶层非空 list 且每条 entry.name 全在 A_EXPORT_ENTRY_NAMES
+         （=tests/test_marrow.py:75 fixture [{"type":"knowledge","name":"test"}] 与
+         test2 探针字面；默认名 export_export_* 本身不是标识——真实用户导出同名，
+         刻意不按名字判，宁窄勿滥）
+    解析失败/顶层非 list/空 list=如实 other 不猜。
+    """
+    if (name or "").startswith(A_EXPORT_NAME_PREFIX):
+        return "A", "A_EXPORT_NAME_PREFIX"
+    try:
+        data = json.loads(raw_text)
+    except (json.JSONDecodeError, TypeError):
+        return "other", "unparsed"
+    if not isinstance(data, list) or not data:
+        return "other", "not_nonempty_list"
+    if all(isinstance(it, dict) and it.get("name") in A_EXPORT_ENTRY_NAMES for it in data):
+        return "A", "A_EXPORT_ENTRY_NAMES"
     return "other", "unmatched"
 
 
@@ -416,10 +443,25 @@ def census_files(out: dict) -> None:
     }
     edir = HOME / ".opensoul" / "exports"
     exports = sorted(x.name for x in edir.glob("*.json")) if edir.is_dir() else []
+    a_files = []
+    a_rules = Counter()
+    for _e in exports:
+        _raw = ""
+        try:
+            _raw = (edir / _e).read_text(encoding="utf-8")
+        except OSError:
+            pass
+        _cls, _rule = classify_export(_e, _raw)
+        if _cls == "A":
+            a_files.append(_e)
+            a_rules[_rule] += 1
     res["exports"] = {
         "total": len(exports),
         "B_uniform_export_export": sum(1 for e in exports if e.startswith("export_export_")),
         "sample": exports[:3],
+        "A_files": a_files,
+        "A_total": len(a_files),
+        "A_by_rule": dict(a_rules),
     }
     sdir = HOME / ".opensoul" / "sandboxes"
     sandboxes = sorted(x.name for x in sdir.iterdir()) if sdir.is_dir() else []
