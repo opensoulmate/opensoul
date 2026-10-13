@@ -50,15 +50,31 @@ ORGAN_EMOJI: dict[str, str] = {
 }
 
 
+def _tenant_key(tenant_id: str | None) -> dict[str, Any]:
+    """F3b-⑨b-①：身份派生租户键注入（事件 dict 自带键→TimelineStore.record 行归属）。
+
+    显式提供（非空白）=注入 {"tenant_id": str(...) }（str() 归一，SQLite 铁律）；
+    未提供/空白=返回空 dict 不注入键——调用点不传行为字节不变（'default' 兜底延续）。
+    """
+    val = str(tenant_id or "").strip()
+    return {"tenant_id": val} if val else {}
+
+
 async def emit(
     organ: str,
     event_type: str,
     summary: str,
     detail: dict[str, Any] | None = None,
     *,
+    tenant_id: str | None = None,
     _client: httpx.AsyncClient | None = None,
 ) -> bool:
     """Publish an event to both the Nerve bus and the in-memory event buffer.
+
+    F3b-⑨b-①：tenant_id=身份派生租户键（bind_identity 派生值由调用点传入），
+    随事件 dict 透传到 TimelineStore.record 行归属（record() 消费 event['tenant_id']）。
+    未提供/空白=不注入键——调用点不传行为字节不变，record() 'default' 兜底延续
+    （③c-2① 语义）。事件 dict 自带键是唯一落库真源，此参数只是构造处的注入口。
 
     Returns True if at least one publish succeeded.  Never raises —
     failures are logged and swallowed so the caller's main path is
@@ -73,6 +89,7 @@ async def emit(
         "summary": summary,
         "detail": detail or {},
         "timestamp": time.time(),
+        **_tenant_key(tenant_id),
     }
 
     ok = False
@@ -105,6 +122,7 @@ async def emit(
                     "summary": summary,
                     "detail": detail or {},
                     "timestamp": time.time(),
+                    **_tenant_key(tenant_id),
                 }
             )
         except (ImportError, AttributeError):
@@ -127,6 +145,7 @@ async def emit(
                     "detail": detail or {},
                     "timestamp": time.time(),
                     "collected_at": time.time(),
+                    **_tenant_key(tenant_id),
                 }
             )
         except Exception as exc:
@@ -163,12 +182,21 @@ async def emit(
     return ok
 
 
-def push_event(event: dict[str, Any]) -> None:
+def push_event(event: dict[str, Any], *, tenant_id: str | None = None) -> None:
     """Append an event to the in-memory ring buffer AND publish to Nerve bus.
 
     This is the synchronous convenience wrapper used by API endpoints.
     For Nerve bus delivery it fires-and-forgets an async task.
+
+    F3b-⑨b-①：tenant_id=身份派生租户键显式注入口——提供（非空白）则覆盖 dict
+    同名键（身份真源优先，防构造处手抄漂移）；未提供不动 dict（事件自带键
+    原样透传，调用点不传行为字节不变，record() 'default' 兜底延续）。
     """
+    # F3b-⑨b-①：显式 tenant_id=身份真源（覆盖 dict 同名键）；未提供不动 dict。
+    val = str(tenant_id or "").strip()
+    if val:
+        event["tenant_id"] = val
+
     try:
         from src.api.event_stream import _event_buffer
 
