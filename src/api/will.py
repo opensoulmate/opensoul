@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from src.services.tenant_binding import bind_identity
 from src.will.checkpoint import CheckpointAccessDenied
 from src.will.dag_planner import DAGPlanner
-from src.will.engine import WorkflowEngine
+from src.will.engine import WorkflowAccessDenied, WorkflowEngine
 from src.will.models import (
     NodeType,
     TriggerType,
@@ -69,54 +69,77 @@ class ExecuteRequest(BaseModel):
 
 
 @router.post("/workflows")
-async def create_workflow(req: WorkflowCreate):
-    """Create a new workflow."""
+async def create_workflow(req: WorkflowCreate, authorization: str | None = Header(None)):
+    """Create a new workflow.
+
+    F3b-⑦：定义面行归属租户从认证身份派生（bind_identity，匿名='default'），禁自报。
+    """
+    identity = bind_identity(authorization)
     wf = engine.create_workflow(
         name=req.name,
         description=req.description,
         trigger=req.trigger,
         trigger_config=req.trigger_config,
         variables=req.variables,
+        tenant_id=identity.tenant_id,
     )
     return _workflow_dict(wf)
 
 
 @router.get("/workflows")
-async def list_workflows(status: str = Query(default=None)):
-    """List all workflows."""
-    ws = engine.list_workflows()
+async def list_workflows(
+    status: str = Query(default=None), authorization: str | None = Header(None)
+):
+    """List all workflows（F3b-⑦：按派生租户过滤，None 系统视图仅引擎内部）。"""
+    identity = bind_identity(authorization)
+    ws = engine.list_workflows(tenant_id=identity.tenant_id)
     if status:
         try:
             s = WorkflowStatus(status)
-            ws = engine.list_workflows(status=s)
+            ws = engine.list_workflows(status=s, tenant_id=identity.tenant_id)
         except ValueError:
             raise HTTPException(400, f"Invalid status: {status}")
     return {"workflows": [_workflow_dict(w) for w in ws], "count": len(ws)}
 
 
 @router.get("/workflows/{workflow_id}")
-async def get_workflow(workflow_id: str):
+async def get_workflow(workflow_id: str, authorization: str | None = Header(None)):
     """Get workflow details."""
-    wf = engine.get_workflow(workflow_id)
+    identity = bind_identity(authorization)
+    try:
+        wf = engine.get_workflow(workflow_id, tenant_id=identity.tenant_id)
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
     if not wf:
         raise HTTPException(404, "Workflow not found")
     return _workflow_dict(wf)
 
 
 @router.put("/workflows/{workflow_id}")
-async def update_workflow(workflow_id: str, req: WorkflowUpdate):
+async def update_workflow(
+    workflow_id: str, req: WorkflowUpdate, authorization: str | None = Header(None)
+):
     """Update workflow metadata."""
+    identity = bind_identity(authorization)
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
-    wf = engine.update_workflow(workflow_id, **updates)
+    try:
+        wf = engine.update_workflow(workflow_id, tenant_id=identity.tenant_id, **updates)
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
     if not wf:
         raise HTTPException(404, "Workflow not found")
     return _workflow_dict(wf)
 
 
 @router.delete("/workflows/{workflow_id}")
-async def delete_workflow(workflow_id: str):
+async def delete_workflow(workflow_id: str, authorization: str | None = Header(None)):
     """Delete a workflow."""
-    if not engine.delete_workflow(workflow_id):
+    identity = bind_identity(authorization)
+    try:
+        ok = engine.delete_workflow(workflow_id, tenant_id=identity.tenant_id)
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
+    if not ok:
         raise HTTPException(404, "Workflow not found")
     return {"status": "ok", "workflow_id": workflow_id}
 
@@ -125,24 +148,34 @@ async def delete_workflow(workflow_id: str):
 
 
 @router.post("/workflows/{workflow_id}/nodes")
-async def add_node(workflow_id: str, req: NodeCreate):
+async def add_node(workflow_id: str, req: NodeCreate, authorization: str | None = Header(None)):
     """Add a node to a workflow."""
-    node = engine.add_node(
-        workflow_id,
-        node_type=req.node_type,
-        label=req.label,
-        config=req.config,
-        position=req.position,
-    )
+    identity = bind_identity(authorization)
+    try:
+        node = engine.add_node(
+            workflow_id,
+            node_type=req.node_type,
+            label=req.label,
+            config=req.config,
+            position=req.position,
+            tenant_id=identity.tenant_id,
+        )
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
     if not node:
         raise HTTPException(404, "Workflow not found")
     return node.model_dump()
 
 
 @router.delete("/workflows/{workflow_id}/nodes/{node_id}")
-async def remove_node(workflow_id: str, node_id: str):
+async def remove_node(workflow_id: str, node_id: str, authorization: str | None = Header(None)):
     """Remove a node from a workflow."""
-    if not engine.remove_node(workflow_id, node_id):
+    identity = bind_identity(authorization)
+    try:
+        ok = engine.remove_node(workflow_id, node_id, tenant_id=identity.tenant_id)
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
+    if not ok:
         raise HTTPException(404, "Node or workflow not found")
     return {"status": "ok"}
 
@@ -151,24 +184,34 @@ async def remove_node(workflow_id: str, node_id: str):
 
 
 @router.post("/workflows/{workflow_id}/edges")
-async def add_edge(workflow_id: str, req: EdgeCreate):
+async def add_edge(workflow_id: str, req: EdgeCreate, authorization: str | None = Header(None)):
     """Add an edge (connection) between two nodes."""
-    edge = engine.add_edge(
-        workflow_id,
-        source_node_id=req.source_node_id,
-        target_node_id=req.target_node_id,
-        condition=req.condition,
-        label=req.label,
-    )
+    identity = bind_identity(authorization)
+    try:
+        edge = engine.add_edge(
+            workflow_id,
+            source_node_id=req.source_node_id,
+            target_node_id=req.target_node_id,
+            condition=req.condition,
+            label=req.label,
+            tenant_id=identity.tenant_id,
+        )
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
     if not edge:
         raise HTTPException(404, "Workflow or nodes not found")
     return edge.model_dump()
 
 
 @router.delete("/workflows/{workflow_id}/edges/{edge_id}")
-async def remove_edge(workflow_id: str, edge_id: str):
+async def remove_edge(workflow_id: str, edge_id: str, authorization: str | None = Header(None)):
     """Remove an edge from a workflow."""
-    if not engine.remove_edge(workflow_id, edge_id):
+    identity = bind_identity(authorization)
+    try:
+        ok = engine.remove_edge(workflow_id, edge_id, tenant_id=identity.tenant_id)
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
+    if not ok:
         raise HTTPException(404, "Edge or workflow not found")
     return {"status": "ok"}
 
@@ -177,9 +220,13 @@ async def remove_edge(workflow_id: str, edge_id: str):
 
 
 @router.get("/workflows/{workflow_id}/validate")
-async def validate_workflow(workflow_id: str):
+async def validate_workflow(workflow_id: str, authorization: str | None = Header(None)):
     """Validate a workflow DAG."""
-    wf = engine.get_workflow(workflow_id)
+    identity = bind_identity(authorization)
+    try:
+        wf = engine.get_workflow(workflow_id, tenant_id=identity.tenant_id)
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
     if not wf:
         raise HTTPException(404, "Workflow not found")
     errors = wf.validate_dag()
@@ -201,9 +248,12 @@ async def execute_workflow(
     checkpoint 表数据面隔离键由此落行。
     """
     identity = bind_identity(authorization)
-    execution = await engine.execute_async(
-        workflow_id, input_vars=req.variables, tenant_id=identity.tenant_id
-    )
+    try:
+        execution = await engine.execute_async(
+            workflow_id, input_vars=req.variables, tenant_id=identity.tenant_id
+        )
+    except WorkflowAccessDenied as e:
+        raise HTTPException(403, f"workflow access denied: {e.reason}")
     if not execution:
         raise HTTPException(404, "Workflow not found")
     return _execution_dict(execution)
@@ -463,6 +513,7 @@ def _workflow_dict(wf: Any) -> dict:
         "updated_at": wf.updated_at,
         "run_count": wf.run_count,
         "last_run_at": wf.last_run_at,
+        "tenant_id": getattr(wf, "tenant_id", "default") or "default",
     }
 
 

@@ -86,6 +86,9 @@ class Workflow(BaseModel):
     updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     run_count: int = 0
     last_run_at: str | None = None
+    # F3b-⑦（2026-10-13）工作流定义面租户归属：行归属租户（create=身份派生禁自报，
+    # 旧 JSON 持久化行缺省='default' 与生产数据分布一致）。
+    tenant_id: str = "default"
 
     def get_node(self, node_id: str) -> WorkflowNode | None:
         for n in self.nodes:

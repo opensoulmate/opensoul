@@ -21,6 +21,9 @@ from uuid import uuid4
 
 import httpx
 
+from src.nest.isolation import IsolationEngine, ResourceType
+from src.nest.tenant import tenant_namespace
+
 from .checkpoint import DEFAULT_TENANT, RESUMABLE_STATES, CheckpointStore
 from .models import (
     ExecutionStatus,
@@ -35,6 +38,21 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class WorkflowAccessDenied(Exception):
+    """跨租户 workflow 定义面访问被 IsolationEngine 拒绝（API 层映射 403，禁静默当 not_found）。
+
+    F3b-⑦（2026-10-13）：与 CheckpointAccessDenied 同族——verdict=check_access 原始回包
+    （allowed/reason/namespaced_id），审计留痕在 IsolationEngine 审计日志（data/nest.db），
+    此处只携带原因供 API 如实报。
+    """
+
+    def __init__(self, reason: str, verdict: dict | None = None):
+        super().__init__(reason)
+        self.reason = reason
+        self.verdict = verdict or {}
+
 
 _BASE = "http://127.0.0.1:8090"
 
@@ -71,6 +89,9 @@ class WorkflowEngine:
         # P1 checkpoint断点续跑（STORM分阶段落盘+agno /continue）：
         # 每个DAG节点执行完即落盘；进程重启后执行历史/可续跑状态从盘上恢复
         self._checkpoints = CheckpointStore(checkpoint_db)
+        # F3b-⑦：定义面数据面咨询 IsolationEngine（懒构造同 CheckpointStore 纪律——
+        # 首个 gate 调用才建 NestStore，系统路径（tenant_id=None）零生产库接触）。
+        self._isolation: IsolationEngine | None = None
         self._load()
         self._recover_executions()
 
@@ -115,6 +136,8 @@ class WorkflowEngine:
                 for wdata in data.get("workflows", []):
                     try:
                         wf = Workflow(**wdata)
+                        # F3b-⑦：旧持久化行缺 tenant_id/空白→'default'（与生产分布一致）
+                        wf.tenant_id = self._tenant_val(getattr(wf, "tenant_id", None))
                         self._workflows[wf.id] = wf
                     except Exception:
                         continue
@@ -132,6 +155,47 @@ class WorkflowEngine:
         except Exception:
             pass  # 写盘失败不阻塞运行
 
+    # ── F3b-⑦ 工作流定义面租户闸门（ResourceType.WORKFLOW）──────────────
+
+    @property
+    def isolation(self) -> IsolationEngine:
+        """隔离引擎（check_access 真执行点；审计日志落 NestStore=data/nest.db）。"""
+        if self._isolation is None:
+            self._isolation = IsolationEngine()
+        return self._isolation
+
+    def gate(self, tenant_id: str, row_tenant: str, resource_id: str, action: str) -> None:
+        """by-ID 访问闸门：IsolationEngine.check_access 真执行（F3b-⑦）。
+
+        资源 ID=namespaced_id(row_tenant ns, workflow_id)——namespace 前缀是行归属
+        租户，比较基准是访问者派生租户；mismatch=跨租户冒读/写/删/执行，引擎拒绝
+        （allowed=False）→ WorkflowAccessDenied 上抛，禁静默当 not_found/假成功。
+        允许/拒绝都进引擎审计日志（audit_access=True），total_access_checks>0。
+        """
+        verdict = self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.WORKFLOW,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(row_tenant), resource_id),
+            action=action,
+        )
+        if not verdict.get("allowed"):
+            raise WorkflowAccessDenied(verdict.get("reason", "access denied"), verdict)
+
+    def gate_bulk(self, tenant_id: str, action: str) -> None:
+        """bulk 操作（list）审计留痕：执行隔离由 WHERE tenant_id=? 承担，
+        引擎侧记一次 namespace 自匹配访问（audit_access="Log all access attempts"）。"""
+        self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.WORKFLOW,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(tenant_id), "*"),
+            action=action,
+        )
+
+    @staticmethod
+    def _tenant_val(tenant_id: str | None) -> str:
+        """行归属/闸门租户归一：缺失/空白→'default'（键派生故障绝不吃掉落库，③b-2 旁路纪律）。"""
+        return (tenant_id or "").strip() or DEFAULT_TENANT
+
     # ── Workflow CRUD ───────────────────────────────────────────
 
     def create_workflow(
@@ -141,6 +205,7 @@ class WorkflowEngine:
         trigger: TriggerType = TriggerType.MANUAL,
         trigger_config: dict | None = None,
         variables: dict | None = None,
+        tenant_id: str | None = None,
     ) -> Workflow:
         wf_id = f"wf_{uuid4().hex[:12]}"
         wf = Workflow(
@@ -150,32 +215,54 @@ class WorkflowEngine:
             trigger=trigger,
             trigger_config=trigger_config or {},
             variables=variables or {},
+            tenant_id=self._tenant_val(tenant_id),
         )
         self._workflows[wf_id] = wf
         self._save()
         return wf
 
-    def get_workflow(self, workflow_id: str) -> Workflow | None:
-        return self._workflows.get(workflow_id)
+    def get_workflow(self, workflow_id: str, tenant_id: str | None = None) -> Workflow | None:
+        wf = self._workflows.get(workflow_id)
+        if wf is None:
+            return None  # 缺行=404 契约不变（先缺行后闸门，禁用 403 泄露存在性之外的信息）
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), wf.tenant_id, workflow_id, "read")
+        return wf
 
-    def list_workflows(self, status: WorkflowStatus | None = None) -> list[Workflow]:
+    def list_workflows(
+        self, status: WorkflowStatus | None = None, tenant_id: str | None = None
+    ) -> list[Workflow]:
         wfs = list(self._workflows.values())
+        if tenant_id is not None:
+            tenant = self._tenant_val(tenant_id)
+            self.gate_bulk(tenant, "list")
+            wfs = [w for w in wfs if w.tenant_id == tenant]
         if status:
             wfs = [w for w in wfs if w.status == status]
         return sorted(wfs, key=lambda w: w.updated_at, reverse=True)
 
-    def update_workflow(self, workflow_id: str, **kwargs: Any) -> Workflow | None:
+    def update_workflow(
+        self, workflow_id: str, tenant_id: str | None = None, **kwargs: Any
+    ) -> Workflow | None:
         wf = self._workflows.get(workflow_id)
         if not wf:
             return None
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), wf.tenant_id, workflow_id, "write")
         for key, value in kwargs.items():
-            if hasattr(wf, key) and key not in ("id", "created_at"):
+            # tenant_id 粘性：归属键不可被 update 洗改（③a COALESCE 粘性同语义）
+            if hasattr(wf, key) and key not in ("id", "created_at", "tenant_id"):
                 setattr(wf, key, value)
         wf.updated_at = datetime.now(UTC).isoformat()
         self._save()
         return wf
 
-    def delete_workflow(self, workflow_id: str) -> bool:
+    def delete_workflow(self, workflow_id: str, tenant_id: str | None = None) -> bool:
+        wf = self._workflows.get(workflow_id)
+        if wf is None:
+            return False
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), wf.tenant_id, workflow_id, "delete")
         removed = self._workflows.pop(workflow_id, None) is not None
         if removed:
             self._save()
@@ -190,10 +277,13 @@ class WorkflowEngine:
         label: str = "",
         config: dict | None = None,
         position: dict | None = None,
+        tenant_id: str | None = None,
     ) -> WorkflowNode | None:
         wf = self._workflows.get(workflow_id)
         if not wf:
             return None
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), wf.tenant_id, workflow_id, "write")
         node = WorkflowNode(
             id=f"node_{uuid4().hex[:8]}",
             node_type=node_type,
@@ -206,10 +296,12 @@ class WorkflowEngine:
         self._save()
         return node
 
-    def remove_node(self, workflow_id: str, node_id: str) -> bool:
+    def remove_node(self, workflow_id: str, node_id: str, tenant_id: str | None = None) -> bool:
         wf = self._workflows.get(workflow_id)
         if not wf:
             return False
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), wf.tenant_id, workflow_id, "write")
         before = len(wf.nodes)
         wf.nodes = [n for n in wf.nodes if n.id != node_id]
         wf.edges = [
@@ -226,10 +318,13 @@ class WorkflowEngine:
         target_node_id: str,
         condition: str | None = None,
         label: str = "",
+        tenant_id: str | None = None,
     ) -> WorkflowEdge | None:
         wf = self._workflows.get(workflow_id)
         if not wf:
             return None
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), wf.tenant_id, workflow_id, "write")
         if not wf.get_node(source_node_id) or not wf.get_node(target_node_id):
             return None
         edge = WorkflowEdge(
@@ -244,10 +339,12 @@ class WorkflowEngine:
         self._save()
         return edge
 
-    def remove_edge(self, workflow_id: str, edge_id: str) -> bool:
+    def remove_edge(self, workflow_id: str, edge_id: str, tenant_id: str | None = None) -> bool:
         wf = self._workflows.get(workflow_id)
         if not wf:
             return False
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), wf.tenant_id, workflow_id, "write")
         before = len(wf.edges)
         wf.edges = [e for e in wf.edges if e.id != edge_id]
         wf.updated_at = datetime.now(UTC).isoformat()
@@ -267,6 +364,9 @@ class WorkflowEngine:
         wf = self._workflows.get(workflow_id)
         if not wf:
             return None
+        # F3b-⑦：执行=使用定义面资源，恒过闸（执行是最高危动作，无系统旁路——
+        # 空 tenant 归一 'default'，内部调用方以 'default' 身份执行 default 归属工作流）
+        self.gate(tenant, wf.tenant_id, workflow_id, "execute")
 
         errors = wf.validate_dag()
         if errors:
@@ -311,6 +411,9 @@ class WorkflowEngine:
         wf = self._workflows.get(workflow_id)
         if not wf:
             return None
+        # F3b-⑦：执行=使用定义面资源，恒过闸（执行是最高危动作，无系统旁路——
+        # 空 tenant 归一 'default'，内部调用方以 'default' 身份执行 default 归属工作流）
+        self.gate(tenant, wf.tenant_id, workflow_id, "execute")
 
         errors = wf.validate_dag()
         if errors:

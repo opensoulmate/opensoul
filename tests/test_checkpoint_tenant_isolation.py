@@ -281,7 +281,8 @@ def engine(tmp_path, monkeypatch):
 
 class TestEngineLayer:
     def test_execute_async_tenant_lands_in_store(self, engine, tmp_path):
-        wf = engine.create_workflow(name="t")
+        # F3b-⑦：执行闸门=请求者须拥有定义（create 归属与 execute 租户同源）
+        wf = engine.create_workflow(name="t", tenant_id="tenant-a")
         n0 = engine.add_node(wf.id, NodeType.TRIGGER, label="start")
         n1 = engine.add_node(
             wf.id, NodeType.ACTION, label="a", config={"type": "script", "command": "echo hi"}
@@ -368,11 +369,12 @@ class TestAPI:
         monkeypatch.setattr(will_api, "engine", WorkflowEngine(checkpoint_db=tmp_path / "ckpt.db"))
         return will_client
 
-    def _mk_wf(self, api):
+    def _mk_wf(self, api, tenant="default"):
         import src.api.will as will_api
 
         eng = will_api.engine
-        wf = eng.create_workflow(name="api-t")
+        # F3b-⑦：定义面归属租户——执行闸门要求请求者拥有定义，故按测试租户建档
+        wf = eng.create_workflow(name="api-t", tenant_id=tenant)
         n0 = eng.add_node(wf.id, NodeType.TRIGGER, label="start")
         n1 = eng.add_node(
             wf.id, NodeType.ACTION, label="a", config={"type": "script", "command": "echo api"}
@@ -387,13 +389,17 @@ class TestAPI:
         uid_b = _insert_ent_user(env, "bob", "tenant-b")
         tok_a = {"Authorization": f"Bearer {_ent_token(uid_a, 'alice')}"}
         tok_b = {"Authorization": f"Bearer {_ent_token(uid_b, 'bob')}"}
-        wf_id = self._mk_wf(api)
+        wf_id = self._mk_wf(api, tenant="tenant-a")
 
         # A 执行：行归属从认证身份派生落库
         resp = api.post(f"/api/will/workflows/{wf_id}/execute", json={}, headers=tok_a)
         assert resp.status_code == 200
         exec_id = resp.json()["id"]
         assert resp.json()["tenant_id"] == "tenant-a"
+
+        # F3b-⑦：B 执行 A 的定义=跨租户使用，403（定义面闸门——修前共享定义畅通）
+        denied_exec = api.post(f"/api/will/workflows/{wf_id}/execute", json={}, headers=tok_b)
+        assert denied_exec.status_code == 403
 
         # A 读自己的：200
         got = api.get(f"/api/will/executions/{exec_id}", headers=tok_a)
@@ -438,9 +444,11 @@ class TestAPI:
         uid_b = _insert_ent_user(env, "bob", "tenant-b")
         tok_a = {"Authorization": f"Bearer {_ent_token(uid_a, 'alice')}"}
         tok_b = {"Authorization": f"Bearer {_ent_token(uid_b, 'bob')}"}
-        wf_id = self._mk_wf(api)
-        ea = api.post(f"/api/will/workflows/{wf_id}/execute", json={}, headers=tok_a).json()["id"]
-        eb = api.post(f"/api/will/workflows/{wf_id}/execute", json={}, headers=tok_b).json()["id"]
+        # F3b-⑦：定义按租户归属——A/B 各自建档各自执行（修前共享定义两租户同跑）
+        wf_a = self._mk_wf(api, tenant="tenant-a")
+        wf_b = self._mk_wf(api, tenant="tenant-b")
+        ea = api.post(f"/api/will/workflows/{wf_a}/execute", json={}, headers=tok_a).json()["id"]
+        eb = api.post(f"/api/will/workflows/{wf_b}/execute", json={}, headers=tok_b).json()["id"]
 
         # A 清理自己的 checkpoint：200；B 的行存活
         resp = api.delete(f"/api/will/checkpoints/{ea}", headers=tok_a)
@@ -455,7 +463,7 @@ class TestAPI:
         uid_b = _insert_ent_user(env, "bob", "tenant-b")
         tok_a = {"Authorization": f"Bearer {_ent_token(uid_a, 'alice')}"}
         tok_b = {"Authorization": f"Bearer {_ent_token(uid_b, 'bob')}"}
-        wf_id = self._mk_wf(api)
+        wf_id = self._mk_wf(api, tenant="tenant-a")
         ea = api.post(f"/api/will/workflows/{wf_id}/execute", json={}, headers=tok_a).json()["id"]
 
         assert api.post(f"/api/will/executions/{ea}/continue", headers=tok_b).status_code == 403
