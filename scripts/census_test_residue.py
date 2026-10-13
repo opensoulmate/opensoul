@@ -92,6 +92,7 @@ A_TENANT_PREFIX = "e2e-"
 A_GOAL_MARKERS = ("冒烟测试", "A1认知层接线live验证", "逐块推送验证目标", "清空生产数据库", "口算17加25")
 B_GOAL_MARKERS = ("用一句话", "请分三句话", "列出3个Linux", "介绍一下Python", "介绍Python的GIL")
 A_MANIFEST_NAME_MARKERS = ("test_backup_integration", "test-sense-backup")
+A_GROUP_NAMES = {"A群组", "B群组"}
 
 
 def classify_rule(tool_name: str, source: str):
@@ -153,6 +154,22 @@ def classify_user(username, email=None):
     if "test" in (email or ""):
         return "A", "A_EMAIL_TEST"
     return "other", "unmatched"
+
+
+def classify_group(name):
+    """ai_groups 组行残留分类（单一源词表，禁手抄；TL-⑪ 删除工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（探针组名硬标识，TL-③ 清点
+    "探针组 A群组/B群组"判据原语义逐字保留）、other=不动。
+    """
+    if (name or "") in A_GROUP_NAMES:
+        return "A", "A_GROUP_NAMES"
+    return "other", "unmatched"
+
+
+def census_group_rule(name):
+    """classify_group 的 rule 侧单取（census_sqlite 收编消费）。"""
+    return classify_group(name)[1]
 
 
 def classify_perm_audit(session_id, tool_name):
@@ -252,9 +269,19 @@ def census_sqlite(out: dict) -> None:
     res["ai_groups"] = {
         "groups_total": len(groups),
         "groups": [{"group_id": g[0], "name": g[1]} for g in groups],
+        "groups_A": [{"group_id": g[0], "name": g[1],
+                      "rule": census_group_rule(g[1])} for g in groups
+                     if classify_group(g[1])[0] == "A"],  # 单一源，禁手抄（TL-⑪ 收编）
         "tasks_total": len(tasks),
         "tasks_A": len(a_t), "tasks_B": len(b_t),
         "tasks_U": len(tasks) - len(a_t) - len(b_t),
+        "orphan_rows_by_table": {
+            t: c.execute(
+                f"SELECT COUNT(*) FROM {t} WHERE group_id NOT IN"
+                " (SELECT id FROM ai_groups)").fetchone()[0]
+            for t in ("ai_group_agents", "ai_group_tasks", "discussion_messages",
+                      "task_execution_events", "agent_scores", "agent_capabilities")
+        },  # 悬挂行（组行已不在场）加性键，TL-⑪ 发现面
     }
     # job_queue.db
     c = ro(REPO / "data" / "job_queue.db")
