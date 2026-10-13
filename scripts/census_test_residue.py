@@ -38,6 +38,14 @@ HOME = Path.home()
 # A=确证测试残留（对象级硬标识：test_sandbox / test.txt / stub-agent / e2e 等）
 # B=疑似测试残留（形态像测试但无硬标识，需人工裁决）
 
+# B 类分组 rule 名单一源（classify_timeline 返回值即此四处常量，禁字面手抄漂移；
+# TL-⑰ 分组处置工具按此消费——storm 保留、exec/pipeline/brain 三组按 TL-⑯ 建议删）
+B_RULE_STORM = "nerve_publish_rate_storm"
+B_RULE_EXEC = "sandbox_exec_cmd_no_hard_marker"
+B_RULE_PIPELINE = "pipeline_fixture_generic"
+B_RULE_BRAIN = "brain_probe_style_goals"
+B_RULES_ALL = (B_RULE_STORM, B_RULE_EXEC, B_RULE_PIPELINE, B_RULE_BRAIN)
+
 
 def classify_timeline(organ: str, etype: str, summary: str, detail: str) -> tuple[str, str]:
     """timeline 事件分类（纯函数单一源，禁在别处手抄判法）。"""
@@ -55,7 +63,7 @@ def classify_timeline(organ: str, etype: str, summary: str, detail: str) -> tupl
             or "test.png" in s)):
         return "A", "file_fixture_names"
     if organ == "mirror" and ("🧪 Sandbox exec" in s or "🍴 Sandbox forked" in s):
-        return "B", "sandbox_exec_cmd_no_hard_marker"
+        return "B", B_RULE_EXEC
     if ("Test Node" in s or "HB Test" in s or "Push Test" in s
             or "test-push-node" in s or "test-delete-me" in s):
         return "A", "soma_fixture_components"
@@ -74,12 +82,12 @@ def classify_timeline(organ: str, etype: str, summary: str, detail: str) -> tupl
                              or "口算17加25" in s or "echo桩" in d):
         return "A", "brain_probe_goals"
     if etype == "request_blocked" and "/api/nerve/publish" in s:
-        return "B", "nerve_publish_rate_storm"
+        return "B", B_RULE_STORM
     if organ == "pipeline" and ("readme.md" in s or "tagged.txt" in s):
-        return "B", "pipeline_fixture_generic"
+        return "B", B_RULE_PIPELINE
     if organ == "brain" and ("用一句话" in s or "请分三句话" in s
                              or "列出3个Linux" in s or "清空生产数据库" in s):
-        return "B", "brain_probe_style_goals"
+        return "B", B_RULE_BRAIN
     return "U", "unmatched"
 
 # 非 timeline 面的硬标识（A 类）
