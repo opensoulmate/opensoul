@@ -1,11 +1,12 @@
 """OpenEcho API — 回声系统：多渠道消息推送、消息模板。"""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.echo.dispatcher import Channel, MessageDispatcher
 from src.echo.templates import TemplateEngine
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -43,8 +44,12 @@ class ChannelConfigRequest(BaseModel):
 
 
 @router.post("/send")
-async def send_message(req: SendRequest):
+async def send_message(
+    req: SendRequest,
+    authorization: str | None = Header(None),
+):
     """Send a message via specified channel."""
+    identity = bind_identity(authorization)
     try:
         channel = Channel(req.channel)
     except ValueError:
@@ -67,7 +72,8 @@ async def send_message(req: SendRequest):
                 "type": "message_sent",
                 "summary": f"📨 [{req.channel}] {req.title}",
                 "detail": {"channel": req.channel, "title": req.title, "msg_id": result.msg_id},
-            }
+            },
+            tenant_id=identity.tenant_id,
         )
 
     return {
@@ -347,8 +353,12 @@ async def get_template(template_id: str):
 
 
 @router.post("/templates")
-async def create_template(req: TemplateCreateRequest):
+async def create_template(
+    req: TemplateCreateRequest,
+    authorization: str | None = Header(None),
+):
     """Create a new message template."""
+    identity = bind_identity(authorization)
     tpl = template_engine.create(
         name=req.name,
         title_template=req.title_template,
@@ -365,7 +375,8 @@ async def create_template(req: TemplateCreateRequest):
             "type": "template_created",
             "summary": f"📝 Template created: {tpl.name}",
             "detail": {"template_id": tpl.template_id, "name": tpl.name},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     return {
         "template_id": tpl.template_id,
@@ -392,8 +403,13 @@ async def delete_template(template_id: str):
 
 
 @router.post("/templates/{template_id}/send")
-async def send_from_template(template_id: str, req: TemplateSendRequest):
+async def send_from_template(
+    template_id: str,
+    req: TemplateSendRequest,
+    authorization: str | None = Header(None),
+):
     """Render a template and send the message immediately."""
+    identity = bind_identity(authorization)
     rendered = template_engine.render_template(template_id, req.variables)
     if not rendered:
         raise HTTPException(404, "Template not found")
@@ -427,7 +443,8 @@ async def send_from_template(template_id: str, req: TemplateSendRequest):
                 "channel": channel_name,
                 "msg_id": result.msg_id,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
