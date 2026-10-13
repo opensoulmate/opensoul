@@ -64,7 +64,11 @@ TL-②-⑥ 收口时刻（2026-10-13 20:30 CST）之后新增 **A 类行 = 0**�
 
 ## 建议处置（**全部待用户拍板，本拍未执行任何删除**）
 
-> 执行记录（2026-10-14，TL-④ 删除执行件①）：第 1 项中 **timeline A 类 8,612 行已按清单精确删**（删前逐行复核单一源判 A、备份 data/backups/timeline_pre_delete_20261014_002822.db（38,027 行全库快照，sha256 见报告）、回读 29,415=38,027−8,612 对平且 B/U 一行不动，报告 data/delete_timeline_test_residue_20261014.json）；其余（knowledge 391 级联/测试用户 4+2/e2e 租户 2/perm 审计 612/manifests 5/探针组 2）与第 3 项 perm 规则失效化仍未执行。
+> 执行记录（2026-10-14，TL-④ 删除执行件①）：第 1 项中 **timeline A 类 8,612 行已按清单精确删**（删前逐行复核单一源判 A、备份 data/backups/timeline_pre_delete_20261014_002822.db（38,027 行全库快照，sha256 见报告）、回读 29,415=38,027−8,612 对平且 B/U 一行不动，报告 data/delete_timeline_test_residue_20261014.json）；其余（knowledge 391 级联/测试用户 4+2/e2e 租户 2/perm 审计 612/manifests 5/探针组 2）仍未执行。
+>
+> 执行记录（2026-10-14，TL-⑤ perm 测试规则失效化）：第 3 项已执行——perm_rules 105 条 test_dangerous_tool 活跃残留规则全部软删（is_deleted=1 可逆非删除；备份 data/backups/perm_rules_pre_deactivate_20261014_010136.db sha256 7b54a5d52df8f6e3a994c376ee55916872d06514b99e35afac016dde0e5166f6、回读活跃 A=0/非 A 43 条零误伤/105 行仍在可回滚，报告 data/deactivate_test_perm_rules_20261014.json）。第 1 项其余（knowledge 391 级联/测试用户 4+2/e2e 租户 2/perm 审计 612/manifests 5/探针组 2）与第 2 项 B 类仍未执行。
+>
+> 勘误（2026-10-14，TL-⑤ 复核）：上文「permission.db **活跃规则** 105 条 test_dangerous_tool + 2 条 p09-probe」多计 2 条——p09-probe 两行在清点时已 is_deleted=1（大概率其探针自带 delete_rule 清痕；清点工具恒只数活跃行，工件 rules_A=105 全为 test_dangerous_tool 为准）；该 2 行现仍软删在场（include_deleted 可回读）。第 3 项实际待失效化=105 条，TL-⑤ 已全数收口。
 
 1. **低风险可删（A 类）**：timeline 8,612 行、knowledge 391 行（级联 chunks/tags）、测试用户 4+2、e2e 租户 2、perm 决策审计 612 行、manifests 悬挂 5 条、探针组 A群组/B群组（delete_group 级联）。删前工具已留 event_id 全清单，可按清单精确删+备份。
 2. **须拍板取舍（B 类）**：nerve 风暴 22,030（删=丢 2026-08-18 安全日志史；建议保留）、mirror exec 666、pipeline 421、exports 308。

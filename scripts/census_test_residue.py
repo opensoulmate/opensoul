@@ -94,6 +94,18 @@ B_GOAL_MARKERS = ("用一句话", "请分三句话", "列出3个Linux", "介绍�
 A_MANIFEST_NAME_MARKERS = ("test_backup_integration", "test-sense-backup")
 
 
+def classify_rule(tool_name: str, source: str):
+    """perm_rules 残留分类（单一源词表，禁手抄；TL-⑤ 失效化工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（对象级硬标识）、other=不动。
+    """
+    if tool_name in A_RULE_TOOLS:
+        return "A", "A_RULE_TOOLS"
+    if source in A_RULE_SOURCES:
+        return "A", "A_RULE_SOURCES"
+    return "other", "unmatched"
+
+
 def ro(path: Path) -> sqlite3.Connection:
     assert path.exists(), f"missing: {path}"
     return sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True)
@@ -199,7 +211,7 @@ def census_permission(out: dict) -> None:
     u = {s: n for s, n in sess if s not in a and not (s or "").startswith("om-")}
     real = {s: n for s, n in sess if (s or "").startswith("om-")}
     rules = c.execute("SELECT rule_id,tool_name,source FROM perm_rules WHERE is_deleted=0").fetchall()
-    a_rules = [r for r in rules if r[1] in A_RULE_TOOLS or r[2] in A_RULE_SOURCES]
+    a_rules = [r for r in rules if classify_rule(r[1], r[2])[0] == "A"]
     out["permission"] = {
         "decision_audit_total": sum(n for _, n in sess),
         "A_by_session": a, "A_total": sum(a.values()),
