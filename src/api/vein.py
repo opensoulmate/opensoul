@@ -2,11 +2,12 @@
 
 import logging
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 from src.vein.cache import CacheManager
 from src.vein.chunked import ChunkedUploader
 from src.vein.file_store import FileStore
@@ -50,8 +51,10 @@ class ChunkUpload(BaseModel):
 async def upload_file(
     file: UploadFile = File(...),
     tags: str = Form(default=""),
+    authorization: str | None = Header(None),
 ):
     """Upload a single file (small-medium size). Content-addressable dedup."""
+    identity = bind_identity(authorization)
     data = await file.read()
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
 
@@ -78,7 +81,8 @@ async def upload_file(
                 "size": meta.size,
                 "mime_type": meta.mime_type,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -135,8 +139,9 @@ async def get_file_meta(file_id: str):
 
 
 @router.get("/files/{file_id}/download")
-async def download_file(file_id: str):
+async def download_file(file_id: str, authorization: str | None = Header(None)):
     """Download a file. Streams from cache if available."""
+    identity = bind_identity(authorization)
     # Check cache first
     cached = cache.get(f"file:{file_id}")
     if cached:
@@ -149,7 +154,8 @@ async def download_file(file_id: str):
                     "type": "file_downloaded",
                     "summary": f"⬇️ File downloaded (cached): {meta.name}",
                     "detail": {"file_id": file_id},
-                }
+                },
+                tenant_id=identity.tenant_id,
             )
         return StreamingResponse(
             iter([cached]),
@@ -177,8 +183,9 @@ async def download_file(file_id: str):
 
 
 @router.delete("/files/{file_id}")
-async def delete_file(file_id: str):
+async def delete_file(file_id: str, authorization: str | None = Header(None)):
     """Delete a file and its cache entry."""
+    identity = bind_identity(authorization)
     meta = store.get_meta(file_id)
     if not store.delete(file_id):
         raise HTTPException(status_code=404, detail="File not found")
@@ -190,7 +197,8 @@ async def delete_file(file_id: str):
             "type": "file_deleted",
             "summary": f"🗑️ File deleted: {meta.name if meta else file_id}",
             "detail": {"file_id": file_id},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     return {"status": "ok", "file_id": file_id}
 
@@ -203,8 +211,10 @@ async def update_file_content(
     file_id: str,
     file: UploadFile = File(...),
     change_summary: str = Form(default=""),
+    authorization: str | None = Header(None),
 ):
     """Update file content with automatic version tracking."""
+    identity = bind_identity(authorization)
     existing = store.get_meta(file_id)
     if not existing:
         raise HTTPException(status_code=404, detail="File not found")
@@ -229,7 +239,8 @@ async def update_file_content(
             "type": "file_updated",
             "summary": f"📝 File updated: {meta.name} (v{store.get_version_history(file_id, limit=1)[0].version_number if store.get_version_history(file_id, limit=1) else '?'})",
             "detail": {"file_id": file_id, "name": meta.name, "size": meta.size},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -286,8 +297,13 @@ async def get_specific_version(file_id: str, version_number: int):
 
 
 @router.post("/files/{file_id}/rollback/{version_number}")
-async def rollback_file(file_id: str, version_number: int):
+async def rollback_file(
+    file_id: str,
+    version_number: int,
+    authorization: str | None = Header(None),
+):
     """Rollback a file to a specific version."""
+    identity = bind_identity(authorization)
     meta = store.rollback_to_version(file_id, version_number)
     if not meta:
         raise HTTPException(status_code=404, detail="File or version not found")
@@ -305,7 +321,8 @@ async def rollback_file(file_id: str, version_number: int):
             "type": "file_rollback",
             "summary": f"⏪ File rolled back: {meta.name} → version {version_number}",
             "detail": {"file_id": file_id, "version_number": version_number},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -478,12 +495,17 @@ class PromoteRequest(BaseModel):
 
 
 @router.post("/files/{file_id}/promote")
-async def promote_to_knowledge(file_id: str, req: PromoteRequest | None = None):
+async def promote_to_knowledge(
+    file_id: str,
+    req: PromoteRequest | None = None,
+    authorization: str | None = Header(None),
+):
     """Promote a Vein file to the knowledge base.
 
     Reads the file content from Vein and creates a knowledge entry in OpenSoul,
     enabling RAG search, graph linking, and full-text retrieval.
     """
+    identity = bind_identity(authorization)
     if req is None:
         req = PromoteRequest()
 
@@ -584,7 +606,8 @@ async def promote_to_knowledge(file_id: str, req: PromoteRequest | None = None):
                 "filename": meta.name,
                 "user_id": req.user_id,
                 "content_length": len(content),
-            }
+            },
+            tenant_id=identity.tenant_id,
         )
     except Exception as exc:
         logging.getLogger(__name__).debug("probe skipped: %s", exc)
@@ -609,7 +632,11 @@ class AutoProcessRequest(BaseModel):
 
 
 @router.post("/files/{file_id}/auto-process")
-async def auto_process_file(file_id: str, req: AutoProcessRequest | None = None):
+async def auto_process_file(
+    file_id: str,
+    req: AutoProcessRequest | None = None,
+    authorization: str | None = Header(None),
+):
     """Auto-detect file type and process through Sense (OCR/ASR), then promote to knowledge.
 
     Pipeline: Vein (storage) → Sense (OCR/ASR) → Soul (knowledge base)
@@ -618,6 +645,7 @@ async def auto_process_file(file_id: str, req: AutoProcessRequest | None = None)
       - PDFs → Smart PDF OCR
       - Audio (wav, mp3, ogg, flac, webm, m4a) → ASR transcription
     """
+    identity = bind_identity(authorization)
     if req is None:
         req = AutoProcessRequest()
 
@@ -819,7 +847,8 @@ async def auto_process_file(file_id: str, req: AutoProcessRequest | None = None)
                 "text_length": len(extracted_text),
                 "promoted": promoted,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -845,12 +874,16 @@ class BatchAutoProcessRequest(BaseModel):
 
 
 @router.post("/auto-process/batch")
-async def batch_auto_process(req: BatchAutoProcessRequest):
+async def batch_auto_process(
+    req: BatchAutoProcessRequest,
+    authorization: str | None = Header(None),
+):
     """Batch auto-process all eligible files through Sense (OCR/ASR).
 
     Processes files that match the mime_filter criteria.
     Returns summary of all processing results.
     """
+    identity = bind_identity(authorization)
     # Get all files
     all_files = store.list_files(limit=req.limit, offset=0)
 
@@ -1002,7 +1035,8 @@ async def batch_auto_process(req: BatchAutoProcessRequest):
             "type": "batch_auto_processed",
             "summary": f"🔍 Batch auto-processed: {ok_count}/{len(results)} files",
             "detail": {"total": len(results), "ok": ok_count, "promoted": promoted_count},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
