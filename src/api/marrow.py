@@ -20,8 +20,10 @@ backup_manager = BackupManager()
 scheduler = BackupScheduler(backup_manager)
 migrator = DataMigrator()
 
-# Start the scheduler background thread
-scheduler.start()
+# 调度线程（scheduler.start/stop）生命周期归服务 lifespan（src/main.py）：
+# 此前模块级 scheduler.start()——import src.api.marrow 即拉起按生产
+# schedules.json 真建备份的后台线程（import 副作用=生产写面），测试面被迫
+# 逐 fixture 手工 stop；调度线程是服务生命周期职责非模块 import 职责。
 
 
 # ── Request Schemas ────────────────────────────────────────

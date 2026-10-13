@@ -330,6 +330,13 @@ async def lifespan(app: FastAPI):
     register_default_handlers(jq)
     await jq.start()
 
+    # marrow 定时备份调度线程随服务起停（此前 src/api/marrow.py 模块级
+    # scheduler.start()——import 即拉起按生产 schedules.json 真建备份的后台
+    # 线程=import 副作用生产写面；生产行为不变：服务必经 lifespan）
+    from src.api.marrow import scheduler
+
+    scheduler.start()
+
     # Intelligence auto-collect background task
     intel_task = asyncio.create_task(_intelligence_auto_collect())
 
@@ -416,6 +423,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     await proactive_engine.stop()
+    scheduler.stop()  # marrow 调度线程随服务停（lifespan 起停对称）
     bootstrap_task.cancel()
     dream_task.cancel()
     retention_task.cancel()
