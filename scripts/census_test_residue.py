@@ -141,6 +141,20 @@ def classify_manifest(name):
     return "other", "unmatched"
 
 
+def classify_user(username, email=None):
+    """users 行残留分类（单一源词表，禁手抄；TL-⑩ 删除工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（测试用户名硬标识 / 测试邮箱硬标识）、other=不动。
+    判据=TL-③ 清点原语义逐字保留（A_USERNAMES 用户名集 + email 含 'test'）；
+    enterprise users 表无 email 列，email=None 时仅按用户名判（与 TL-③ 逐字一致）。
+    """
+    if (username or "") in A_USERNAMES:
+        return "A", "A_USERNAMES"
+    if "test" in (email or ""):
+        return "A", "A_EMAIL_TEST"
+    return "other", "unmatched"
+
+
 def classify_perm_audit(session_id, tool_name):
     """perm_decision_audit 行残留分类（单一源词表，禁手抄；TL-⑨ 删除工具同源消费）。
 
@@ -201,7 +215,8 @@ def census_sqlite(out: dict) -> None:
     users = c.execute("SELECT id,username,email FROM users").fetchall()
     res["opensoul_users"] = {
         "total": len(users),
-        "A": [{"id": u[0], "username": u[1]} for u in users if u[1] in A_USERNAMES or "test" in (u[2] or "")],
+        "A": [{"id": u[0], "username": u[1]} for u in users
+              if classify_user(u[1], u[2])[0] == "A"],  # 单一源，禁手抄（TL-⑩ 收编）
     }
     kn = c.execute("SELECT id,title FROM knowledge").fetchall()
     a_kn = [k for k in kn if classify_knowledge(k[1])[0] == "A"]
@@ -225,7 +240,8 @@ def census_sqlite(out: dict) -> None:
     eusers = c.execute("SELECT id,username FROM users").fetchall()
     res["enterprise_users"] = {
         "total": len(eusers),
-        "A": [{"id": u[0], "username": u[1]} for u in eusers if u[1] in A_USERNAMES],
+        "A": [{"id": u[0], "username": u[1]} for u in eusers
+              if classify_user(u[1])[0] == "A"],  # 单一源，禁手抄（TL-⑩ 收编；无 email 列）
     }
     # ai_groups.db：goal 级分类（父任务归类，子任务随父）
     c = ro(REPO / "data" / "ai_groups.db")
