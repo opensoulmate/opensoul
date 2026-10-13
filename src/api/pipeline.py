@@ -8,10 +8,11 @@ import asyncio
 import logging
 import time
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -266,6 +267,7 @@ async def pipeline_upload(
     tags: str = Form(default=""),
     skip_immune: bool = Form(default=False),
     skip_knowledge: bool = Form(default=False),
+    authorization: str | None = Header(None),
 ):
     """Upload a file and run it through the smart processing pipeline.
 
@@ -277,6 +279,7 @@ async def pipeline_upload(
 
     Set pipeline="auto" for auto-detection, or specify: ocr, asr, text, video.
     """
+    identity = bind_identity(authorization)
     pipeline_id = f"pipe_{int(time.time() * 1000)}"
     started_at = time.time()
     steps = []
@@ -351,7 +354,8 @@ async def pipeline_upload(
                     "type": "pipeline_blocked",
                     "summary": f"🚫 Pipeline blocked: high-risk content in {filename}",
                     "detail": {"pipeline_id": pipeline_id, "file_id": file_id},
-                }
+                },
+                tenant_id=identity.tenant_id,
             )
             return {
                 "pipeline_id": pipeline_id,
@@ -414,15 +418,20 @@ async def pipeline_upload(
                 "steps_completed": sum(1 for s in steps if s.get("status") == "ok"),
                 "steps_total": len(steps),
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return result
 
 
 @router.post("/run")
-async def pipeline_run(req: PipelineRunRequest):
+async def pipeline_run(
+    req: PipelineRunRequest,
+    authorization: str | None = Header(None),
+):
     """Run a pipeline on an existing Vein file by file_id."""
+    identity = bind_identity(authorization)
     pipeline_id = f"pipe_{int(time.time() * 1000)}"
     started_at = time.time()
     steps = []
@@ -511,7 +520,8 @@ async def pipeline_run(req: PipelineRunRequest):
             "type": "pipeline_completed",
             "summary": f"✅ Pipeline [{pipeline}] completed: {meta.name}",
             "detail": {"pipeline_id": pipeline_id, "file_id": req.file_id},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return result
