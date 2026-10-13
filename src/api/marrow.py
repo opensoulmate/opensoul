@@ -3,12 +3,13 @@
 import logging
 import os
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from src.marrow.backup import BackupManager, BackupScheduler
 from src.marrow.migrator import DataMigrator
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
@@ -61,8 +62,12 @@ class ScheduleToggleRequest(BaseModel):
 
 
 @router.post("/backup")
-async def create_backup(req: BackupCreateRequest):
+async def create_backup(
+    req: BackupCreateRequest,
+    authorization: str | None = Header(None),
+):
     """Create a backup snapshot of specified directories."""
+    identity = bind_identity(authorization)
     # Validate paths exist
     valid_dirs = []
     for d in req.source_dirs:
@@ -90,7 +95,8 @@ async def create_backup(req: BackupCreateRequest):
                 "name": manifest.name,
                 "file_count": manifest.file_count,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     # Push notification for backup completion
     try:
@@ -147,8 +153,13 @@ async def delete_backup(backup_id: str):
 
 
 @router.post("/restore/{backup_id}")
-async def restore_backup(backup_id: str, req: RestoreRequest | None = None):
+async def restore_backup(
+    backup_id: str,
+    req: RestoreRequest | None = None,
+    authorization: str | None = Header(None),
+):
     """Restore a backup to target directory."""
+    identity = bind_identity(authorization)
     target = (req.target_dir if req else None) or os.path.expanduser("~/.opensoul/restore")
     result = backup_manager.restore_backup(backup_id, target)
     if not result["success"]:
@@ -160,7 +171,8 @@ async def restore_backup(backup_id: str, req: RestoreRequest | None = None):
             "type": "backup_restored",
             "summary": f"♻️ Backup restored: {backup_id}",
             "detail": {"backup_id": backup_id, "target_dir": target},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     return result
 
@@ -169,8 +181,12 @@ async def restore_backup(backup_id: str, req: RestoreRequest | None = None):
 
 
 @router.post("/schedules")
-async def create_schedule(req: ScheduleCreateRequest):
+async def create_schedule(
+    req: ScheduleCreateRequest,
+    authorization: str | None = Header(None),
+):
     """Create a scheduled backup job."""
+    identity = bind_identity(authorization)
     # Validate interval
     valid_intervals = list(BackupScheduler.INTERVALS.keys())
     if req.interval not in valid_intervals and not req.interval_seconds:
@@ -207,7 +223,8 @@ async def create_schedule(req: ScheduleCreateRequest):
                 "name": schedule.name,
                 "interval": schedule.cron_expr,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
