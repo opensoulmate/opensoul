@@ -190,6 +190,65 @@ def classify_perm_audit(session_id, tool_name):
     return "other", "unmatched"
 
 
+# ai_groups 悬挂残留行（组行已不在场的子表行）硬标识（A 类）
+A_ORPHAN_GROUP_ID_EXACT = {"test-group-123", "a1proof"}
+A_ORPHAN_GROUP_ID_PREFIX = ("test-",)
+A_ORPHAN_TEXT_MARKERS = (
+    "防缓存标记",            # e2e 探针防缓存标记（ACC*）
+    "广播探针",              # 广播探针A→B/B→A 探针字面
+    "Hello broadcast test",  # test-broadcast 探针字面
+    "Hello from client",     # test-group-123 探针字面
+    "test discussion",       # 探针任务名
+    "测试任务：",             # 测试任务前缀
+    "请分三句话介绍你自己",   # 会话探针目标全文（刻意不用泛化 B_GOAL_MARKERS 短语防误杀真用户）
+    "e2e隔离验证", "e2e匿名任务", "e2e 场景", "e2e 超龄任务治理",
+    "xyzabc",                # F2b-② 控制组占位符探针
+)
+ORPHAN_SCAN_TABLES = (
+    "ai_group_agents", "ai_group_tasks", "discussion_messages",
+    "task_execution_events", "agent_scores", "agent_capabilities",
+)
+
+
+def classify_orphan_group(group_id, row_texts):
+    """ai_groups 悬挂残留行（组行已不在场的子表行）按组分类（单一源词表，禁手抄；
+    TL-⑫ 删除工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（组 id 硬标识 / 行文本硬标识）、other=不动。
+    组级判定（任一行文本命中即整组 A）＝TL-③「随组处置比逐行删稳」语义；
+    词表=组 id 硬标识+探针字面+复用 A_GOAL_MARKERS 既有 A 类硬标识（禁第二套
+    判法），泛化短语（B_GOAL_MARKERS）刻意不收防误杀真用户同款提问（宁窄勿滥）。
+    """
+    g = group_id or ""
+    if g in A_ORPHAN_GROUP_ID_EXACT:
+        return "A", "A_ORPHAN_GROUP_ID_EXACT"
+    if g.startswith(A_ORPHAN_GROUP_ID_PREFIX):
+        return "A", "A_ORPHAN_GROUP_ID_PREFIX"
+    markers = tuple(A_ORPHAN_TEXT_MARKERS) + tuple(A_GOAL_MARKERS)
+    for t in row_texts:
+        s = t if t is not None else ""
+        for m in markers:
+            if m in s:
+                return "A", "A_ORPHAN_TEXT_MARKERS"
+    return "other", "unmatched"
+
+
+def orphan_group_texts(conn) -> dict:
+    """悬挂行按组归集行文本（group_id -> [行文本]，行文本=行内非空列值拼接）。
+
+    census_sqlite 与 TL-⑫ 删除工具共用同一取数口（禁两套扫描）。
+    """
+    out = {}
+    for t in ORPHAN_SCAN_TABLES:
+        cur = conn.execute(
+            f"SELECT * FROM {t} WHERE group_id NOT IN (SELECT id FROM ai_groups)")
+        gi = [d[0] for d in cur.description].index("group_id")
+        for row in cur:
+            out.setdefault(row[gi], []).append(
+                " ".join(str(v) for v in row if v is not None))
+    return out
+
+
 def ro(path: Path) -> sqlite3.Connection:
     assert path.exists(), f"missing: {path}"
     return sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True)
@@ -266,6 +325,12 @@ def census_sqlite(out: dict) -> None:
     a_t = [t for t in tasks if any(m in (t[1] or "") for m in A_GOAL_MARKERS)]
     b_t = [t for t in tasks if t not in a_t and any(m in (t[1] or "") for m in B_GOAL_MARKERS)]
     groups = c.execute("SELECT id,name FROM ai_groups").fetchall()
+    orphan_texts = orphan_group_texts(c)  # 悬挂行按组归集（单一源取数口，TL-⑫ 收编）
+    orphan_a = []
+    for og, ots in sorted(orphan_texts.items()):
+        ocls, orule = classify_orphan_group(og, ots)  # 单一源，禁手抄（TL-⑫ 收编）
+        if ocls == "A":
+            orphan_a.append({"group_id": og, "rule": orule, "rows": len(ots)})
     res["ai_groups"] = {
         "groups_total": len(groups),
         "groups": [{"group_id": g[0], "name": g[1]} for g in groups],
@@ -282,6 +347,7 @@ def census_sqlite(out: dict) -> None:
             for t in ("ai_group_agents", "ai_group_tasks", "discussion_messages",
                       "task_execution_events", "agent_scores", "agent_capabilities")
         },  # 悬挂行（组行已不在场）加性键，TL-⑪ 发现面
+        "orphan_groups_A": orphan_a,  # 悬挂残留行 A 组清单（TL-⑫ 删除工具清单源）
     }
     # job_queue.db
     c = ro(REPO / "data" / "job_queue.db")
