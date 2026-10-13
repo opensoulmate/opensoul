@@ -46,28 +46,48 @@ class DiagnosisResult:
     timestamp: float = field(default_factory=time.time)
 
 
-# ── Known organ repair strategies ─────────────────────────────
+# ── Symptom strings produced by diagnose() (single source, HEAL-②b-②) ─
+# 产生侧字面单一源：produce 点与 _symptom_kind 分类共用，禁两侧手抄
+# （F4b-㉗ 纪律）。
+
+_SYMPTOM_CONNECTION = "connection refused"
+_SYMPTOM_TIMEOUT = "timeout"
+_SYMPTOM_HTTP_PREFIX = "HTTP "
+_SYMPTOM_EXCEPTION_PREFIX = "exception: "
+_SYMPTOM_SLOW_PREFIX = "slow response:"
+_SYMPTOM_UNRECOGNIZED_PREFIX = "service reports unrecognized status:"
+
+# ── Known organ repair strategies ─────────────────────────
+# 触发对齐（HEAL-②b-②）：triggers = diagnose() 在不健康路径真能产生的规范症状类。
+# 修前 trigger 是自由文本模式（"cache miss or expired" 等器官内部状态描述），
+# 与产生面词表零交集=0/6 可达（HEAL-② 审计，推荐与修复双双走不到）。
+# 映射依据=动作语义（诚实边界：仓内无器官自报内部状态的产生面，本映射
+# 是策略选择可另拍）：
+#   degraded（自报降级=积累/磨损）→ 清理型维护（cleanup 系：清过期留有效）
+#   timeout（健康口超时=过载）→ 清缓存（快速减负）
+# down/error/unrecognized/HTTP/exception/connection 无对症维护动作，不触发
+# （宁缺勿滥）。同器官多策略按症状类分工，防首匹配遮蔽（可达性测试 6/6 锁死）。
 
 _REPAIR_STRATEGIES: dict[str, list[dict]] = {
     "vein": [
         {
-            "symptom": "cache miss or expired",
+            "triggers": (_SYMPTOM_TIMEOUT,),
             "action": Action.CLEAR_CACHE,
             "endpoint": "/api/vein/cache/clear",
             "method": "POST",
-            "description": "Clear Vein cache to resolve stale entries",
+            "description": "Clear Vein cache to relieve overload (timeout)",
         },
         {
-            "symptom": "expired entries",
+            "triggers": ("degraded",),
             "action": Action.CLEANUP,
             "endpoint": "/api/vein/cache/cleanup",
             "method": "POST",
-            "description": "Cleanup expired cache entries",
+            "description": "Cleanup expired cache entries (degraded self-report)",
         },
     ],
     "reflex": [
         {
-            "symptom": "cache full or degraded",
+            "triggers": ("degraded", _SYMPTOM_TIMEOUT),
             "action": Action.CLEAR_CACHE,
             "endpoint": "/api/reflex/cache/clear",
             "method": "POST",
@@ -76,7 +96,7 @@ _REPAIR_STRATEGIES: dict[str, list[dict]] = {
     ],
     "mirror": [
         {
-            "symptom": "expired sandbox",
+            "triggers": ("degraded", _SYMPTOM_TIMEOUT),
             "action": Action.CLEANUP,
             "endpoint": "/api/mirror/cleanup",
             "method": "POST",
@@ -85,7 +105,7 @@ _REPAIR_STRATEGIES: dict[str, list[dict]] = {
     ],
     "hippo": [
         {
-            "symptom": "expired session",
+            "triggers": ("degraded", _SYMPTOM_TIMEOUT),
             "action": Action.CLEANUP,
             "endpoint": "/api/hippo/sessions/cleanup",
             "method": "POST",
@@ -94,7 +114,7 @@ _REPAIR_STRATEGIES: dict[str, list[dict]] = {
     ],
     "immune": [
         {
-            "symptom": "audit log full",
+            "triggers": ("degraded", _SYMPTOM_TIMEOUT),
             "action": Action.CLEANUP,
             "endpoint": "/api/immune/audit/cleanup",
             "method": "POST",
@@ -171,9 +191,45 @@ def _classify_status(status: object) -> _StatusVerdict | None:
     shown = word or "<empty>"
     return _StatusVerdict(
         Severity.WARNING,
-        f"service reports unrecognized status: {shown}",
+        f"{_SYMPTOM_UNRECOGNIZED_PREFIX} {shown}",
         f"component reports unrecognized status '{shown}'",
     )
+
+
+_STATUS_SYMPTOM_KINDS: dict[str, str] = {
+    verdict.symptom: word for word, verdict in _STATUS_VERDICTS.items()
+}
+
+
+def _symptom_kind(symptom: str) -> str | None:
+    """观测症状串 → 规范症状类（策略触发词汇）。识别不了 → None，不硬凑。
+
+    状态类从 _STATUS_VERDICTS 反查派生（禁手抄字面）；传输类按产生串
+    常量归类。触发词汇=产生面词汇：测试构造症状也必须用产生面形态，
+    禁再造第二词表。
+    """
+    s = symptom.strip()
+    kind = _STATUS_SYMPTOM_KINDS.get(s)
+    if kind is not None:
+        return kind
+    if s == _SYMPTOM_CONNECTION:
+        return _SYMPTOM_CONNECTION
+    if s == _SYMPTOM_TIMEOUT:
+        return _SYMPTOM_TIMEOUT
+    if s.startswith(_SYMPTOM_HTTP_PREFIX):
+        return "http error"
+    if s.startswith(_SYMPTOM_EXCEPTION_PREFIX):
+        return "exception"
+    if s.startswith(_SYMPTOM_SLOW_PREFIX):
+        return "slow response"
+    if s.startswith(_SYMPTOM_UNRECOGNIZED_PREFIX):
+        return "unrecognized"
+    return None
+
+
+def _matches_trigger(symptoms: list[str], triggers) -> bool:
+    """症状命中策略触发类：观测症状串归类后与 triggers 求交（词表同源对齐）。"""
+    return any(_symptom_kind(s) in triggers for s in symptoms)
 
 
 class OrganHealer:
@@ -221,34 +277,34 @@ class OrganHealer:
                 else:
                     result.healthy = False
                     result.severity = Severity.CRITICAL
-                    result.symptoms.append(f"HTTP {resp.status_code}")
+                    result.symptoms.append(f"{_SYMPTOM_HTTP_PREFIX}{resp.status_code}")
                     result.root_cause = f"health endpoint returned {resp.status_code}"
                     result.detail = {"status_code": resp.status_code}
 
         except httpx.ConnectError:
             result.healthy = False
             result.severity = Severity.CRITICAL
-            result.symptoms.append("connection refused")
+            result.symptoms.append(_SYMPTOM_CONNECTION)
             result.root_cause = "service not running or port not listening"
             result.response_time_ms = round((time.time() - start) * 1000, 1)
 
         except httpx.TimeoutException:
             result.healthy = False
             result.severity = Severity.WARNING
-            result.symptoms.append("timeout")
+            result.symptoms.append(_SYMPTOM_TIMEOUT)
             result.root_cause = "health check timed out — service may be overloaded"
             result.response_time_ms = round((time.time() - start) * 1000, 1)
 
         except Exception as e:
             result.healthy = False
             result.severity = Severity.CRITICAL
-            result.symptoms.append(f"exception: {type(e).__name__}")
+            result.symptoms.append(f"{_SYMPTOM_EXCEPTION_PREFIX}{type(e).__name__}")
             result.root_cause = str(e)
             result.response_time_ms = round((time.time() - start) * 1000, 1)
 
         # Check response time thresholds
         if result.healthy and result.response_time_ms > 5000:
-            result.symptoms.append(f"slow response: {result.response_time_ms}ms")
+            result.symptoms.append(f"{_SYMPTOM_SLOW_PREFIX} {result.response_time_ms}ms")
             if result.severity == Severity.INFO:
                 result.severity = Severity.WARNING
 
@@ -289,7 +345,7 @@ class OrganHealer:
         # Try built-in repair strategies
         strategies = _REPAIR_STRATEGIES.get(result.organ, [])
         for strategy in strategies:
-            if self._matches_symptom(result.symptoms, strategy.get("symptom", "")):
+            if _matches_trigger(result.symptoms, strategy.get("triggers", ())):
                 success = await self._execute_repair(strategy)
                 result.action_taken = strategy["action"]
                 result.action_success = success
@@ -478,25 +534,30 @@ class OrganHealer:
             self._history = self._history[-self._max_history :]
 
     def _recommend_action(self, organ: str, result: DiagnosisResult) -> Action:
-        """Determine the best recovery action based on symptoms."""
-        symptoms_text = " ".join(result.symptoms).lower()
+        """推荐=可执行（声明从实现派生，HEAL-②b-②）：只推荐 heal() 真有执行路径的动作。
 
+        修前两类假承诺（HEAL-② 审计连带死路）：① 策略触发词表与产生面零交集，
+        推荐的策略动作 heal() 永远匹配不上=推荐即死；② connection refused 推荐
+        RESTART 而 heal()/全仓无 restart 执行路径=推荐即死。现 ① 触发同源对齐、
+        ② RESTART 仅在该器官注册了自定义处理器（restart 的真实实现）时推荐，
+        否则如实 NONE（root_cause 已说明服务未监听，无进程内修复手段）。
+        """
         strategies = _REPAIR_STRATEGIES.get(organ, [])
         for strategy in strategies:
-            if self._matches_symptom(result.symptoms, strategy.get("symptom", "")):
+            if _matches_trigger(result.symptoms, strategy.get("triggers", ())):
                 return strategy["action"]
 
-        # Generic fallbacks
-        if "timeout" in symptoms_text or "slow" in symptoms_text:
+        kinds = {_symptom_kind(s) for s in result.symptoms}
+        # 通用兑底：超时（过载）→ 清缓存（generic /api/{organ}/cache/clear）
+        if _SYMPTOM_TIMEOUT in kinds:
             return Action.CLEAR_CACHE
-        if "connection" in symptoms_text:
+        # connection refused：进程内无可执行修复（服务未监听，重启=进程外动作），
+        # 仅当有自定义处理器（restart 实现）才推荐 RESTART（修前恒推荐=假承诺）
+        if _SYMPTOM_CONNECTION in kinds and organ in self._custom_handlers:
             return Action.RESTART
-
+        # "slow response" 推荐分支已清（HEAL-② 死路 (c)）：该症状只在
+        # healthy=True 产生面出现，recommend 只跑不健康路径=死分支
         return Action.NONE
-
-    def _matches_symptom(self, symptoms: list[str], pattern: str) -> bool:
-        pattern_lower = pattern.lower()
-        return any(pattern_lower in s.lower() for s in symptoms)
 
     async def _execute_repair(self, strategy: dict) -> bool:
         """Execute a repair strategy by calling the endpoint."""

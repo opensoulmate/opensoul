@@ -10,14 +10,12 @@ notify 真投递成功、audit 真落审计、diagnose_and_heal 修复后复查�
 可编程响应序列）让这些分支真实执行 HTTP 往返，零生产接触（不打 :8090、
 timeline 事件面走 TIMELINE_DB autouse 隔离）。
 
-发现留档（如实记，修复需拍板）：_REPAIR_STRATEGIES 的 symptom 模式
-（"cache miss or expired" 等）与 diagnose 产出的症状串（"connection refused"
-/"timeout"/"HTTP {code}"/"service reports degraded status"/"slow response: …"）
-互不为子串——_matches_symptom 为「症状串包含模式」方向，故内置修复策略从
-diagnose→_recommend_action→heal 生产链上不可达（wired-but-not-functional，
-F4b-㉒ 同型）；生产可达的修复动作只剩超时症状→generic _try_generic_clear_cache
-（本文件 /cycle、/heal e2e 走的就是这条真链）。策略真执行分支在 heal() 公共缝
-上以显式症状结果覆盖（见 TestHealRepairStrategies 注释）。
+收口记录（HEAL-②b-②）：修前 _REPAIR_STRATEGIES 的 symptom 自由文本模式与
+diagnose 产生面词表零交集=0/6 策略不可达（HEAL-② 审计①，发现留档原文见
+docs/dev-roadmap.md HEAL-①/② 条目）。HEAL-②b-② 起 trigger=规范症状类与产生面
+同源对齐，策略真链可达性与 restart 假承诺收口由
+tests/test_healer_strategy_alignment.py 覆盖；本文件的策略执行分支测试改用产生面
+词汇构造症状（见 TestHealBranches 注释）。
 """
 
 import asyncio
@@ -113,7 +111,7 @@ def _healer(base):
 
 
 def _unhealthy(organ, symptoms, action, severity=Severity.CRITICAL):
-    """显式症状结果：覆盖 heal() 公共缝上 diagnose 产不出的症状形态（见模块注释）。"""
+    """显式症状结果：在 heal() 公共缝上以产生面词汇症状覆盖修复执行分支。"""
     return DiagnosisResult(
         organ=organ,
         healthy=False,
@@ -219,12 +217,22 @@ class TestHealBranches:
         [
             (
                 "vein",
-                "cache miss or expired entries in view",
+                "timeout",
                 Action.CLEAR_CACHE,
                 "/api/vein/cache/clear",
             ),
-            ("vein", "expired entries pile up", Action.CLEANUP, "/api/vein/cache/cleanup"),
-            ("mirror", "expired sandbox residue", Action.CLEANUP, "/api/mirror/cleanup"),
+            (
+                "vein",
+                "service reports degraded status",
+                Action.CLEANUP,
+                "/api/vein/cache/cleanup",
+            ),
+            (
+                "mirror",
+                "service reports degraded status",
+                Action.CLEANUP,
+                "/api/mirror/cleanup",
+            ),
         ],
     )
     def test_builtin_strategy_repair_success(
@@ -232,7 +240,7 @@ class TestHealBranches:
     ):
         """策略真执行分支：_execute_repair 真 HTTP POST 修复端点 200→RECOVERED。
 
-        症状串显式含策略模式（模块注释：diagnose 生产链产不出这些症状）。
+        症状串=产生面词汇（HEAL-②b-② 触发对齐后 diagnose 生产链真产出的形态）。
         """
         state, base = healer_stub
         state.script("POST", expected_path, {"status": 200, "json": {"status": "ok"}})
@@ -246,7 +254,7 @@ class TestHealBranches:
     def test_repair_endpoint_failure_not_recovered(self, healer_stub):
         state, base = healer_stub
         state.script("POST", "/api/vein/cache/clear", {"status": 500, "json": {"error": "no"}})
-        r = _unhealthy("vein", ["cache miss or expired entries"], Action.CLEAR_CACHE)
+        r = _unhealthy("vein", ["timeout"], Action.CLEAR_CACHE)
         out = asyncio.run(_healer(base).heal(r))
         assert out.action_taken == Action.CLEAR_CACHE
         assert out.action_success is False
