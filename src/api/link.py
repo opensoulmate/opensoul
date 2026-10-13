@@ -1,10 +1,11 @@
 """OpenLink API — 突触系统：双向集成网关、Webhook管理。"""
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from src.link.connector import IntegrationManager
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -43,8 +44,12 @@ class WebhookSendRequest(BaseModel):
 
 
 @router.post("/connectors")
-async def create_connector(req: ConnectorCreateRequest):
+async def create_connector(
+    req: ConnectorCreateRequest,
+    authorization: str | None = Header(None),
+):
     """Create a new integration connector."""
+    identity = bind_identity(authorization)
     connector = manager.create_connector(
         name=req.name,
         type=req.type,
@@ -66,7 +71,8 @@ async def create_connector(req: ConnectorCreateRequest):
                 "name": connector.name,
                 "type": connector.type.value,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {

@@ -9,7 +9,9 @@ import asyncio
 import logging
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
+
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -336,7 +338,10 @@ async def bootstrap_status():
 
 
 @router.post("/bootstrap/run")
-async def run_bootstrap(req: BootstrapRequest = None):
+async def run_bootstrap(
+    req: BootstrapRequest = None,
+    authorization: str | None = Header(None),
+):
     """Run system bootstrap — auto-configure default cross-organ integrations.
 
     Sets up:
@@ -348,6 +353,7 @@ async def run_bootstrap(req: BootstrapRequest = None):
 
     Idempotent — safe to call multiple times. Use force=true to re-run.
     """
+    identity = bind_identity(authorization)
     force = req.force if req else False
     result = bootstrap.run_bootstrap(force=force)
 
@@ -362,7 +368,8 @@ async def run_bootstrap(req: BootstrapRequest = None):
                 "type": "bootstrap",
                 "summary": f"🔧 System bootstrap: {result['status']}",
                 "detail": result,
-            }
+            },
+            tenant_id=identity.tenant_id,
         )
     except Exception as exc:
         logging.getLogger(__name__).debug("probe skipped: %s", exc)

@@ -6,7 +6,7 @@ Three advanced intelligence features for the knowledge platform:
 - Quality: multi-dimensional quality scoring of knowledge entries
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.cortex.graphrag import GraphRAGEngine
@@ -14,6 +14,7 @@ from src.cortex.quality import QualityScorer
 from src.cortex.recommendation import RecommendationEngine
 from src.database.postgres import db_pool
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -35,9 +36,13 @@ class GraphQueryRequest(BaseModel):
 
 
 @router.post("/graphrag/build")
-async def build_graph(user_id: str = Query(default="default")):
+async def build_graph(
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
     """Scan all knowledge entries and auto-extract entities + relations
     into the knowledge graph."""
+    identity = bind_identity(authorization)
     result = await graphrag.build_graph_from_knowledge(db_pool, user_id)
 
     push_event(
@@ -47,7 +52,8 @@ async def build_graph(user_id: str = Query(default="default")):
             "type": "graphrag_build",
             "summary": f"🔮 GraphRAG built: {result['entities_new']} new entities, {result['relations_new']} new relations",
             "detail": result,
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return result
