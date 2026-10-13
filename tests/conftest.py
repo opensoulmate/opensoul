@@ -522,3 +522,39 @@ def pipeline_client(tmp_path, monkeypatch):
     app.state.pipeline_client_opensoul_db = str(tmp_os_db)
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def soma_client(tmp_path, monkeypatch):
+    """soma-connector API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db 与生产服务进程的组件注册表（gene_client/will_client/
+    mirror_client 同款路线；timeline 测试隔离拆件② live 测试写方收编——
+    test_soma_connector.py 此前走 live :8090，服务进程把 component_registered/
+    data_pushed/component_unregistered 事件写生产 timeline.db（2026-10-13
+    修前实测 7 行/轮），且测试组件（test-node-1/test-hb-node/test-push-node）
+    残留在生产服务进程的内存注册表里冒充 online 组件）。测试面=真实
+    router/handler 代码，数据面换 tmp：
+    - 组件注册面：fresh ComponentRegistry()（修前=生产服务进程内存单例，
+      测试行永不自清；进程内 app 用 tmp 实例，monkeypatch 模块单例）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位（_isolate_timeline_db）
+      —— push_event 进程内构造 TimelineStore 读 env，事件落本用例 tmp 库
+    app.state.soma_client_* 暴露 tmp 真源供隔离护栏断言。
+    src.api.soma_connector 在 fixture 内延迟 import（模块 import 有单例构造
+    副作用，conftest 收集期不全局 import）。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.soma_connector as soma_api
+    from src.api.soma_connector import ComponentRegistry
+    from src.timeline.store import default_db_path
+
+    tmp_registry = ComponentRegistry()
+    monkeypatch.setattr(soma_api, "registry", tmp_registry)
+
+    app = FastAPI()
+    app.include_router(soma_api.router, prefix="/api/soma")
+    app.state.soma_client_timeline_db = default_db_path()
+    app.state.soma_client_registry = tmp_registry
+    with TestClient(app) as c:
+        yield c
