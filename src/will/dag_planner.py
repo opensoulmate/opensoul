@@ -9,13 +9,33 @@ Borrowed from: LLM Compiler, Plan-and-Execute, Tree of Thoughts
 import hashlib
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Optional
 
+from src.nest.isolation import IsolationEngine, ResourceType
+from src.nest.tenant import tenant_namespace
+
+from .checkpoint import DEFAULT_TENANT
+
 logger = logging.getLogger("opensoul.will.planner")
+
+
+class DAGPlanAccessDenied(Exception):
+    """跨租户 DAG 计划面访问被 IsolationEngine 拒绝（API 层映射 403，禁静默当 not_found）。
+
+    F3b-⑧b（2026-10-13）：与 GoalAccessDenied/WorkflowAccessDenied/CheckpointAccessDenied
+    同族——verdict=check_access 原始回包（allowed/reason/namespaced_id），审计留痕在
+    IsolationEngine 审计日志（data/nest.db）。
+    """
+
+    def __init__(self, reason: str, verdict: dict | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.verdict = verdict or {}
 
 
 class StepStatus(StrEnum):
@@ -52,6 +72,8 @@ class ExecutionPlan:
     completed_at: float = 0.0
     status: str = "pending"
     metadata: dict = field(default_factory=dict)
+    # F3b-⑧b：行归属租户（create=bind_identity 派生禁自报；缺失/空白→'default'）
+    tenant_id: str = DEFAULT_TENANT
 
     @property
     def progress(self) -> float:
@@ -88,9 +110,49 @@ class DAGPlanner:
             "failed_plans": 0,
             "total_steps": 0,
         }
+        # F3b-⑧b：隔离引擎按 NEST_DB env 值缓存（conftest 全测试隔离自动换引擎，
+        # ai_groups._iso 同款纪律）；懒构造=首个 gate 调用才建 NestStore，
+        # 系统路径（tenant_id=None）零生产库接触。
+        self._iso_cache: tuple[str, IsolationEngine] | None = None
 
-    def create_plan(self, goal: str, steps_spec: list[dict]) -> ExecutionPlan:
-        """Create an execution plan from step specifications."""
+    # ── F3b-⑧b 租户闸门 ─────────────────────────────────────────────
+    @property
+    def isolation(self) -> IsolationEngine:
+        """隔离引擎（check_access 真执行点；审计日志落 NestStore=data/nest.db）。"""
+        key = os.environ.get("NEST_DB") or ""
+        if self._iso_cache is None or self._iso_cache[0] != key:
+            self._iso_cache = (key, IsolationEngine())
+        return self._iso_cache[1]
+
+    def gate(self, tenant_id: str, row_tenant: str, plan_id: str, action: str) -> None:
+        """by-ID 访问闸门：IsolationEngine.check_access 真执行（F3b-⑧b）。
+
+        资源 ID=namespaced_id(row_tenant ns, plan_id)——namespace 前缀是行归属
+        租户的 ns（审计语义与 F3b-⑧ GoalGate 同构）；跨租户（allowed=False）
+        → DAGPlanAccessDenied 上抛，禁静默当 not_found/假成功。
+        """
+        verdict = self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.DAG_PLAN,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(row_tenant), plan_id),
+            action=action,
+        )
+        if not verdict.get("allowed", False):
+            raise DAGPlanAccessDenied(verdict.get("reason", "access denied"), verdict)
+
+    @staticmethod
+    def _tenant_val(tenant_id: str | None) -> str:
+        """行归属键归一：缺失/空白→'default'（与生产分布一致，键派生故障绝不吃掉落库）。"""
+        return (tenant_id or "").strip() or DEFAULT_TENANT
+
+    def create_plan(
+        self, goal: str, steps_spec: list[dict], tenant_id: str | None = None
+    ) -> ExecutionPlan:
+        """Create an execution plan from step specifications.
+
+        F3b-⑧b：行归属租户=调用方身份派生（bind_identity），禁自报；
+        缺失/空白→'default'（与生产分布一致）。
+        """
         plan_id = f"plan_{uuid.uuid4().hex[:12]}"
 
         steps = []
@@ -105,7 +167,9 @@ class DAGPlanner:
             )
             steps.append(step)
 
-        plan = ExecutionPlan(plan_id=plan_id, goal=goal, steps=steps)
+        plan = ExecutionPlan(
+            plan_id=plan_id, goal=goal, steps=steps, tenant_id=self._tenant_val(tenant_id)
+        )
         self._plans[plan_id] = plan
         self._stats["total_plans"] += 1
         self._stats["total_steps"] += len(steps)
@@ -113,15 +177,17 @@ class DAGPlanner:
         logger.info(f"Created plan {plan_id}: {len(steps)} steps for: {goal[:50]}")
         return plan
 
-    def create_from_llm_response(self, goal: str, llm_response: str) -> ExecutionPlan | None:
-        """Parse LLM response into an execution plan."""
+    def create_from_llm_response(
+        self, goal: str, llm_response: str, tenant_id: str | None = None
+    ) -> ExecutionPlan | None:
+        """Parse LLM response into an execution plan.（F3b-⑧b：tenant_id 透传行归属）"""
         # Try JSON format
         try:
             data = json.loads(llm_response)
             if isinstance(data, dict) and "steps" in data:
-                return self.create_plan(goal, data["steps"])
+                return self.create_plan(goal, data["steps"], tenant_id=tenant_id)
             elif isinstance(data, list):
-                return self.create_plan(goal, data)
+                return self.create_plan(goal, data, tenant_id=tenant_id)
         except json.JSONDecodeError:
             pass
 
@@ -149,13 +215,22 @@ class DAGPlanner:
             steps_spec.append(current)
 
         if steps_spec:
-            return self.create_plan(goal, steps_spec)
+            return self.create_plan(goal, steps_spec, tenant_id=tenant_id)
 
         logger.warning(f"Could not parse LLM response as plan: {llm_response[:200]}")
         return None
 
-    def get_plan(self, plan_id: str) -> ExecutionPlan | None:
-        return self._plans.get(plan_id)
+    def get_plan(self, plan_id: str, tenant_id: str | None = None) -> ExecutionPlan | None:
+        """读计划（F3b-⑧b）：tenant_id=None=系统视图（引擎内部/维护路径）不过滤不闸；
+        显式租户=by-ID 闸门真执行（跨租户→DAGPlanAccessDenied，禁静默当 not_found）。
+        缺行=返回 None（404 契约不变）。
+        """
+        plan = self._plans.get(plan_id)
+        if plan is None:
+            return None
+        if tenant_id is not None:
+            self.gate(tenant_id, plan.tenant_id, plan_id, "read")
+        return plan
 
     def update_step(
         self,
@@ -164,11 +239,18 @@ class DAGPlanner:
         status: StepStatus,
         result: Any = None,
         error: str = "",
+        tenant_id: str | None = None,
     ):
-        """Update a step's status and check plan completion."""
+        """Update a step's status and check plan completion.
+
+        F3b-⑧b：显式租户=by-ID 写闸门真执行（跨租户→DAGPlanAccessDenied 行零改写）；
+        tenant_id=None=系统路径语义不变。
+        """
         plan = self._plans.get(plan_id)
         if not plan:
             return
+        if tenant_id is not None:
+            self.gate(tenant_id, plan.tenant_id, plan_id, "write")
 
         for step in plan.steps:
             if step.step_id == step_id:
@@ -237,6 +319,8 @@ class DAGPlanner:
         return "\n".join(lines)
 
     def get_stats(self) -> dict:
+        # F3b-⑧b 边界：聚合计数器全局不闸（同 F3b-⑧ goals-stats 全局边界——
+        # 只含计数不含计划内容；by-ID 内容面由 get_plan 闸门承担）
         return {
             **self._stats,
             "active_plans": sum(

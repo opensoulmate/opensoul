@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from src.services.tenant_binding import bind_identity
 from src.will.checkpoint import CheckpointAccessDenied
-from src.will.dag_planner import DAGPlanner
+from src.will.dag_planner import DAGPlanAccessDenied, DAGPlanner
 from src.will.engine import WorkflowAccessDenied, WorkflowEngine
 from src.will.models import (
     NodeType,
@@ -544,9 +544,15 @@ class DAGPlanRequest(BaseModel):
 
 
 @router.post("/dag/plan")
-async def create_dag_plan(req: DAGPlanRequest):
-    """Create execution plan from LLM response."""
-    plan = dag_planner.create_from_llm_response(req.goal, req.llm_response)
+async def create_dag_plan(req: DAGPlanRequest, authorization: str | None = Header(None)):
+    """Create execution plan from LLM response.
+
+    F3b-⑧b：行归属租户从认证身份派生（bind_identity，匿名='default'），禁自报。
+    """
+    identity = bind_identity(authorization)
+    plan = dag_planner.create_from_llm_response(
+        req.goal, req.llm_response, tenant_id=identity.tenant_id
+    )
     if not plan:
         raise HTTPException(400, "Failed to parse LLM response into plan")
     return {
@@ -555,13 +561,22 @@ async def create_dag_plan(req: DAGPlanRequest):
         "total_steps": len(plan.steps),
         "progress": plan.progress,
         "mermaid": dag_planner.to_mermaid(plan.plan_id),
+        # F3b-⑧b：行归属租户随计划回显（加性契约键，可观测非自报）
+        "tenant_id": plan.tenant_id,
     }
 
 
 @router.get("/dag/{plan_id}/status")
-async def dag_status(plan_id: str):
-    """Get plan status."""
-    plan = dag_planner.get_plan(plan_id)
+async def dag_status(plan_id: str, authorization: str | None = Header(None)):
+    """Get plan status.
+
+    F3b-⑧b：by-ID 读走 IsolationEngine 闸门（跨租户→403 带真因，禁静默 not_found）。
+    """
+    identity = bind_identity(authorization)
+    try:
+        plan = dag_planner.get_plan(plan_id, tenant_id=identity.tenant_id)
+    except DAGPlanAccessDenied as e:
+        raise HTTPException(403, f"dag plan access denied: {e.reason}")
     if not plan:
         raise HTTPException(404, "Plan not found")
     return {
@@ -570,6 +585,8 @@ async def dag_status(plan_id: str):
         "progress": plan.progress,
         "is_complete": plan.is_complete,
         "total_steps": len(plan.steps),
+        # F3b-⑧b：行归属租户随计划回显（加性契约键）
+        "tenant_id": plan.tenant_id or "default",
         "steps": [
             {
                 "step_id": s.step_id,
@@ -586,7 +603,10 @@ async def dag_status(plan_id: str):
 
 @router.get("/dag/stats")
 async def dag_stats():
-    """Get DAG planner statistics."""
+    """Get DAG planner statistics.
+
+    F3b-⑧b 边界：聚合计数器全局不闸（同 goals-stats 全局边界，只含计数不含计划内容）。
+    """
     return dag_planner.get_stats()
 
 
