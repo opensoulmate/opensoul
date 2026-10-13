@@ -50,6 +50,7 @@ class ResourceType(StrEnum):
         "enterprise_audit"  # F3b-③c-2②c（2026-10-12）：企业审计面（enterprise.db audit_log 表）
     )
     AGENT_MESSAGE = "agent_message"  # F3b-③c-2②d（2026-10-12）：agent 协作消息面（agent_collaboration.db agent_messages 表）
+    GOAL = "goal"  # F3b-⑧（2026-10-13）：will 目标面（will_goals.json）——goal 定义/状态面
 
 
 @dataclass
@@ -146,6 +147,9 @@ class IsolationEngine:
         ),
         ResourceType.AGENT_MESSAGE: IsolationPolicy(
             ResourceType.AGENT_MESSAGE, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.GOAL: IsolationPolicy(
+            ResourceType.GOAL, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 

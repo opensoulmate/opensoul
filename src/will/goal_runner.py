@@ -23,7 +23,26 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from src.nest.isolation import IsolationEngine, ResourceType
+from src.nest.tenant import tenant_namespace
+
+from .checkpoint import DEFAULT_TENANT
+
 logger = logging.getLogger(__name__)
+
+
+class GoalAccessDenied(Exception):
+    """跨租户 goal 面访问被 IsolationEngine 拒绝（API 层映射 403，禁静默当 not_found）。
+
+    F3b-⑧（2026-10-13）：与 WorkflowAccessDenied/CheckpointAccessDenied 同族——
+    verdict=check_access 原始回包（allowed/reason/namespaced_id），审计留痕在
+    IsolationEngine 审计日志（data/nest.db）。
+    """
+
+    def __init__(self, reason: str, verdict: dict | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.verdict = verdict or {}
 
 
 class GoalState(StrEnum):
@@ -61,6 +80,7 @@ class Goal(BaseModel):
 
     goal_id: str = Field(default_factory=lambda: f"goal_{uuid4().hex[:12]}")
     session_id: str = ""  # 所属会话
+    tenant_id: str = DEFAULT_TENANT  # F3b-⑧：行归属租户（create=bind_identity 派生禁自报）
     description: str = ""  # 目标描述
     state: GoalState = GoalState.ACTIVE
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
@@ -131,9 +151,53 @@ class GoalRunner:
 
     _PERSIST_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "will_goals.json"
 
+    # F3b-⑧：数据面咨询 IsolationEngine（懒构造同 WorkflowEngine 纪律——首个 gate
+    # 调用才建 NestStore，系统路径（tenant_id=None）零生产库接触）。类级缺省保证
+    # __new__ 旁路构造的实例（既有测试面）不炸。
+    _isolation: IsolationEngine | None = None
+
     def __init__(self) -> None:
         self._goals: dict[str, Goal] = {}
         self._load()
+
+    # ── F3b-⑧ 租户闸门 ─────────────────────────────────────────────
+    @property
+    def isolation(self) -> IsolationEngine:
+        """隔离引擎（check_access 真执行点；审计日志落 NestStore=data/nest.db）。"""
+        if self._isolation is None:
+            self._isolation = IsolationEngine()
+        return self._isolation
+
+    def gate(self, tenant_id: str, row_tenant: str, resource_id: str, action: str) -> None:
+        """by-ID 访问闸门：IsolationEngine.check_access 真执行（F3b-⑧）。
+
+        资源 ID=namespaced_id(row_tenant ns, goal_id)——namespace 前缀是行归属
+        租户的 ns（审计语义与 F3b-⑦ WorkflowGate 同构）；跨租户（allowed=False）
+        → GoalAccessDenied 上抛，禁静默当 not_found/假成功。
+        """
+        verdict = self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.GOAL,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(row_tenant), resource_id),
+            action=action,
+        )
+        if not verdict.get("allowed", False):
+            raise GoalAccessDenied(verdict.get("reason", "access denied"), verdict)
+
+    def gate_bulk(self, tenant_id: str, action: str) -> None:
+        """bulk 操作（list）审计留痕：执行隔离由查询过滤承担，
+        引擎侧记一次 namespace 自匹配访问（audit_access="Log all access attempts"）。"""
+        self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.GOAL,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(tenant_id), "*"),
+            action=action,
+        )
+
+    @staticmethod
+    def _tenant_val(tenant_id: str | None) -> str:
+        """行归属键归一：缺失/空白→'default'（与生产分布一致，键派生故障绝不吃掉落库）。"""
+        return (tenant_id or "").strip() or DEFAULT_TENANT
 
     # ── Persistence ─────────────────────────────────────────────
 
@@ -144,6 +208,8 @@ class GoalRunner:
                 for gdata in data.get("goals", []):
                     try:
                         goal = Goal(**gdata)
+                        # F3b-⑧：旧持久化行缺 tenant_id/空白→'default'（与生产分布一致）
+                        goal.tenant_id = self._tenant_val(getattr(goal, "tenant_id", None))
                         self._goals[goal.goal_id] = goal
                     except Exception:
                         continue
@@ -162,14 +228,21 @@ class GoalRunner:
 
     # ── Admission Check（准入前置检查） ──────────────────────────
 
-    def admit(self, session_id: str) -> tuple[bool, str]:
+    def admit(self, session_id: str, tenant_id: str | None = None) -> tuple[bool, str]:
         """启动goal前的准入检查（kilocode admit()）。
 
         检查项：
         1. 该session没有其他ACTIVE状态的goal（同一时间只跑一个）
         2. 该session没有BLOCKED状态的goal（需先处理阻塞）
+
+        F3b-⑧ 语义收口：tenant_id 给定时只看同租户的 goal（session 键按租户隔离，
+        与 F3b-③a 幂等键按租户隔离同款）——防同名 session 被他租户的 goal 误拦；
+        tenant_id=None=既有全局语义不变（既有测试/系统路径契约）。
         """
+        tenant = self._tenant_val(tenant_id) if tenant_id is not None else None
         for goal in self._goals.values():
+            if tenant is not None and goal.tenant_id != tenant:
+                continue
             if goal.session_id == session_id:
                 if goal.state == GoalState.ACTIVE:
                     return False, f"Session {session_id} already has an active goal: {goal.goal_id}"
@@ -182,15 +255,17 @@ class GoalRunner:
 
     # ── CRUD ────────────────────────────────────────────────────
 
-    def create_goal(self, req: GoalCreate) -> Goal | None:
-        """创建新目标，先过准入检查。"""
-        ok, reason = self.admit(req.session_id)
+    def create_goal(self, req: GoalCreate, tenant_id: str | None = None) -> Goal | None:
+        """创建新目标，先过准入检查。F3b-⑧：行归属=identity 派生租户（禁自报）。"""
+        tenant = self._tenant_val(tenant_id)
+        ok, reason = self.admit(req.session_id, tenant_id=tenant)
         if not ok:
             logger.warning("Goal admission denied: %s", reason)
             return None
 
         goal = Goal(
             session_id=req.session_id,
+            tenant_id=tenant,
             description=req.description,
             max_loops=req.max_loops,
             started_at=datetime.now(UTC).isoformat(),
@@ -207,26 +282,38 @@ class GoalRunner:
         logger.info("Goal %s created: %s", goal.goal_id, goal.description)
         return goal
 
-    def get_goal(self, goal_id: str) -> Goal | None:
-        return self._goals.get(goal_id)
+    def get_goal(self, goal_id: str, tenant_id: str | None = None) -> Goal | None:
+        goal = self._goals.get(goal_id)
+        if goal is not None and tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), goal.tenant_id, goal_id, "read")
+        return goal
 
     def list_goals(
         self,
         session_id: str | None = None,
         state: GoalState | None = None,
+        tenant_id: str | None = None,
     ) -> list[Goal]:
         goals = list(self._goals.values())
+        if tenant_id is not None:
+            tenant = self._tenant_val(tenant_id)
+            self.gate_bulk(tenant, "list")
+            goals = [g for g in goals if g.tenant_id == tenant]
         if session_id:
             goals = [g for g in goals if g.session_id == session_id]
         if state:
             goals = [g for g in goals if g.state == state]
         return sorted(goals, key=lambda g: g.updated_at, reverse=True)
 
-    def delete_goal(self, goal_id: str) -> bool:
-        removed = self._goals.pop(goal_id, None) is not None
-        if removed:
-            self._save()
-        return removed
+    def delete_goal(self, goal_id: str, tenant_id: str | None = None) -> bool:
+        goal = self._goals.get(goal_id)
+        if goal is None:
+            return False
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), goal.tenant_id, goal_id, "delete")
+        del self._goals[goal_id]
+        self._save()
+        return True
 
     # ── Event Recording（事件驱动结果判定） ──────────────────────
 
@@ -267,11 +354,15 @@ class GoalRunner:
         tool_name: str,
         result: dict[str, Any],
         detail: str = "",
+        tenant_id: str | None = None,
     ) -> GoalEvent | None:
         """记录一次工具执行事件，更新计数，检查是否触发状态转换。"""
         goal = self._goals.get(goal_id)
         if not goal:
             return None
+        if tenant_id is not None:
+            # F3b-⑧：闸门前置于状态检查（跨租户恒拒，禁终态差分泄露他租户 goal 状态）
+            self.gate(self._tenant_val(tenant_id), goal.tenant_id, goal_id, "write")
         if goal.is_terminal:
             logger.debug("Goal %s is terminal, ignoring event", goal_id)
             return None
@@ -348,7 +439,7 @@ class GoalRunner:
 
     # ── goal_report自报协议 ─────────────────────────────────────
 
-    def goal_report(self, req: GoalReport) -> Goal | None:
+    def goal_report(self, req: GoalReport, tenant_id: str | None = None) -> Goal | None:
         """处理goal_report自报（kilocode tool.ts）。
 
         注意：这是agent的自报，不是独立验证。
@@ -358,6 +449,8 @@ class GoalRunner:
         goal = self._goals.get(req.goal_id)
         if not goal:
             return None
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), goal.tenant_id, req.goal_id, "write")
         if goal.is_terminal:
             return goal
 
@@ -384,11 +477,15 @@ class GoalRunner:
 
     # ── State Transitions ───────────────────────────────────────
 
-    def pause_goal(self, goal_id: str, reason: str = "User paused") -> Goal | None:
+    def pause_goal(
+        self, goal_id: str, reason: str = "User paused", tenant_id: str | None = None
+    ) -> Goal | None:
         """暂停goal（用户抢占/手动暂停）。PAUSED不是终态。"""
         goal = self._goals.get(goal_id)
         if not goal:
             return None
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), goal.tenant_id, goal_id, "write")
         if goal.is_terminal:
             return goal
         if goal.state == GoalState.ACTIVE:
@@ -397,7 +494,9 @@ class GoalRunner:
         self._save()
         return goal
 
-    def resume_goal(self, goal_id: str, reason: str = "User resumed") -> Goal | None:
+    def resume_goal(
+        self, goal_id: str, reason: str = "User resumed", tenant_id: str | None = None
+    ) -> Goal | None:
         """恢复goal（从PAUSED/BLOCKED回到ACTIVE）。
 
         准入检查：只有PAUSED可直接恢复，BLOCKED需先clear blocked原因。
@@ -405,6 +504,8 @@ class GoalRunner:
         goal = self._goals.get(goal_id)
         if not goal:
             return None
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), goal.tenant_id, goal_id, "write")
         if goal.is_terminal:
             return goal
         if goal.state == GoalState.PAUSED:
@@ -415,11 +516,16 @@ class GoalRunner:
         self._save()
         return goal
 
-    def cancel_goal(self, goal_id: str, reason: str = "User cancelled") -> Goal | None:
+    def cancel_goal(
+        self, goal_id: str, reason: str = "User cancelled", tenant_id: str | None = None
+    ) -> Goal | None:
         """取消goal → FAILED终态。"""
         goal = self._goals.get(goal_id)
         if not goal:
             return None
+        if tenant_id is not None:
+            # 闸门前置（③c-1 cancel 纪律）：跨租户恒拒，禁终态差分泄露
+            self.gate(self._tenant_val(tenant_id), goal.tenant_id, goal_id, "delete")
         if not goal.is_terminal:
             self._transition(goal, GoalState.FAILED, reason)
         self._save()

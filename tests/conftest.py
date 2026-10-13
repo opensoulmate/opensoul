@@ -148,6 +148,12 @@ def will_client(tmp_path, monkeypatch):
     tmp_wakeup = WakeupScheduler(db_path=str(tmp_path / "wakeup.db"))
     monkeypatch.setattr(wakeup_mod, "_scheduler", tmp_wakeup)
 
+    # F3b-⑧：goal_runner 持久化面隔离（will_goals.json 绝不落生产）——单例重建指向 tmp
+    import src.will.goal_runner as goal_runner_mod
+
+    monkeypatch.setattr(goal_runner_mod.GoalRunner, "_PERSIST_PATH", tmp_path / "goals.json")
+    monkeypatch.setattr(goal_runner_mod, "_runner", None)
+
     register_default_handlers(jq)  # 幂等硬化：不依赖api/will.py的import时机
 
     import src.api.will as will_api

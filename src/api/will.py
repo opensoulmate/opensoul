@@ -592,6 +592,9 @@ async def dag_stats():
 
 # ── P1 Goal自主目标循环（kilocode goal/runner.ts移植）──
 from src.will.goal_runner import (
+    GoalAccessDenied as _GoalAccessDenied,
+)
+from src.will.goal_runner import (
     GoalCreate as _GoalCreate,
 )
 from src.will.goal_runner import (
@@ -623,15 +626,20 @@ class GoalEventRequest(BaseModel):
 
 
 @router.post("/goals")
-async def create_goal(req: GoalCreateRequest):
-    """Create a new autonomous goal. Admission check applied."""
+async def create_goal(req: GoalCreateRequest, authorization: str | None = Header(None)):
+    """Create a new autonomous goal. Admission check applied.
+
+    F3b-⑧：行归属租户从认证身份派生（bind_identity，匿名='default'），禁自报。
+    """
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
     goal = runner.create_goal(
         _GoalCreate(
             session_id=req.session_id,
             description=req.description,
             max_loops=req.max_loops,
-        )
+        ),
+        tenant_id=identity.tenant_id,
     )
     if not goal:
         raise HTTPException(409, "Admission denied — session already has active/blocked goal")
@@ -642,59 +650,91 @@ async def create_goal(req: GoalCreateRequest):
 async def list_goals(
     session_id: str = Query(default=None),
     state: str = Query(default=None),
+    authorization: str | None = Header(None),
 ):
-    """List goals, optionally filtered by session or state."""
+    """List goals, optionally filtered by session or state.
+
+    F3b-⑧：按派生租户过滤（None=系统视图仅引擎内部）。
+    """
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
-    gs = runner.list_goals(
-        session_id=session_id,
-        state=_GoalState(state) if state else None,
-    )
+    try:
+        gs = runner.list_goals(
+            session_id=session_id,
+            state=_GoalState(state) if state else None,
+            tenant_id=identity.tenant_id,
+        )
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
     return {"goals": [g.model_dump() for g in gs], "count": len(gs)}
 
 
 @router.get("/goals/{goal_id}")
-async def get_goal(goal_id: str):
+async def get_goal(goal_id: str, authorization: str | None = Header(None)):
     """Get goal details including event history."""
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
-    goal = runner.get_goal(goal_id)
+    try:
+        goal = runner.get_goal(goal_id, tenant_id=identity.tenant_id)
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
     if not goal:
         raise HTTPException(404, "Goal not found")
     return goal.model_dump()
 
 
 @router.delete("/goals/{goal_id}")
-async def delete_goal(goal_id: str):
+async def delete_goal(goal_id: str, authorization: str | None = Header(None)):
     """Delete a goal."""
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
-    if not runner.delete_goal(goal_id):
-        raise HTTPException(404, "Goal not found")
+    try:
+        if not runner.delete_goal(goal_id, tenant_id=identity.tenant_id):
+            raise HTTPException(404, "Goal not found")
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
     return {"status": "ok", "goal_id": goal_id}
 
 
 @router.post("/goals/{goal_id}/report")
-async def goal_report(goal_id: str, req: GoalReportRequest):
+async def goal_report(
+    goal_id: str, req: GoalReportRequest, authorization: str | None = Header(None)
+):
     """Agent self-report via goal_report protocol.
 
     注意：这是agent自报，不是独立验证。事件驱动计数决定是否真正COMPLETED。
     """
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
-    goal = runner.goal_report(
-        _GoalReport(
-            goal_id=goal_id,
-            status=req.status,
-            reason=req.reason,
+    try:
+        goal = runner.goal_report(
+            _GoalReport(
+                goal_id=goal_id,
+                status=req.status,
+                reason=req.reason,
+            ),
+            tenant_id=identity.tenant_id,
         )
-    )
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
     if not goal:
         raise HTTPException(404, "Goal not found")
     return goal.model_dump()
 
 
 @router.post("/goals/{goal_id}/events")
-async def record_goal_event(goal_id: str, req: GoalEventRequest):
+async def record_goal_event(
+    goal_id: str, req: GoalEventRequest, authorization: str | None = Header(None)
+):
     """Record a tool execution event for event-driven outcome counting."""
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
-    event = runner.record_event(goal_id, req.tool_name, req.result, req.detail)
+    try:
+        event = runner.record_event(
+            goal_id, req.tool_name, req.result, req.detail, tenant_id=identity.tenant_id
+        )
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
     if event is None:
         raise HTTPException(404, "Goal not found or already terminal")
     goal = runner.get_goal(goal_id)
@@ -702,30 +742,54 @@ async def record_goal_event(goal_id: str, req: GoalEventRequest):
 
 
 @router.post("/goals/{goal_id}/pause")
-async def pause_goal(goal_id: str, reason: str = Query(default="User paused")):
+async def pause_goal(
+    goal_id: str,
+    reason: str = Query(default="User paused"),
+    authorization: str | None = Header(None),
+):
     """Pause an active goal (user preemption). Not terminal."""
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
-    goal = runner.pause_goal(goal_id, reason)
+    try:
+        goal = runner.pause_goal(goal_id, reason, tenant_id=identity.tenant_id)
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
     if not goal:
         raise HTTPException(404, "Goal not found")
     return goal.model_dump()
 
 
 @router.post("/goals/{goal_id}/resume")
-async def resume_goal(goal_id: str, reason: str = Query(default="User resumed")):
+async def resume_goal(
+    goal_id: str,
+    reason: str = Query(default="User resumed"),
+    authorization: str | None = Header(None),
+):
     """Resume a paused goal. BLOCKED goals require goal_report first."""
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
-    goal = runner.resume_goal(goal_id, reason)
+    try:
+        goal = runner.resume_goal(goal_id, reason, tenant_id=identity.tenant_id)
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
     if not goal:
         raise HTTPException(400, "Cannot resume — goal not found, terminal, or BLOCKED")
     return goal.model_dump()
 
 
 @router.post("/goals/{goal_id}/cancel")
-async def cancel_goal(goal_id: str, reason: str = Query(default="User cancelled")):
+async def cancel_goal(
+    goal_id: str,
+    reason: str = Query(default="User cancelled"),
+    authorization: str | None = Header(None),
+):
     """Cancel a goal → FAILED terminal state."""
+    identity = bind_identity(authorization)
     runner = get_goal_runner()
-    goal = runner.cancel_goal(goal_id, reason)
+    try:
+        goal = runner.cancel_goal(goal_id, reason, tenant_id=identity.tenant_id)
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
     if not goal:
         raise HTTPException(404, "Goal not found")
     return goal.model_dump()
