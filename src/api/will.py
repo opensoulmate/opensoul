@@ -995,10 +995,14 @@ class WakeupScheduleRequest(BaseModel):
 
 
 @router.post("/wakeup/schedule")
-async def wakeup_schedule(req: WakeupScheduleRequest):
-    """记录一次 ScheduleWakeup 自报：钳制延迟 + noop streak + 折叠状态。"""
+async def wakeup_schedule(req: WakeupScheduleRequest, authorization: str | None = Header(None)):
+    """记录一次 ScheduleWakeup 自报：钳制延迟 + noop streak + 折叠状态。
+
+    F3b-⑧c：行归属租户从认证身份派生（bind_identity，匿名='default'），禁自报。
+    """
     from src.will.wakeup import get_wakeup_scheduler
 
+    identity = bind_identity(authorization)
     try:
         event = get_wakeup_scheduler().record(
             reason=req.reason,
@@ -1008,6 +1012,7 @@ async def wakeup_schedule(req: WakeupScheduleRequest):
             agent_id=req.agent_id,
             session_id=req.session_id,
             source=req.source,
+            tenant_id=identity.tenant_id,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -1015,33 +1020,57 @@ async def wakeup_schedule(req: WakeupScheduleRequest):
 
 
 @router.get("/wakeup/status")
-async def wakeup_status(agent_id: str = "default", session_id: str = ""):
-    """唤醒循环状态：active / current_streak / next_wakeup_at / 倒计时。"""
+async def wakeup_status(
+    agent_id: str = "default",
+    session_id: str = "",
+    authorization: str | None = Header(None),
+):
+    """唤醒循环状态：active / current_streak / next_wakeup_at / 倒计时。
+
+    F3b-⑧c：按派生租户过滤（跨租户循环恒不可见）。
+    """
     from src.will.wakeup import get_wakeup_scheduler
 
-    return get_wakeup_scheduler().status(agent_id=agent_id, session_id=session_id)
+    identity = bind_identity(authorization)
+    return get_wakeup_scheduler().status(
+        agent_id=agent_id, session_id=session_id, tenant_id=identity.tenant_id
+    )
 
 
 @router.get("/wakeup/folded")
 async def wakeup_folded(
-    agent_id: str = "default", session_id: str = "", limit: int = Query(default=50)
+    agent_id: str = "default",
+    session_id: str = "",
+    limit: int = Query(default=50),
+    authorization: str | None = Header(None),
 ):
-    """折叠显示：连续 noop 折叠成一个 noop_streak 块（count/streak_max/时间段/全部reason）。"""
+    """折叠显示：连续 noop 折叠成一个 noop_streak 块（count/streak_max/时间段/全部reason）。
+
+    F3b-⑧c：按派生租户过滤（跨租户循环恒不可见）。
+    """
     from src.will.wakeup import get_wakeup_scheduler
 
-    return get_wakeup_scheduler().folded_view(agent_id=agent_id, session_id=session_id, limit=limit)
+    identity = bind_identity(authorization)
+    return get_wakeup_scheduler().folded_view(
+        agent_id=agent_id, session_id=session_id, limit=limit, tenant_id=identity.tenant_id
+    )
 
 
 @router.get("/wakeup/overview")
-async def wakeup_overview(include_test: bool = Query(default=False)):
+async def wakeup_overview(
+    include_test: bool = Query(default=False), authorization: str | None = Header(None)
+):
     """全部唤醒循环状态聚合（monitoring面板数据源：不指定key一屏看全）。
 
     每个 (agent_id, session_id) 键给 status() 同语义摘要（active/streak/倒计时/
     fire执行侧状态），前端Wakeup面板按此渲染，逐key展开再查/wakeup/folded。
-    include_test 默认False：source='test' 测试循环不进面板（真实唤醒循环一屏可见）。"""
+    include_test 默认False：source='test' 测试循环不进面板（真实唤醒循环一屏可见）。
+    F3b-⑧c：按派生租户过滤（跨租户循环恒不进面板，reason 全文不跨租户泄露）。
+    """
     from src.will.wakeup import get_wakeup_scheduler
 
-    return get_wakeup_scheduler().overview(include_test=include_test)
+    identity = bind_identity(authorization)
+    return get_wakeup_scheduler().overview(include_test=include_test, tenant_id=identity.tenant_id)
 
 
 # ── 执行侧闭环（claude-code runtime"到点重新唤醒agent"）──
@@ -1061,20 +1090,31 @@ class WakeupFireResultRequest(BaseModel):
 
 
 @router.get("/wakeup/due")
-async def wakeup_due():
-    """到点应唤醒的事件（executor轮询入口；已领取/已终结的不再返回）。"""
+async def wakeup_due(authorization: str | None = Header(None)):
+    """到点应唤醒的事件（executor轮询入口；已领取/已终结的不再返回）。
+
+    F3b-⑧c：按派生租户过滤（跨租户到点事件恒不返回，reason 全文不跨租户泄露）。
+    """
     from src.will.wakeup import get_wakeup_scheduler
 
-    due = get_wakeup_scheduler().due_wakeups()
+    identity = bind_identity(authorization)
+    due = get_wakeup_scheduler().due_wakeups(tenant_id=identity.tenant_id)
     return {"count": len(due), "due": due}
 
 
 @router.post("/wakeup/claim")
-async def wakeup_claim(req: WakeupClaimRequest):
-    """CAS领取执行权：并发领取只有一个赢家（409=已被领取/已终结/超重试上限）。"""
-    from src.will.wakeup import get_wakeup_scheduler
+async def wakeup_claim(req: WakeupClaimRequest, authorization: str | None = Header(None)):
+    """CAS领取执行权：并发领取只有一个赢家（409=已被领取/已终结/超重试上限）。
 
-    event = get_wakeup_scheduler().claim_fire(req.event_id)
+    F3b-⑧c：by-ID 写闸门（跨租户→403 带真因，闸门前置于状态检查）。
+    """
+    from src.will.wakeup import WakeupAccessDenied, get_wakeup_scheduler
+
+    identity = bind_identity(authorization)
+    try:
+        event = get_wakeup_scheduler().claim_fire(req.event_id, tenant_id=identity.tenant_id)
+    except WakeupAccessDenied as e:
+        raise HTTPException(403, f"wakeup access denied: {e.reason}")
     if event is None:
         raise HTTPException(
             409,
@@ -1084,25 +1124,38 @@ async def wakeup_claim(req: WakeupClaimRequest):
 
 
 @router.post("/wakeup/fire-result")
-async def wakeup_fire_result(req: WakeupFireResultRequest):
-    """执行结果回执：失败→释放重试或EXHAUSTED终态（mem0 §1.1失败必须可见）。"""
-    from src.will.wakeup import get_wakeup_scheduler
+async def wakeup_fire_result(
+    req: WakeupFireResultRequest, authorization: str | None = Header(None)
+):
+    """执行结果回执：失败→释放重试或EXHAUSTED终态（mem0 §1.1失败必须可见）。
 
+    F3b-⑧c：by-ID 写闸门（跨租户→403 行零改写）。
+    """
+    from src.will.wakeup import WakeupAccessDenied, get_wakeup_scheduler
+
+    identity = bind_identity(authorization)
     try:
-        return get_wakeup_scheduler().ack_fire(req.event_id, ok=req.ok, error=req.error)
+        return get_wakeup_scheduler().ack_fire(
+            req.event_id, ok=req.ok, error=req.error, tenant_id=identity.tenant_id
+        )
+    except WakeupAccessDenied as e:
+        raise HTTPException(403, f"wakeup access denied: {e.reason}")
     except ValueError as e:
         raise HTTPException(404, str(e))
 
 
 @router.post("/wakeup/purge")
-async def wakeup_purge(source: str = ""):
+async def wakeup_purge(source: str = "", authorization: str | None = Header(None)):
     """清理唤醒事件 — source='test'：provenance精确打击（只清标记行，不按名字猜）。
 
     live测试收编约定：测试schedule声明source='test'，跑完自清本表
-    （jobs/purge同款；零过滤拒绝——无source=DELETE全表，误清footgun）。"""
+    （jobs/purge同款；零过滤拒绝——无source=DELETE全表，误清footgun）。
+    F3b-⑧c：按派生租户清（"只给租户"的清理不得变相清他租户历史）。
+    """
     from src.will.wakeup import get_wakeup_scheduler
 
+    identity = bind_identity(authorization)
     try:
-        return get_wakeup_scheduler().purge(source=source)
+        return get_wakeup_scheduler().purge(source=source, tenant_id=identity.tenant_id)
     except ValueError as e:
         raise HTTPException(400, str(e))

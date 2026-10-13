@@ -25,10 +25,16 @@ FastAPI 线程池/asyncio.to_thread 场景）。表结构幂等（CREATE TABLE I
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 import time
 from pathlib import Path
+
+from src.nest.isolation import IsolationEngine, ResourceType
+from src.nest.tenant import tenant_namespace
+
+from .checkpoint import DEFAULT_TENANT
 
 # claude-code：delaySeconds 被 runtime 钳到 [60, 3600]
 MIN_WAKEUP_DELAY_S = 60.0
@@ -38,6 +44,20 @@ REASON_MAX_CHARS = 500
 # 执行侧唤醒循环（claude-code runtime"到点重新唤醒agent"）：fire失败重试上限。
 # 超限后事件进 EXHAUSTED 终态（fired_at 保持 + last_fire_error 留痕），绝不无限重试。
 MAX_FIRE_ATTEMPTS = 5
+
+
+class WakeupAccessDenied(Exception):
+    """跨租户唤醒面访问被 IsolationEngine 拒绝（API 层映射 403，禁静默当 not_found）。
+
+    F3b-⑧c（2026-10-13）：与 GoalAccessDenied/DAGPlanAccessDenied 同族——
+    verdict=check_access 原始回包（allowed/reason/namespaced_id），审计留痕在
+    IsolationEngine 审计日志（data/nest.db）。
+    """
+
+    def __init__(self, reason: str, verdict: dict | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.verdict = verdict or {}
 
 
 def clamp_delay(delay_seconds: float) -> tuple[float, float, bool]:
@@ -65,7 +85,51 @@ class WakeupScheduler:
     def __init__(self, db_path: str = ""):
         self._db_path = db_path or str(Path.home() / "opensoul" / "data" / "wakeup.db")
         self._lock = threading.Lock()
+        # F3b-⑧c：隔离引擎按 NEST_DB env 值缓存（conftest 全测试隔离自动换引擎，
+        # DAGPlanner._iso_cache 同款纪律）；懒构造=首个 gate 调用才建 NestStore，
+        # 系统路径（tenant_id=None）零生产库接触。
+        self._iso_cache: tuple[str, IsolationEngine] | None = None
         self._init_db()
+
+    # ── F3b-⑧c 租户闸门 ─────────────────────────────────────────────
+    @property
+    def isolation(self) -> IsolationEngine:
+        """隔离引擎（check_access 真执行点；审计日志落 NestStore=data/nest.db）。"""
+        key = os.environ.get("NEST_DB") or ""
+        if self._iso_cache is None or self._iso_cache[0] != key:
+            self._iso_cache = (key, IsolationEngine())
+        return self._iso_cache[1]
+
+    def gate(self, tenant_id: str, row_tenant: str, event_id: int, action: str) -> None:
+        """by-ID 访问闸门：IsolationEngine.check_access 真执行（F3b-⑧c）。
+
+        资源 ID=namespaced_id(row_tenant ns, event_id)——namespace 前缀是行归属
+        租户的 ns（审计语义与 F3b-⑧b DAGPlanGate 同构）；跨租户（allowed=False）
+        → WakeupAccessDenied 上抛，禁静默当 not_found/假成功。
+        """
+        verdict = self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.WAKEUP_EVENT,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(row_tenant), str(event_id)),
+            action=action,
+        )
+        if not verdict.get("allowed", False):
+            raise WakeupAccessDenied(verdict.get("reason", "access denied"), verdict)
+
+    def gate_bulk(self, tenant_id: str, action: str) -> None:
+        """bulk 操作（status/folded/overview/due/purge）审计留痕：执行隔离由查询
+        过滤承担，引擎侧记一次 namespace 自匹配访问（audit_access="Log all access attempts"）。"""
+        self.isolation.check_access(
+            tenant_namespace=tenant_namespace(tenant_id),
+            resource_type=ResourceType.WAKEUP_EVENT,
+            resource_id=self.isolation.namespaced_id(tenant_namespace(tenant_id), "*"),
+            action=action,
+        )
+
+    @staticmethod
+    def _tenant_val(tenant_id: str | None) -> str:
+        """行归属键归一：缺失/空白→'default'（与生产分布一致，键派生故障绝不吃掉落库）。"""
+        return (tenant_id or "").strip() or DEFAULT_TENANT
 
     # ── 存储 ────────────────────────────────────────────────
 
@@ -95,7 +159,8 @@ class WakeupScheduler:
                     source TEXT NOT NULL DEFAULT '',
                     fired_at REAL,
                     fire_attempts INTEGER NOT NULL DEFAULT 0,
-                    last_fire_error TEXT NOT NULL DEFAULT ''
+                    last_fire_error TEXT NOT NULL DEFAULT '',
+                    tenant_id TEXT NOT NULL DEFAULT 'default'
                 )
                 """
             )
@@ -119,9 +184,17 @@ class WakeupScheduler:
                     "last_fire_error",
                     "ALTER TABLE wakeup_events ADD COLUMN last_fire_error TEXT NOT NULL DEFAULT ''",
                 ),
+                # F3b-⑧c：租户列（存量行随 DEFAULT 'default' 回填，与生产分布一致）
+                (
+                    "tenant_id",
+                    "ALTER TABLE wakeup_events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'",
+                ),
             ):
                 if col not in existing:
                     conn.execute(ddl)
+            # F3b-⑧c：租户索引必须在补列之后建（老库形态先建索引=no such column，
+            # F3b-③c-2① 坑记档延续）。
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_wakeup_tenant ON wakeup_events(tenant_id)")
 
     @staticmethod
     def _key(agent_id: str, session_id: str) -> tuple[str, str]:
@@ -133,6 +206,8 @@ class WakeupScheduler:
             "event_id": row["id"],
             "agent_id": row["agent_id"],
             "session_id": row["session_id"],
+            # F3b-⑧c：加性契约键（行归属可观测）；老库行回填 'default'
+            "tenant_id": row["tenant_id"] or DEFAULT_TENANT,
             "ts": row["ts"],
             "requested_delay_s": row["requested_delay_s"],
             "delay_s": row["delay_s"],
@@ -233,12 +308,16 @@ class WakeupScheduler:
         agent_id: str = "default",
         session_id: str = "",
         source: str = "",
+        tenant_id: str | None = None,
     ) -> dict:
         """记录一次 ScheduleWakeup 自报。
 
         返回事件摘要：streak（当前连续noop计数）、folded（streak>=2 已进入折叠区）、
         next_wakeup_at（stop=True 时为 None）、clamped（是否被钳制）。
         ValueError：reason 为空（claude-code：reason 必填）。
+        F3b-⑧c：行归属租户=调用方身份派生（bind_identity），禁自报；
+        缺失/空白→'default'（与生产分布一致）；streak 判定按
+        (tenant_id, agent_id, session_id) 三键隔离（同名 key 跨租户=两个独立循环）。
         """
         text = _trim_reason(reason)
         if not text:
@@ -248,12 +327,13 @@ class WakeupScheduler:
         noop = bool(noop)
         now = time.time()
         aid, sid = self._key(agent_id, session_id)
+        tenant = self._tenant_val(tenant_id)
 
         with self._lock, self._conn() as conn:
             prev = conn.execute(
                 "SELECT * FROM wakeup_events WHERE agent_id=? AND session_id=? "
-                "ORDER BY ts DESC, id DESC LIMIT 1",
-                (aid, sid),
+                "AND tenant_id=? ORDER BY ts DESC, id DESC LIMIT 1",
+                (aid, sid, tenant),
             ).fetchone()
 
             # streak：连续 noop 计数。noop=False 立即归零（有进展就打断空转统计）；
@@ -269,8 +349,8 @@ class WakeupScheduler:
             cur = conn.execute(
                 "INSERT INTO wakeup_events "
                 "(agent_id, session_id, ts, requested_delay_s, delay_s, clamped, "
-                " reason, noop, streak, stopped, next_wakeup_at, source) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                " reason, noop, streak, stopped, next_wakeup_at, source, tenant_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     aid,
                     sid,
@@ -284,6 +364,7 @@ class WakeupScheduler:
                     1 if stop else 0,
                     next_at,
                     source or "",
+                    tenant,
                 ),
             )
             event_id = cur.lastrowid
@@ -292,6 +373,7 @@ class WakeupScheduler:
             "event_id": event_id,
             "agent_id": aid,
             "session_id": sid,
+            "tenant_id": tenant,
             "reason": text,
             "noop": noop,
             "stop": stop,
@@ -310,35 +392,45 @@ class WakeupScheduler:
 
     # ── 查询：status（"它现在在干嘛"） ────────────────────────
 
-    def status(self, agent_id: str = "default", session_id: str = "") -> dict:
-        """当前唤醒循环状态：active / current_streak / next_wakeup_at / 倒计时。"""
+    def status(
+        self, agent_id: str = "default", session_id: str = "", tenant_id: str | None = None
+    ) -> dict:
+        """当前唤醒循环状态：active / current_streak / next_wakeup_at / 倒计时。
+
+        F3b-⑧c：tenant_id=None=系统视图（引擎内部/维护路径）不过滤不闸；
+        显式租户=按行归属键过滤 + bulk 审计留痕（跨租户循环恒不可见）。
+        """
         aid, sid = self._key(agent_id, session_id)
         now = time.time()
+        tenant = self._tenant_val(tenant_id) if tenant_id is not None else None
+        where = "agent_id=? AND session_id=?"
+        base: tuple = (aid, sid)
+        if tenant is not None:
+            where += " AND tenant_id=?"
+            base = (aid, sid, tenant)
+            self.gate_bulk(tenant, "read")
         with self._lock, self._conn() as conn:
             row = conn.execute(
-                "SELECT * FROM wakeup_events WHERE agent_id=? AND session_id=? "
-                "ORDER BY ts DESC, id DESC LIMIT 1",
-                (aid, sid),
+                f"SELECT * FROM wakeup_events WHERE {where} ORDER BY ts DESC, id DESC LIMIT 1",
+                base,
             ).fetchone()
             total = conn.execute(
-                "SELECT COUNT(*) AS n FROM wakeup_events WHERE agent_id=? AND session_id=?",
-                (aid, sid),
+                f"SELECT COUNT(*) AS n FROM wakeup_events WHERE {where}",
+                base,
             ).fetchone()["n"]
             noop_n = conn.execute(
-                "SELECT COUNT(*) AS n FROM wakeup_events "
-                "WHERE agent_id=? AND session_id=? AND noop=1 AND stopped=0",
-                (aid, sid),
+                f"SELECT COUNT(*) AS n FROM wakeup_events WHERE {where} AND noop=1 AND stopped=0",
+                base,
             ).fetchone()["n"]
             fired_n = conn.execute(
-                "SELECT COUNT(*) AS n FROM wakeup_events "
-                "WHERE agent_id=? AND session_id=? AND fired_at IS NOT NULL "
+                f"SELECT COUNT(*) AS n FROM wakeup_events WHERE {where} AND fired_at IS NOT NULL "
                 "AND last_fire_error=''",
-                (aid, sid),
+                base,
             ).fetchone()["n"]
             exhausted_n = conn.execute(
-                "SELECT COUNT(*) AS n FROM wakeup_events "
-                "WHERE agent_id=? AND session_id=? AND last_fire_error LIKE 'EXHAUSTED%'",
-                (aid, sid),
+                f"SELECT COUNT(*) AS n FROM wakeup_events WHERE {where} "
+                "AND last_fire_error LIKE 'EXHAUSTED%'",
+                base,
             ).fetchone()["n"]
 
         ev = self._row_to_event(row) if row is not None else None
@@ -360,23 +452,31 @@ class WakeupScheduler:
         agent_id: str = "default",
         session_id: str = "",
         limit: int = 50,
+        tenant_id: str | None = None,
     ) -> dict:
         """折叠显示：连续 noop 折叠成一个 {kind:"noop_streak", count:N} 块并统计 streak。
 
         返回 {"items": [...], "current_streak": n, "active": bool, "total_events": N}。
         items 按时间倒序（最新在前）；折叠块覆盖它折叠掉的连续 noop 段（时间正序聚合）。
+        F3b-⑧c：tenant_id=None=系统视图；显式租户=按行归属键过滤 + bulk 审计留痕。
         """
         aid, sid = self._key(agent_id, session_id)
         limit = max(1, min(500, int(limit or 50)))
+        tenant = self._tenant_val(tenant_id) if tenant_id is not None else None
+        where = "agent_id=? AND session_id=?"
+        base: tuple = (aid, sid)
+        if tenant is not None:
+            where += " AND tenant_id=?"
+            base = (aid, sid, tenant)
+            self.gate_bulk(tenant, "read")
         with self._lock, self._conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM wakeup_events WHERE agent_id=? AND session_id=? "
-                "ORDER BY ts DESC, id DESC LIMIT ?",
-                (aid, sid, limit),
+                f"SELECT * FROM wakeup_events WHERE {where} ORDER BY ts DESC, id DESC LIMIT ?",
+                (*base, limit),
             ).fetchall()
             total = conn.execute(
-                "SELECT COUNT(*) AS n FROM wakeup_events WHERE agent_id=? AND session_id=?",
-                (aid, sid),
+                f"SELECT COUNT(*) AS n FROM wakeup_events WHERE {where}",
+                base,
             ).fetchone()["n"]
 
         # 先按时间正序折叠连续 noop 段（>=2 才折叠成块；单个 noop 原样显示），
@@ -434,7 +534,7 @@ class WakeupScheduler:
 
     # ── 查询：overview（monitoring面板：全部唤醒循环一屏可见） ──
 
-    def overview(self, include_test: bool = False) -> dict:
+    def overview(self, include_test: bool = False, tenant_id: str | None = None) -> dict:
         """全部 (agent_id, session_id) 唤醒循环的状态聚合——monitoring面板数据源。
 
         每个键经 _status_payload 与 status() 同一语义（判定逻辑单一真源，不复制）；
@@ -449,12 +549,23 @@ class WakeupScheduler:
 
         include_test=False（默认）：source='test' 的唤醒循环不进面板——monitoring
         面板只呈现真实唤醒循环（live测试收编轮：190/196行测试产物曾把"我都不知道
-        他们在干嘛"面板刷成129个假循环）。include_test=True 供测试/排查显式查看。"""
+        他们在干嘛"面板刷成129个假循环）。include_test=True 供测试/排查显式查看。
+
+        F3b-⑧c：tenant_id=None=系统视图（维护/排查路径）；显式租户=按行归属键
+        过滤（跨租户循环恒不进面板，reason 全文不跨租户泄露）+ bulk 审计留痕。"""
         now = time.time()
+        tenant = self._tenant_val(tenant_id) if tenant_id is not None else None
+        flt = ""
+        fparams: tuple = ()
+        if tenant is not None:
+            flt = " WHERE tenant_id=?"
+            fparams = (tenant,)
+            self.gate_bulk(tenant, "list")
         with self._lock, self._conn() as conn:
             rows = conn.execute(
                 "SELECT * FROM wakeup_events WHERE id IN ("
-                " SELECT MAX(id) FROM wakeup_events GROUP BY agent_id, session_id)"
+                f" SELECT MAX(id) FROM wakeup_events{flt} GROUP BY agent_id, session_id)",
+                fparams,
             ).fetchall()
             counts = {
                 (r["agent_id"], r["session_id"]): r
@@ -465,7 +576,8 @@ class WakeupScheduler:
                     "THEN 1 ELSE 0 END) AS fired_n,"
                     " SUM(CASE WHEN last_fire_error LIKE 'EXHAUSTED%' "
                     "THEN 1 ELSE 0 END) AS exhausted_n"
-                    " FROM wakeup_events GROUP BY agent_id, session_id"
+                    f" FROM wakeup_events{flt} GROUP BY agent_id, session_id",
+                    fparams,
                 ).fetchall()
             }
         loops = []
@@ -496,21 +608,32 @@ class WakeupScheduler:
 
     # ── 调度：due_wakeups（执行侧按此拉取到点唤醒） ───────────
 
-    def due_wakeups(self, now: float | None = None) -> list[dict]:
+    def due_wakeups(self, now: float | None = None, tenant_id: str | None = None) -> list[dict]:
         """到点应唤醒的循环（每个 (agent_id, session_id) 取最新事件判定——
         stop事件是循环终态，必须参与"最新"判定，否则旧的未stop事件会复活成due）。
 
         执行侧闭环过滤：已被领取执行权（fired_at非空）或重试用尽（EXHAUSTED）的
         事件不再返回——at-most-once，双实例executor靠claim_fire CAS保证不双跑。
-        失败被ack_fire释放回 fired_at=NULL 后重新可见=自动进入重试。"""
+        失败被ack_fire释放回 fired_at=NULL 后重新可见=自动进入重试。
+
+        F3b-⑧c：tenant_id=None=系统视图（引擎内部）；显式租户=按行归属键过滤
+        （跨租户到点事件恒不返回，reason 全文不跨租户泄露）+ bulk 审计留痕。"""
         now = time.time() if now is None else now
+        tenant = self._tenant_val(tenant_id) if tenant_id is not None else None
+        flt = ""
+        fparams: tuple = ()
+        if tenant is not None:
+            flt = " WHERE tenant_id=?"
+            fparams = (tenant,)
+            self.gate_bulk(tenant, "read")
         with self._lock, self._conn() as conn:
             # 每key只取最新一行（多轮遗留"全表扫描取每key最新"销账）：id自增≡ts序
             # （record()是唯一写入路径，ts=now），MAX(id) per key 即最新事件——
             # 不再把全表加载进Python做per-key去重，行数=键数而非事件总数。
             rows = conn.execute(
                 "SELECT * FROM wakeup_events WHERE id IN ("
-                " SELECT MAX(id) FROM wakeup_events GROUP BY agent_id, session_id)"
+                f" SELECT MAX(id) FROM wakeup_events{flt} GROUP BY agent_id, session_id)",
+                fparams,
             ).fetchall()
         latest: dict[tuple[str, str], dict] = {}
         for r in rows:
@@ -522,13 +645,31 @@ class WakeupScheduler:
 
     # ── 执行：claim_fire / ack_fire（executor到点真正"再醒"） ──
 
-    def claim_fire(self, event_id: int) -> dict | None:
+    def claim_fire(self, event_id: int, tenant_id: str | None = None) -> dict | None:
         """CAS领取一次到点唤醒的执行权（at-most-once）。
 
         UPDATE ... WHERE fired_at IS NULL AND fire_attempts < MAX 的 rowcount==1
         即唯一赢家（双实例executor并发领取时输家拿None，绝不双跑）。
-        领取即 fire_attempts+1（失败重试计数在领取时发生，ack只决定释放/终结）。"""
+        领取即 fire_attempts+1（失败重试计数在领取时发生，ack只决定释放/终结）。
+
+        F3b-⑧c：显式租户=by-ID 写闸门真执行（跨租户→WakeupAccessDenied→403，
+        闸门前置于状态检查——禁用 None/409 差分泄露他租户事件的领取状态）；
+        缺行=None 契约不变；tenant_id=None=系统路径语义不变。
+        """
         now = time.time()
+        with self._lock, self._conn() as conn:
+            pre = conn.execute(
+                "SELECT * FROM wakeup_events WHERE id=?", (int(event_id),)
+            ).fetchone()
+        if pre is None:
+            return None
+        if tenant_id is not None:
+            self.gate(
+                tenant_id,
+                self._tenant_val(pre["tenant_id"]),
+                int(event_id),
+                "write",
+            )
         with self._lock, self._conn() as conn:
             cur = conn.execute(
                 "UPDATE wakeup_events SET fired_at=?, fire_attempts=fire_attempts+1 "
@@ -542,10 +683,16 @@ class WakeupScheduler:
             ).fetchone()
         return self._row_to_event(row) if row is not None else None
 
-    def ack_fire(self, event_id: int, ok: bool, error: str = "") -> dict:
+    def ack_fire(
+        self, event_id: int, ok: bool, error: str = "", tenant_id: str | None = None
+    ) -> dict:
         """执行结果回执。ok=True：保持fired终态；ok=False：
         - 未达MAX_FIRE_ATTEMPTS → 释放（fired_at=NULL）重新可见=自动重试；
-        - 已达上限 → EXHAUSTED终态（fired_at保持+last_fire_error留痕），绝不再烧。"""
+        - 已达上限 → EXHAUSTED终态（fired_at保持+last_fire_error留痕），绝不再烧。
+
+        F3b-⑧c：显式租户=by-ID 写闸门真执行（跨租户→WakeupAccessDenied→403
+        行零改写，闸门前置于状态检查）；缺行 ValueError 契约不变（API 404）；
+        tenant_id=None=系统路径语义不变。"""
         text = _trim_reason(error)
         with self._lock, self._conn() as conn:
             row = conn.execute(
@@ -553,6 +700,13 @@ class WakeupScheduler:
             ).fetchone()
             if row is None:
                 raise ValueError(f"wakeup事件不存在: {event_id}")
+            if tenant_id is not None:
+                self.gate(
+                    tenant_id,
+                    self._tenant_val(row["tenant_id"]),
+                    int(event_id),
+                    "write",
+                )
             attempts = int(row["fire_attempts"])
             if ok:
                 conn.execute(
@@ -587,7 +741,7 @@ class WakeupScheduler:
 
     # ── 清理：purge（jobs/purge同款provenance精确打击） ──
 
-    def purge(self, source: str) -> dict:
+    def purge(self, source: str, tenant_id: str | None = None) -> dict:
         """按 source 清理唤醒事件（只清schema级标记行，不按名字猜——
         jobs.source provenance轮同款哲学："清理责任在产生侧，只认标记"）。
 
@@ -596,12 +750,24 @@ class WakeupScheduler:
         _is_due_now 永久排除（清理失败也不会点火真实唤醒）。
 
         ValueError：source 为空——零过滤=DELETE全表，误清footgun，拒绝
-        （api/will.py jobs/purge "零过滤拒绝"同款守卫）。"""
+        （api/will.py jobs/purge "零过滤拒绝"同款守卫）。
+
+        F3b-⑧c：tenant_id 显式=按行租户键清（F3b-③a jobs purge 纪律：
+        "只给租户"的清理不得变相清他租户历史）；tenant_id=None=系统清理
+        （按 source 全量，既有契约）。"""
         text = (source or "").strip()
         if not text:
             raise ValueError("purge requires source（零过滤=DELETE全表；显式指定source如'test'）")
+        tenant = self._tenant_val(tenant_id) if tenant_id is not None else None
+        if tenant is not None:
+            self.gate_bulk(tenant, "delete")
         with self._lock, self._conn() as conn:
-            cur = conn.execute("DELETE FROM wakeup_events WHERE source=?", (text,))
+            if tenant is None:
+                cur = conn.execute("DELETE FROM wakeup_events WHERE source=?", (text,))
+            else:
+                cur = conn.execute(
+                    "DELETE FROM wakeup_events WHERE source=? AND tenant_id=?", (text, tenant)
+                )
             deleted = int(cur.rowcount or 0)
         return {"source": text, "purged": deleted}
 

@@ -52,6 +52,7 @@ class ResourceType(StrEnum):
     AGENT_MESSAGE = "agent_message"  # F3b-③c-2②d（2026-10-12）：agent 协作消息面（agent_collaboration.db agent_messages 表）
     GOAL = "goal"  # F3b-⑧（2026-10-13）：will 目标面（will_goals.json）——goal 定义/状态面
     DAG_PLAN = "dag_plan"  # F3b-⑧b（2026-10-13）：will DAG 计划面（进程内 plans 字典）
+    WAKEUP_EVENT = "wakeup_event"  # F3b-⑧c（2026-10-13）：will 唤醒面（wakeup.db wakeup_events 表）
 
 
 @dataclass
@@ -154,6 +155,9 @@ class IsolationEngine:
         ),
         ResourceType.DAG_PLAN: IsolationPolicy(
             ResourceType.DAG_PLAN, namespace_scoped=True, cross_tenant_allowed=False
+        ),
+        ResourceType.WAKEUP_EVENT: IsolationPolicy(
+            ResourceType.WAKEUP_EVENT, namespace_scoped=True, cross_tenant_allowed=False
         ),
     }
 
