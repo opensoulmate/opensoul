@@ -243,6 +243,9 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
                 "risk": risk.overall_level,
                 "files": target_files,
             },
+            # F3b-⑨b-② 调用点接派生：身份派生租户键→record 行归属（闭"非 default
+            # 租户动作事件落 'default' 自我不可见"缺口首个调用点；匿名='default' 行值不变）
+            tenant_id=identity.tenant_id,
         )
     except Exception:
         pass
@@ -300,7 +303,14 @@ async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
         from src.nerve.event_bridge import emit
 
         status = "✅ 成功" if req.result.get("success") else "❌ 失败"
-        await emit("brain", "verify", f"🔍 {status}: {req.action[:100]}", req.result)
+        await emit(
+            "brain",
+            "verify",
+            f"🔍 {status}: {req.action[:100]}",
+            req.result,
+            # F3b-⑨b-② 调用点接派生（同 think：身份真源→行归属）
+            tenant_id=identity.tenant_id,
+        )
     except Exception:
         pass
 
