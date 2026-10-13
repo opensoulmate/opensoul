@@ -10,6 +10,7 @@ confirm 端点 approved=true 放行（不再重复要确认）/ false 终止，�
 
 import asyncio
 import time
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -80,7 +81,10 @@ def confirm_env(tmp_path, monkeypatch):
         conn = ai_groups.get_db()
         try:
             gid = "g-confirm-test"
-            now = "2026-10-12T12:00:00"
+            # F3b-⑨b-②b-1 顺手收口（时间炸弹修）：原硬编码 "2026-10-12T12:00:00"，
+            # 一旦墙钟越过 +24h 父任务行变超龄被 R2 清扫（2026-10-13 12:00 后全量必炸）。
+            # fixture 行=建行即"新鲜"语义，取真实 now 还原作者意图。
+            now = datetime.now().isoformat()
             conn.execute(
                 "INSERT OR REPLACE INTO ai_groups (id,name,description,status,created_at) VALUES (?,?,?,?,?)",
                 (gid, "confirm-gate", "", "active", now),
@@ -99,7 +103,10 @@ def confirm_env(tmp_path, monkeypatch):
         conn = ai_groups.get_db()
         try:
             gid, pid = "g-confirm-test", "t-chain-parent"
-            now = "2026-10-12T12:00:00"
+            # F3b-⑨b-②b-1 顺手收口（时间炸弹修）：原硬编码 "2026-10-12T12:00:00"，
+            # 一旦墙钟越过 +24h 父任务行变超龄被 R2 清扫（2026-10-13 12:00 后全量必炸）。
+            # fixture 行=建行即"新鲜"语义，取真实 now 还原作者意图。
+            now = datetime.now().isoformat()
             conn.execute(
                 "INSERT OR REPLACE INTO ai_groups (id,name,description,status,created_at) VALUES (?,?,?,?,?)",
                 (gid, "confirm-gate", "", "active", now),
