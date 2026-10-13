@@ -64,6 +64,8 @@ TL-②-⑥ 收口时刻（2026-10-13 20:30 CST）之后新增 **A 类行 = 0**�
 
 ## 建议处置（**全部待用户拍板，本拍未执行任何删除**）
 
+> 执行记录（2026-10-14，TL-④ 删除执行件①）：第 1 项中 **timeline A 类 8,612 行已按清单精确删**（删前逐行复核单一源判 A、备份 data/backups/timeline_pre_delete_20261014_002822.db（38,027 行全库快照，sha256 见报告）、回读 29,415=38,027−8,612 对平且 B/U 一行不动，报告 data/delete_timeline_test_residue_20261014.json）；其余（knowledge 391 级联/测试用户 4+2/e2e 租户 2/perm 审计 612/manifests 5/探针组 2）与第 3 项 perm 规则失效化仍未执行。
+
 1. **低风险可删（A 类）**：timeline 8,612 行、knowledge 391 行（级联 chunks/tags）、测试用户 4+2、e2e 租户 2、perm 决策审计 612 行、manifests 悬挂 5 条、探针组 A群组/B群组（delete_group 级联）。删前工具已留 event_id 全清单，可按清单精确删+备份。
 2. **须拍板取舍（B 类）**：nerve 风暴 22,030（删=丢 2026-08-18 安全日志史；建议保留）、mirror exec 666、pipeline 421、exports 308。
 3. **修生产行为（非删除）**：permission.db 105 条 test_dangerous_tool 活跃规则 + 2 条 p09-probe——测试残留规则仍在权限引擎生效，建议失效化（is_deleted=1），同样待拍板。
