@@ -610,3 +610,63 @@ def vein_client(tmp_path, monkeypatch):
     app.state.vein_client_uploader = tmp_uploader
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def immune_client(tmp_path, monkeypatch):
+    """immune API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db 与 ~/.hermes/opensoul/immune/permission.db（gene_client/
+    will_client/mirror_client/pipeline_client/soma_client/vein_client 同款路线；
+    timeline 测试隔离拆件② live 测试写方收编——test_immune.py +
+    test_permission_engine.py TestPermissionAPI 此前走 live :8090，服务进程把
+    ip_blacklisted 1 + permission_denied 2 事件写生产 timeline.db（2026-10-13
+    修前实测 3 行/轮逐行实证），且权限决策审计写生产 permission.db、测试还在
+    生产服务进程的内存单例（rate_limiter/moderator/ip_control/audit/intrusion）
+    上留状态）。测试面=真实 router/handler 代码，数据面换 tmp：
+    - 权限持久面：PermissionService(db_path=tmp)（修前缺省
+      ~/.hermes/opensoul/immune/permission.db）
+    - 六个模块单例每用例 fresh（monkeypatch 替换 src.api.immune 模块全局，
+      修前=生产服务进程内存单例）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位（_isolate_timeline_db）
+      —— push_event 进程内构造 TimelineStore 读 env，事件落本用例 tmp 库
+    app.state.immune_client_* 暴露 tmp 真源供隔离护栏断言。
+    src.api.immune 在 fixture 内延迟 import：模块 import 有单例构造副作用
+    （PermissionService() 缺省解析生产 permission.db 并幂等播种内置规则），
+    不能在 conftest 收集期全局 import。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.immune as immune_api
+    from src.immune.access_control import IPAccessControl
+    from src.immune.audit import AuditLogger
+    from src.immune.intrusion import IntrusionDetector
+    from src.immune.moderator import ContentModerator
+    from src.immune.permission_engine import PermissionService
+    from src.immune.rate_limiter import RateLimiter
+    from src.timeline.store import default_db_path
+
+    tmp_perm_db = str(tmp_path / "permission.db")
+    tmp_rate_limiter = RateLimiter()
+    tmp_moderator = ContentModerator()
+    tmp_ip_control = IPAccessControl()
+    tmp_audit = AuditLogger()
+    tmp_intrusion = IntrusionDetector()
+    tmp_permission_service = PermissionService(db_path=tmp_perm_db)
+    monkeypatch.setattr(immune_api, "rate_limiter", tmp_rate_limiter)
+    monkeypatch.setattr(immune_api, "moderator", tmp_moderator)
+    monkeypatch.setattr(immune_api, "ip_control", tmp_ip_control)
+    monkeypatch.setattr(immune_api, "audit", tmp_audit)
+    monkeypatch.setattr(immune_api, "intrusion", tmp_intrusion)
+    monkeypatch.setattr(immune_api, "permission_service", tmp_permission_service)
+
+    app = FastAPI()
+    app.include_router(immune_api.router, prefix="/api/immune")
+    app.state.immune_client_timeline_db = default_db_path()
+    app.state.immune_client_permission_db = tmp_perm_db
+    app.state.immune_client_permission_service = tmp_permission_service
+    app.state.immune_client_ip_control = tmp_ip_control
+    app.state.immune_client_rate_limiter = tmp_rate_limiter
+    app.state.immune_client_audit = tmp_audit
+    with TestClient(app) as c:
+        yield c

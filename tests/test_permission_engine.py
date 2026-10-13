@@ -358,8 +358,8 @@ class TestService:
 
 
 class TestPermissionAPI:
-    def test_check_endpoint_read_only(self, client):
-        resp = client.post(
+    def test_check_endpoint_read_only(self, immune_client):
+        resp = immune_client.post(
             "/api/immune/permission/check",
             json={
                 "tool_name": "read_file",
@@ -372,8 +372,8 @@ class TestPermissionAPI:
         data = resp.json()
         assert data["behavior"] == "allow"
 
-    def test_check_endpoint_hard_deny(self, client):
-        resp = client.post(
+    def test_check_endpoint_hard_deny(self, immune_client):
+        resp = immune_client.post(
             "/api/immune/permission/check",
             json={
                 "tool_name": "terminal",
@@ -386,15 +386,15 @@ class TestPermissionAPI:
         assert data["behavior"] == "deny"
         assert data["rule_source"] == "builtin"
 
-    def test_rules_list_includes_builtin(self, client):
-        resp = client.get("/api/immune/permission/rules")
+    def test_rules_list_includes_builtin(self, immune_client):
+        resp = immune_client.get("/api/immune/permission/rules")
         assert resp.status_code == 200
         rules = resp.json()["rules"]
         assert any(r["hard"] for r in rules)
         assert any(r["behavior"] == "ask" for r in rules)
 
-    def test_rule_add_and_delete(self, client):
-        resp = client.post(
+    def test_rule_add_and_delete(self, immune_client):
+        resp = immune_client.post(
             "/api/immune/permission/rules",
             json={
                 "tool_name": "terminal",
@@ -405,37 +405,37 @@ class TestPermissionAPI:
         )
         assert resp.status_code == 200
         rule_id = resp.json()["rule_id"]
-        resp2 = client.delete(f"/api/immune/permission/rules/{rule_id}")
+        resp2 = immune_client.delete(f"/api/immune/permission/rules/{rule_id}")
         assert resp2.status_code == 200
 
-    def test_rule_invalid_behavior(self, client):
-        resp = client.post(
+    def test_rule_invalid_behavior(self, immune_client):
+        resp = immune_client.post(
             "/api/immune/permission/rules",
             json={"tool_name": "terminal", "rule_content": "x", "behavior": "banana"},
         )
         assert resp.status_code == 400
 
-    def test_mode_get_set_roundtrip(self, client):
-        original = client.get("/api/immune/permission/mode").json()["mode"]
-        resp = client.put("/api/immune/permission/mode", json={"mode": "dont_ask"})
+    def test_mode_get_set_roundtrip(self, immune_client):
+        original = immune_client.get("/api/immune/permission/mode").json()["mode"]
+        resp = immune_client.put("/api/immune/permission/mode", json={"mode": "dont_ask"})
         assert resp.status_code == 200
-        assert client.get("/api/immune/permission/mode").json()["mode"] == "dont_ask"
+        assert immune_client.get("/api/immune/permission/mode").json()["mode"] == "dont_ask"
         # DONT_ASK下敏感读取被转DENY
-        resp2 = client.post(
+        resp2 = immune_client.post(
             "/api/immune/permission/check",
             json={"tool_name": "read_file", "arguments": {"path": "/home/u/.ssh/id_rsa"}},
         )
         assert resp2.json()["behavior"] == "deny"
         # 恢复原模式
-        client.put("/api/immune/permission/mode", json={"mode": original})
+        immune_client.put("/api/immune/permission/mode", json={"mode": original})
 
-    def test_mode_invalid(self, client):
-        resp = client.put("/api/immune/permission/mode", json={"mode": "nope"})
+    def test_mode_invalid(self, immune_client):
+        resp = immune_client.put("/api/immune/permission/mode", json={"mode": "nope"})
         assert resp.status_code == 400
 
-    def test_audit_and_outcome_flow(self, client):
+    def test_audit_and_outcome_flow(self, immune_client):
         # 触发一次ASK
-        r = client.post(
+        r = immune_client.post(
             "/api/immune/permission/check",
             json={
                 "tool_name": "terminal",
@@ -447,24 +447,24 @@ class TestPermissionAPI:
         decision_id = r.json()["decision_id"]
         assert decision_id
         # 回写人工审批结果
-        r2 = client.post(
+        r2 = immune_client.post(
             f"/api/immune/permission/approvals/{decision_id}",
             json={"outcome": "approved", "comment": "运维巡检"},
         )
         assert r2.status_code == 200
         # 审计查询可见
-        r3 = client.get("/api/immune/permission/audit", params={"outcome": "approved"})
+        r3 = immune_client.get("/api/immune/permission/audit", params={"outcome": "approved"})
         assert r3.status_code == 200
         ids = [e["decision_id"] for e in r3.json()["entries"]]
         assert decision_id in ids
         # 无效outcome拒绝
-        r4 = client.post(
+        r4 = immune_client.post(
             f"/api/immune/permission/approvals/{decision_id}", json={"outcome": "banana"}
         )
         assert r4.status_code in (400, 404)
 
-    def test_stats_endpoint(self, client):
-        resp = client.get("/api/immune/permission/stats")
+    def test_stats_endpoint(self, immune_client):
+        resp = immune_client.get("/api/immune/permission/stats")
         assert resp.status_code == 200
         data = resp.json()
         assert "decisions_total" in data and "active_rules" in data and "mode" in data
