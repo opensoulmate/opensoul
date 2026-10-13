@@ -670,3 +670,250 @@ def immune_client(tmp_path, monkeypatch):
     app.state.immune_client_audit = tmp_audit
     with TestClient(app) as c:
         yield c
+
+
+# cortex 知识图谱面 tmp 库预建 schema（_PIPELINE_KNOWLEDGE_DDL 核心业务表 +
+# GraphRAG/推荐/质量三面真实触达的 entities/relations/knowledge_entity_link——
+# 生产表历史建表，tmp 库开局补齐）
+_CORTEX_DDL = (
+    _PIPELINE_KNOWLEDGE_DDL
+    + """CREATE TABLE IF NOT EXISTS entities (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT DEFAULT '',
+    description TEXT DEFAULT '', properties TEXT DEFAULT '{}',
+    user_id TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS relations (
+    id TEXT PRIMARY KEY, source_id TEXT NOT NULL, target_id TEXT NOT NULL,
+    relation_type TEXT NOT NULL, properties TEXT DEFAULT '{}',
+    user_id TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS knowledge_entity_link (
+    id TEXT PRIMARY KEY, knowledge_id TEXT NOT NULL, entity_id TEXT NOT NULL);"""
+)
+
+
+@pytest.fixture()
+def cortex_client(tmp_path, monkeypatch):
+    """cortex-enhanced API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db 与 data/opensoul.db（gene_client/will_client/mirror_client/
+    pipeline_client/soma_client/vein_client/immune_client 同款路线；timeline 测试
+    隔离拆件② live 测试写方收编——test_cortex_enhanced.py 此前走 live :8090，
+    服务进程把 graphrag_build 事件写生产 timeline.db（2026-10-13 修前实测
+    1 行/轮；勘误如实记：TL-① 清单漏记 test_cortex.py——同面 1 行/轮
+    graphrag_build，本拍同探针逼出后同拍收编，fixture 同时挂基础 cortex router
+    服务 /api/cortex/health），且 graphrag build 把抽取的 entities/relations
+    写生产 opensoul.db 知识图谱面）。测试面=真实 router/handler 代码，数据面换 tmp：
+    - 知识图谱面：db_pool（src.api.cortex_enhanced 模块全局）→tmp SQLitePool
+      （tmp opensoul.db 预建真 schema+2 条种子知识，build 真抽取真落 tmp）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位（_isolate_timeline_db）
+      —— push_event 进程内构造 TimelineStore 读 env，事件落本用例 tmp 库
+    app.state.cortex_client_* 暴露 tmp 真源供隔离护栏断言。
+    src.api.cortex_enhanced 在 fixture 内延迟 import（单例构造副作用不进
+    conftest 收集期）。
+    """
+    import sqlite3 as _sqlite3
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.cortex as cortex_base_api
+    import src.api.cortex_enhanced as cortex_api
+    from src.config import settings
+    from src.database.postgres import SQLitePool
+    from src.timeline.store import default_db_path
+
+    tmp_os_db = tmp_path / "cortex_opensoul.db"
+    with _sqlite3.connect(tmp_os_db) as _c:
+        _c.executescript(_CORTEX_DDL)
+        _c.execute(
+            "INSERT INTO knowledge (id, user_id, title, content) VALUES (?,?,?,?)",
+            (
+                "k-cortex-a",
+                "default",
+                "华为交换机选型指南",
+                "华为技术有限公司生产华为交换机。北京研发中心使用Python。",
+            ),
+        )
+        _c.execute(
+            "INSERT INTO knowledge (id, user_id, title, content) VALUES (?,?,?,?)",
+            (
+                "k-cortex-b",
+                "default",
+                "数据中心存储方案",
+                "星辰科技公司提供存储服务器。建议采用分布式数据库。",
+            ),
+        )
+        _c.commit()
+    monkeypatch.setattr(settings, "database_url", f"sqlite:///{tmp_os_db}")
+    tmp_pool = SQLitePool()
+    monkeypatch.setattr(cortex_api, "db_pool", tmp_pool)
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        await tmp_pool.connect()  # tmp库startup时连接（真实SQLitePool数据面）
+        yield
+        await tmp_pool.disconnect()
+
+    app = FastAPI(lifespan=_lifespan)
+    app.include_router(cortex_base_api.router, prefix="/api/cortex")
+    app.include_router(cortex_api.router, prefix="/api/cortex")
+    app.state.cortex_client_timeline_db = default_db_path()
+    app.state.cortex_client_opensoul_db = str(tmp_os_db)
+    app.state.cortex_client_pool = tmp_pool
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
+def healer_client(tmp_path, monkeypatch):
+    """healer API隔离测试面：真实router + 零生产接触探针面，绝不写生产
+    data/timeline.db，也绝不打生产服务的修复/通知/审计端点（gene_client/
+    will_client/mirror_client/pipeline_client/soma_client/vein_client/
+    immune_client 同款路线；timeline 测试隔离拆件② live 测试写方收编——
+    test_healer.py 此前走 live :8090，服务进程把 diagnosis_all/heal_all 事件写
+    生产 timeline.db（2026-10-13 修前实测 2 行/轮），且 OrganHealer 探针/修复/
+    notify/audit 全打生产 :8090（heal 修复 POST 生产端点、notify POST 生产
+    /api/echo/send、audit POST 生产 /api/nerve/event——生产一旦不健康，测试
+    即写生产）。测试面=真实 router/handler 代码，数据面换 tmp：
+    - 探针/修复/通知/审计面：OrganHealer(base_url=死端口)——探测恒
+      ConnectError 走真实失败分支，修复/通知/审计 POST 死端口失败被既有
+      try/except 如实吞掉，零生产接触
+    - 历史/统计面：fresh OrganHealer 内存（修前=生产服务进程内存单例）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位
+    app.state.healer_client_* 暴露 tmp 真源供隔离护栏断言。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.healer as healer_api
+    from src.healer.diagnose import OrganHealer
+    from src.timeline.store import default_db_path
+
+    tmp_healer = OrganHealer(base_url="http://127.0.0.1:1")
+    monkeypatch.setattr(healer_api, "healer", tmp_healer)
+
+    app = FastAPI()
+    app.include_router(healer_api.router, prefix="/api/healer")
+    app.state.healer_client_timeline_db = default_db_path()
+    app.state.healer_client_healer = tmp_healer
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
+def marrow_client(tmp_path, monkeypatch):
+    """marrow API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db 与 ~/.opensoul/backups、~/.opensoul/exports（gene_client/
+    will_client/mirror_client/pipeline_client/soma_client/vein_client/
+    immune_client 同款路线；timeline 测试隔离拆件② live 测试写方收编——
+    test_marrow.py 此前走 live :8090，服务进程把 backup_created/
+    schedule_created 事件写生产 timeline.db（2026-10-13 修前实测 2 行/轮），
+    且备份 tar/manifests.json/schedules.json 写生产 ~/.opensoul/backups、
+    导出写生产 ~/.opensoul/exports）。测试面=真实 router/handler 代码，
+    数据面换 tmp：
+    - 备份面：BackupManager(backup_dir=tmp)（修前缺省 ~/.opensoul/backups）
+    - 调度面：BackupScheduler(tmp manager)（schedules.json 随 tmp backup_dir）
+      +src.api.marrow 模块级 scheduler.start() 启动的调度线程停掉（该线程按
+      生产 schedules.json 真建备份=生产写面）
+    - 导出面：DataMigrator(export_dir=tmp)（修前缺省 ~/.opensoul/exports）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位
+    app.state.marrow_client_* 暴露 tmp 真源供隔离护栏断言。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.marrow as marrow_api
+    from src.marrow.backup import BackupManager, BackupScheduler
+    from src.marrow.migrator import DataMigrator
+    from src.timeline.store import default_db_path
+
+    running = marrow_api.scheduler
+    if getattr(running, "_running", False):
+        running.stop()  # 模块级 start() 起的调度线程（生产 schedules 面）停掉
+    tmp_backup_dir = tmp_path / "backups"
+    tmp_export_dir = tmp_path / "exports"
+    tmp_manager = BackupManager(backup_dir=tmp_backup_dir)
+    tmp_scheduler = BackupScheduler(tmp_manager)
+    tmp_migrator = DataMigrator(export_dir=tmp_export_dir)
+    monkeypatch.setattr(marrow_api, "backup_manager", tmp_manager)
+    monkeypatch.setattr(marrow_api, "scheduler", tmp_scheduler)
+    monkeypatch.setattr(marrow_api, "migrator", tmp_migrator)
+
+    app = FastAPI()
+    app.include_router(marrow_api.router, prefix="/api/marrow")
+    app.state.marrow_client_timeline_db = default_db_path()
+    app.state.marrow_client_backup_dir = str(tmp_backup_dir)
+    app.state.marrow_client_export_dir = str(tmp_export_dir)
+    app.state.marrow_client_backup_manager = tmp_manager
+    app.state.marrow_client_scheduler = tmp_scheduler
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
+def echo_client(tmp_path, monkeypatch):
+    """echo API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db 与 data/echo/templates.db（gene_client/will_client/
+    mirror_client/pipeline_client/soma_client/vein_client/immune_client 同款
+    路线；timeline 测试隔离拆件② live 测试写方收编——test_echo.py 此前走
+    live :8090，服务进程把 message_sent 事件写生产 timeline.db（2026-10-13
+    修前实测 1 行/轮），且模板写生产 templates.db、通道配置/派发历史留生产
+    服务进程内存单例）。测试面=真实 router/handler 代码，数据面换 tmp：
+    - 模板面：TemplateEngine(db_path=tmp)（修前缺省
+      ~/opensoul/data/echo/templates.db）
+    - 派发面：fresh MessageDispatcher()（修前=生产服务进程内存单例）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位
+    app.state.echo_client_* 暴露 tmp 真源供隔离护栏断言。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.echo as echo_api
+    from src.echo.dispatcher import MessageDispatcher
+    from src.echo.templates import TemplateEngine
+    from src.timeline.store import default_db_path
+
+    tmp_templates_db = str(tmp_path / "echo_templates.db")
+    tmp_dispatcher = MessageDispatcher()
+    tmp_template_engine = TemplateEngine(db_path=tmp_templates_db)
+    monkeypatch.setattr(echo_api, "dispatcher", tmp_dispatcher)
+    monkeypatch.setattr(echo_api, "template_engine", tmp_template_engine)
+
+    app = FastAPI()
+    app.include_router(echo_api.router, prefix="/api/echo")
+    app.state.echo_client_timeline_db = default_db_path()
+    app.state.echo_client_templates_db = tmp_templates_db
+    app.state.echo_client_dispatcher = tmp_dispatcher
+    app.state.echo_client_template_engine = tmp_template_engine
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
+def link_client(tmp_path, monkeypatch):
+    """link API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db（gene_client/will_client/mirror_client/pipeline_client/
+    soma_client/vein_client/immune_client 同款路线；timeline 测试隔离拆件②
+    live 测试写方收编——test_link.py 此前走 live :8090，服务进程把
+    connector_created 事件写生产 timeline.db（2026-10-13 修前实测 1 行/轮），
+    且连接器/事件留生产服务进程内存单例）。测试面=真实 router/handler 代码，
+    数据面换 tmp：
+    - 连接器面：fresh IntegrationManager()（修前=生产服务进程内存单例，
+      测试连接器永不自清）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位
+    app.state.link_client_* 暴露 tmp 真源供隔离护栏断言。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.link as link_api
+    from src.link.connector import IntegrationManager
+    from src.timeline.store import default_db_path
+
+    tmp_manager = IntegrationManager()
+    monkeypatch.setattr(link_api, "manager", tmp_manager)
+
+    app = FastAPI()
+    app.include_router(link_api.router, prefix="/api/link")
+    app.state.link_client_timeline_db = default_db_path()
+    app.state.link_client_manager = tmp_manager
+    with TestClient(app) as c:
+        yield c

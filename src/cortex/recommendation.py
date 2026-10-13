@@ -12,6 +12,17 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _ts(value: Any) -> str | None:
+    """created_at 出线归一：datetime（PG/asyncpg）走 isoformat，TEXT（SQLite
+    时间戳恒为 text，生产 typeof 实证）原样透传。修前 .isoformat() 硬调对
+    SQLite TEXT 时间戳必炸——任何有知识行的用户 GET /recommend/trending|recent
+    恒 500（2026-10-13 live 实证），空结果面把它掩成 200。"""
+    if value is None:
+        return None
+    iso = getattr(value, "isoformat", None)
+    return iso() if iso else str(value)
+
+
 class RecommendationEngine:
     """Suggest related knowledge entries for a given item."""
 
@@ -122,7 +133,7 @@ class RecommendationEngine:
             {
                 "id": str(r["id"]),
                 "title": r["title"] or "",
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "created_at": _ts(r["created_at"]),
             }
             for r in rows
         ]
@@ -139,7 +150,7 @@ class RecommendationEngine:
             {
                 "id": str(r["id"]),
                 "title": r["title"] or "",
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "created_at": _ts(r["created_at"]),
             }
             for r in rows
         ]
