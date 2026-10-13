@@ -51,7 +51,7 @@ U 类主分布（不动）：brain/think 1,905（含自动开发 cron 真事件�
 | job_queue jobs | 0 | B 2（idempotency 含 test） | 其余 194=真实 hippo.dream 等 |
 | manifests.json | 5 条悬挂测试条目（test-sense-backup + 4×test_backup_integration，tar 已不在盘） | 真 55（Daily Data Backup） | |
 | ~/.opensoul/exports | 0 | B 308（export_export_*.json 齐整同构） | DataMigrator 测试导出 |
-| ~/.opensoul/sandboxes | 0 | U 4（随机 id 目录无法从名判） | |
+| ~/.opensoul/sandboxes | 0 | U 4（随机 id 目录；TL-⑭ 内容级清点：3 空目录 + 1×155B 演示快照，零用户数据） | 内容与出处证据见「sandboxes 内容级清点（TL-⑭）」 |
 | echo/mirror templates.db | 0 | 0（tpl-*/stpl-* 均为内置种子内容非残留） | |
 
 ### 3. 残留增长闸门（隔离是否真稳）
@@ -62,7 +62,21 @@ TL-②-⑥ 收口时刻（2026-10-13 20:30 CST）之后新增 **A 类行 = 0**�
 
 与工具输出逐值对平：stub-agent verify 1,138 ✓ / 192.168.99.99 275 ✓ / nerve 风暴 22,030 ✓ / `[Pipeline] test` 391 ✓ / perm t1+t2+api-test 567 ✓ / A+B+U=38,027=total ✓。
 
+## sandboxes 内容级清点（TL-⑭，2026-10-14）
+
+TL-③ 留档「随机 id 目录无法从名字判」的最后一面，本节以**内容级+出处级**证据补齐决策材料（只读，未删除）：
+
+| 目录 | mtime | 内容 | timeline 引用 | 出处（git 时间戳比对） |
+|---|---|---|---|---|
+| sandbox-3f79b4e6 | 2026-08-14 10:33:31 | snap-8354c13d.json 155B（name=initial, variables={env:staging}, log_length=1） | 0 | commit `3e51e462`「feat(mirror): OpenMirror 镜像系统 - 沙箱测试环境(创建/销毁/快照/变量/日志)」2026-08-14 10:33:38（提交前 7 秒）——该 commit 的开发验证跑，快照/变量功能验证产物 |
+| sandbox-36ab8f8a | 2026-08-15 06:32:27 | 空 | 0 | 2026-08-14~17 开发窗口（该窗口 131 个 commit）；早于 timeline 采集起点 2026-08-17 16:09，零引用是采集前史不是删除痕 |
+| sandbox-2ce51cab | 2026-08-16 23:52:43 | 空 | 0 | 同上 |
+| sandbox-bcf4e66d | 2026-08-18 06:48:40 | 空 | 1（evt_1787006920738 sandbox_from_template） | commit `1dacb9df`「feat: Echo message templates + Mirror sandbox templates」2026-08-18 06:48:49（提交前 9 秒）——内置模板种子（06:48:29 落 stpl-*）后从 stpl-agent-debug 实例化的功能验证产物 |
+
+**定性**：4 目录全部为**功能开发期验证产物**（目录 mtime 与对应 feature commit 提交时刻精确吻合到秒级），零用户数据（3 空目录 + 1×155B 演示快照，独立复算 find/du 4 目录/1 文件/155B 与工具逐值对平）；名字无硬标识按纪律仍判 U/other（classify_sandbox 宁窄勿滥，内容证据只作决策材料不改判）。**建议处置：删除（零数据损失，删前 tar+sha256 备份可整体回滚）——待用户拍板**。
+
 ## 建议处置（**全部待用户拍板，本拍未执行任何删除**）
+
 
 > 执行记录（2026-10-14，TL-④ 删除执行件①）：第 1 项中 **timeline A 类 8,612 行已按清单精确删**（删前逐行复核单一源判 A、备份 data/backups/timeline_pre_delete_20261014_002822.db（38,027 行全库快照，sha256 见报告）、回读 29,415=38,027−8,612 对平且 B/U 一行不动，报告 data/delete_timeline_test_residue_20261014.json）；其余（knowledge 391 级联/测试用户 4+2/e2e 租户 2/perm 审计 612/manifests 5/探针组 2）仍未执行。
 >

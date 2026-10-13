@@ -28,6 +28,7 @@ import os
 import re
 import sqlite3
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -95,6 +96,7 @@ A_MANIFEST_NAME_MARKERS = ("test_backup_integration", "test-sense-backup")
 A_GROUP_NAMES = {"A群组", "B群组"}
 A_EXPORT_NAME_PREFIX = "test-"
 A_EXPORT_ENTRY_NAMES = {"test", "test2"}
+A_SANDBOX_NAME_MARKERS = ("test", "e2e", "sentinel", "probe", "fixture")
 
 
 def classify_rule(tool_name: str, source: str):
@@ -167,6 +169,78 @@ def classify_export(name, raw_text):
     if all(isinstance(it, dict) and it.get("name") in A_EXPORT_ENTRY_NAMES for it in data):
         return "A", "A_EXPORT_ENTRY_NAMES"
     return "other", "unmatched"
+
+
+def classify_sandbox(name, file_names):
+    """sandboxes 目录残留分类（单一源词表，禁手抄；TL-⑭ 内容级清点消费）。
+
+    返回 (cls, rule)：A=确证测试残留（目录名/内含文件名硬标识）、other=不动。
+    随机 id 目录名（sandbox-<hex>）无硬标识时如实 other——TL-③「无法从名字判」
+    语义逐字保留；内容级证据（inspect_sandbox_dir/timeline 引用）只作决策材料
+    不改判（宁窄勿滥，删除动作仍待拍板）。
+    """
+    hay = [name or ""]
+    hay.extend(file_names or [])
+    for h in hay:
+        hl = h.lower()
+        for m in A_SANDBOX_NAME_MARKERS:
+            if m in hl:
+                return "A", "A_SANDBOX_NAME_MARKERS:" + m
+    return "other", "unmatched"
+
+
+def inspect_sandbox_dir(path: Path) -> dict:
+    """沙箱目录内容级清点（只读事实，零推断）：文件清单/字节数/快照元数据/目录 mtime。
+
+    快照（snap-*.json）解析失败或顶层非 dict 如实标 parsed=False，不猜内容。
+    """
+    name = path.name
+    try:
+        files = sorted(x.name for x in path.iterdir() if x.is_file())
+    except OSError:
+        files = []
+    total_bytes = 0
+    snapshots = []
+    for f in files:
+        fp = path / f
+        try:
+            total_bytes += fp.stat().st_size
+        except OSError:
+            pass
+        if f.startswith("snap-") and f.endswith(".json"):
+            meta = {"file": f, "parsed": False}
+            try:
+                data = json.loads(fp.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                data = None
+            if isinstance(data, dict):
+                meta["parsed"] = True
+                for k in ("snapshot_id", "name", "created_at", "log_length"):
+                    meta[k] = data.get(k)
+                meta["variables"] = data.get("variables")
+            snapshots.append(meta)
+    cls, rule = classify_sandbox(name, files)
+    try:
+        created = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
+    except OSError:
+        created = None
+    return {
+        "name": name, "cls": cls, "rule": rule,
+        "file_count": len(files), "total_bytes": total_bytes, "files": files,
+        "snapshots": snapshots, "dir_mtime": created,
+    }
+
+
+def sandbox_timeline_xref(conn, names) -> dict:
+    """沙箱目录名在 timeline 事件面的引用计数（只读决策材料：有无事件引用）。"""
+    out = {}
+    for n in names:
+        rows = conn.execute(
+            "SELECT event_id, event_type FROM events WHERE summary LIKE ? OR detail LIKE ?",
+            (f"%{n}%", f"%{n}%"),
+        ).fetchall()
+        out[n] = {"count": len(rows), "sample": [r[0] for r in rows[:3]]}
+    return out
 
 
 def classify_user(username, email=None):
@@ -464,8 +538,27 @@ def census_files(out: dict) -> None:
         "A_by_rule": dict(a_rules),
     }
     sdir = HOME / ".opensoul" / "sandboxes"
-    sandboxes = sorted(x.name for x in sdir.iterdir()) if sdir.is_dir() else []
-    res["sandboxes"] = {"total": len(sandboxes), "U_names": sandboxes, "note": "随机 id 目录，无法从名字判测试/真实"}
+    sdirs = sorted((x for x in sdir.iterdir() if x.is_dir()), key=lambda x: x.name) if sdir.is_dir() else []
+    entries = [inspect_sandbox_dir(x) for x in sdirs]
+    xref: dict = {}
+    tl_path = REPO / "data" / "timeline.db"
+    if tl_path.exists():
+        try:
+            xref = sandbox_timeline_xref(ro(tl_path), [e["name"] for e in entries])
+        except (OSError, sqlite3.Error):
+            xref = {}
+    for e in entries:
+        e["timeline_xref"] = xref.get(e["name"], {"count": 0, "sample": []})
+    res["sandboxes"] = {
+        "total": len(entries),
+        "U_names": [e["name"] for e in entries if e["cls"] != "A"],
+        "A_names": [e["name"] for e in entries if e["cls"] == "A"],
+        "empty_dirs": sum(1 for e in entries if e["file_count"] == 0),
+        "user_data_bytes": sum(e["total_bytes"] for e in entries),
+        "entries": entries,
+        "note": "内容级清点（TL-⑭）：文件/字节/快照元数据/timeline 引用计数为只读事实；"
+                "名字硬标识判 A，随机 id 目录如实 other（内容证据只作决策材料，删除待拍板）",
+    }
     out["files"] = res
 
 
