@@ -176,6 +176,12 @@ async def delete_cache_entry(entry_id: str):
     return {"deleted": True}
 
 
+@router.post("/cache/clear")
+async def clear_cache_entries():
+    """Clear ALL cache entries (load relief; /cleanup only drops expired)."""
+    return cache.clear()
+
+
 @router.post("/cleanup")
 async def cleanup_cache():
     """Remove expired entries."""

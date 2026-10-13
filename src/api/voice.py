@@ -271,6 +271,12 @@ async def delete_output(filename: str):
 # ── Health ─────────────────────────────────────────────────
 
 
+@router.post("/cache/clear")
+async def clear_tts_cache():
+    """Clear all cached TTS audio files."""
+    return engine.clear_cache()
+
+
 @router.get("/health")
 async def voice_health():
     """OpenVoice health check."""

@@ -78,8 +78,8 @@ async def cleanup_expired():
     cleanup_endpoints = {
         "vein_cache": ("/api/vein/cache/cleanup", "POST"),
         "mirror_sandboxes": ("/api/mirror/cleanup", "POST"),
-        "hippo_sessions": ("/api/hippo/sessions/cleanup", "POST"),
-        "reflex_cache": ("/api/reflex/cache/cleanup", "POST"),
+        "hippo_sessions": ("/api/hippo/sessions/lifecycle-check", "POST"),
+        "reflex_cache": ("/api/reflex/cleanup", "POST"),
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:

@@ -170,6 +170,16 @@ class ReflexCache:
                 removed += 1
         return {"removed": removed, "remaining": len(self._entries)}
 
+    def clear(self) -> dict:
+        """Drop ALL entries (expired or not) — overload load-shedding.
+
+        与 cleanup() 语义分界：cleanup=清过期留有效（维护），clear=全清（减负）。
+        """
+        with self._lock:
+            cleared = len(self._entries)
+            self._entries.clear()
+        return {"cleared": cleared, "remaining": 0}
+
     def get_stats(self) -> dict:
         """Get cache statistics."""
         now = time.time()

@@ -97,6 +97,24 @@ class AuditLogger:
 
         return results
 
+    def cleanup(self, keep_last: int | None = None) -> dict:
+        """Drop oldest entries, keeping the newest keep_last.
+
+        缺省 keep_last=容量之半（策略选择可另拍）：为降级器官腾出内存头寸，
+        保留最近一半审计历史。counters 是累计计数，不随裁剪回退。
+        """
+        if keep_last is None:
+            keep_last = (self._log.maxlen or 0) // 2
+        if isinstance(keep_last, bool) or not isinstance(keep_last, int):
+            raise ValueError("keep_last must be an integer")
+        if keep_last < 0:
+            raise ValueError("keep_last must be >= 0")
+        with self._lock:
+            dropped = max(0, len(self._log) - keep_last)
+            for _ in range(dropped):
+                self._log.popleft()
+            return {"dropped": dropped, "remaining": len(self._log), "keep_last": keep_last}
+
     def stats(self) -> dict:
         with self._lock:
             return {

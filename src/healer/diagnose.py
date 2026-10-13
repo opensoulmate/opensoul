@@ -107,9 +107,9 @@ _REPAIR_STRATEGIES: dict[str, list[dict]] = {
         {
             "triggers": ("degraded", _SYMPTOM_TIMEOUT),
             "action": Action.CLEANUP,
-            "endpoint": "/api/hippo/sessions/cleanup",
+            "endpoint": "/api/hippo/sessions/lifecycle-check",
             "method": "POST",
-            "description": "Cleanup expired memory sessions",
+            "description": "Run session lifecycle check (mark idle/expired sessions)",
         },
     ],
     "immune": [

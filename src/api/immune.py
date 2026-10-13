@@ -316,6 +316,19 @@ async def audit_stats():
     return audit.stats()
 
 
+class AuditCleanupRequest(BaseModel):
+    keep_last: int | None = None
+
+
+@router.post("/audit/cleanup")
+async def cleanup_audit_log(req: AuditCleanupRequest | None = None):
+    """Drop oldest audit entries, keeping the newest keep_last (default: half capacity)."""
+    try:
+        return audit.cleanup(keep_last=req.keep_last if req else None)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 # ── Health ─────────────────────────────────────────────────
 
 

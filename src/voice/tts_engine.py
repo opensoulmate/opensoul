@@ -134,6 +134,22 @@ class TTSEngine:
             os.unlink(fp)
             total -= size
 
+    def clear_cache(self) -> dict:
+        """Remove ALL cached TTS audio files (space/load relief)."""
+        removed = 0
+        freed = 0
+        for name in os.listdir(self._cache_dir):
+            fp = os.path.join(self._cache_dir, name)
+            if not os.path.isfile(fp):
+                continue
+            try:
+                freed += os.path.getsize(fp)
+                os.unlink(fp)
+                removed += 1
+            except OSError:
+                continue
+        return {"removed": removed, "freed_bytes": freed}
+
     async def synthesize(
         self,
         text: str,

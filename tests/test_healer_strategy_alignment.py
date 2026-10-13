@@ -164,7 +164,7 @@ class TestStrategyReachability:
             ("vein", "/api/vein/health", Action.CLEANUP, "/api/vein/cache/cleanup"),
             ("reflex", "/api/reflex/health", Action.CLEAR_CACHE, "/api/reflex/cache/clear"),
             ("mirror", "/api/mirror/health", Action.CLEANUP, "/api/mirror/cleanup"),
-            ("hippo", "/api/hippo/health", Action.CLEANUP, "/api/hippo/sessions/cleanup"),
+            ("hippo", "/api/hippo/health", Action.CLEANUP, "/api/hippo/sessions/lifecycle-check"),
             ("immune", "/api/immune/health", Action.CLEANUP, "/api/immune/audit/cleanup"),
         ]
         for organ, health, expected_action, repair_path in cases:
