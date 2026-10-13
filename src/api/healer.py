@@ -13,11 +13,12 @@ Endpoints:
 
 import time
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, Query
 from pydantic import BaseModel
 
 from src.healer.diagnose import DiagnosisResult, OrganHealer, Severity
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -89,8 +90,9 @@ class CycleRequest(BaseModel):
 
 
 @router.post("/diagnose/{organ}")
-async def diagnose_organ(organ: str):
+async def diagnose_organ(organ: str, authorization: str | None = Header(None)):
     """Diagnose a single organ — check health, detect symptoms, recommend action."""
+    identity = bind_identity(authorization)
     endpoint = _ORGANS.get(organ)
     if not endpoint:
         from fastapi import HTTPException
@@ -110,15 +112,17 @@ async def diagnose_organ(organ: str):
                 "healthy": result.healthy,
                 "severity": result.severity.value,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return _result_to_dict(result)
 
 
 @router.post("/diagnose-all")
-async def diagnose_all_organs():
+async def diagnose_all_organs(authorization: str | None = Header(None)):
     """Diagnose all organs in parallel."""
+    identity = bind_identity(authorization)
     results = await healer.diagnose_all(_ORGANS)
 
     healthy = sum(1 for r in results if r.healthy)
@@ -131,7 +135,8 @@ async def diagnose_all_organs():
             "type": "diagnosis_all",
             "summary": f"🔍 Diagnosed {len(results)} organs: {healthy} healthy, {unhealthy} unhealthy",
             "detail": {"total": len(results), "healthy": healthy, "unhealthy": unhealthy},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -143,8 +148,9 @@ async def diagnose_all_organs():
 
 
 @router.post("/heal/{organ}")
-async def heal_organ(organ: str):
+async def heal_organ(organ: str, authorization: str | None = Header(None)):
     """Diagnose + attempt to heal a single organ."""
+    identity = bind_identity(authorization)
     endpoint = _ORGANS.get(organ)
     if not endpoint:
         from fastapi import HTTPException
@@ -160,15 +166,17 @@ async def heal_organ(organ: str):
             "type": "heal",
             "summary": f"{'✅' if result.healthy else '❌'} Heal {organ}: {result.action_taken.value} → {'success' if result.action_success else 'failed'}",
             "detail": _result_to_dict(result),
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return _result_to_dict(result)
 
 
 @router.post("/heal-all")
-async def heal_all_organs():
+async def heal_all_organs(authorization: str | None = Header(None)):
     """Diagnose all organs, attempt healing on failures."""
+    identity = bind_identity(authorization)
     # Phase 1: Diagnose all
     results = await healer.diagnose_all(_ORGANS)
 
@@ -212,7 +220,8 @@ async def heal_all_organs():
             "type": "heal_all",
             "summary": f"💊 Heal cycle: {len(to_heal)} failures, {healed_count} recovered",
             "detail": {"total": len(all_results), "healthy": healthy, "healed": healed_count},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
