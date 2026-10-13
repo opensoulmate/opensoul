@@ -27,6 +27,22 @@ def _isolate_learn_db(tmp_path, monkeypatch):
     monkeypatch.setenv("LEARN_DB", str(tmp_path / "learn.db"))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_timeline_db(tmp_path, monkeypatch):
+    """TIMELINE_DB 全测试隔离（timeline 测试隔离拆件①增补）：event_bridge 懒缓存
+    （push_event._timeline/emit._timeline）与 api.timeline 模块单例在构造时按
+    TIMELINE_DB 解析库路径——修前缺省恒 ~/opensoul/data/timeline.db，pytest 全量
+    ~74 行/轮 brain think/verify 事件经 push_event 懒构造 TimelineStore() 写生产
+    timeline.db（2026-10-13 全量实测 120 行/轮 中的 in-process 部分）。懒缓存每
+    用例复位（delattr）：每用例真源=本用例 tmp 库，禁跨用例陈旧缓存。显式指定
+    db_path/TIMELINE_DB 的测试（test_timeline_tenant_isolation 等）按其覆盖为准。"""
+    import src.nerve.event_bridge as event_bridge_mod
+
+    monkeypatch.setenv("TIMELINE_DB", str(tmp_path / "timeline.db"))
+    monkeypatch.delattr(event_bridge_mod.push_event, "_timeline", raising=False)
+    monkeypatch.delattr(event_bridge_mod.emit, "_timeline", raising=False)
+
+
 @pytest.fixture(scope="session")
 def base_url():
     return BASE_URL

@@ -80,11 +80,20 @@ def _time_ago(ts: float) -> str:
         return f"{int(diff / 86400)}d ago"
 
 
+def default_db_path() -> str:
+    """库路径：TIMELINE_DB 环境变量优先（测试隔离，NEST_DB/AGENT_REGISTRY_DB 同款
+    先例），缺省 <repo>/data/timeline.db。"""
+    env = os.environ.get("TIMELINE_DB")
+    if env:
+        return env
+    return str(Path(__file__).resolve().parents[2] / "data" / "timeline.db")
+
+
 class TimelineStore:
     """Persistent event timeline with SQLite backend."""
 
     def __init__(self, db_path: str | None = None):
-        db = db_path or os.path.expanduser("~/opensoul/data/timeline.db")
+        db = db_path or default_db_path()
         Path(db).parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(db, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
