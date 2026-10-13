@@ -414,3 +414,111 @@ def mirror_client(tmp_path, monkeypatch):
     app.state.mirror_client_timeline_db = default_db_path()
     with TestClient(app) as c:
         yield c
+
+
+# pipeline 知识入库面 tmp 库预建 schema（对齐 src/main.py lifespan 核心业务表 DDL +
+# create_knowledge 真实触达的 tags/knowledge_tags 两表——生产表历史建表，tmp 库开局补齐）
+_PIPELINE_KNOWLEDGE_DDL = """CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL,
+    email TEXT DEFAULT '', password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'user', is_active INTEGER DEFAULT 1,
+    tenant_id TEXT DEFAULT 'default',
+    created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS knowledge (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL,
+    title TEXT NOT NULL, content TEXT DEFAULT '',
+    tags TEXT DEFAULT '[]', source TEXT DEFAULT '',
+    content_type TEXT DEFAULT '', metadata TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+    id TEXT PRIMARY KEY, knowledge_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL, content TEXT NOT NULL,
+    embedding_id TEXT, token_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS tags (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL,
+    color TEXT DEFAULT '#6366f1', created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS knowledge_tags (
+    knowledge_id TEXT NOT NULL, tag_id TEXT NOT NULL);"""
+
+
+@pytest.fixture()
+def pipeline_client(tmp_path, monkeypatch):
+    """pipeline API隔离测试面：真实router + tmp独立数据面，绝不写生产
+    data/timeline.db / data/vein/ / data/opensoul.db（gene_client/will_client/
+    mirror_client 同款路线；timeline 测试隔离拆件② live 测试写方收编——
+    test_pipeline.py+test_pipeline_api.py 此前走 live :8090，服务进程把
+    pipeline_completed 事件写生产 timeline.db（2026-10-13 修前实测 8 行/轮=
+    两文件 4+4），且上传用例同时写生产 vein 文件面与 opensoul.db 知识/用户行）。
+    测试面=真实 router/handler 代码，数据面换 tmp：
+    - vein 文件面：FileStore 工厂→tmp root+tmp vein_meta.db（修前缺省
+      ~/opensoul/data/vein/files 与同目录 vein_meta.db）
+    - 知识入库面：db_pool 三绑定（src.database.postgres / src.services.auth /
+      src.services.knowledge 模块全局）→tmp SQLitePool（tmp opensoul.db 预建真
+      schema）；embedding 降级空向量（空向量不写 qdrant=既有真降级路径）、meili
+      AVAILABLE=False（外部索引面不写）
+    - timeline 事件面：TIMELINE_DB autouse 隔离+懒缓存复位（_isolate_timeline_db）
+    - pipeline history 内存面：每用例 fresh dict（修前 live 服务进程累积）
+    app.state.pipeline_client_* 暴露 tmp 路径供隔离护栏断言。
+    """
+    import sqlite3 as _sqlite3
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.pipeline as pipeline_api
+    import src.database.postgres as postgres_mod
+    import src.services.auth as auth_mod
+    import src.services.knowledge as knowledge_mod
+    import src.vein.file_store as vein_store_mod
+    from src.config import settings
+    from src.database.postgres import SQLitePool
+
+    # ── vein 文件面：tmp root + tmp meta db（FileStore 缺省解析生产路径）──
+    tmp_vein_root = tmp_path / "vein" / "files"
+    tmp_vein_db = tmp_path / "vein_meta.db"
+    _real_file_store = vein_store_mod.FileStore  # 先捕获真类（patch 后模块属性=工厂自身，自递归坑）
+
+    def _tmp_file_store(root=None, db_path=None):
+        return _real_file_store(root=str(tmp_vein_root), db_path=str(tmp_vein_db))
+
+    monkeypatch.setattr(vein_store_mod, "FileStore", _tmp_file_store)
+
+    # ── 知识入库面：tmp opensoul.db 真 schema + 三绑定换 tmp pool ──
+    tmp_os_db = tmp_path / "opensoul.db"
+    with _sqlite3.connect(tmp_os_db) as _c:
+        _c.executescript(_PIPELINE_KNOWLEDGE_DDL)
+        _c.commit()
+    monkeypatch.setenv("USERS_DB", str(tmp_os_db))  # register_user 自愈面随 tmp（F3b-② 先例）
+    monkeypatch.setenv("ENTERPRISE_DB", str(tmp_path / "enterprise.db"))
+    monkeypatch.setattr(settings, "database_url", f"sqlite:///{tmp_os_db}")
+    tmp_pool = SQLitePool()
+    monkeypatch.setattr(postgres_mod, "db_pool", tmp_pool)
+    monkeypatch.setattr(auth_mod, "db_pool", tmp_pool)
+    monkeypatch.setattr(knowledge_mod, "db_pool", tmp_pool)
+
+    async def _no_embeddings(_texts):
+        return []
+
+    monkeypatch.setattr(knowledge_mod, "get_embeddings_batch", _no_embeddings)
+    monkeypatch.setattr(knowledge_mod.meili_client, "AVAILABLE", False)
+
+    # ── pipeline history 内存面：每用例 fresh dict ──
+    monkeypatch.setattr(pipeline_api, "_pipeline_history", {})
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        await tmp_pool.connect()  # tmp库startup时连接（真实SQLitePool数据面）
+        yield
+        await tmp_pool.disconnect()
+
+    from src.timeline.store import default_db_path
+
+    app = FastAPI(lifespan=_lifespan)
+    app.include_router(pipeline_api.router, prefix="/api/pipeline")
+    app.state.pipeline_client_timeline_db = default_db_path()
+    app.state.pipeline_client_vein_root = str(tmp_vein_root)
+    app.state.pipeline_client_vein_db = str(tmp_vein_db)
+    app.state.pipeline_client_opensoul_db = str(tmp_os_db)
+    with TestClient(app) as c:
+        yield c
