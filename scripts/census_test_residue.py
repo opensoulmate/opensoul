@@ -97,6 +97,13 @@ A_RULE_TOOLS = {"test_dangerous_tool"}
 A_RULE_SOURCES = {"p09-probe"}
 A_KNOWLEDGE_TITLES_PREFIX = ("[Pipeline] test", "[Pipeline] dup", "[Pipeline] timeline-test")
 B_KNOWLEDGE_TITLES_PREFIX = ("[Pipeline] readme.md", "[Pipeline] tagged.txt")
+# TL-⑱ knowledge 夹具内容单一源：文件名→上传夹具逐字节内容（出处 tests/test_pipeline.py
+# :93 data.json / :104 notes.md 上传夹具；标题+内容双逐字钉=对象级硬标识）。
+# 仅内容逐字节相同才判 A（宁窄勿滥：同名真实用户上传不动）。
+A_KNOWLEDGE_FIXTURE_CONTENT = {
+    "data.json": '{"key": "value", "nested": {"a": 1}}',
+    "notes.md": "# Title\n\nSome content here with enough text for processing.",
+}
 A_TENANT_PREFIX = "e2e-"
 A_GOAL_MARKERS = ("冒烟测试", "A1认知层接线live验证", "逐块推送验证目标", "清空生产数据库", "口算17加25")
 B_GOAL_MARKERS = ("用一句话", "请分三句话", "列出3个Linux", "介绍一下Python", "介绍Python的GIL")
@@ -119,17 +126,23 @@ def classify_rule(tool_name: str, source: str):
     return "other", "unmatched"
 
 
-def classify_knowledge(title: str):
+def classify_knowledge(title: str, content: str | None = None):
     """knowledge 行残留分类（单一源词表，禁手抄；TL-⑥ 删除工具同源消费）。
 
-    返回 (cls, rule)：A=确证测试残留（fixture 标题前缀）、B=疑似（需人工裁决）、
-    other=不动。
+    返回 (cls, rule)：A=确证测试残留（fixture 标题前缀，或标题+内容双逐字钉
+    A_KNOWLEDGE_FIXTURE_CONTENT——TL-⑱）、B=疑似（需人工裁决）、other=不动。
+    内容判据宁窄勿滥：仅内容与夹具逐字节相同才判 A（同名真实用户上传不动）；
+    content 未提供（旧调用面）不猜——标题词表语义逐字不变（契约锁死面）。
     """
     t = title or ""
     if t.startswith(A_KNOWLEDGE_TITLES_PREFIX):
         return "A", "A_KNOWLEDGE_TITLES_PREFIX"
     if t.startswith(B_KNOWLEDGE_TITLES_PREFIX):
         return "B", "B_KNOWLEDGE_TITLES_PREFIX"
+    if content is not None and t.startswith("[Pipeline] "):
+        fixture = A_KNOWLEDGE_FIXTURE_CONTENT.get(t[len("[Pipeline] "):])
+        if fixture is not None and content == fixture:
+            return "A", "A_KNOWLEDGE_FIXTURE_CONTENT"
     return "other", "unmatched"
 
 
@@ -500,10 +513,10 @@ def census_sqlite(out: dict) -> None:
         "A": [{"id": u[0], "username": u[1]} for u in users
               if classify_user(u[1], u[2])[0] == "A"],  # 单一源，禁手抄（TL-⑩ 收编）
     }
-    kn = c.execute("SELECT id,title FROM knowledge").fetchall()
-    a_kn = [k for k in kn if classify_knowledge(k[1])[0] == "A"]
-    b_kn = [k for k in kn if classify_knowledge(k[1])[0] == "B"]
-    o_kn = [k for k in kn if classify_knowledge(k[1])[0] == "other"]
+    kn = c.execute("SELECT id,title,content FROM knowledge").fetchall()
+    a_kn = [k for k in kn if classify_knowledge(k[1], k[2])[0] == "A"]
+    b_kn = [k for k in kn if classify_knowledge(k[1], k[2])[0] == "B"]
+    o_kn = [k for k in kn if classify_knowledge(k[1], k[2])[0] == "other"]
     res["opensoul_knowledge"] = {
         "total": len(kn), "A": len(a_kn), "B": len(b_kn),
         "A_titles": dict(Counter(k[1] for k in a_kn)),

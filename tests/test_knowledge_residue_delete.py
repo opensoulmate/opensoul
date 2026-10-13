@@ -205,11 +205,11 @@ def test_refuse_when_row_now_not_A(scene, monkeypatch):
     real = mod.census.classify_knowledge
     calls = {"n": 0}
 
-    def fake(title):
+    def fake(title, content=None):
         calls["n"] += 1
         if calls["n"] > len(KNOWLEDGE):  # scan 5 次之后=复核段
             return "other", "flipped"
-        return real(title)
+        return real(title, content)
 
     monkeypatch.setattr(mod.census, "classify_knowledge", fake)
     with pytest.raises(mod.RefuseError, match="现判非 A"):

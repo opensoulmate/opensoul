@@ -62,12 +62,12 @@ def load_artifact_knowledge(artifact: Path) -> dict:
 
 def scan(conn: sqlite3.Connection) -> dict:
     """逐行分类（单一源 census.classify_knowledge）+级联面在场清单。"""
-    rows = conn.execute("SELECT id,title FROM knowledge").fetchall()
+    rows = conn.execute("SELECT id,title,content FROM knowledge").fetchall()
     a_ids: list[str] = []
     other_ids: set[str] = set()
     b = 0
-    for kid, title in rows:
-        cls, _rule = census.classify_knowledge(title)
+    for kid, title, content in rows:
+        cls, _rule = census.classify_knowledge(title, content)
         if cls == "A":
             a_ids.append(kid)
         elif cls == "B":
@@ -99,10 +99,10 @@ def scan(conn: sqlite3.Connection) -> dict:
 def recheck(conn: sqlite3.Connection, ids: list[str]) -> None:
     """删前逐行复核：fresh 重读每行再判（单一源），现判非 A=拒删。"""
     bad = []
-    for kid, title in conn.execute(
-            "SELECT id,title FROM knowledge WHERE id IN (%s)"
+    for kid, title, content in conn.execute(
+            "SELECT id,title,content FROM knowledge WHERE id IN (%s)"
             % ",".join("?" * len(ids)), ids):
-        cls, rule = census.classify_knowledge(title)
+        cls, rule = census.classify_knowledge(title, content)
         if cls != "A":
             bad.append({"id": kid, "title": title, "cls": cls, "rule": rule})
     if bad:

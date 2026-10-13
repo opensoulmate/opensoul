@@ -118,3 +118,30 @@ TL-③ 留档「B=疑似（无硬标识需人工裁决）」的 23,128 行，本
 **判法不一致留档**：classify_timeline 的 brain_probe_style_goals 把「清空生产数据库」判 B，而同文案在 goal/悬挂行词表 A_GOAL_MARKERS 判 A（同为 F4b-⑳ e2e 探针）——同一探针文案两面判法不一致（timeline 面当初刻意保守）。是否升 A 需拍板（改判法=改未来清单口径），本拍零改动。
 
 **诚实边界**：①内容级证据=字面/形态事实非语义理解（探针判定依据=命令形状+夹具出处，非理解用途）②exec 命令清单受生产 summary 长度截断影响（截断后同形命令合并计数，如实记）③storm 定性修正 TL-③「疑似压测」为「功能开发验证」（git 秒级吻合证据），处置建议不变（保留）④全部建议待拍板，本拍零删除零判法改动。
+
+## knowledge 夹具词表扩充（TL-⑱，2026-10-14）
+
+**对象**：TL-⑯ 发现留档——[Pipeline] data.json 194 + notes.md 194 + pipe_test.txt 2 共 390 行
+文件名逐字=tests/test_pipeline.py:95/:105 上传夹具名，但 classify_knowledge 词表判 other。
+
+**内容级证据（本拍新增，出处钉死）**：生产 388 行（data.json 194+notes.md 194）内容与
+tests/test_pipeline.py 上传夹具**逐字节相同**——data.json 全 194 行=`{"key": "value",
+"nested": {"a": 1}}`（:93 `json.dumps({"key": "value", "nested": {"a": 1}})` 产出）、
+notes.md 全 194 行=`# Title\n\nSome content here with enough text for processing.`
+（:104 字节字面）——标题+内容双逐字钉=对象级硬标识（TL-⑯ 处置 pipeline B 组的同级证据）。
+
+**判法扩充（单一源 A_KNOWLEDGE_FIXTURE_CONTENT，宁窄勿滥）**：仅「标题=[Pipeline] 夹具文件名
+**且**内容与夹具逐字节相同」判 A；同名真实用户上传（内容不同）不动；不带 content 的旧调用面
+语义逐字不变（tests/test_knowledge_residue_delete.py:158 锁死的「notes.md=other」契约仍在，
+无需动契约测试）；近似内容（尾空白/换行/截断）不算命中。删除工具 scan/recheck/census_sqlite
+三消费面随接线传 content（写了≠接线了）。
+
+**census 复跑（data/test_residue_census_20261014_post_tl18.json）**：opensoul_knowledge
+395 行里 A 388（data.json 194+notes.md 194）/B 0/other 7；other_titles 收窄为
+反馈层测试 4、[Pipeline] pipe_test.txt 2、test 1。
+
+**诚实边界**：①pipe_test.txt 2 行不动——内容「Hello pipeline test file for knowledge
+import validation 20260919.」自述为测试验证文件且文件名含 test，但 repo 全历史零出处
+（git log -S 零命中，疑为一次性 e2e 探针），按宁窄勿滥留 other 待拍板②「反馈层测试」4、
+「test」1 不在本拍（候选只点名夹具词表，范围纪律）③388 行 A 类**本拍只判不删**（删除执行件
+另拍，TL-④~⑰ 备份+回读纪律）④A 判定=字面逐字节比对非语义理解。
