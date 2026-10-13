@@ -2,13 +2,14 @@
 
 import asyncio
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.mirror import isolation
 from src.mirror.sandbox import SandboxManager, SandboxNotActive
 from src.mirror.templates import SandboxTemplateEngine
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -61,8 +62,12 @@ class ForkRequest(BaseModel):
 
 
 @router.post("/sandboxes")
-async def create_sandbox(req: SandboxCreateRequest):
+async def create_sandbox(
+    req: SandboxCreateRequest,
+    authorization: str | None = Header(None),
+):
     """Create a new isolated sandbox."""
+    identity = bind_identity(authorization)
     sandbox = manager.create(
         name=req.name,
         description=req.description,
@@ -77,7 +82,8 @@ async def create_sandbox(req: SandboxCreateRequest):
             "type": "sandbox_created",
             "summary": f"🆕 Sandbox created: {sandbox.name or sandbox.sandbox_id}",
             "detail": {"sandbox_id": sandbox.sandbox_id, "name": sandbox.name},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -188,8 +194,13 @@ async def take_snapshot(sandbox_id: str, req: SnapshotRequest):
 
 
 @router.post("/sandboxes/{sandbox_id}/exec")
-async def exec_in_sandbox(sandbox_id: str, req: ExecRequest):
+async def exec_in_sandbox(
+    sandbox_id: str,
+    req: ExecRequest,
+    authorization: str | None = Header(None),
+):
     """Execute a command inside the sandbox (real namespace isolation)."""
+    identity = bind_identity(authorization)
     try:
         result = await asyncio.to_thread(
             manager.exec,
@@ -218,7 +229,8 @@ async def exec_in_sandbox(sandbox_id: str, req: ExecRequest):
                 "truncated": result["stdout_truncated"] or result["stderr_truncated"],
                 "network_policy": result["network_policy"],
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     return result
 
@@ -236,8 +248,13 @@ async def set_network_policy(sandbox_id: str, req: NetworkPolicyRequest):
 
 
 @router.post("/sandboxes/{sandbox_id}/fork")
-async def fork_from_snapshot(sandbox_id: str, req: ForkRequest):
+async def fork_from_snapshot(
+    sandbox_id: str,
+    req: ForkRequest,
+    authorization: str | None = Header(None),
+):
     """E2B snapshot-fork: create a new sandbox from a snapshot."""
+    identity = bind_identity(authorization)
     child = manager.fork_from_snapshot(sandbox_id, req.snapshot_id, req.name)
     if not child:
         raise HTTPException(404, "Sandbox or snapshot not found")
@@ -252,7 +269,8 @@ async def fork_from_snapshot(sandbox_id: str, req: ForkRequest):
                 "forked_from": sandbox_id,
                 "snapshot_id": req.snapshot_id,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     return {
         "sandbox_id": child.sandbox_id,
@@ -349,8 +367,12 @@ async def get_sandbox_template(template_id: str):
 
 
 @router.post("/templates")
-async def create_sandbox_template(req: SandboxTemplateCreateRequest):
+async def create_sandbox_template(
+    req: SandboxTemplateCreateRequest,
+    authorization: str | None = Header(None),
+):
     """Create a new sandbox template."""
+    identity = bind_identity(authorization)
     tpl = template_engine.create(
         name=req.name,
         description=req.description,
@@ -367,7 +389,8 @@ async def create_sandbox_template(req: SandboxTemplateCreateRequest):
             "type": "sandbox_template_created",
             "summary": f"📋 Sandbox template created: {tpl.name}",
             "detail": {"template_id": tpl.template_id, "name": tpl.name},
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
     return {
         "template_id": tpl.template_id,
@@ -384,8 +407,13 @@ async def delete_sandbox_template(template_id: str):
 
 
 @router.post("/templates/{template_id}/instantiate")
-async def create_sandbox_from_template(template_id: str, req: SandboxFromTemplateRequest):
+async def create_sandbox_from_template(
+    template_id: str,
+    req: SandboxFromTemplateRequest,
+    authorization: str | None = Header(None),
+):
     """Create a sandbox from a template with optional overrides."""
+    identity = bind_identity(authorization)
     instance = template_engine.instantiate(template_id, overrides=req.variables)
     if not instance:
         raise HTTPException(404, "Template not found")
@@ -419,7 +447,8 @@ async def create_sandbox_from_template(template_id: str, req: SandboxFromTemplat
                 "template_id": template_id,
                 "name": sandbox.name,
             },
-        }
+        },
+        tenant_id=identity.tenant_id,
     )
 
     return {
