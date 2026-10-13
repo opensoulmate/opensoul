@@ -130,6 +130,17 @@ def classify_tenant(name):
     return "other", "unmatched"
 
 
+def classify_manifest(name):
+    """backups manifests.json 条目残留分类（单一源词表，禁手抄；TL-⑧ 删除工具同源消费）。
+
+    返回 (cls, rule)：A=确证测试残留（测试备份名硬标识子串）、other=不动。
+    """
+    n = name or ""
+    if any(m in n for m in A_MANIFEST_NAME_MARKERS):
+        return "A", "A_MANIFEST_NAME_MARKERS"
+    return "other", "unmatched"
+
+
 def ro(path: Path) -> sqlite3.Connection:
     assert path.exists(), f"missing: {path}"
     return sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True)
@@ -253,7 +264,7 @@ def census_files(out: dict) -> None:
     manifests = json.loads((bdir / "manifests.json").read_text())
     items = manifests if isinstance(manifests, list) else list(manifests.values())
     a_items = [it for it in items
-               if isinstance(it, dict) and any(m in str(it.get("name", "")) for m in A_MANIFEST_NAME_MARKERS)]
+               if isinstance(it, dict) and classify_manifest(str(it.get("name", "")))[0] == "A"]
     tars = sorted(x.name for x in bdir.glob("*.tar.gz"))
     res["backups"] = {
         "manifest_entries": len(items),
