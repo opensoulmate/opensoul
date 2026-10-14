@@ -51,7 +51,7 @@ def test_detect_available_true_for_user_local_bin(monkeypatch, tmp_path):
     monkeypatch.setattr(agents, "AGENT_REGISTRY", _fake_registry())
     monkeypatch.setattr(agents, "_detect_cache", None)
     monkeypatch.setattr(agents, "_detect_cache_time", 0.0)
-    monkeypatch.setattr(agents, "list_registered_agents", lambda: [])
+    monkeypatch.setattr(agents, "list_registered_agents", lambda **_: [])
 
     res = asyncio.run(agents.detect_agents())
     mimo = [a for a in res["agents"] if a["id"] == "mimo"][0]
@@ -64,7 +64,7 @@ def test_detect_available_false_when_truly_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(agents, "AGENT_REGISTRY", _fake_registry())
     monkeypatch.setattr(agents, "_detect_cache", None)
     monkeypatch.setattr(agents, "_detect_cache_time", 0.0)
-    monkeypatch.setattr(agents, "list_registered_agents", lambda: [])
+    monkeypatch.setattr(agents, "list_registered_agents", lambda **_: [])
 
     res = asyncio.run(agents.detect_agents())
     assert res["agents"][0]["available"] is False
@@ -78,7 +78,7 @@ def test_detect_version_probe_uses_abs_path(monkeypatch, tmp_path):
     monkeypatch.setattr(agents, "AGENT_REGISTRY", _fake_registry())
     monkeypatch.setattr(agents, "_detect_cache", None)
     monkeypatch.setattr(agents, "_detect_cache_time", 0.0)
-    monkeypatch.setattr(agents, "list_registered_agents", lambda: [])
+    monkeypatch.setattr(agents, "list_registered_agents", lambda **_: [])
 
     res = asyncio.run(agents.detect_agents())
     assert res["agents"][0]["version"] == "9.9.9"

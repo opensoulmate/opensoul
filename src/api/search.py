@@ -191,30 +191,37 @@ async def _search_events(query: str, limit: int, tenant_id: str) -> list[dict]:
         return []
 
 
-async def _search_agents(query: str, limit: int) -> list[dict]:
-    """Search agents list."""
-    try:
-        import json
-        import os
+async def _search_agents(query: str, limit: int, tenant_id: str) -> list[dict]:
+    """Search agents registry（tenant_id=身份派生租户，DEC-⑦-⑤ 加轴）。
 
-        agents_path = os.path.expanduser("~/.openmate/agents.json")
-        if not os.path.exists(agents_path):
-            return []
-        with open(agents_path) as f:
-            agents = json.load(f)
+    行归属判法=agent_row_tenant 单一源（list_registered 内过滤，自带键缺失/
+    空白→'default' 兜底，DEC-⑦-① _event_row_tenant / ② message_row_tenant /
+    ③ template_row_tenant / ④ file_row_tenant 同款）；过滤先于截断=limit 只计
+    可见命中。读真源=src.services.agent_registry 的 acp_agent_registry（修前读
+    ~/.openmate/agents.json——该文件本机恒不存在且全仓零写方=幽灵源，子搜索恒
+    空集 wired-but-not-functional，DEC-⑦-② 读真源收口同款：加轴前必须先能读到
+    真行）；「未注册不进列表」语义延续（只搜 registered=1 行，与 /registry、
+    /detect.session_agents 一条真源）。
+    """
+    try:
+        from src.services.agent_registry import list_registered
+
         query_lower = query.lower()
         matches = []
-        for a in agents:
-            name = str(a.get("name", "")).lower()
-            desc = str(a.get("description", "")).lower()
-            if query_lower in name or query_lower in desc:
+        for a in list_registered(tenant_id=tenant_id):
+            agent_id = str(a.get("agent_id", "")).lower()
+            detail = str(a.get("probe_detail", "")).lower()
+            if query_lower in agent_id or query_lower in detail:
                 matches.append(
                     {
                         "source": "agents",
                         "icon": "🤖",
-                        "title": a.get("name", "Unknown"),
-                        "snippet": a.get("description", ""),
-                        "agent_id": a.get("id", ""),
+                        "title": a.get("agent_id", "Unknown"),
+                        "snippet": (
+                            f"session_ready={a.get('session_ready')} · "
+                            f"last probe {a.get('last_probe_at', '')}"
+                        ),
+                        "agent_id": a.get("agent_id", ""),
                     }
                 )
                 if len(matches) >= limit:
@@ -439,8 +446,11 @@ async def unified_search(
     子搜索用派生租户过滤（DEC-⑦-③，修前模板注册表零过滤=跨租户泄露；行归属=
     模板自带键缺失→'default' 兜底，template_row_tenant 同款）、files
     子搜索用派生租户过滤（DEC-⑦-④，修前文件列表零过滤=跨租户泄露；行归属=
-    文件自带键缺失→'default' 兜底，file_row_tenant 同款）。其余
-    子搜索（agents/trajectory/cron）的存储层无 user/tenant 轴，
+    文件自带键缺失→'default' 兜底，file_row_tenant 同款）、agents
+    子搜索用派生租户过滤（DEC-⑦-⑤，修前注册表零过滤=跨租户泄露且读幽灵源
+    ~/.openmate/agents.json 恒空集；行归属=agent 行自带键缺失→'default'
+    兜底，agent_row_tenant 同款；读真源=acp_agent_registry 一条真源）。其余
+    子搜索（trajectory/cron）的存储层无 user/tenant 轴，
     保持系统视图（诚实边界，DEC-⑦ 分批拆件留待拍）。
     """
     identity = bind_identity(authorization, "", user_id)
@@ -456,7 +466,7 @@ async def unified_search(
     if search_all or "events" in source_list:
         tasks["events"] = _search_events(q, limit, identity.tenant_id)
     if search_all or "agents" in source_list:
-        tasks["agents"] = _search_agents(q, limit)
+        tasks["agents"] = _search_agents(q, limit, identity.tenant_id)
     if search_all or "courses" in source_list:
         tasks["courses"] = _search_courses(q, limit, identity.tenant_id)
     if search_all or "trajectory" in source_list:

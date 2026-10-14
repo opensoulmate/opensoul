@@ -9,18 +9,22 @@ import shutil
 import subprocess
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.api.user import get_current_user
 from src.api.ws_chat import which_agent
 from src.services.agent_registry import (
+    AgentTenantDenied,
+)
+from src.services.agent_registry import (
     list_registered as list_registered_agents,
 )
 from src.services.agent_registry import (
     probe_agent as acp_probe_agent,
 )
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -796,15 +800,19 @@ _DETECT_CACHE_TTL = 300  # 5 minutes
 
 
 @router.get("/detect")
-async def detect_agents():
+async def detect_agents(authorization: str | None = Header(None)):
     """检测本机安装的AI Agent (结果缓存5分钟)
 
     B3打通：session_agents 与 /api/agents/registry、/api/agents/probe 同表一条真源
     （探测即注册）。装没装=目录信息；能否开会话=真ACP探测后的注册状态。
+    DEC-⑦-⑤：session_agents 恒按行租户键过滤（tenant=bind_identity 派生禁自报，
+    匿名 'default'——单机存量行全 'default'，契约不变）；安装目录扫描=机器级
+    目录信息无行键，保持系统视图（诚实边界）。
     """
     global _detect_cache, _detect_cache_time
     import time
 
+    identity = bind_identity(authorization)
     now = time.time()
     if not _detect_cache or (now - _detect_cache_time) >= _DETECT_CACHE_TTL:
         os_name = _get_os()
@@ -844,8 +852,12 @@ async def detect_agents():
             )
         _detect_cache = {"os": os_name, "agents": result, "total": len(result)}
         _detect_cache_time = now
-    # session_agents 每次现读注册表（一条真源，不进安装目录缓存）
-    return {**_detect_cache, "session_agents": list_registered_agents()}
+    # session_agents 每次现读注册表（一条真源，不进安装目录缓存）——
+    # DEC-⑦-⑤：恒按派生租户过滤。
+    return {
+        **_detect_cache,
+        "session_agents": list_registered_agents(tenant_id=identity.tenant_id),
+    }
 
 
 class ProbeRequest(BaseModel):
@@ -855,19 +867,35 @@ class ProbeRequest(BaseModel):
 
 
 @router.post("/probe")
-async def probe_agent_endpoint(req: ProbeRequest):
+async def probe_agent_endpoint(req: ProbeRequest, authorization: str | None = Header(None)):
     """探测即注册（B3）：L1真ACP握手（acp-proxy /agents/probe）+ L2真开会话
     （ws session/new 拿到 sessionId），两级全过才注册——检测成功=必能开会话。
-    verify_session=false 只做连通性体检，不改注册状态。"""
-    result = await acp_probe_agent(req.agent_id, cmd=req.cmd, verify_session=req.verify_session)
+    verify_session=false 只做连通性体检，不改注册状态。
+    DEC-⑦-⑤：写点行归属=bind_identity 派生租户流入 _record（匿名 'default'
+    契约不变，禁自报）；跨租户同 agent_id 重探测=劫持→AgentTenantDenied→403
+    行零改写。
+    """
+    identity = bind_identity(authorization)
+    try:
+        result = await acp_probe_agent(
+            req.agent_id,
+            cmd=req.cmd,
+            verify_session=req.verify_session,
+            tenant_id=identity.tenant_id,
+        )
+    except AgentTenantDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     return result
 
 
 @router.get("/registry")
-async def agent_registry_list():
+async def agent_registry_list(authorization: str | None = Header(None)):
     """已注册（可开会话）agent 列表——未注册不进列表。
-    与 /detect.session_agents、/probe 同表一条真源。"""
-    rows = list_registered_agents()
+    与 /detect.session_agents、/probe 同表一条真源。
+    DEC-⑦-⑤：恒按行租户键过滤（tenant=bind_identity 派生禁自报，匿名 'default'
+    契约不变）；行 dict 带加性 tenant_id 键（归一值=agent_row_tenant）。"""
+    identity = bind_identity(authorization)
+    rows = list_registered_agents(tenant_id=identity.tenant_id)
     return {"agents": rows, "total": len(rows)}
 
 

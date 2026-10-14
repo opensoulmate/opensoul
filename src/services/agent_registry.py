@@ -49,6 +49,25 @@ def _db_path() -> str:
     )
 
 
+class AgentTenantDenied(Exception):
+    """跨租户写拒（行归属不可被跨租户改写）：API层映射为HTTP 403。
+
+    DEC-⑦-③ TemplateTenantDenied / ④ FileTenantDenied 同款（劫持闸语义，
+    F3b-③c-2②d 纪律）。
+    """
+
+
+def agent_row_tenant(entry: dict) -> str:
+    """行租户键单一判法（DEC-⑦-⑤）：自带键、缺失/空白→'default' 兜底。
+
+    写读同源：_record 落行与 list_registered 过滤、劫持闸、API 加性 tenant_id
+    键共用本函数，禁消费点另发明判法（F4b-㉗ 纪律）；DEC-⑦-① _event_row_tenant
+    / ② message_row_tenant / ③ template_row_tenant / ④ file_row_tenant 同款语义
+    （系统/缺省写方→'default'，键派生故障绝不吃掉落库）。
+    """
+    return str((entry or {}).get("tenant_id") or "").strip() or "default"
+
+
 def _conn() -> sqlite3.Connection:
     conn = sqlite3.connect(_db_path(), timeout=30)
     conn.row_factory = sqlite3.Row
@@ -62,9 +81,23 @@ def _conn() -> sqlite3.Connection:
             probe_detail TEXT,
             session_id TEXT,
             last_probe_at TEXT,
-            probe_count INTEGER NOT NULL DEFAULT 0
+            probe_count INTEGER NOT NULL DEFAULT 0,
+            tenant_id TEXT NOT NULL DEFAULT 'default'
         )"""
     )
+    # 老库自愈（C1 幂等双轨，③c-2① 先例）：CREATE TABLE IF NOT EXISTS 不补列，
+    # 存量库按 PRAGMA 探测补 tenant_id 列（常量默认='default' 回填存量行，与 F3
+    # 实测分布一致）；租户索引必须在补列之后建（③c-2① 坑延续）。
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(acp_agent_registry)").fetchall()}
+    if "tenant_id" not in cols:
+        conn.execute(
+            "ALTER TABLE acp_agent_registry ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
+        )
+        conn.commit()
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_acp_agents_tenant ON acp_agent_registry(tenant_id)"
+    )
+    conn.commit()
     return conn
 
 
@@ -78,17 +111,26 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     d["session_ready"] = bool(d["session_ready"])
     if d.get("probe_ok") is not None:
         d["probe_ok"] = bool(d["probe_ok"])
+    # 行归属可观测（DEC-⑦-⑤ 加性键）：归一值=agent_row_tenant 单一判法。
+    d["tenant_id"] = agent_row_tenant(d)
     return d
 
 
-def list_registered() -> list[dict]:
-    """未注册不进列表：只回 registered=1（两级真探测全过）的行。"""
+def list_registered(tenant_id: str | None = None) -> list[dict]:
+    """未注册不进列表：只回 registered=1（两级真探测全过）的行。
+
+    tenant_id=显式租户→恒按行租户键过滤（DEC-⑦-⑤）；None=系统视图（既有
+    调用面字节不变）。
+    """
     conn = _conn()
     try:
         rows = conn.execute(
             "SELECT * FROM acp_agent_registry WHERE registered=1 ORDER BY agent_id"
         ).fetchall()
-        return [_row_to_dict(r) for r in rows]
+        entries = [_row_to_dict(r) for r in rows]
+        if tenant_id is not None:
+            entries = [e for e in entries if agent_row_tenant(e) == tenant_id]
+        return entries
     finally:
         conn.close()
 
@@ -111,20 +153,34 @@ def _record(
     probe_detail: str,
     session_ok: bool | None,
     session_id: str = "",
+    tenant_id: str | None = None,
 ) -> dict:
     """落痕+探测即注册：两级全过才 registered=1；失败不除名但 session_ready=0。
     session_ok=None 表示本次未验会话（连通性体检）——session_ready/registered
-    保持既有值，未验证≠不可用（徽章不说谎的双向语义）。"""
+    保持既有值，未验证≠不可用（徽章不说谎的双向语义）。
+
+    tenant_id=写点派生租户键（DEC-⑦-⑤）；未提供/空白→'default' 兜底=系统写方
+    语义（agent_row_tenant 单一判法，键派生故障绝不吃掉落库）。劫持闸：同
+    agent_id 跨租户重探测=行归属不可被跨租户改写→AgentTenantDenied 行零改写
+    （DEC-⑦-③④ 同款，F3b-③c-2②d 纪律）；ON CONFLICT 不带 tenant_id（粘性：
+    行归属=首次写入，同租户再探绝不洗键）。
+    """
     checked = session_ok is not None
     registered = bool(probe_ok and session_ok)
+    row_tenant = agent_row_tenant({"tenant_id": tenant_id})
     conn = _conn()
     try:
+        existing = conn.execute(
+            "SELECT * FROM acp_agent_registry WHERE agent_id=?", (str(agent_id),)
+        ).fetchone()
+        if existing is not None and agent_row_tenant(_row_to_dict(existing)) != row_tenant:
+            raise AgentTenantDenied(f"agent_id {str(agent_id)!r} belongs to another tenant")
         conn.execute(
             """INSERT INTO acp_agent_registry
                (agent_id, cmd, registered, session_ready, probe_ok, probe_detail,
-                session_id, last_probe_at, probe_count)
+                session_id, last_probe_at, probe_count, tenant_id)
                VALUES (:agent_id, :cmd, :registered, :session_ready, :probe_ok,
-                       :probe_detail, :session_id, :last_probe_at, 1)
+                       :probe_detail, :session_id, :last_probe_at, 1, :tenant_id)
                ON CONFLICT(agent_id) DO UPDATE SET
                  cmd=excluded.cmd,
                  registered=CASE WHEN :checked
@@ -150,6 +206,7 @@ def _record(
                 "session_id": str(session_id or ""),
                 "last_probe_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "checked": 1 if checked else 0,
+                "tenant_id": row_tenant,
             },
         )
         conn.commit()
@@ -286,10 +343,17 @@ async def session_probe(agent_id: str, timeout: float = _SESSION_TIMEOUT) -> dic
         return {"ok": False, "session_id": "", "detail": f"ws会话探测失败: {e}"}
 
 
-async def probe_agent(agent_id: str, cmd: list | None = None, verify_session: bool = True) -> dict:
+async def probe_agent(
+    agent_id: str,
+    cmd: list | None = None,
+    verify_session: bool = True,
+    tenant_id: str | None = None,
+) -> dict:
     """探测即注册全路径：注册表预检（禁冒名兜底）→ L1握手 → L2开会话 → 落库。
 
     verify_session=False 时只做 L1 快速握手（连通性体检），不改注册状态。
+    tenant_id=写点派生租户键（DEC-⑦-⑤，透传 _record；跨租户同 agent_id=
+    AgentTenantDenied 行零改写）。
     """
     agent_id = str(agent_id)
     known = await known_agents()
@@ -299,7 +363,14 @@ async def probe_agent(agent_id: str, cmd: list | None = None, verify_session: bo
             f"agent '{agent_id}' 不在 acp-proxy 注册表且未显式给 cmd——"
             "拒绝探测（禁冒名兜底：ws侧未知agent会回落soulmate路由）"
         )
-        entry = _record(agent_id, cmd, probe_ok=False, probe_detail=detail, session_ok=False)
+        entry = _record(
+            agent_id,
+            cmd,
+            probe_ok=False,
+            probe_detail=detail,
+            session_ok=False,
+            tenant_id=tenant_id,
+        )
         return {
             "agent_id": agent_id,
             "ok": False,
@@ -340,6 +411,7 @@ async def probe_agent(agent_id: str, cmd: list | None = None, verify_session: bo
         probe_detail=" | ".join(detail_parts),
         session_ok=session_ok,
         session_id=(session or {}).get("session_id", ""),
+        tenant_id=tenant_id,
     )
     return {
         "agent_id": agent_id,
