@@ -12,10 +12,34 @@
 
 import asyncio
 import logging
+import os
 from functools import partial
 from typing import Any
 
 logger = logging.getLogger("will.proactive-behaviors")
+
+
+async def _default_learn_db_pool() -> Any:
+    """学习面默认数据池单一解析（PROACT-③ 行为执行面数据面隔离）：
+
+    OPENSOUL_DB 环境变量优先→EphemeralSQLitePool 显式路径临时池（call-time
+    读取，与 experience_collector._default_opensoul_db 同一 env 单一源；按查询
+    开合零常驻连接——行为回调逐 tick 重建临时池，常驻池会逐 tick 泄漏 aiosqlite
+    工作线程）——测试进程里 lifespan 心跳 tick 跑 pattern_extract/advisory_review
+    时 learned_patterns 写入面归 env 指定库，绝不写生产 opensoul.db（修前：行为
+    缺省走 src.database.postgres.db_pool 单例，lifespan connect 即生产写面）。
+    缺省（无 env）返回生产单例（main lifespan 已 connect，行为不重复建连），
+    生产部署零配置行为字节不变。"""
+    env = os.environ.get("OPENSOUL_DB")
+    if env:
+        from pathlib import Path
+
+        from src.database.postgres import EphemeralSQLitePool
+
+        return EphemeralSQLitePool(str(Path(env).resolve()))
+    from src.database.postgres import db_pool as _db_pool
+
+    return _db_pool
 
 
 async def memory_decay(store: Any = None) -> dict:
@@ -70,9 +94,7 @@ async def pattern_extract(
     共用 LongTermLearning.extract_patterns，不产生第二套提取逻辑）。
     """
     if db_pool is None:
-        from src.database.postgres import db_pool as _db_pool
-
-        db_pool = _db_pool
+        db_pool = await _default_learn_db_pool()
     from src.learn.long_term import LongTermLearning
 
     learning = LongTermLearning(db_pool, tenant_id, agent_id)
@@ -106,9 +128,7 @@ async def advisory_review(top_k: int = 3, db_pool: Any = None) -> dict:
       上板失败收进 errors 不掀翻其余（可见不阻断 F2b-②c-1 纪律）
     """
     if db_pool is None:
-        from src.database.postgres import db_pool as _db_pool
-
-        db_pool = _db_pool
+        db_pool = await _default_learn_db_pool()
     from src.api import ai_groups
     from src.learn.long_term import ADVISORY_SCOPE, LongTermLearning
 

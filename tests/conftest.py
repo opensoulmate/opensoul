@@ -63,6 +63,56 @@ def _isolate_proactive_db(tmp_path, monkeypatch):
     monkeypatch.setattr(proactive_mod.proactive_engine, "_events_memory", [])
 
 
+@pytest.fixture(autouse=True)
+def _isolate_behavior_execution_faces(tmp_path, monkeypatch):
+    """PROACT-③ 行为执行面数据面隔离（PROACT-① 诚实边界「生产单例数据面另拍」
+    执行件）：测试进程里 lifespan 心跳 tick / 手动 run_watcher 跑默认行为回调时，
+    四个文件写入面绝不写生产——
+    - experiences+learned_patterns（opensoul.db 双面）：OPENSOUL_DB env → tmp
+      （experience_collector._default_opensoul_db 与 proactive_behaviors
+      ._default_learn_db_pool 同一 env 单一源，修前实证 TestClient(src.main) 单
+      测试文件写穿生产 experiences +2 行）；
+    - ai_groups.db（advisory_review 上板/回群写面）：DB_PATH 模块属性 → tmp
+      （get_db 调用期读取；test_advisory_review 等逐文件 monkeypatch 在本 fixture
+      之后执行仍覆盖）；
+    - evolution.db（heredity_triggers 熔断/触发写面）：heredity 模块单例 → tmp
+      实例（will_client/heredity_client 同款缝，逐 fixture 覆盖仍生效）。
+    显式指定 OPENSOUL_DB/显式注入 db_path/db_pool/engine 的测试按其覆盖为准。
+    memory_decay 纯内存无文件面（无需隔离）；experience_collect 的 job/eval 采集
+    源仍只读生产（写入面已归 tmp，源面只读零写入）。
+
+    evolution 单例走懒构造（_LazyEvolutionEngine）：Eager EvolutionEngine() 会在
+    tmp_path 立即落 evolution.db 文件，撞 test_template_write_guard「storage_dir
+    之外零新文件」类不变量（全量实测 11 failed 逼出）；懒构造=真用到 heredity
+    写面才建 tmp 库。"""
+    import src.api.ai_groups as ai_groups_mod
+    import src.api.heredity as heredity_api
+
+    monkeypatch.setenv("OPENSOUL_DB", str(tmp_path / "opensoul.db"))
+    monkeypatch.setattr(ai_groups_mod, "DB_PATH", tmp_path / "ai_groups.db")
+    monkeypatch.setattr(
+        heredity_api, "evolution_engine", _LazyEvolutionEngine(str(tmp_path / "evolution.db"))
+    )
+
+
+class _LazyEvolutionEngine:
+    """EvolutionEngine 懒替身：首次属性访问才构造 tmp 实例（数据面同真实现）。"""
+
+    def __init__(self, db_path: str):
+        self._db_path = db_path
+        self._engine = None
+
+    def _get(self):
+        if self._engine is None:
+            from src.heredity.evolution_loop import EvolutionEngine
+
+            self._engine = EvolutionEngine(db_path=self._db_path)
+        return self._engine
+
+    def __getattr__(self, name):
+        return getattr(self._get(), name)
+
+
 @pytest.fixture(scope="session")
 def base_url():
     return BASE_URL

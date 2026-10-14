@@ -589,6 +589,9 @@ class TestDedupeAndStats:
     def test_non_sqlite_database_url_skipped(self, tmp_path, monkeypatch):
         from src.config import settings
 
+        # PROACT-③ 契约随更新：OPENSOUL_DB env 现优先于 settings.database_url
+        # （行为执行面数据面隔离），本例验 settings 回退面须显式去 env。
+        monkeypatch.delenv("OPENSOUL_DB", raising=False)
         monkeypatch.setattr(settings, "database_url", "postgresql+asyncpg://user:pw@db/x")
         c = ExperienceCollector(job_db_path="x", eval_db_path="x")
         stats = c.collect()

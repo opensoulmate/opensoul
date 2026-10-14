@@ -181,13 +181,21 @@ class _SQLitePoolContext:
 
 
 class SQLitePool:
-    def __init__(self):
+    def __init__(self, db_path: str | None = None):
         self._conn = None
+        # PROACT-③：显式路径可注入（proactive_behaviors._default_learn_db_pool
+        # 的测试隔离/多实例换源用）；缺省 None=跟随 settings.database_url（生产
+        # 行为字节不变）。
+        self._db_path = db_path
 
     async def connect(self):
         import aiosqlite
 
-        db_path = settings.database_url.replace("sqlite:///", "").replace("sqlite://", "")
+        db_path = (
+            (self._db_path or settings.database_url)
+            .replace("sqlite:///", "")
+            .replace("sqlite://", "")
+        )
         self._conn = await aiosqlite.connect(db_path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA journal_mode=WAL")
@@ -306,6 +314,48 @@ class SQLitePool:
     async def executemany(self, query: str, args_list: list) -> None:
         async with self.acquire() as conn:
             await conn.executemany(query, args_list)
+
+
+class EphemeralSQLitePool:
+    """按查询开合的 SQLite 数据池（PROACT-③ 行为临时池专用）。
+
+    每个查询独立 SQLitePool(db_path) connect→执行→disconnect，零常驻连接：
+    行为回调在测试进程里逐 tick 重建临时池，常驻连接会逐 tick 泄漏 aiosqlite
+    工作线程（实测 PytestUnhandledThreadExceptionWarning），查询次数少的回调
+    开合成本可忽略。fetch/execute/fetchval/executemany 与 SQLitePool 消费面
+    契约对齐（LongTermLearning 等调用方零感知）。
+    """
+
+    def __init__(self, db_path: str):
+        self._db_path = db_path
+
+    async def _call(self, name: str, query, args: tuple):
+        pool = SQLitePool(db_path=self._db_path)
+        await pool.connect()
+        try:
+            return await getattr(pool, name)(query, *args)
+        finally:
+            await pool.disconnect()
+
+    async def fetch(self, query, *args):
+        return await self._call("fetch", query, args)
+
+    async def fetchrow(self, query, *args):
+        return await self._call("fetchrow", query, args)
+
+    async def fetchval(self, query, *args):
+        return await self._call("fetchval", query, args)
+
+    async def execute(self, query, *args):
+        return await self._call("execute", query, args)
+
+    async def executemany(self, query, args_list):
+        pool = SQLitePool(db_path=self._db_path)
+        await pool.connect()
+        try:
+            return await pool.executemany(query, args_list)
+        finally:
+            await pool.disconnect()
 
 
 # ---------------------------------------------------------------------------

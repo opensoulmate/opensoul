@@ -33,6 +33,7 @@ analysis_error="no such table: experiences"——SelfEvolution.analyze_and_evolv
 
 import json
 import logging
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -162,7 +163,17 @@ def normalize_error_key(error: str) -> str:
 
 def _default_opensoul_db() -> str:
     """与src.database.postgres.SQLitePool同款解析（sqlite:///相对路径按cwd解析，
-    两者同进程同cwd→必然指向同一文件；非sqlite部署返回空串→collect显式skip）。"""
+    两者同进程同cwd→必然指向同一文件；非sqlite部署返回空串→collect显式skip）。
+
+    PROACT-③ 行为执行面数据面隔离：OPENSOUL_DB 环境变量优先（call-time 读取，
+    trajectory/import_formats、hippo/session_importer、api/sessions_api 既有同名
+    env 约定的单一源收编，PROACTIVE_DB env 同款先例）——测试进程里 lifespan 心跳
+    tick 跑 experience_collect 时采集写入面归 env 指定库，绝不写生产 opensoul.db
+    （修前实证：TestClient(src.main) 单测试文件即写穿生产 experiences +2 行）。
+    缺省（无 env）走 settings.database_url，生产部署零配置行为字节不变。"""
+    env = os.environ.get("OPENSOUL_DB")
+    if env:
+        return str(Path(env).resolve())
     try:
         from src.config import settings
 
