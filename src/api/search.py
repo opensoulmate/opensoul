@@ -317,26 +317,34 @@ async def _search_trajectory(query: str, limit: int, tenant_id: str) -> list[dic
         return []
 
 
-async def _search_cron_jobs(query: str, limit: int) -> list[dict]:
-    """Search cron/scheduled jobs."""
+async def _search_cron_jobs(query: str, limit: int, tenant_id: str) -> list[dict]:
+    """Search cron/scheduled jobs（tenant_id=身份派生租户，DEC-⑦-⑦ 加轴）。
+
+    读真源=hermes cron store jobs.json（src.services.cron_store 单一源；修前
+    db_pool `SELECT * FROM cron_jobs` 读幽灵表——全仓零建表零写方→恒异常→
+    except 空集=wired-but-not-functional，DEC-⑦-⑤ agents.json 幽灵源同型；
+    真源=/api/cron 管理面背后的同一 store）。行归属判法=cron_row_tenant 单一源
+    （自带键缺失/空白→'default' 兜底——hermes CLI 外部写方无身份轴不带键，
+    ③b-2 同款）；过滤先于截断=limit 只计可见命中（⑦-①~⑥ 同款）。
+    """
     try:
-        from src.database.postgres import db_pool
+        from src.services.cron_store import cron_row_tenant, load_cron_jobs
 
         query_lower = query.lower()
-        rows = await db_pool.fetch("SELECT * FROM cron_jobs ORDER BY created_at DESC LIMIT 200")
         matches = []
-        for row in rows:
-            d = dict(row)
+        for d in load_cron_jobs():
+            if cron_row_tenant(d) != tenant_id:
+                continue
             name = (d.get("name") or "").lower()
             prompt = (d.get("prompt") or "").lower()
-            schedule = (d.get("schedule") or "").lower()
+            schedule = (d.get("schedule_display") or "").lower()
             if query_lower in name or query_lower in prompt or query_lower in schedule:
                 matches.append(
                     {
                         "source": "cron",
                         "icon": "⏰",
-                        "title": d.get("name", "Unnamed Job"),
-                        "snippet": f"Schedule: {d.get('schedule', '?')} · {'Enabled' if d.get('enabled') else 'Disabled'}",
+                        "title": d.get("name") or "Unnamed Job",
+                        "snippet": f"Schedule: {d.get('schedule_display') or '?'} · {'Enabled' if d.get('enabled') else 'Disabled'}",
                         "job_id": d.get("id"),
                         "enabled": d.get("enabled"),
                     }
@@ -485,7 +493,7 @@ async def unified_search(
     if search_all or "trajectory" in source_list:
         tasks["trajectory"] = _search_trajectory(q, limit, identity.tenant_id)
     if search_all or "cron" in source_list:
-        tasks["cron"] = _search_cron_jobs(q, limit)
+        tasks["cron"] = _search_cron_jobs(q, limit, identity.tenant_id)
     if search_all or "gene" in source_list:
         tasks["gene"] = _search_gene_templates(q, limit, identity.tenant_id)
     if search_all or "echo" in source_list:
