@@ -575,6 +575,68 @@ def load_journal_starts():
     return sorted(starts)
 
 
+def proactive_row_verdicts(rows, starts):
+    """proactive_events 逐行 (分类, 规则, 证据层) 单一源（PROACT-④ 删除工具同源消费）。
+
+    rows=[(rid, watcher, started_at_iso)]（调用方按 started_at, id 排序）；
+    starts=load_journal_starts() 返回值（None=journal 不可用，layer 恒 'orphan'——
+    调用方须看 orphan_reliable 禁当删除清单用）。判法=census_proactive 原实现逐字
+    收编（classify_proactive 分类 + near_start/cadence/orphan 证据层），禁第二套。
+    返回 (verdicts, excess_ids)：verdicts={rid: (cls, rule, layer)}；
+    excess_ids=同秒同 watcher 重复组内除最早一行外的行（测试行数硬下界 n-1）。
+    """
+    sec_w = Counter()
+    sec_tot = Counter()
+    for _rid, w, ts in rows:
+        sec = ts[:19]
+        sec_w[(sec, w)] += 1
+        sec_tot[sec] += 1
+
+    def near_start(epoch):
+        if not starts:
+            return False
+        i = bisect.bisect_left(starts, epoch)
+        for j in (i - 1, i):
+            if 0 <= j < len(starts) and abs(starts[j] - epoch) <= PROACTIVE_START_WINDOW_S:
+                return True
+        return False
+
+    # 心跳节奏链（cadence）：同 watcher 按时间序贪心成链，相邻入选行间隔 >= interval-5
+    # ——生产心跳的形状上界（链可能被同距测试行抢占/接纳孤立测试行，如实记不精判）。
+    cadence = set()
+    last = {}
+    parsed = []  # (rid, w, ts, epoch)
+    for rid, w, ts in rows:
+        epoch = datetime.fromisoformat(ts).timestamp()
+        parsed.append((rid, w, ts, epoch))
+        interval = PROACTIVE_INTERVALS.get(w)
+        if interval is None:
+            continue
+        prev = last.get(w)
+        if prev is None or epoch - prev >= interval - 5.0:
+            cadence.add(rid)
+            last[w] = epoch
+    verdicts = {}
+    excess_ids = []
+    seen = Counter()
+    for rid, w, ts, epoch in parsed:
+        sec = ts[:19]
+        cls, rule = classify_proactive(sec_w[(sec, w)], sec_tot[sec])  # 单一源，禁手抄
+        if near_start(epoch):
+            layer = "near_start"
+        elif rid in cadence:
+            layer = "cadence"
+        else:
+            layer = "orphan"
+        verdicts[rid] = (cls, rule, layer)
+        if cls == "A":
+            k = (sec, w)
+            seen[k] += 1
+            if seen[k] > 1:
+                excess_ids.append(rid)
+    return verdicts, sorted(excess_ids)
+
+
 def ro(path: Path) -> sqlite3.Connection:
     assert path.exists(), f"missing: {path}"
     return sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True)
@@ -807,74 +869,30 @@ def census_proactive(out):
     rows = c.execute(
         "SELECT id, watcher, started_at FROM proactive_events ORDER BY started_at, id"
     ).fetchall()
-    sec_w = Counter()
-    sec_tot = Counter()
-    for _rid, w, ts in rows:
-        sec = ts[:19]
-        sec_w[(sec, w)] += 1
-        sec_tot[sec] += 1
+    starts = load_journal_starts()
+    verdicts, excess_ids = proactive_row_verdicts(rows, starts)  # 单一源（PROACT-④ 收编）
     counts = {"A": Counter(), "B": Counter(), "U": Counter()}
     assigned = {"A": [], "B": [], "U": []}
-    excess_ids = []  # dup 组内除最早一行外=测试行数硬下界（n-1）
-    seen = Counter()
-    parsed = []  # (rid, w, epoch, cls)
-    after = {"A": 0, "B": 0, "U": 0}
-    for rid, w, ts in rows:
-        sec = ts[:19]
-        cls, rule = classify_proactive(sec_w[(sec, w)], sec_tot[sec])  # 单一源，禁手抄
-        counts[cls][w + ":" + rule] += 1
-        assigned[cls].append(rid)
-        if cls == "A":
-            k = (sec, w)
-            seen[k] += 1
-            if seen[k] > 1:
-                excess_ids.append(rid)
-        epoch = datetime.fromisoformat(ts).timestamp()
-        parsed.append((rid, w, epoch, cls))
-        if epoch > PROACTIVE_CUTOFF:
-            after[cls] += 1
-    # ---- 证据层（只作决策材料，不改判）----
-    starts = load_journal_starts()
-
-    def near_start(epoch):
-        if not starts:
-            return False
-        i = bisect.bisect_left(starts, epoch)
-        for j in (i - 1, i):
-            if 0 <= j < len(starts) and abs(starts[j] - epoch) <= PROACTIVE_START_WINDOW_S:
-                return True
-        return False
-
-    # 心跳节奏链（cadence）：同 watcher 按时间序贪心成链，相邻入选行间隔 >= interval-5
-    # ——生产心跳的形状上界（链可能被同距测试行抢占/接纳孤立测试行，如实记不精判）。
-    cadence = set()
-    last = {}
-    for rid, w, epoch, _cls in parsed:
-        interval = PROACTIVE_INTERVALS.get(w)
-        if interval is None:
-            continue
-        prev = last.get(w)
-        if prev is None or epoch - prev >= interval - 5.0:
-            cadence.add(rid)
-            last[w] = epoch
-    layer_of = {}
     layers = {"near_start": [], "cadence": [], "orphan": []}
     a_near_start = 0
-    for rid, w, epoch, cls in parsed:
-        if near_start(epoch):
-            layer = "near_start"
-        elif rid in cadence:
-            layer = "cadence"
-        else:
-            layer = "orphan"
-        layer_of[rid] = layer
+    after = {"A": 0, "B": 0, "U": 0}
+    for rid, w, ts in rows:
+        cls, rule, layer = verdicts[rid]
+        counts[cls][w + ":" + rule] += 1
+        assigned[cls].append(rid)
         layers[layer].append(rid)
         if layer == "near_start" and cls == "A":
             a_near_start += 1
+        if datetime.fromisoformat(ts).timestamp() > PROACTIVE_CUTOFF:
+            after[cls] += 1
+    # ---- 证据层（只作决策材料，不改判；计算已收编 proactive_row_verdicts）----
 
     def layer_ids(cls, layer):
-        return sorted(rid for rid in assigned[cls] if layer_of[rid] == layer)
+        return sorted(rid for rid in assigned[cls] if verdicts[rid][2] == layer)
 
+    sec_w = Counter()
+    for _rid, w, ts in rows:
+        sec_w[(ts[:19], w)] += 1
     dup_groups = {k: v for k, v in sec_w.items() if v >= 2}
     journal_info = {
         "available": starts is not None,
