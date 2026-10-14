@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from typing import Any
 
 import httpx
@@ -137,7 +138,9 @@ async def emit(
                 emit._timeline = TimelineStore()  # type: ignore[attr-defined]
             emit._timeline.record(
                 {
-                    "id": f"evt_{int(time.time() * 1000)}_{organ}_{event_type}",
+                    # 事件身份=一次事件一身份（uuid 后缀）：同毫秒同 organ/type 的
+                    # 突发事件此前撞同一 id 被 record() INSERT OR IGNORE 静默吞掉。
+                    "id": f"evt_{int(time.time() * 1000)}_{organ}_{event_type}_{uuid.uuid4().hex[:8]}",
                     "organ": organ,
                     "emoji": emoji,
                     "type": event_type,
@@ -200,7 +203,10 @@ def push_event(event: dict[str, Any], *, tenant_id: str | None = None) -> None:
     try:
         from src.api.event_stream import _event_buffer
 
-        event.setdefault("id", f"evt_{int(time.time() * 1000)}")
+        # 事件身份=一次事件一身份（uuid 后缀，evt_<ms> 前缀保留时序可读）：
+        # 同毫秒两事件此前撞同一 id 被 record() 去重静默吞掉（实测两事件只落 1 行）；
+        # 同一事件 dict 重放仍同 id=record() 既有 replay 幂等语义零变化。
+        event.setdefault("id", f"evt_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}")
         event.setdefault("collected_at", time.time())
         _event_buffer.append(event)
     except ImportError:

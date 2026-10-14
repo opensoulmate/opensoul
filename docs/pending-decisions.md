@@ -6,7 +6,7 @@
 
 | # | 事项 | 出处 | 建议 | 一句话拍板 |
 |---|------|------|------|-----------|
-| ① | F3b-⑨b-③ 非 HTTP 面事件身份归属（9 调用点，4 子面） | F3b-⑨ 审计③ | 1a/1b/1d 取"系统事件"，1c 取"补身份轴" | "①aA ①bA ①cB ①dA" |
+| ① | F3b-⑨b-③ 非 HTTP 面事件身份归属（9 调用点，4 子面；1c 已落 2026-10-14=F3b-⑨b-③-1c） | F3b-⑨ 审计③ | 1a/1b/1d 取"系统事件"（1c 已收口无需拍） | "①aA ①bA ①dA" |
 | ② | wakeup executor 认证轴 | F3b-⑧c 边界① | 取 C（executor=系统组件按行租户点火） | "②取C" |
 | ③ | episodic 经验 prompt 回流消费点 | F4b-㉜ 边界③ | 维持不注入，等⑤落地 | "③维持" |
 | ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为） | "④取B" |
@@ -35,6 +35,7 @@
 - 建议：**A**；如未来要"用户私有组件"，走 B（先给 components 定归属模型）。
 
 ### 1c link_gateway 3 点（helper 汇聚点 + HTTP + WS）
+- **状态：已落（2026-10-14 F3b-⑨b-③-1c）**——按建议 B 收口（HTTP 面 bind_identity+WS 凭据双源+helper 形参 1 改盖 9 fan-out），本项退出拍板清单；1a/1b/1d 仍待拍。
 - 证据：src/api/link_gateway.py:157 `_record_event`（helper，fan-out 9 站点 :221/:236/:251/:282/:357/:456/:598/:678/:694，改一处覆盖九点）；HTTP 面 + WS `websocket_proxy`（:667，:703 push_event）。当前 handler 无 authorization 形参=零身份轴。
 - 选项：**A** 维持 `'default'` / **B** HTTP 面补 bind_identity+WS 握手/query 取参双源（F3b-④ 先例），helper 形参带入（1 改覆盖 9 fan-out）。
 - 权衡：与 ②b-1~②b-8 已收的 37 个 HTTP 点同型——link_gateway 若是用户可触发的 HTTP/WS 面，B 与既有收口哲学一致（"自动作自我不可见"在多租户下是真断点）；B 是 9 点里唯一**零语义争议、纯接线**的子面。

@@ -318,7 +318,8 @@ def test_build_graph_dual_tenant(env):
 
 def test_static_census():
     """接线普查：3 文件各恰 1 identity 派生+1 tenant 注入；
-    ③ 待拍 3 文件（soma_connector/link_gateway/中间件）零改动锁死。"""
+    ③ 待拍文件（soma_connector/中间件）零改动锁死（link_gateway 已由
+    F3b-⑨b-③-1c 收口，其接线普查见 test_link_gateway_emit_tenant）。"""
 
     def count(path, needle):
         return (ROOT / path).read_text(encoding="utf-8").count(needle)
@@ -335,7 +336,6 @@ def test_static_census():
         assert count(path, "tenant_id=identity.tenant_id") == n_inject, path
     for path in (
         "src/api/soma_connector.py",
-        "src/api/link_gateway.py",
         "src/middleware/intrusion_middleware.py",
     ):
         assert count(path, "bind_identity(") == 0, path

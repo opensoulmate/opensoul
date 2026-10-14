@@ -24,11 +24,12 @@ from enum import StrEnum
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.nerve.event_bridge import push_event
+from src.services.tenant_binding import bind_identity
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +164,14 @@ def _record_event(
     status: str = "ok",
     error: str = "",
     attempt: int = 1,
+    tenant_id: str | None = None,
 ) -> GatewayEvent:
-    """Record a gateway event and push to Nerve bus."""
+    """Record a gateway event and push to Nerve bus.
+
+    F3b-⑨b-③-1c：tenant_id=身份派生租户键（⑨b-① 桥注入口）——用户面调用点
+    带 bind_identity 派生租户，事件行归属身份真源；未提供（外部 webhook 入口
+    1a 待拍面）='default' 兜底，行为字节不变。
+    """
     evt = GatewayEvent(
         event_id=f"gw-{uuid.uuid4().hex[:12]}",
         timestamp=time.time(),
@@ -194,7 +201,8 @@ def _record_event(
                     "target_url": target_url,
                     "status": status,
                 },
-            }
+            },
+            tenant_id=tenant_id,
         )
     except Exception as exc:
         logging.getLogger(__name__).debug("probe skipped: %s", exc)
@@ -207,6 +215,7 @@ async def _send_with_retry(
     payload: dict,
     headers: dict[str, str] | None = None,
     source: str = "",
+    tenant_id: str | None = None,
 ) -> GatewayEvent:
     """Send webhook payload with exponential backoff retry (3 attempts)."""
     all_headers = {"Content-Type": "application/json", **(headers or {})}
@@ -226,6 +235,7 @@ async def _send_with_retry(
                         target_url=url,
                         status="ok",
                         attempt=attempt,
+                        tenant_id=tenant_id,
                     )
                     return evt
                 last_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
@@ -242,6 +252,7 @@ async def _send_with_retry(
             status="retrying",
             error=last_error,
             attempt=attempt,
+            tenant_id=tenant_id,
         )
 
         if attempt < RETRY_ATTEMPTS:
@@ -257,6 +268,7 @@ async def _send_with_retry(
         status="error",
         error=last_error,
         attempt=RETRY_ATTEMPTS,
+        tenant_id=tenant_id,
     )
 
 
@@ -264,8 +276,9 @@ async def _send_with_retry(
 
 
 @router.post("/webhooks")
-async def register_webhook(req: WebhookRegisterRequest):
+async def register_webhook(req: WebhookRegisterRequest, authorization: str | None = Header(None)):
     """Register a new webhook endpoint (incoming or outgoing)."""
+    identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
     webhook_id = f"wh-{uuid.uuid4().hex[:8]}"
     wh = WebhookEndpoint(
         webhook_id=webhook_id,
@@ -284,6 +297,7 @@ async def register_webhook(req: WebhookRegisterRequest):
         direction="inbound",
         event_type="webhook_registered",
         payload={"webhook_id": webhook_id, "name": req.name, "direction": req.direction},
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -391,11 +405,12 @@ async def receive_incoming_webhook(webhook_id: str, request: Request):
 
 
 @router.post("/push")
-async def push_to_external(req: WebhookPushRequest):
+async def push_to_external(req: WebhookPushRequest, authorization: str | None = Header(None)):
     """
     Push a message to an external system via a registered webhook.
     Supports retry with exponential backoff (1s, 2s, 4s).
     """
+    identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
     wh = _webhooks.get(req.webhook_id)
     if not wh:
         raise HTTPException(404, "Webhook endpoint not found")
@@ -418,6 +433,7 @@ async def push_to_external(req: WebhookPushRequest):
         payload=req.payload,
         headers=merged_headers,
         source=req.webhook_id,
+        tenant_id=identity.tenant_id,
     )
 
     wh.trigger_count += 1
@@ -437,8 +453,9 @@ async def push_to_external(req: WebhookPushRequest):
 
 
 @router.post("/systems")
-async def register_system(req: SystemRegisterRequest):
+async def register_system(req: SystemRegisterRequest, authorization: str | None = Header(None)):
     """Register an external system for bidirectional integration."""
+    identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
     system_id = f"sys-{uuid.uuid4().hex[:8]}"
     sys = ExternalSystem(
         system_id=system_id,
@@ -458,6 +475,7 @@ async def register_system(req: SystemRegisterRequest):
         direction="inbound",
         event_type="system_registered",
         payload={"system_id": system_id, "name": req.name, "type": req.type},
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -556,11 +574,12 @@ async def get_events(
 
 
 @router.post("/broadcast")
-async def broadcast_to_systems(req: BroadcastRequest):
+async def broadcast_to_systems(req: BroadcastRequest, authorization: str | None = Header(None)):
     """
     Broadcast a message to all registered external systems (or a subset).
     Each system gets the message via its configured URL with auth headers.
     """
+    identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
     targets = _systems.values()
     if req.target_system_ids:
         targets = [_systems[sid] for sid in req.target_system_ids if sid in _systems]
@@ -585,6 +604,7 @@ async def broadcast_to_systems(req: BroadcastRequest):
             payload=req.payload,
             headers=headers,
             source=sys.system_id,
+            tenant_id=identity.tenant_id,
         )
         results.append(
             {
@@ -604,6 +624,7 @@ async def broadcast_to_systems(req: BroadcastRequest):
             "targets": len(results),
             "results": results,
         },
+        tenant_id=identity.tenant_id,
     )
 
     return {
@@ -663,13 +684,35 @@ async def sse_event_stream(
 # ── WebSocket Proxy ─────────────────────────────────────────
 
 
+def _ws_presented_token(ws: WebSocket) -> str:
+    """WS 身份凭证取参双源（F3b-④ 先例）：`?token=` query（浏览器 WS 无法自设头，
+    主口）优先，Authorization 头（非浏览器客户端）兜底。返回原始凭证串
+    （bind_identity._bearer_token 归一 Bearer 前缀），未提供=空串=匿名。"""
+    token = (ws.query_params.get("token") or "").strip()
+    if token:
+        return token
+    return (ws.headers.get("authorization") or "").strip()
+
+
 @router.websocket("/ws")
 async def websocket_proxy(ws: WebSocket):
     """
     WebSocket endpoint for real-time bidirectional communication.
     External clients connect here; messages are broadcast to all
     connected WS subscribers and forwarded to the Nerve bus.
+
+    F3b-⑨b-③-1c：身份轴——凭据双源取参→bind_identity 派生租户键带入事件；
+    坏 token 握手拒绝（accept 前 close 1008，身份证明先于一切 F3b-⑤），
+    未提供=匿名 'default' 契约不变。
     """
+    try:
+        identity = bind_identity(_ws_presented_token(ws) or None)
+    except HTTPException as exc:
+        logger.warning("link WS rejected: %s", exc.detail)
+        await ws.close(code=1008, reason="invalid token")
+        return
+    tenant = identity.tenant_id
+
     await ws.accept()
     _ws_clients.append(ws)
     logger.info("WS client connected (%d active)", len(_ws_clients))
@@ -680,6 +723,7 @@ async def websocket_proxy(ws: WebSocket):
         direction="inbound",
         event_type="ws_connected",
         payload={"total_clients": len(_ws_clients)},
+        tenant_id=tenant,
     )
 
     try:
@@ -696,6 +740,7 @@ async def websocket_proxy(ws: WebSocket):
                 direction="inbound",
                 event_type="ws_message",
                 payload=payload,
+                tenant_id=tenant,
             )
 
             # Forward to Nerve bus
@@ -707,7 +752,8 @@ async def websocket_proxy(ws: WebSocket):
                         "type": "ws_message",
                         "summary": "🔌 WebSocket message received",
                         "detail": {"payload": payload},
-                    }
+                    },
+                    tenant_id=tenant,
                 )
             except Exception as exc:
                 logging.getLogger(__name__).debug("probe skipped: %s", exc)
