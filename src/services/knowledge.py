@@ -14,6 +14,42 @@ from src.services.chunking import smart_chunk
 from src.services.embedding import get_embeddings_batch
 
 
+def _row_out(d: dict) -> dict:
+    """行→响应契约归一（单一收口，声明从实现派生）。
+
+    metadata：JSON 文本→dict（既有语义逐字保留，解析失败=空 dict）。
+    tags：KnowledgeResponse.tags 契约=list[str]，存储面两形态——knowledge.tags 列
+    JSON 文本（DEFAULT '[]'）与链接面 GROUP_CONCAT 逗号串（None=无标签）；修前
+    存储行原样回吐，响应校验 Input should be a valid list → 500（create 逐次必炸、
+    get/list 有行即炸）。全部归一为 list[str]。
+    """
+    if isinstance(d.get("metadata"), str):
+        try:
+            d["metadata"] = json.loads(d["metadata"])
+        except Exception:
+            d["metadata"] = {}
+    raw = d.get("tags")
+    if isinstance(raw, list):
+        d["tags"] = [str(x) for x in raw]
+    elif isinstance(raw, str):
+        s = raw.strip()
+        parsed = None
+        if s.startswith("["):
+            try:
+                parsed = json.loads(s)
+            except Exception:
+                parsed = None
+        if isinstance(parsed, list):
+            d["tags"] = [str(x) for x in parsed]
+        elif s:
+            d["tags"] = [t for t in s.split(",") if t]
+        else:
+            d["tags"] = []
+    else:
+        d["tags"] = []
+    return d
+
+
 async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
     import uuid as _uuid
 
@@ -29,7 +65,7 @@ async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
         json.dumps(data.metadata or {}),
         str(user_id),
     )
-    row = await db_pool.fetchrow("SELECT * FROM knowledge WHERE id = $1", knowledge_id)
+    await db_pool.fetchrow("SELECT * FROM knowledge WHERE id = $1", knowledge_id)
 
     # Add tags
     for tag_name in data.tags:
@@ -101,13 +137,9 @@ async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
             ]
         )
 
-    d = dict(row)
-    if isinstance(d.get("metadata"), str):
-        try:
-            d["metadata"] = json.loads(d["metadata"])
-        except Exception:
-            d["metadata"] = {}
-    return d
+    # 响应走 get_knowledge 同一读真源（链接面 GROUP_CONCAT）：create/get/list
+    # 三面 tags 同源禁双源漂移（修前 create 回吐存储行原样=tags 文本触发 500）
+    return await get_knowledge(_uuid.UUID(knowledge_id), user_id)
 
 
 async def get_knowledge(knowledge_id: UUID, user_id: UUID) -> dict | None:
@@ -120,13 +152,9 @@ async def get_knowledge(knowledge_id: UUID, user_id: UUID) -> dict | None:
         knowledge_id,
         str(user_id),
     )
-    d = dict(row)
-    if isinstance(d.get("metadata"), str):
-        try:
-            d["metadata"] = json.loads(d["metadata"])
-        except Exception:
-            d["metadata"] = {}
-    return d if row else None
+    if not row:
+        return None
+    return _row_out(dict(row))
 
 
 async def list_knowledge(
@@ -156,31 +184,29 @@ async def list_knowledge(
     if tag:
         # Filter by tag via join
         query = (
-            "SELECT k.* FROM knowledge k "
+            "SELECT k.*, GROUP_CONCAT(t.name) as tags FROM knowledge k "
+            "LEFT JOIN knowledge_tags kt ON k.id = kt.knowledge_id "
+            "LEFT JOIN tags t ON kt.tag_id = t.id "
             "WHERE " + where_clause + " AND EXISTS ("
             "SELECT 1 FROM knowledge_tags kt2 JOIN tags t2 ON kt2.tag_id = t2.id "
             "WHERE kt2.knowledge_id = k.id AND t2.name = ?) "
-            "ORDER BY k.created_at DESC LIMIT ? OFFSET ?"
+            "GROUP BY k.id ORDER BY k.created_at DESC LIMIT ? OFFSET ?"
         )
         values.extend([tag, limit, offset])
     else:
         query = (
-            "SELECT k.* FROM knowledge k "
+            "SELECT k.*, GROUP_CONCAT(t.name) as tags FROM knowledge k "
+            "LEFT JOIN knowledge_tags kt ON k.id = kt.knowledge_id "
+            "LEFT JOIN tags t ON kt.tag_id = t.id "
             "WHERE " + where_clause + " "
-            "ORDER BY k.created_at DESC LIMIT ? OFFSET ?"
+            "GROUP BY k.id ORDER BY k.created_at DESC LIMIT ? OFFSET ?"
         )
         values.extend([limit, offset])
 
     rows = await db_pool.fetch(query, *values)
     result = []
     for r in rows:
-        d = dict(r)
-        if isinstance(d.get("metadata"), str):
-            try:
-                d["metadata"] = json.loads(d["metadata"])
-            except Exception:
-                d["metadata"] = {}
-        result.append(d)
+        result.append(_row_out(dict(r)))
     return result
 
 
@@ -209,6 +235,14 @@ async def update_knowledge(knowledge_id: UUID, data: KnowledgeUpdate, user_id: U
 
 
 async def delete_knowledge(knowledge_id: UUID, user_id: UUID) -> bool:
+    # 归属闸前置：行属他人=零副作用（修前 qdrant/meili 在归属检查前先删=他人
+    # 向量/索引可被毁，SQL 行留着但检索面已残）
+    owned = await db_pool.fetchval(
+        "SELECT 1 FROM knowledge WHERE id = $1 AND user_id = $2", knowledge_id, user_id
+    )
+    if not owned:
+        return False
+
     # Delete chunks from qdrant
     chunks = await db_pool.fetch(
         "SELECT embedding_id FROM knowledge_chunks WHERE knowledge_id = $1", knowledge_id
@@ -225,6 +259,11 @@ async def delete_knowledge(knowledge_id: UUID, user_id: UUID) -> bool:
     result = await db_pool.execute(
         "DELETE FROM knowledge WHERE id = $1 AND user_id = $2", knowledge_id, user_id
     )
+    if "DELETE 1" in result:
+        # 级联三面（TL-⑥ 删除工具同款语义）：链接/分块行随知识行删——修前只删
+        # knowledge 行，knowledge_chunks/knowledge_tags 留孤儿行（孤儿增长）
+        await db_pool.execute("DELETE FROM knowledge_tags WHERE knowledge_id = $1", knowledge_id)
+        await db_pool.execute("DELETE FROM knowledge_chunks WHERE knowledge_id = $1", knowledge_id)
     return "DELETE 1" in result
 
 

@@ -443,6 +443,61 @@ CREATE TABLE IF NOT EXISTS knowledge_tags (
 
 
 @pytest.fixture()
+def knowledge_client(tmp_path, monkeypatch):
+    """knowledge API隔离测试面：真实router + tmp独立数据面（pipeline_client 知识
+    入库面同款路线），绝不写生产 data/opensoul.db。TL-⑲ 顺手收口件消费：knowledge
+    服务读写面断点回归（tags 响应归一/get 404 契约/delete 级联）。
+    数据面：tmp opensoul.db 真 schema（_PIPELINE_KNOWLEDGE_DDL）+ db_pool 三绑定
+    换 tmp SQLitePool + embedding 降级空向量 + meili AVAILABLE=False。
+    app.state.knowledge_client_db 暴露 tmp 库路径供行级断言。
+    """
+    import sqlite3 as _sqlite3
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.knowledge as knowledge_api
+    import src.database.postgres as postgres_mod
+    import src.services.auth as auth_mod
+    import src.services.knowledge as knowledge_mod
+    from src.config import settings
+    from src.database.postgres import SQLitePool
+
+    tmp_os_db = tmp_path / "opensoul.db"
+    with _sqlite3.connect(tmp_os_db) as _c:
+        _c.executescript(_PIPELINE_KNOWLEDGE_DDL)
+        _c.commit()
+    monkeypatch.setenv("USERS_DB", str(tmp_os_db))
+    monkeypatch.setenv("ENTERPRISE_DB", str(tmp_path / "enterprise.db"))
+    monkeypatch.setattr(settings, "database_url", f"sqlite:///{tmp_os_db}")
+    tmp_pool = SQLitePool()
+    monkeypatch.setattr(postgres_mod, "db_pool", tmp_pool)
+    monkeypatch.setattr(auth_mod, "db_pool", tmp_pool)
+    monkeypatch.setattr(knowledge_mod, "db_pool", tmp_pool)
+    monkeypatch.setattr(knowledge_api, "db_pool", tmp_pool)
+
+    async def _no_embeddings(_texts):
+        # 逐条空向量（=既有空向量降级形态：chunk 行照常落库、qdrant 不写）；
+        # 整批 [] 会让 zip(chunks, embeddings) 截断成零 chunk 行，非真实降级形态
+        return [[] for _ in _texts]
+
+    monkeypatch.setattr(knowledge_mod, "get_embeddings_batch", _no_embeddings)
+    monkeypatch.setattr(knowledge_mod.meili_client, "AVAILABLE", False)
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        await tmp_pool.connect()
+        yield
+        await tmp_pool.disconnect()
+
+    app = FastAPI(lifespan=_lifespan)
+    app.include_router(knowledge_api.router, prefix="/api/knowledge")
+    app.state.knowledge_client_db = str(tmp_os_db)
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
 def pipeline_client(tmp_path, monkeypatch):
     """pipeline API隔离测试面：真实router + tmp独立数据面，绝不写生产
     data/timeline.db / data/vein/ / data/opensoul.db（gene_client/will_client/
