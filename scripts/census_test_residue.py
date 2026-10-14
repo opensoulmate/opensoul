@@ -114,6 +114,24 @@ A_KNOWLEDGE_FIXTURE_CONTENT = {
 A_KNOWLEDGE_SELF_DECLARED_CONTENT = {
     "pipe_test.txt": "Hello pipeline test file for knowledge import validation 20260919.",
 }
+# TL-㉑ 「反馈层测试」4/「test」1 取舍拍板（2026-10-14）：(标题, 内容) 双逐字钉
+# 探针对。证据链（TL-⑳ 三重旁证同法）：①自述——标题「反馈层测试」自述测试+行
+# 内容逐字「这是自动提取的知识条目，用于验证反馈层写入机制」自述验证用途；
+# 「test」行 title/source/content 全字面测试标识（'test'/'test'/'test content'，
+# 与 A_USERNAMES{'test'}、A_EXPORT_ENTRY_NAMES 同族字面）②时刻——2026-08-30
+# 02:21:33~02:22:26 60 秒簇 5 行（3 种 metadata 形状×2 user_id=写入路径验证行为
+# 非知识生产），落在反馈层功能（src/services/feedback.py 首提交 0c49266e
+# 2026-08-31 00:56:58）前 22.6h 的开发空窗（cf2fff9d 2026-08-28 08:21 后全仓零
+# 提交）正中=反馈层开发期写入验证探针（时距如实记，非 TL-⑳ 的秒级吻合）
+# ③repo 全历史 git log -S「这是自动提取的知识条目」「自动提取的知识条目」零出处；
+# 「test content」仅作 tests/test_vein.py 更长夹具子串存在（逐字节不同）=非仓内
+# 夹具。仅 (标题,内容) 双逐字节相同才判 A（宁窄勿滥：同题真实内容/同内容异题不动）。
+A_KNOWLEDGE_PROBE_TITLE_CONTENT = {
+    ("反馈层测试", "这是自动提取的知识条目"),
+    ("反馈层测试", "这是自动提取的知识条目，用于验证反馈层写入机制"),
+    ("反馈层测试", "自动提取的知识条目"),
+    ("test", "test content"),
+}
 A_TENANT_PREFIX = "e2e-"
 A_GOAL_MARKERS = ("冒烟测试", "A1认知层接线live验证", "逐块推送验证目标", "清空生产数据库", "口算17加25")
 B_GOAL_MARKERS = ("用一句话", "请分三句话", "列出3个Linux", "介绍一下Python", "介绍Python的GIL")
@@ -141,7 +159,8 @@ def classify_knowledge(title: str, content: str | None = None):
 
     返回 (cls, rule)：A=确证测试残留（fixture 标题前缀，或标题+内容双逐字钉
     A_KNOWLEDGE_FIXTURE_CONTENT——TL-⑱，或自述测试探针内容逐字钉
-    A_KNOWLEDGE_SELF_DECLARED_CONTENT——TL-⑳）、B=疑似（需人工裁决）、other=不动。
+    A_KNOWLEDGE_SELF_DECLARED_CONTENT——TL-⑳，或 (标题,内容) 双逐字钉探针对
+    A_KNOWLEDGE_PROBE_TITLE_CONTENT——TL-㉑）、B=疑似（需人工裁决）、other=不动。
     内容判据宁窄勿滥：仅内容与夹具/探针逐字节相同才判 A（同名真实用户上传不动）；
     content 未提供（旧调用面）不猜——标题词表语义逐字不变（契约锁死面）。
     """
@@ -158,6 +177,8 @@ def classify_knowledge(title: str, content: str | None = None):
         selfdecl = A_KNOWLEDGE_SELF_DECLARED_CONTENT.get(bare)
         if selfdecl is not None and content == selfdecl:
             return "A", "A_KNOWLEDGE_SELF_DECLARED_CONTENT"
+    if content is not None and (t, content) in A_KNOWLEDGE_PROBE_TITLE_CONTENT:
+        return "A", "A_KNOWLEDGE_PROBE_TITLE_CONTENT"
     return "other", "unmatched"
 
 
