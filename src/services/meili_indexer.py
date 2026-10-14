@@ -4,31 +4,36 @@
 - main.py lifespan启动时：index_all_knowledge()（空索引首次填充）
 - api/search.py POST /api/search/reindex：手动全量重建
 - api/vein.py + api/capture.py写入点：index_knowledge_doc()增量索引
+- services/knowledge.py create/update 写面：index_knowledge_doc()增量索引（KN-②）
 - api/vein.py删除knowledge时：delete_knowledge_doc()
 
 设计约束：
 - 全部操作fire-and-forget语义：索引失败不阻塞业务主流程（mem0 §1.1失败可见=logger.warning）
 - 文档content截断5000字：meilisearch单文档合理上限，全文可搜
+- doc tags 真源=链接面（knowledge_tags/tags GROUP_CONCAT，与 get/list 同一读真源；
+  修前读 knowledge.tags 列=该列无写点恒 '[]'，全量重索引把已索引条目 tags 洗空）
 """
 
-import json
 import logging
 
 from src.database.meilisearch import meili_client
+from src.models.knowledge import normalize_tags
 
 logger = logging.getLogger(__name__)
 
-_SELECT_COLS = "id, user_id, title, content, tags, source, content_type, created_at"
+# 读真源=链接面 GROUP_CONCAT tags（get/list 同源），knowledge.tags 列无写点不作源
+_SELECT_JOIN = (
+    "SELECT k.id, k.user_id, k.title, k.content, k.source, k.content_type, k.created_at, "
+    "GROUP_CONCAT(t.name) AS tags "
+    "FROM knowledge k "
+    "LEFT JOIN knowledge_tags kt ON k.id = kt.knowledge_id "
+    "LEFT JOIN tags t ON kt.tag_id = t.id "
+)
 
 
 def _row_to_doc(row: dict) -> dict:
-    """knowledge表行→Meilisearch文档。tags列可能是JSON字符串。"""
-    tags = row.get("tags")
-    if isinstance(tags, str):
-        try:
-            tags = json.loads(tags)
-        except (json.JSONDecodeError, TypeError):
-            tags = [tags] if tags else []
+    """knowledge表行→Meilisearch文档。tags 形态归一走 normalize_tags 单一源。"""
+    tags = normalize_tags(row.get("tags"))
     created_at = row.get("created_at")
     if created_at is None:
         created_at = 0
@@ -54,7 +59,7 @@ async def index_all_knowledge() -> dict:
         from src.database.postgres import db_pool
 
         meili_client.ensure_index()
-        rows = await db_pool.fetch(f"SELECT {_SELECT_COLS} FROM knowledge")
+        rows = await db_pool.fetch(f"{_SELECT_JOIN} GROUP BY k.id")
         docs = [_row_to_doc(dict(r)) for r in rows]
         if docs:
             meili_client.add_documents(docs)
@@ -72,9 +77,7 @@ async def index_knowledge_doc(knowledge_id: str) -> bool:
     try:
         from src.database.postgres import db_pool
 
-        row = await db_pool.fetchrow(
-            f"SELECT {_SELECT_COLS} FROM knowledge WHERE id = $1", knowledge_id
-        )
+        row = await db_pool.fetchrow(f"{_SELECT_JOIN} WHERE k.id = $1 GROUP BY k.id", knowledge_id)
         if not row:
             return False
         meili_client.ensure_index()

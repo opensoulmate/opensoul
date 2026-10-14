@@ -10,9 +10,10 @@ try:
     from qdrant_client.models import PointStruct
 except ImportError:
     PointStruct = None
-from src.models.knowledge import KnowledgeCreate, KnowledgeUpdate
+from src.models.knowledge import KnowledgeCreate, KnowledgeUpdate, normalize_tags
 from src.services.chunking import smart_chunk
 from src.services.embedding import get_embeddings_batch
+from src.services.meili_indexer import index_knowledge_doc
 
 
 def _row_out(d: dict) -> dict:
@@ -29,25 +30,7 @@ def _row_out(d: dict) -> dict:
             d["metadata"] = json.loads(d["metadata"])
         except Exception:
             d["metadata"] = {}
-    raw = d.get("tags")
-    if isinstance(raw, list):
-        d["tags"] = [str(x) for x in raw]
-    elif isinstance(raw, str):
-        s = raw.strip()
-        parsed = None
-        if s.startswith("["):
-            try:
-                parsed = json.loads(s)
-            except Exception:
-                parsed = None
-        if isinstance(parsed, list):
-            d["tags"] = [str(x) for x in parsed]
-        elif s:
-            d["tags"] = [t for t in s.split(",") if t]
-        else:
-            d["tags"] = []
-    else:
-        d["tags"] = []
+    d["tags"] = normalize_tags(d.get("tags"))
     return d
 
 
@@ -131,20 +114,12 @@ async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
         if points:
             qdrant_client.upsert_points(points)
 
-    # Index in Meilisearch (always, even if no chunks)
-    if meili_client.AVAILABLE:
-        meili_client.add_documents(
-            [
-                {
-                    "id": str(knowledge_id),
-                    "title": data.title,
-                    "content": data.content[:5000],
-                    "tags": data.tags,
-                    "user_id": str(user_id),
-                    "content_type": data.content_type,
-                }
-            ]
-        )
+    # Meili 索引写面走 meili_indexer.index_knowledge_doc 单一构造口（doc 从 DB
+    # 读真源派生，与 update/全量重索引同形同源；修前 create 内联 doc 与
+    # _row_to_doc 双形状双 tags 源=同一索引内容随写入路径漂移）。行为收口如实记：
+    # 修前 meili 异常逃逸=行已落库后 create 500 部分写，现按 meili_indexer 既有
+    # fire-and-forget 语义失败 logger.warning 不阻断业务主流程。
+    await index_knowledge_doc(knowledge_id)
 
     # 响应走 get_knowledge 同一读真源（链接面 GROUP_CONCAT）：create/get/list
     # 三面 tags 同源禁双源漂移（修前 create 回吐存储行原样=tags 文本触发 500）
@@ -262,6 +237,11 @@ async def update_knowledge(knowledge_id: UUID, data: KnowledgeUpdate, user_id: U
     if "tags" in fields:
         # 修前整个跳过=静默丢+200 回旧 tags 谎报 ok（KN-①）；现走 create 同一链接面收口
         await _replace_tags(str(knowledge_id), fields["tags"] or [], user_id)
+
+    # KN-②：写面后真重索引（修 KN-① 留档边界「不重刷 meili 索引=content/title/
+    # tags 变更后检索面仍旧文」）。doc 从 DB 读真源派生（tags=链接面，与 get/list
+    # 同一读真源），失败 indexer 内 logger.warning 不阻断（fire-and-forget 语义）。
+    await index_knowledge_doc(str(knowledge_id))
 
     return await get_knowledge(knowledge_id, user_id)
 
