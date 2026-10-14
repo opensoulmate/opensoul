@@ -108,6 +108,9 @@ class IntrusionDetectionMiddleware(BaseHTTPMiddleware):
             try:
                 from src.nerve.event_bridge import push_event
 
+                # 系统事件归属（DEC-① 1d 裁决＝维持 'default' 兜底）：安全拦截史
+                # 归系统，事件刻意不带 tenant_id（record() 落 'default'）；不按
+                # 请求身份派生——攻击者视角的拦截记录挂到受害者租户名下反而失真。
                 push_event(
                     {
                         "organ": "immune",

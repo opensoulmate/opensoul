@@ -180,6 +180,10 @@ async def receive_webhook(connector_id: str, request: Request):
         source_ip=source_ip,
     )
 
+    # 系统事件归属（DEC-① 1a 裁决＝维持 'default' 兜底）：外部 webhook 调用方
+    # 非用户身份轴，事件刻意不带 tenant_id（record() 落 'default'）＝「connector
+    # 系统事件」语义如实；任何 Authorization 头都不改变归属，也绝不接 401
+    # （第三方调用方无用户 JWT，接身份轴＝打断外部 webhook 真回归）。
     push_event(
         {
             "organ": "link",

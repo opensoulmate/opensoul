@@ -222,6 +222,9 @@ async def register_component(req: RegisterRequest):
         secret_token=req.secret_token,
     )
 
+    # 系统事件归属（DEC-① 1b 裁决＝维持 'default' 兜底，本文件 4 处 push_event
+    # 同语义）：组件是系统资源（component token 自有鉴权轴，非用户 JWT），事件
+    # 刻意不带 tenant_id（record() 落 'default'）；Authorization 头不改变归属。
     push_event(
         {
             "organ": "soma",
