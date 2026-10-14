@@ -48,6 +48,10 @@ class TrajectoryEvent:
     status: str = "ok"
     created_at: str = ""
     end_at: str | None = None
+    # 行租户键（DEC-⑦-⑥ trajectory 子搜索存储层加轴）：自带键、缺失/空白→
+    # 'default' 兜底（event_row_tenant 单一判法）；行归属=父 session 行继承
+    # （add_event 单写点，③b-2 写点=父行继承同款），存量行随迁移回填 'default'。
+    tenant_id: str = ""
 
     def __post_init__(self):
         if not self.id:
@@ -84,6 +88,10 @@ class TrajectorySession:
     tags: list[str] = field(default_factory=list)
     created_at: str = ""
     ended_at: str | None = None
+    # 行租户键（DEC-⑦-⑥）：自带键、缺失/空白→'default' 兜底（session_row_tenant
+    # 单一判法）；写点=create_session(tenant_id=) bind_identity 派生，存量行随
+    # 迁移回填 'default'（与 F3 实测分布一致）。
+    tenant_id: str = ""
 
     def __post_init__(self):
         if not self.id:
@@ -94,6 +102,38 @@ class TrajectorySession:
     def to_dict(self) -> dict:
         d = asdict(self)
         return d
+
+
+DEFAULT_TENANT = "default"
+
+
+class SessionTenantDenied(Exception):
+    """跨租户写拒（行归属不可被跨租户改写）：API层映射为HTTP 403。
+
+    DEC-⑦-③ TemplateTenantDenied / ④ FileTenantDenied / ⑤ AgentTenantDenied
+    同款（劫持闸语义，F3b-③c-2②d 纪律）。
+    """
+
+
+def session_row_tenant(session: TrajectorySession) -> str:
+    """session 行租户键单一判法（DEC-⑦-⑥）：自带键、缺失/空白→'default' 兜底。
+
+    写读同源：create_session 落行、劫持闸/归属闸、list/count 过滤、API 加性
+    tenant_id 键共用本函数，禁消费点另发明判法（F4b-㉗ 纪律）；DEC-⑦-①
+    _event_row_tenant / ② message_row_tenant / ③ template_row_tenant / ④
+    file_row_tenant / ⑤ agent_row_tenant 同款语义（系统/缺省写方→'default'，
+    键派生故障绝不吃掉落库）。
+    """
+    return ((session.tenant_id or "").strip()) or DEFAULT_TENANT
+
+
+def event_row_tenant(event: TrajectoryEvent) -> str:
+    """事件行租户键单一判法（DEC-⑦-⑥）：自带键、缺失/空白→'default' 兜底。
+
+    事件行归属=父 session 行继承（add_event 单写点，③b-2「写点租户键=父行
+    继承」同款）；本函数=落行归一与加性 tenant_id 键共用判法（写读同源）。
+    """
+    return ((event.tenant_id or "").strip()) or DEFAULT_TENANT
 
 
 class ScoreDataType(StrEnum):
@@ -180,7 +220,8 @@ class TrajectoryStore:
                 total_duration_ms REAL NOT NULL DEFAULT 0,
                 tags_json TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
-                ended_at TEXT
+                ended_at TEXT,
+                tenant_id TEXT NOT NULL DEFAULT 'default'
             )
         """)
         await db_pool.execute("""
@@ -195,7 +236,8 @@ class TrajectoryStore:
                 token_usage INTEGER NOT NULL DEFAULT 0,
                 duration_ms REAL NOT NULL DEFAULT 0,
                 status TEXT NOT NULL DEFAULT 'ok',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                tenant_id TEXT NOT NULL DEFAULT 'default'
             )
         """)
         await db_pool.execute("""
@@ -211,6 +253,28 @@ class TrajectoryStore:
             msg = str(exc).lower()
             if "duplicate column" not in msg and "already exists" not in msg:
                 raise
+        # Migration: 行租户键（DEC-⑦-⑥，C1 幂等双轨 ⑦-③④⑤ 先例）：CREATE TABLE
+        # IF NOT EXISTS 不补列，存量库按 try/ALTER 补 tenant_id 列（常量默认
+        # ='default' 回填存量行，与 F3 实测分布一致）；租户索引必须在补列之后建
+        # （③c-2① 坑延续）。
+        for _ddl in (
+            "ALTER TABLE trajectory_sessions ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'",
+            "ALTER TABLE trajectory_events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'",
+        ):
+            try:
+                await db_pool.execute(_ddl)
+            except Exception as exc:
+                msg = str(exc).lower()
+                if "duplicate column" not in msg and "already exists" not in msg:
+                    raise
+        await db_pool.execute("""
+            CREATE INDEX IF NOT EXISTS idx_traj_sessions_tenant
+            ON trajectory_sessions(tenant_id)
+        """)
+        await db_pool.execute("""
+            CREATE INDEX IF NOT EXISTS idx_traj_events_tenant
+            ON trajectory_events(tenant_id)
+        """)
         await db_pool.execute("""
             CREATE TABLE IF NOT EXISTS trajectory_scores (
                 id TEXT PRIMARY KEY,
@@ -240,7 +304,15 @@ class TrajectoryStore:
         forked_from: str | None = None,
         fork_point_event_id: str | None = None,
         tags: list[str] | None = None,
+        tenant_id: str | None = None,
     ) -> TrajectorySession:
+        """新建 session。
+
+        tenant_id=写点派生租户键（DEC-⑦-⑥）；未提供/空白→'default' 兜底=系统
+        写方语义（session_row_tenant 单一判法，键派生故障绝不吃掉落库）。
+        劫持闸：显式 id 撞既有行且租户不同=SessionTenantDenied 行零改写
+        （DEC-⑦-③④⑤ 同款，F3b-③c-2②d 纪律）。
+        """
         await self.ensure_tables()
         s = TrajectorySession(
             id=id,
@@ -249,12 +321,22 @@ class TrajectoryStore:
             forked_from=forked_from,
             fork_point_event_id=fork_point_event_id,
             tags=tags or [],
+            tenant_id=tenant_id or "",
         )
+        # 行归属=写点派生租户（写读同一判法：落行值即 session_row_tenant 归一值）
+        row_tenant = session_row_tenant(s)
+        s.tenant_id = row_tenant
+        if id:
+            existing = await db_pool.fetchrow("SELECT * FROM trajectory_sessions WHERE id = ?", id)
+            if existing and session_row_tenant(self._row_to_session(existing)) != row_tenant:
+                # 行归属不可被跨租户改写：跨租户按同 id 建/顶=拒绝且行零改写。
+                raise SessionTenantDenied(f"session {id!r} belongs to another tenant")
         await db_pool.execute(
             """INSERT INTO trajectory_sessions
                (id, agent_id, task_description, status, forked_from, fork_point_event_id,
-                total_events, total_tokens, total_duration_ms, tags_json, created_at, ended_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                total_events, total_tokens, total_duration_ms, tags_json, created_at, ended_at,
+                tenant_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             s.id,
             s.agent_id,
             s.task_description,
@@ -267,6 +349,7 @@ class TrajectoryStore:
             json.dumps(s.tags),
             s.created_at,
             s.ended_at,
+            s.tenant_id,
         )
         return s
 
@@ -278,8 +361,19 @@ class TrajectoryStore:
         return self._row_to_session(row)
 
     async def list_sessions(
-        self, agent_id: str = "", status: str = "", limit: int = 50, offset: int = 0
+        self,
+        agent_id: str = "",
+        status: str = "",
+        limit: int = 50,
+        offset: int = 0,
+        tenant_id: str | None = None,
     ) -> list[TrajectorySession]:
+        """列出 session（DEC-⑦-⑥ 租户过滤）。
+
+        tenant_id 显式给出=恒按行租户键过滤（行键写点归一+迁移回填，SQL 等值
+        =session_row_tenant 等值；过滤先于截断=limit 只计可见命中，跨租户行不占
+        名额）；None=系统视图，既有调用面字节不变。
+        """
         await self.ensure_tables()
         clauses = []
         params: list[Any] = []
@@ -289,6 +383,9 @@ class TrajectoryStore:
         if status:
             clauses.append("status = ?")
             params.append(status)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         params.extend([limit, offset])
         rows = await db_pool.fetch(
@@ -297,15 +394,26 @@ class TrajectoryStore:
         )
         return [self._row_to_session(r) for r in rows]
 
-    async def end_session(self, session_id: str, status: str = "completed"):
+    async def end_session(
+        self, session_id: str, status: str = "completed", tenant_id: str | None = None
+    ):
         """收口session（04:20轮遗留#2销账：session.status不再恒running）。
 
         session.status = 活跃度生命周期：running（有在途/最近活动）↔ completed
         （已收口不再活跃）。首收口生效（ended_at只记第一次，重复收口no-op）；
         后续add_event自愈翻回running（见add_event）。span/event级status仍是
         结果语义（ok/error）——失败可见性不在此层。
+
+        DEC-⑦-⑥ 劫持闸：tenant_id 显式给出且与行租户键不同=SessionTenantDenied
+        行零改写（跨租户不得改写他人 session 状态，⑦-④ update 同款）；None=
+        系统视图不闸（既有内部调用面字节不变）；tenant_id 不进 SET=粘性不洗键。
         """
         await self.ensure_tables()
+        row = await db_pool.fetchrow("SELECT * FROM trajectory_sessions WHERE id = ?", session_id)
+        if not row:
+            return
+        if tenant_id is not None and session_row_tenant(self._row_to_session(row)) != tenant_id:
+            raise SessionTenantDenied(f"session {session_id!r} belongs to another tenant")
         await db_pool.execute(
             """UPDATE trajectory_sessions
                SET status = ?, ended_at = ?
@@ -360,28 +468,61 @@ class TrajectoryStore:
             flipped += 1
         return flipped
 
-    async def delete_session(self, session_id: str):
+    async def delete_session(self, session_id: str, tenant_id: str | None = None) -> bool:
+        """删除 session 及其事件/score（DEC-⑦-⑥ 归属闸）。
+
+        tenant_id 显式给出时跨租户删除=零副作用回 False（与 not-found 同一契约，
+        不差分泄露他租户行存在性，⑦-④ delete 同款）；None=系统视图不闸（既有
+        内部调用面字节不变）。返回 True=真删，False=缺行或跨租户拒。
+        """
         await self.ensure_tables()
+        row = await db_pool.fetchrow("SELECT * FROM trajectory_sessions WHERE id = ?", session_id)
+        if not row:
+            return False
+        if tenant_id is not None and session_row_tenant(self._row_to_session(row)) != tenant_id:
+            return False
         await db_pool.execute("DELETE FROM trajectory_scores WHERE session_id = ?", session_id)
         await db_pool.execute("DELETE FROM trajectory_events WHERE session_id = ?", session_id)
         await db_pool.execute("DELETE FROM trajectory_sessions WHERE id = ?", session_id)
+        return True
 
-    async def count_sessions(self) -> int:
+    async def count_sessions(self, tenant_id: str | None = None) -> int:
+        """session 总数（DEC-⑦-⑥：tenant_id 显式给出=恒按行租户键过滤——
+        总数不得泄露全局分布，③c-2① stats 纪律；None=系统视图字节不变）。"""
         await self.ensure_tables()
-        row = await db_pool.fetchrow("SELECT COUNT(*) as cnt FROM trajectory_sessions")
+        if tenant_id is not None:
+            row = await db_pool.fetchrow(
+                "SELECT COUNT(*) as cnt FROM trajectory_sessions WHERE tenant_id = ?",
+                tenant_id,
+            )
+        else:
+            row = await db_pool.fetchrow("SELECT COUNT(*) as cnt FROM trajectory_sessions")
         return row["cnt"] if row else 0
 
     # ── Event CRUD ───────────────────────────────────────────
 
     async def add_event(self, event: TrajectoryEvent) -> TrajectoryEvent:
+        """写入事件（DEC-⑦-⑥：行归属=父 session 行继承）。
+
+        写点租户键=父 session 行租户键（③b-2「写点租户键=父行继承」同款）：
+        外部/系统写方经 HTTP 落事件同样随父行归属（会话拥有者可见自己会话的
+        全部事件，③b-2 外部写方回帖语义）；父行缺失/键空白→'default' 兜底不
+        掉落库（键派生故障绝不吃掉落库，③b-2 旁路纪律）。
+        """
         await self.ensure_tables()
         if not event.session_id:
             raise ValueError("event.session_id is required")
+        parent = await db_pool.fetchrow(
+            "SELECT tenant_id FROM trajectory_sessions WHERE id = ?", event.session_id
+        )
+        event.tenant_id = (dict(parent).get("tenant_id") if parent else "") or ""
+        event.tenant_id = event_row_tenant(event)
         await db_pool.execute(
             """INSERT INTO trajectory_events
                (id, session_id, parent_event_id, event_type, agent_id,
-                content, metadata_json, token_usage, duration_ms, status, created_at, end_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                content, metadata_json, token_usage, duration_ms, status, created_at, end_at,
+                tenant_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             event.id,
             event.session_id,
             event.parent_event_id,
@@ -394,6 +535,7 @@ class TrajectoryStore:
             event.status,
             event.created_at,
             event.end_at,
+            event.tenant_id,
         )
         # Update session counters + 活跃度自愈重开（session收口语义，04:20轮遗留#2）：
         # 事件=活动——已收口（completed）的session被新事件翻回running并清ended_at，
@@ -429,13 +571,19 @@ class TrajectoryStore:
 
     @staticmethod
     def _search_where(
-        session_id: str = "", event_type: str = "", keyword: str = "", status: str = ""
+        session_id: str = "",
+        event_type: str = "",
+        keyword: str = "",
+        status: str = "",
+        tenant_id: str | None = None,
     ) -> tuple[str, list[Any]]:
         """搜索过滤条件单一真源——search_events与search_events_by_session共用。
 
         两处各写WHERE会漂移出"分组计数与事件列表对不上"（指标不许说谎）。
         列全带e.限定：JOIN trajectory_sessions后status列两表都有，裸列名歧义。
         调用方须把轨迹事件表别名为e（两查询同款）。
+        DEC-⑦-⑥：tenant_id 显式给出=恒按事件行租户键过滤（行键=父行继承落行
+        归一+迁移回填，SQL 等值=event_row_tenant 等值；None=系统视图）。
         """
         clauses = []
         params: list[Any] = []
@@ -451,6 +599,9 @@ class TrajectoryStore:
         if status:
             clauses.append("e.status = ?")
             params.append(status)
+        if tenant_id is not None:
+            clauses.append("e.tenant_id = ?")
+            params.append(tenant_id)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         return where, params
 
@@ -461,9 +612,12 @@ class TrajectoryStore:
         keyword: str = "",
         status: str = "",
         limit: int = 50,
+        tenant_id: str | None = None,
     ) -> list[TrajectoryEvent]:
         await self.ensure_tables()
-        where, params = self._search_where(session_id, event_type, keyword, status)
+        where, params = self._search_where(
+            session_id, event_type, keyword, status, tenant_id=tenant_id
+        )
         params.append(limit)
         rows = await db_pool.fetch(
             f"SELECT * FROM trajectory_events e{where} ORDER BY e.created_at DESC LIMIT ?",
@@ -478,6 +632,7 @@ class TrajectoryStore:
         keyword: str = "",
         status: str = "",
         limit: int = 50,
+        tenant_id: str | None = None,
     ) -> list[dict]:
         """跨会话命中分组——"哪个session有error的tool_call"观察面。
 
@@ -491,7 +646,9 @@ class TrajectoryStore:
           不猜不冒充。
         """
         await self.ensure_tables()
-        where, params = self._search_where(session_id, event_type, keyword, status)
+        where, params = self._search_where(
+            session_id, event_type, keyword, status, tenant_id=tenant_id
+        )
         group_params = list(params)
         group_params.append(limit)
         rows = await db_pool.fetch(
@@ -512,7 +669,9 @@ class TrajectoryStore:
         )
         if not rows:
             return []
-        sample_where, sample_params = self._search_where(session_id, event_type, keyword, status)
+        sample_where, sample_params = self._search_where(
+            session_id, event_type, keyword, status, tenant_id=tenant_id
+        )
         sample_rows = await db_pool.fetch(
             f"""SELECT id, session_id, event_type, status, content, created_at FROM (
                     SELECT e.*, ROW_NUMBER() OVER (
@@ -787,10 +946,18 @@ class TrajectoryStore:
     # ── Fork (Branch) ────────────────────────────────────────
 
     async def fork_session(
-        self, source_session_id: str, fork_point_event_id: str, new_agent_id: str = ""
+        self,
+        source_session_id: str,
+        fork_point_event_id: str,
+        new_agent_id: str = "",
+        tenant_id: str | None = None,
     ) -> TrajectorySession:
         """Fork a session at a specific event — copies events up to the fork point
-        and creates a new session for branching execution."""
+        and creates a new session for branching execution.
+
+        DEC-⑦-⑥：新 session 行归属=调用方派生租户（克隆归克隆者，⑦-③ clone
+        同款）；复制事件经 add_event 随新 session 行继承落键（父行继承单一写点）。
+        """
         source = await self.get_session(source_session_id)
         if not source:
             raise ValueError(f"Source session {source_session_id} not found")
@@ -802,6 +969,7 @@ class TrajectoryStore:
             forked_from=source_session_id,
             fork_point_event_id=fork_point_event_id,
             tags=source.tags + ["fork"],
+            tenant_id=tenant_id,
         )
 
         # Copy events up to and including the fork point
@@ -1029,7 +1197,7 @@ class TrajectoryStore:
                 tags = json.loads(tags)
             except (json.JSONDecodeError, TypeError):
                 tags = []
-        return TrajectorySession(
+        s = TrajectorySession(
             id=d["id"],
             agent_id=d.get("agent_id", ""),
             task_description=d.get("task_description", ""),
@@ -1042,11 +1210,15 @@ class TrajectoryStore:
             tags=tags,
             created_at=d.get("created_at", ""),
             ended_at=d.get("ended_at"),
+            tenant_id=d.get("tenant_id") or "",
         )
+        # 加性 tenant_id 键归一（session_row_tenant 单一判法，⑤ _row_to_dict 同款）
+        s.tenant_id = session_row_tenant(s)
+        return s
 
     def _row_to_event(self, row) -> TrajectoryEvent:
         d = dict(row)
-        return TrajectoryEvent(
+        ev = TrajectoryEvent(
             id=d["id"],
             session_id=d.get("session_id", ""),
             parent_event_id=d.get("parent_event_id"),
@@ -1059,7 +1231,11 @@ class TrajectoryStore:
             status=d.get("status", "ok"),
             created_at=d.get("created_at", ""),
             end_at=d.get("end_at"),
+            tenant_id=d.get("tenant_id") or "",
         )
+        # 加性 tenant_id 键归一（event_row_tenant 单一判法，写读同源）
+        ev.tenant_id = event_row_tenant(ev)
+        return ev
 
     def _row_to_score(self, row) -> TrajectoryScore:
         d = dict(row)

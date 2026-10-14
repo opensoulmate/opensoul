@@ -261,17 +261,25 @@ async def _search_courses(query: str, limit: int, tenant_id: str) -> list[dict]:
         return []
 
 
-async def _search_trajectory(query: str, limit: int) -> list[dict]:
-    """Search trajectory sessions and events."""
-    try:
-        from src.trajectory.store import TrajectoryStore
+async def _search_trajectory(query: str, limit: int, tenant_id: str) -> list[dict]:
+    """Search trajectory sessions and events（tenant_id=身份派生租户，DEC-⑦-⑥ 加轴）。
 
-        store = TrajectoryStore()
+    行归属判法=session_row_tenant / event_row_tenant 单一源（list_sessions /
+    search_events 内过滤，session 自带键缺失→'default' 兜底、事件行键=父 session
+    行继承落行，DEC-⑦-① _event_row_tenant / ② message_row_tenant / ③
+    template_row_tenant / ④ file_row_tenant / ⑤ agent_row_tenant 同款）；过滤
+    先于截断=limit 只计可见命中。读真源=src.trajectory.store 模块单例
+    trajectory_store（修前函数内 new TrajectoryStore() 每调用新实例，⑦-③④
+    读真源收口同款：与管理面一条真源）。
+    """
+    try:
+        from src.trajectory.store import trajectory_store
+
         query_lower = query.lower()
         matches = []
 
         # Search sessions by task description
-        sessions = await store.list_sessions(limit=50)
+        sessions = await trajectory_store.list_sessions(limit=50, tenant_id=tenant_id)
         for s in sessions:
             if query_lower in s.task_description.lower() or query_lower in s.agent_id.lower():
                 matches.append(
@@ -289,7 +297,9 @@ async def _search_trajectory(query: str, limit: int) -> list[dict]:
 
         # Search events by content
         if len(matches) < limit:
-            events = await store.search_events(keyword=query, limit=limit - len(matches))
+            events = await trajectory_store.search_events(
+                keyword=query, limit=limit - len(matches), tenant_id=tenant_id
+            )
             for ev in events:
                 matches.append(
                     {
@@ -449,8 +459,11 @@ async def unified_search(
     文件自带键缺失→'default' 兜底，file_row_tenant 同款）、agents
     子搜索用派生租户过滤（DEC-⑦-⑤，修前注册表零过滤=跨租户泄露且读幽灵源
     ~/.openmate/agents.json 恒空集；行归属=agent 行自带键缺失→'default'
-    兜底，agent_row_tenant 同款；读真源=acp_agent_registry 一条真源）。其余
-    子搜索（trajectory/cron）的存储层无 user/tenant 轴，
+    兜底，agent_row_tenant 同款；读真源=acp_agent_registry 一条真源）、trajectory
+    子搜索用派生租户过滤（DEC-⑦-⑥，修前 session/事件查询零过滤=跨租户泄露；
+    行归属=session 行自带键缺失→'default' 兜底、事件行键=父 session 行继承，
+    session_row_tenant/event_row_tenant 同款；读真源=src.trajectory.store 模块
+    单例）。其余子搜索（cron）的存储层无 user/tenant 轴，
     保持系统视图（诚实边界，DEC-⑦ 分批拆件留待拍）。
     """
     identity = bind_identity(authorization, "", user_id)
@@ -470,7 +483,7 @@ async def unified_search(
     if search_all or "courses" in source_list:
         tasks["courses"] = _search_courses(q, limit, identity.tenant_id)
     if search_all or "trajectory" in source_list:
-        tasks["trajectory"] = _search_trajectory(q, limit)
+        tasks["trajectory"] = _search_trajectory(q, limit, identity.tenant_id)
     if search_all or "cron" in source_list:
         tasks["cron"] = _search_cron_jobs(q, limit)
     if search_all or "gene" in source_list:

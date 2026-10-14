@@ -178,8 +178,9 @@ class TestTrajectoryStore:
         pool = _mock_db_pool()
         with patch("src.trajectory.store.db_pool", pool):
             await self.store.ensure_tables()
-            # 2 tables + 2 indexes + end_at migration ALTER + scores table
-            assert pool.execute.call_count == 6
+            # 2 tables + 2 索引 + end_at migration ALTER + 2 租户 ALTER
+            # + 2 租户索引 + scores table（DEC-⑦-⑥ 行租户键迁移随契约演进）
+            assert pool.execute.call_count == 10
 
     @pytest.mark.asyncio
     async def test_create_session(self):
@@ -194,8 +195,10 @@ class TestTrajectoryStore:
             assert session.task_description == "Test task"
             assert session.tags == ["tag1"]
             assert session.status == "running"
-            # create_session calls ensure_tables (3 calls) + INSERT (1 call)
-            assert pool.execute.call_count == 7
+            assert session.tenant_id == "default"  # DEC-⑦-⑥ 缺省='default' 系统写方
+            # create_session calls ensure_tables (10 calls) + INSERT (1 call)
+            # （DEC-⑦-⑥ 迁移 DDL 随契约演进；hijack SELECT 是 fetchrow 不计）
+            assert pool.execute.call_count == 11
 
     @pytest.mark.asyncio
     async def test_add_event(self):
@@ -215,8 +218,10 @@ class TestTrajectoryStore:
             assert result.content == "Hello"
             assert result.token_usage == 10
             assert result.duration_ms == 50.0
-            # add_event calls ensure_tables (3) + INSERT + UPDATE
-            assert pool.execute.call_count == 8
+            assert result.tenant_id == "default"  # DEC-⑦-⑥ 父行缺失→'default' 兜底
+            # add_event calls ensure_tables (10) + INSERT + UPDATE
+            # （DEC-⑦-⑥ 父行 SELECT 是 fetchrow 不计）
+            assert pool.execute.call_count == 12
 
     @pytest.mark.asyncio
     async def test_list_sessions(self):
@@ -256,6 +261,24 @@ class TestTrajectoryStore:
     @pytest.mark.asyncio
     async def test_end_session(self):
         pool = _mock_db_pool()
+        # DEC-⑦-⑥：end_session 先取行（劫持闸判据）——行存在才走到 UPDATE
+        pool.fetchrow = AsyncMock(
+            return_value={
+                "id": "s1",
+                "agent_id": "a1",
+                "task_description": "task1",
+                "status": "running",
+                "forked_from": None,
+                "fork_point_event_id": None,
+                "total_events": 0,
+                "total_tokens": 0,
+                "total_duration_ms": 0,
+                "tags_json": "[]",
+                "created_at": "2024-01-01T00:00:00Z",
+                "ended_at": None,
+                "tenant_id": "default",
+            }
+        )
         with patch("src.trajectory.store.db_pool", pool):
             await self.store.end_session("s1", status="completed")
             # end_session: just 1 UPDATE call（ensure_tables的DDL不计；
@@ -338,7 +361,25 @@ class TestTrajectoryStore:
     @pytest.mark.asyncio
     async def test_delete_session(self):
         pool = _mock_db_pool()
+        # DEC-⑦-⑥：delete_session 先取行（归属闸判据）——行存在才走到 DELETE
+        pool.fetchrow = AsyncMock(
+            return_value={
+                "id": "s1",
+                "agent_id": "a1",
+                "task_description": "task1",
+                "status": "running",
+                "forked_from": None,
+                "fork_point_event_id": None,
+                "total_events": 0,
+                "total_tokens": 0,
+                "total_duration_ms": 0,
+                "tags_json": "[]",
+                "created_at": "2024-01-01T00:00:00Z",
+                "ended_at": None,
+                "tenant_id": "default",
+            }
+        )
         with patch("src.trajectory.store.db_pool", pool):
-            await self.store.delete_session("s1")
-            # delete_session: ensure_tables (6) + DELETE scores/events/session
-            assert pool.execute.call_count == 9
+            assert await self.store.delete_session("s1") is True
+            # delete_session: ensure_tables (10) + DELETE scores/events/session
+            assert pool.execute.call_count == 13

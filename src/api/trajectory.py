@@ -3,14 +3,17 @@
 import json
 import os
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from src.services.tenant_binding import bind_identity
 from src.trajectory.session_fsm import SessionEvent, SessionStateMachine
 from src.trajectory.store import (
     EventType,
+    SessionTenantDenied,
     TrajectoryEvent,
     TrajectoryScore,
+    session_row_tenant,
     trajectory_store,
 )
 
@@ -97,24 +100,35 @@ async def stats():
 
 
 @router.post("/sessions")
-async def create_session(req: SessionCreateRequest):
+async def create_session(req: SessionCreateRequest, authorization: str | None = Header(None)):
     """Create a new trajectory session.
 
     When ``session_id`` is provided the call is an idempotent *ensure*:
     an existing session with that id is returned unchanged (HTTP 200)
     instead of creating a duplicate row — repeated ensures across turns
     and process restarts must converge on one session per chat session.
+
+    DEC-⑦-⑥：写点行归属=bind_identity 派生租户流入 create_session（匿名
+    'default' 契约不变，禁自报）；跨租户 ensure 撞既有行=劫持→SessionTenantDenied
+    →403 行零改写（同租户 ensure 契约不变）。
     """
+    identity = bind_identity(authorization)
     if req.session_id:
         existing = await trajectory_store.get_session(req.session_id)
         if existing:
+            if session_row_tenant(existing) != identity.tenant_id:
+                raise HTTPException(403, f"session {req.session_id!r} belongs to another tenant")
             return existing.to_dict()
-    session = await trajectory_store.create_session(
-        id=req.session_id,
-        agent_id=req.agent_id,
-        task_description=req.task_description,
-        tags=req.tags,
-    )
+    try:
+        session = await trajectory_store.create_session(
+            id=req.session_id,
+            agent_id=req.agent_id,
+            task_description=req.task_description,
+            tags=req.tags,
+            tenant_id=identity.tenant_id,
+        )
+    except SessionTenantDenied as exc:
+        raise HTTPException(403, str(exc))
     return session.to_dict()
 
 
@@ -124,16 +138,23 @@ async def list_sessions(
     status: str = Query(default=""),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    authorization: str | None = Header(None),
 ):
-    """List trajectory sessions with optional filters."""
+    """List trajectory sessions with optional filters.
+
+    DEC-⑦-⑥：恒按派生租户过滤（tenant=bind_identity 派生禁自报，匿名 'default'
+    ——单机存量行全 'default'，契约不变）；total 同带键（禁泄露全局分布）。
+    """
+    identity = bind_identity(authorization)
     await _sweep_idle_sessions()
     sessions = await trajectory_store.list_sessions(
         agent_id=agent_id,
         status=status,
         limit=limit,
         offset=offset,
+        tenant_id=identity.tenant_id,
     )
-    total = await trajectory_store.count_sessions()
+    total = await trajectory_store.count_sessions(tenant_id=identity.tenant_id)
     return {
         "sessions": [s.to_dict() for s in sessions],
         "total": total,
@@ -153,22 +174,41 @@ async def get_session(session_id: str):
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
-    """Delete a session and all its events."""
+async def delete_session(session_id: str, authorization: str | None = Header(None)):
+    """Delete a session and all its events.
+
+    DEC-⑦-⑥ 归属闸：跨租户删除=零副作用与 not-found 同契约（404，不差分泄露
+    他租户行存在性，⑦-④ delete 同款）。
+    """
+    identity = bind_identity(authorization)
     session = await trajectory_store.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
-    await trajectory_store.delete_session(session_id)
+    deleted = await trajectory_store.delete_session(session_id, tenant_id=identity.tenant_id)
+    if not deleted:
+        raise HTTPException(404, "Session not found")
     return {"deleted": True, "session_id": session_id}
 
 
 @router.post("/sessions/{session_id}/end")
-async def end_session(session_id: str, status: str = Query(default="completed")):
-    """End a running session."""
+async def end_session(
+    session_id: str,
+    status: str = Query(default="completed"),
+    authorization: str | None = Header(None),
+):
+    """End a running session.
+
+    DEC-⑦-⑥ 劫持闸：跨租户收口=SessionTenantDenied→403 行零改写（⑦-④
+    update 同款）。
+    """
+    identity = bind_identity(authorization)
     session = await trajectory_store.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
-    await trajectory_store.end_session(session_id, status=status)
+    try:
+        await trajectory_store.end_session(session_id, status=status, tenant_id=identity.tenant_id)
+    except SessionTenantDenied as exc:
+        raise HTTPException(403, str(exc))
     return {"ended": True, "session_id": session_id, "status": status}
 
 
@@ -254,13 +294,17 @@ async def search_events(
     q: str = Query(default="", description="keyword的容错别名"),
     status: str = Query(default=""),
     limit: int = Query(default=50, ge=1, le=200),
+    authorization: str | None = Header(None),
 ):
     """Search across trajectory events.
 
     参数容错：前端历史误传``q``而本端点只读``keyword``→文本搜索被静默忽略
     （q=探测词返回全量事件，2026-10-04 live实锤P0 bug）。canonical=keyword，
     ``q``仅作容错别名（keyword非空优先），两端谁先改都不再哑掉文本过滤。
+    DEC-⑦-⑥：恒按派生租户过滤（tenant=bind_identity 派生禁自报，匿名 'default'
+    契约不变）。
     """
+    identity = bind_identity(authorization)
     kw = keyword or q
     events = await trajectory_store.search_events(
         session_id=session_id,
@@ -268,6 +312,7 @@ async def search_events(
         keyword=kw,
         status=status,
         limit=limit,
+        tenant_id=identity.tenant_id,
     )
     return {
         "events": [e.to_dict() for e in events],
@@ -289,12 +334,16 @@ async def search_sessions_grouped(
     q: str = Query(default="", description="keyword的容错别名"),
     status: str = Query(default=""),
     limit: int = Query(default=50, ge=1, le=200),
+    authorization: str | None = Header(None),
 ):
     """跨会话命中分组——"哪个session有error的tool_call"。
 
     每组match_count=SQL GROUP BY真值（不从/search截断列表推算），带最近命中
     样本+会话元数据；前端会话列表级过滤/分组头吃本端点（跨session搜索）。
+    DEC-⑦-⑥：恒按派生租户过滤（tenant=bind_identity 派生禁自报，匿名 'default'
+    契约不变）。
     """
+    identity = bind_identity(authorization)
     kw = keyword or q
     groups = await trajectory_store.search_events_by_session(
         session_id=session_id,
@@ -302,6 +351,7 @@ async def search_sessions_grouped(
         keyword=kw,
         status=status,
         limit=limit,
+        tenant_id=identity.tenant_id,
     )
     return {
         "sessions": groups,
@@ -319,14 +369,19 @@ async def search_sessions_grouped(
 
 
 @router.post("/sessions/{session_id}/fork")
-async def fork_session(session_id: str, req: ForkRequest):
+async def fork_session(session_id: str, req: ForkRequest, authorization: str | None = Header(None)):
     """Fork a session at a specific event — creates a new session
-    with events copied up to the fork point for branching execution."""
+    with events copied up to the fork point for branching execution.
+
+    DEC-⑦-⑥：新 session 行归属=调用方派生租户（克隆归克隆者，⑦-③ clone 同款）。
+    """
+    identity = bind_identity(authorization)
     try:
         new_session = await trajectory_store.fork_session(
             source_session_id=session_id,
             fork_point_event_id=req.fork_point_event_id,
             new_agent_id=req.new_agent_id,
+            tenant_id=identity.tenant_id,
         )
         return new_session.to_dict()
     except ValueError as e:
