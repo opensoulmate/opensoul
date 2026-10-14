@@ -145,3 +145,38 @@ import validation 20260919.」自述为测试验证文件且文件名含 test，
 （git log -S 零命中，疑为一次性 e2e 探针），按宁窄勿滥留 other 待拍板②「反馈层测试」4、
 「test」1 不在本拍（候选只点名夹具词表，范围纪律）③388 行 A 类**本拍只判不删**（删除执行件
 另拍，TL-④~⑰ 备份+回读纪律）④A 判定=字面逐字节比对非语义理解。
+
+## pipe_test.txt 取舍拍板+删除执行（TL-⑳，2026-10-14）
+
+**对象**：TL-⑱ 诚实边界①留档待拍件——[Pipeline] pipe_test.txt 2 行（id eb7a035e…/eb4ccdae…，
+内容 66 字节「Hello pipeline test file for knowledge import validation 20260919.」，
+source=pipeline，创建 2026-09-19 08:11:33/08:13:22）。
+
+**证据链（TL-⑭ 出处比对同法，取舍=可删）**：①内容自述测试探针——「test file for
+knowledge import validation」即"知识导入验证测试文件"②上传时刻与功能 commit **秒级吻合**：
+commit bed38f84「feat(search): Meilisearch知识库索引管道全链接线」2026-09-19 08:10:59，
+两行落库 08:11:33/08:13:22（提交后 34 秒/2 分 23 秒）=该功能上线当刻的导入验证探针
+③repo 全历史零出处（git log -S "pipe_test"/"knowledge import validation" 仅命中 roadmap
+文档自身）=一次性 e2e 探针非仓内夹具。三重旁证同 TL-⑯ storm/exec 组处置的证据强度
+（内容自述+时刻吻合+零出处），且**无任何真实用户数据形态**——用户不会把
+「Hello pipeline test file…」存为知识。处置：删（备份可整体回滚，若用户有异议随时还原）。
+
+**判法扩充（单一源 A_KNOWLEDGE_SELF_DECLARED_CONTENT，与 A_KNOWLEDGE_FIXTURE_CONTENT
+刻意分源）**：夹具词表出处钉 tests/test_pipeline.py，本件出处不可钉仓内文件（自述+时刻证据），
+故独立常量+独立 rule 名；语义同款宁窄勿滥——仅「标题=[Pipeline] pipe_test.txt **且**内容
+逐字节相同」判 A，同名真实上传不动、不带 content 旧调用面逐字不变、近似内容不算命中。
+
+**删除执行（复用 TL-⑥ 工具零改动，清单=工件）**：dry-run matched 2/2 drift False→
+--apply deleted knowledge 2/chunks 1/links 8、post 5/0/9 算术对平（7−2/1−1/17−8）、
+独立复算（raw SQL 不经工具代码）三面残留 0+非目标行（反馈层测试 4/test 1）一行不动、
+备份 opensoul_pre_delete_20261014_101506.db（9,011,200B，sha256 421ee2bf…）删前
+7/1/17 全量快照（2 目标行完好）可整体回滚、meili delete-batch task succeeded、
+census 复跑 A=0（other_titles 收窄为 反馈层测试 4/test 1）+timeline 28,317 零增量+
+perm rules_A=0 零回归、live e2e：health knowledge_entries=5（7−2）、search「pipe_test」
+与「knowledge import validation」双查无=检索面随删真生效、真实行（反馈层测试×4）可见。
+
+**诚实边界**：①判据=内容自述字面+上传时刻与 commit 秒级吻合+零出处三重旁证（TL-⑭
+出处比对推断链同级，非对象级仓内硬标识）——若两行为真实用户刻意模仿探针字面则无法区分
+（如实记）②「反馈层测试」4、「test」1 仍留 other（候选只点名 pipe_test.txt，范围纪律）；
+「test」1 与「反馈层测试」4 的取舍需各自证据另拍③chunks_left=0（剩余 5 行本就无块面）
+④backup/data 报告为 data/ gitignore 本地工件。

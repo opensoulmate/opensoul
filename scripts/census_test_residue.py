@@ -104,6 +104,16 @@ A_KNOWLEDGE_FIXTURE_CONTENT = {
     "data.json": '{"key": "value", "nested": {"a": 1}}',
     "notes.md": "# Title\n\nSome content here with enough text for processing.",
 }
+# TL-⑳ pipe_test.txt 取舍拍板（2026-10-14）：文件名→自述测试探针逐字节内容。证据链
+# （TL-⑭ 出处比对同法）：①内容自述「test file for knowledge import validation」
+# ②上传时刻 2026-09-19 08:11:33/08:13:22 与 commit bed38f84「feat(search):
+# Meilisearch知识库索引管道全链接线」08:10:59 秒级吻合=该功能的导入验证探针
+# ③repo 全历史 git log -S 零出处=一次性 e2e 探针非仓内夹具。仅内容逐字节相同才判 A
+# （宁窄勿滥：同名真实用户上传内容不同不动）。出处不可钉于仓内测试文件，故独立于
+# A_KNOWLEDGE_FIXTURE_CONTENT（那是 tests/test_pipeline.py 夹具）。
+A_KNOWLEDGE_SELF_DECLARED_CONTENT = {
+    "pipe_test.txt": "Hello pipeline test file for knowledge import validation 20260919.",
+}
 A_TENANT_PREFIX = "e2e-"
 A_GOAL_MARKERS = ("冒烟测试", "A1认知层接线live验证", "逐块推送验证目标", "清空生产数据库", "口算17加25")
 B_GOAL_MARKERS = ("用一句话", "请分三句话", "列出3个Linux", "介绍一下Python", "介绍Python的GIL")
@@ -130,8 +140,9 @@ def classify_knowledge(title: str, content: str | None = None):
     """knowledge 行残留分类（单一源词表，禁手抄；TL-⑥ 删除工具同源消费）。
 
     返回 (cls, rule)：A=确证测试残留（fixture 标题前缀，或标题+内容双逐字钉
-    A_KNOWLEDGE_FIXTURE_CONTENT——TL-⑱）、B=疑似（需人工裁决）、other=不动。
-    内容判据宁窄勿滥：仅内容与夹具逐字节相同才判 A（同名真实用户上传不动）；
+    A_KNOWLEDGE_FIXTURE_CONTENT——TL-⑱，或自述测试探针内容逐字钉
+    A_KNOWLEDGE_SELF_DECLARED_CONTENT——TL-⑳）、B=疑似（需人工裁决）、other=不动。
+    内容判据宁窄勿滥：仅内容与夹具/探针逐字节相同才判 A（同名真实用户上传不动）；
     content 未提供（旧调用面）不猜——标题词表语义逐字不变（契约锁死面）。
     """
     t = title or ""
@@ -140,9 +151,13 @@ def classify_knowledge(title: str, content: str | None = None):
     if t.startswith(B_KNOWLEDGE_TITLES_PREFIX):
         return "B", "B_KNOWLEDGE_TITLES_PREFIX"
     if content is not None and t.startswith("[Pipeline] "):
-        fixture = A_KNOWLEDGE_FIXTURE_CONTENT.get(t[len("[Pipeline] "):])
+        bare = t[len("[Pipeline] "):]
+        fixture = A_KNOWLEDGE_FIXTURE_CONTENT.get(bare)
         if fixture is not None and content == fixture:
             return "A", "A_KNOWLEDGE_FIXTURE_CONTENT"
+        selfdecl = A_KNOWLEDGE_SELF_DECLARED_CONTENT.get(bare)
+        if selfdecl is not None and content == selfdecl:
+            return "A", "A_KNOWLEDGE_SELF_DECLARED_CONTENT"
     return "other", "unmatched"
 
 
