@@ -90,11 +90,34 @@ def cron_row_tenant(row: dict) -> str:
     return DEFAULT_TENANT
 
 
-def cron_job_row(job_id: str) -> dict | None:
-    """按 id 取真源行（缺行=None，如实不 fabricate）。"""
-    for row in load_cron_jobs():
-        if str(row.get("id")) == str(job_id):
+def cron_job_row(ref: str) -> dict | None:
+    """job 引用解析单一源（写闸/读面同一判法，F4b-㉗ 纪律；缺行/歧义=None，
+    如实不 fabricate）。
+
+    判法与 hermes CLI resolve_job_ref 对齐（声明从实现派生——闸必须覆盖执行体
+    真接受的一切引用形；DEC-⑦-⑦ 修前只认精确 id=用 name 引用可绕写闸）：
+    ①精确 ID 优先（即使他行 name==ref，resolve_job_ref 同款）
+    ②大小写不敏感独一 name
+    ③独一 ID 前缀（/get 读面既有兼容面）
+    歧义（重名/前缀多命中）→None 如实不猜——hermes 对重名 raise
+    AmbiguousJobReference 拒执行，闸门 None→照旧交 CLI→CLI 拒绝=无动作安全。
+    """
+    ref = str(ref)
+    if not ref:
+        return None
+    rows = load_cron_jobs()
+    for row in rows:
+        if str(row.get("id")) == ref:
             return row
+    ref_lower = ref.lower()
+    name_hits = [r for r in rows if str(r.get("name") or "").lower() == ref_lower]
+    if len(name_hits) == 1:
+        return name_hits[0]
+    if len(name_hits) > 1:
+        return None  # 重名歧义=hermes 同款拒绝语义，不跌落前缀层
+    prefix_hits = [r for r in rows if str(r.get("id")).startswith(ref)]
+    if len(prefix_hits) == 1:
+        return prefix_hits[0]
     return None
 
 

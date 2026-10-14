@@ -4,6 +4,13 @@ DEC-⑦-⑦ cron 面加轴：写点行归属（/create bind_identity 派生租�
 stamp_job_tenant 落行键）+by-ID 改/删闸（pause/resume/run 跨租户→403
 CronTenantDenied 行零改写；delete 跨租户=零副作用与 not-found 同契约 404
 不差分泄露行存在性，⑦-⑥ 同款）。身份与读面判法单一源=src.services.cron_store。
+
+DEC-⑦-⑧ 管理读面加轴+引用判法单一源：/list 按行租户键过滤（过滤先于 total，
+加性键 tenant_id=行归属可观测）、/get /history by-ID 归属闸（跨租户=与
+not-found 同契约 404 不差分泄露行存在性）；job 引用解析收口 cron_store.
+cron_job_row 单一源（精确 ID→独一 name→独一前缀，与 hermes CLI
+resolve_job_ref 对齐）——修前闸门只认精确 id，用作业 name 引用可绕写闸
+（闸查无行→放行交 CLI→CLI 按名执行=跨租户改删，wired-but-not-functional）。
 """
 
 import asyncio
@@ -17,6 +24,7 @@ from src.api.user import get_current_user
 from src.services.cron_store import (
     CronTenantDenied,
     cron_job_row,
+    cron_row_tenant,
     load_cron_jobs,
     require_cron_row_tenant,
     stamp_job_tenant,
@@ -64,7 +72,10 @@ async def run_hermes_cron(*args: str) -> dict:
 def _gate_by_id(job_id: str, authorization) -> None:
     """by-ID 改/删闸：行归属租户≠请求者派生租户→CronTenantDenied（行零改写）。
 
-    缺行照旧交 CLI（既有 not-found/CLI 错误契约不变）；行在才闸=不误伤。
+    引用解析=cron_job_row 单一源（精确 ID→独一 name→独一前缀，与 CLI
+    resolve_job_ref 对齐——DEC-⑦-⑧ 修前只认精确 id，name 引用绕闸真断点）。
+    缺行/歧义照旧交 CLI（既有 not-found/CLI 错误契约不变，且 CLI 对歧义
+    name 自身 raise AmbiguousJobReference 拒执行）；行在才闸=不误伤。
     """
     row = cron_job_row(job_id)
     if row is None:
@@ -73,9 +84,39 @@ def _gate_by_id(job_id: str, authorization) -> None:
     require_cron_row_tenant(row, identity.tenant_id)
 
 
+def _visible_jobs(parsed_jobs: list, tenant_id: str) -> list:
+    """管理读面过滤单一收口（DEC-⑦-⑧）：CLI 解析行按真源行归属键过滤。
+
+    - parsed 行→真源行匹配走 cron_job_row 单一源（禁第二套判法）。
+    - 归属键=cron_row_tenant 单一判法，≠请求者租户→隐藏（三面互斥）。
+    - parsed 行匹配不到真源行=归属不可判→隐藏（fail-closed：不可判的行可能
+      属他租户，宁缺勿泄）+logger.warning 可见（禁静默）。
+    - 加性键 tenant_id=行归属可观测（⑦ faces 同款）；total=过滤后计数
+      （过滤先于计数，⑦-① limit 只计可见同款）。
+    """
+    visible = []
+    for job in parsed_jobs:
+        row = cron_job_row(str(job.get("id", "")))
+        if row is None:
+            logger.warning(
+                "cron list: parsed job %r has no resolvable store row, hidden",
+                job.get("id"),
+            )
+            continue
+        row_tenant = cron_row_tenant(row)
+        if row_tenant != tenant_id:
+            continue
+        visible.append({**job, "tenant_id": row_tenant})
+    return visible
+
+
 @router.get("/list")
-async def list_cron_jobs(user_id: UUID = Depends(get_current_user)):
-    """List all Hermes cron jobs."""
+async def list_cron_jobs(
+    user_id: UUID = Depends(get_current_user),
+    authorization: str | None = Header(None),
+):
+    """List Hermes cron jobs.（DEC-⑦-⑧ 按行租户键过滤：恒按 bind_identity
+    派生租户过滤，过滤先于 total；加性键 tenant_id）"""
     try:
         result = await run_hermes_cron("list")
         output = result["output"]
@@ -122,6 +163,8 @@ async def list_cron_jobs(user_id: UUID = Depends(get_current_user)):
         if current_job:
             jobs.append(current_job)
 
+        identity = bind_identity(authorization)
+        jobs = _visible_jobs(jobs, identity.tenant_id)
         return {"jobs": jobs, "total": len(jobs)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -255,9 +298,23 @@ async def create_cron_job(
 
 
 @router.get("/{job_id}")
-async def get_cron_job(job_id: str, user_id: UUID = Depends(get_current_user)):
-    """Get a single cron job by ID."""
+async def get_cron_job(
+    job_id: str,
+    user_id: UUID = Depends(get_current_user),
+    authorization: str | None = Header(None),
+):
+    """Get a single cron job by ID/name.（DEC-⑦-⑧ 读面归属闸：跨租户=与
+    not-found 同契约 404 不差分泄露行存在性（delete 闸 ⑦-⑦ 同款理由）；
+    引用解析=cron_job_row 单一源（精确 ID->独一 name->独一前缀，与写闸同一
+    判法；歧义->404 如实不猜，修前前缀静默取首匹配=歧义错配））"""
     try:
+        row = cron_job_row(job_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        identity = bind_identity(authorization)
+        row_tenant = cron_row_tenant(row)
+        if row_tenant != identity.tenant_id:
+            raise HTTPException(status_code=404, detail="Job not found")
         list_result = await run_hermes_cron("list")
         output = list_result["output"]
         jobs = []
@@ -293,9 +350,10 @@ async def get_cron_job(job_id: str, user_id: UUID = Depends(get_current_user)):
                     current_job["prompt"] = line[7:].strip()
         if current_job:
             jobs.append(current_job)
+        row_id = str(row.get("id"))
         for j in jobs:
-            if j["id"] == job_id or j["id"].startswith(job_id):
-                return j
+            if j["id"] == row_id:
+                return {**j, "tenant_id": row_tenant}
         raise HTTPException(status_code=404, detail="Job not found")
     except HTTPException:
         raise
@@ -304,9 +362,21 @@ async def get_cron_job(job_id: str, user_id: UUID = Depends(get_current_user)):
 
 
 @router.get("/{job_id}/history")
-async def get_cron_job_history(job_id: str, user_id: UUID = Depends(get_current_user)):
-    """Get execution history for a cron job."""
+async def get_cron_job_history(
+    job_id: str,
+    user_id: UUID = Depends(get_current_user),
+    authorization: str | None = Header(None),
+):
+    """Get execution history for a cron job.（DEC-⑦-⑧ 读面归属闸：跨租户/缺行
+    =与 not-found 同契约 404 不差分泄露行存在性；修前缺行 200 空集与跨租户
+    形状可分=存在性差分，同契约收口如实记）"""
     try:
+        row = cron_job_row(job_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        identity = bind_identity(authorization)
+        if cron_row_tenant(row) != identity.tenant_id:
+            raise HTTPException(status_code=404, detail="Job not found")
         result = await run_hermes_cron("runs", job_id)
         output = result["output"]
         runs = []
@@ -330,5 +400,7 @@ async def get_cron_job_history(job_id: str, user_id: UUID = Depends(get_current_
         if current_run:
             runs.append(current_run)
         return {"runs": runs, "total": len(runs), "raw": output}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
