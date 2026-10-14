@@ -1,0 +1,104 @@
+# 待拍板汇总决策材料件（DEC-①）
+
+> 2026-10-14。用途：roadmap 全部切片已勾选，剩余候选全部标注"需拍板/需用户定"且散落在 ~20 条切片的"诚实边界/下一步候选"里。本件把它们收拢成**一张决策单**——每项：现状证据（file:line 已逐条核验）、选项、权衡、建议默认、可逆性。拍板方式：回一句"①取B ②取C ③维持"即可，逐项独立互不阻塞。本件零行为改动（决策材料件先落：TL-③ / TL-⑭ / TL-⑯ / HEAL-② 先例），拍板前不动任何代码。
+
+## 决策单总览
+
+| # | 事项 | 出处 | 建议 | 一句话拍板 |
+|---|------|------|------|-----------|
+| ① | F3b-⑨b-③ 非 HTTP 面事件身份归属（9 调用点，4 子面） | F3b-⑨ 审计③ | 1a/1b/1d 取"系统事件"，1c 取"补身份轴" | "①aA ①bA ①cB ①dA" |
+| ② | wakeup executor 认证轴 | F3b-⑧c 边界① | 取 C（executor=系统组件按行租户点火） | "②取C" |
+| ③ | episodic 经验 prompt 回流消费点 | F4b-㉜ 边界③ | 维持不注入，等⑤落地 | "③维持" |
+| ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为） | "④取B" |
+| ⑤ | Reflector 写侧触发面（执行结果回传协议） | F4b-㉚ ⑤ | 取 B（定执行结果回传协议），生态层大件 | "⑤取B/暂不做" |
+| ⑥ | a2a 取消语义扩展 | F4b-㉔ 锁死语义 | 取 B（显式 /cancel 指令），或维持 | "⑥取B/维持" |
+| ⑦ | unified 其余子搜索存储层加轴 | F3b-⑥ 边界 | 取 B 分批（events 面最小件可先行） | "⑦取B" |
+| ⑧ | healer 两小项（死路(a) 修复动作定义 / immune keep_last 缺省） | HEAL-② / ②b-④ | 维持现状 | "⑧维持" |
+| ⑨ | TL-⑰ B 类"三删一留"异议窗口（信息项，非决策） | TL-⑰ | 无异议即结 | 异议才回 |
+
+---
+
+## ① F3b-⑨b-③ 非 HTTP 面事件身份归属语义（9 调用点）
+
+**现状**（F3b-⑨ census：46 调用点中 37 个 HTTP 点已由 ②b-1~②b-8 接 bind_identity 派生；余 9 点全归本项）：9 个调用点的事件 dict 无 tenant_id 键 → record() 落 `'default'`（timeline/store.py 兜底）。生产单租户下零行为影响；多租户下这些事件会落错租户（自我不可见）。
+
+### 1a link receive_webhook 1 点（外部 webhook 入口）
+- 证据：src/api/link.py:152 `receive_webhook`（:183 push_event，不带租户键）。
+- 选项：**A** 维持 `'default'` 兜底并文档化=外部系统事件 / **B** 按 connector owner 归属（connector 行有归属即继承）/ **C** 接 bind_identity（401 拒垃圾 Authorization）。
+- 权衡：C 已被 ②b-8 边界实证=**会打断外部 webhook**（第三方调用方无用户 JWT，按用户端点语义接 401 是真回归）；B 需 connector 归属模型先行。
+- 建议：**A**（外部调用方非用户身份轴，"connector 系统事件"语义如实）；若拍 B 则连带 connector 归属模型一起定。
+
+### 1b soma_connector 4 点（component token 身份轴）
+- 证据：src/api/soma_connector.py:225/:297 等 4 处 push_event；鉴权走 `_verify_token(component_id, x_component_token)`（:259/:289/:344）=component 自有 token 体系，非用户 JWT。
+- 选项：**A** 维持 `'default'`（组件=系统资源）/ **B** components 表加 tenant 列+token 派生租户 / **C** 组件改挂用户 JWT。
+- 权衡：B 牵动组件注册面+存量组件回填；C 重构鉴权体系。组件本体（心跳/数据推送）语义上是系统器官而非用户代理。
+- 建议：**A**；如未来要"用户私有组件"，走 B（先给 components 定归属模型）。
+
+### 1c link_gateway 3 点（helper 汇聚点 + HTTP + WS）
+- 证据：src/api/link_gateway.py:157 `_record_event`（helper，fan-out 9 站点 :221/:236/:251/:282/:357/:456/:598/:678/:694，改一处覆盖九点）；HTTP 面 + WS `websocket_proxy`（:667，:703 push_event）。当前 handler 无 authorization 形参=零身份轴。
+- 选项：**A** 维持 `'default'` / **B** HTTP 面补 bind_identity+WS 握手/query 取参双源（F3b-④ 先例），helper 形参带入（1 改覆盖 9 fan-out）。
+- 权衡：与 ②b-1~②b-8 已收的 37 个 HTTP 点同型——link_gateway 若是用户可触发的 HTTP/WS 面，B 与既有收口哲学一致（"自动作自我不可见"在多租户下是真断点）；B 是 9 点里唯一**零语义争议、纯接线**的子面。
+- 建议：**B**（可独立先行，不等 1a/1b/1d 裁决）。
+
+### 1d intrusion 中间件 1 点（安全事件归属）
+- 证据：src/middleware/intrusion_middleware.py:111 push_event（安全拦截事件，dispatch 内无 actor 语义）。
+- 选项：**A** 系统事件 `'default'`（安全防护史归系统）/ **B** 按请求身份派生（有 Authorization 时）否则 `'default'`。
+- 权衡：安全拦截史（同类=TL-⑯ 已裁决保留的 nerve 风暴 22,030 行真实安全日志）语义上是系统防护记录；B 会让"攻击者视角的拦截记录"挂到受害者租户名下，反而失真。
+- 建议：**A**（系统事件，文档化）。
+
+## ② wakeup executor 认证轴
+
+**现状**：due/claim/ack 三 API 已带 bind_identity（src/api/will.py:1101/:1115/:1138），但共享 executor 匿名轮询→派生 `'default'`（F3b-⑧c 边界①）：**非 default 租户的到点事件没有 executor 去点火**（生产全 'default' 行=零影响，多租户=真断点）。
+- 选项：**A** 维持（等多租户真实出现再说）/ **B** executor 持 service token 按租户逐一枚举点火 / **C** executor 走系统视图 claim 各租户到点事件、点火动作落**行租户**键。
+- 权衡：B 要维护租户清单+service token 体系；C 需要给 executor 开系统旁路——与 F3b-⑦"execute 恒过闸无系统旁路"哲学形成对偶，故需拍板而非自决；但 executor 本质是调度器（与 proactive 心跳同族系统组件），事件行本身已带租户键，C 的行归属天然准确。
+- 建议：**C**（executor=系统组件，按行租户点火，事件归属不漂移）。
+
+## ③ episodic 经验 prompt 回流消费点（F4b-㉜ 边界③）
+
+**现状**：brain think 响应 `experience` 观测键（src/api/brain.py:199-215，count+top-3 items）只观测不决策；生产 experiences 980 行 fix 列全空、action 多为不透明 ID（chat_turn:*/job:*）→经验行独有信息=失败错误原文+成败观测，注入执行 prompt=噪声风险（F4b-㉜ 已评估）。
+- 选项：**A** 维持不注入 / **B** 失败错误原文 top-k 注入执行 prompt / **C** 先落⑤（Reflector 补 fix 采集）再注入。
+- 权衡：B 立刻可做但注入的是噪声（无 fix 的错误原文对执行帮助有限）；C 依赖⑤。
+- 建议：**A**（维持，等⑤）；若要先行试水可拍 B 且仅注入 failure 行 error 字段（软建议块语义沿用 F2b-②）。
+
+## ④ proactive 推荐回流面消费点（F2b-②c-1 复核留档）
+
+**现状**：proactive 固定四行为（experience_collect / pattern_extract / …，src/will/proactive_behaviors.py）无"按推荐调整行为"接缝——learned_patterns 产出的推荐只有任务执行/对话/evolve 三面消费（F2b-②②b②c-1 已落），主动行为面零消费（复核定性=无消费接缝，非断点漏修）。
+- 选项：**A** 不做 / **B** 新增 `advisory_review` 定期行为（读推荐→生成改进类任务回群/看板）/ **C** 心跳 prompt 注入推荐。
+- 权衡：B 需要定"改进任务"的消费形态（回群聊？进任务链？）；C 让心跳 prompt 变动=行为漂移风险。
+- 建议：**B**（消费点=AI 群组改进任务，与 B0 任务链回群聊同面），具体形态需用户拍。
+
+## ⑤ Reflector 写侧触发面（F4b-㉚ ⑤）
+
+**现状**：src/cortex/reflector.py:22 `Reflector.reflect()` 全仓零生产调用（grep 实证），`Verification → ExperienceMemory.record` 整链零调用=experiences 的 fix 列恒空的根因（连带③）。硬接的障碍：本仓执行模型=外部 agent 代理，**无 file_written / test_output / diff 结果形态**，伪造 outcome 违 ExperienceCollector"绝不伪造 outcome"纪律。
+- 选项：**A** 不接（维持）/ **B** 定义执行结果回传协议（agent 执行完回传 test_output/exit code→真 Verification）/ **C** 从 job_queue 结果推断成败。
+- 权衡：B 是生态层协议件（涉及 acp-proxy/OpenMate 侧回传），大件但根因修；C 只有 exit code 无 checks 明细，产出的 Verification 信息量低。
+- 建议：**B**（生态层排期）；短期维持 A。此项决定③的解锁时机。
+
+## ⑥ a2a 取消语义扩展（F4b-㉔ 锁死语义冲突）
+
+**现状**：`_is_cancel_intent` 只在 §6.3 pending 回答分支生效（src/a2a/task_manager.py:373 定义 / :1092 唯一消费）；无 pending 的「不用了」走普通路由照常 completed（F4b-㉔ 明确锁死"不越权改状态"，测试锁死）。扩展=打破该锁死语义，需拍板。
+- 选项：**A** 维持（宁窄勿滥）/ **B** 增显式取消指令（如消息以 `/cancel` 开头=取消当前任务）/ **C** 闭集扩到普通路由（「不用了」也可取消任意任务）。
+- 权衡：C 与锁死语义正面冲突且误杀风险高（"如何取消订单"类真查询）；B 无歧义、向后兼容；A 零风险。
+- 建议：**B**（显式指令），或 A 维持。
+
+## ⑦ unified 其余子搜索存储层加轴（F3b-⑥ 边界）
+
+**现状**：unified 的 files/events/agents/trajectory/cron/gene/echo 七个子搜索存储层无 user/tenant 轴=系统视图（src/api/search.py:396-400 诚实边界）。注意：events 子搜索查的是 **event_stream._event_buffer 全局内存缓冲**（src/api/search.py:143-150），非 timeline.db（timeline 面租户过滤 ③c-2① 已落，但内存缓冲面刻意不滤=既有边界）。
+- 选项：**A** 维持系统视图 / **B** 分批加轴（逐存储面拆件，F3b-③ 系同型）/ **C** 只收 events（缓冲 dict 加租户键）。
+- 权衡：B 是跨模块大件；C 最小但缓冲是全局内存面（重启即清），隔离收益有限。
+- 建议：**B**（分批，events/echo 面最小件可先行）；或 A 维持到多租户真实出现。
+
+## ⑧ healer 两小项
+
+- **HEAL-② 死路(a)**：degraded/HTTP/exception 症状→无对症维护动作→如实 NONE（HEAL-②b-② 已裁决"宁缺勿滥"维持）。要真修需**逐器官定义 degraded 修复动作**（维护策略拍板）。建议：**维持**。
+- **immune audit cleanup keep_last 缺省**：=容量之半（src/immune/audit.py:107，策略值）。建议：**维持**（或拍一个固定值）。
+
+## ⑨ TL-⑰ B 类"三删一留"异议窗口（信息项）
+
+TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证流量=真实安全日志史）**保留**、exec/pipeline/brain 1,098 行（夹具探针，出处逐字钉）**已删**。备份 `data/backups/timeline_b_pre_delete_*` 可整体回滚。无需决策，有异议回一句即可。
+
+---
+
+## 附：锚点核验
+
+本件引用的全部 file:line 锚点已程序化核验（逐条对当前 HEAD 源码回读，结果存 `data/dec1_anchor_verification.json`）；核验不通过的锚点不上墙。核验方式见周期日志 DEC-① 行。
