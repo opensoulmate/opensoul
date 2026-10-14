@@ -60,26 +60,17 @@ async def _replace_tags(knowledge_id: str, tag_names: list[str], user_id: UUID) 
             )
 
 
-async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
-    knowledge_id = str(_uuid.uuid4())
-    await db_pool.execute(
-        "INSERT INTO knowledge (id, title, content, source, content_type, metadata, user_id) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        knowledge_id,
-        data.title,
-        data.content,
-        data.source,
-        data.content_type,
-        json.dumps(data.metadata or {}),
-        str(user_id),
-    )
-    await db_pool.fetchrow("SELECT * FROM knowledge WHERE id = $1", knowledge_id)
+async def _write_chunk_face(
+    knowledge_id: str, content: str, content_type: str, user_id: UUID
+) -> None:
+    """分块+嵌入落面单一收口（create/update 重分块共用，禁双源漂移）。
 
-    # Add tags（链接面写入走 _replace_tags 单一收口，与 update 同源）
-    await _replace_tags(knowledge_id, data.tags, user_id)
-
-    # Chunk and embed
-    chunks = smart_chunk(data.content, content_type=data.content_type)
+    语义与 create 原内联块逐字一致：smart_chunk → get_embeddings_batch →
+    knowledge_chunks 行 + qdrant points（point id={knowledge_id}_{chunk.index}）。
+    空向量（embedding 降级）不写 qdrant——空 vector 会被 qdrant 拒绝并打断整个
+    入库；分块行照落（embedding_id=NULL），关键词面兜底。
+    """
+    chunks = smart_chunk(content or "", content_type=content_type or "")
     if chunks:
         chunk_texts = [c.content for c in chunks]
         embeddings = await get_embeddings_batch(chunk_texts)
@@ -113,6 +104,45 @@ async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
             )
         if points:
             qdrant_client.upsert_points(points)
+
+
+async def _drop_chunk_face(knowledge_id: str) -> None:
+    """旧分块/向量面清除（update 重分块前置单一收口）。
+
+    与 delete_knowledge 级联块同款语义（按行记录的 embedding_id 删 qdrant 点、
+    清 knowledge_chunks 行），但时序刻意不同：update 是"换新前先清旧"（行还在、
+    归属闸已过），delete 是随知识行级联删——故不并用一个口，防时序语义漂移。
+    """
+    rows = await db_pool.fetch(
+        "SELECT embedding_id FROM knowledge_chunks WHERE knowledge_id = $1", knowledge_id
+    )
+    embedding_ids = [c["embedding_id"] for c in rows if c["embedding_id"]]
+    if embedding_ids and qdrant_client.AVAILABLE:
+        qdrant_client.delete_points(embedding_ids)
+    await db_pool.execute("DELETE FROM knowledge_chunks WHERE knowledge_id = $1", knowledge_id)
+
+
+async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
+    knowledge_id = str(_uuid.uuid4())
+    await db_pool.execute(
+        "INSERT INTO knowledge (id, title, content, source, content_type, metadata, user_id) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        knowledge_id,
+        data.title,
+        data.content,
+        data.source,
+        data.content_type,
+        json.dumps(data.metadata or {}),
+        str(user_id),
+    )
+    await db_pool.fetchrow("SELECT * FROM knowledge WHERE id = $1", knowledge_id)
+
+    # Add tags（链接面写入走 _replace_tags 单一收口，与 update 同源）
+    await _replace_tags(knowledge_id, data.tags, user_id)
+
+    # Chunk and embed（分块+嵌入落面走 _write_chunk_face 单一收口，与 update
+    # 重分块同源；修前 create 内联块与 update 无共享=重分块若另写一份必双源漂移）
+    await _write_chunk_face(knowledge_id, data.content, data.content_type, user_id)
 
     # Meili 索引写面走 meili_indexer.index_knowledge_doc 单一构造口（doc 从 DB
     # 读真源派生，与 update/全量重索引同形同源；修前 create 内联 doc 与
@@ -218,11 +248,14 @@ async def update_knowledge(knowledge_id: UUID, data: KnowledgeUpdate, user_id: U
         set_clauses.append(f"{field} = ?")
         values.append(value)
 
+    updated = None
     if set_clauses:
         values.extend([knowledge_id, str(user_id)])
-        await db_pool.execute(
+        # RETURNING content/content_type=重分块输入真源（UPDATE 后行值，content_type
+        # 可能本次未传而在行上；toggle_star 同款 RETURNING 先例）
+        updated = await db_pool.fetchrow(
             f"UPDATE knowledge SET {', '.join(set_clauses)}, updated_at = NOW() "
-            f"WHERE id = ? AND user_id = ?",
+            f"WHERE id = ? AND user_id = ? RETURNING content, content_type",
             *values,
         )
     else:
@@ -237,6 +270,17 @@ async def update_knowledge(knowledge_id: UUID, data: KnowledgeUpdate, user_id: U
     if "tags" in fields:
         # 修前整个跳过=静默丢+200 回旧 tags 谎报 ok（KN-①）；现走 create 同一链接面收口
         await _replace_tags(str(knowledge_id), fields["tags"] or [], user_id)
+
+    # KN-③：content/content_type 变更=分块真源变化，旧分块/向量必须随换（KN-② 诚实
+    # 边界留档「update 不重分块/重嵌入=向量面旧文留档」收口——检索命中旧文=向量面
+    # 谎报）。title/metadata/tags/source 不参与分块构造，不触发（宁窄勿滥）。
+    # updated 为 None=行随并发删除消失（归属闸后竞态），无物可分块——get_knowledge
+    # 同刻回 None→404，非静默顶替。
+    if ("content" in fields or "content_type" in fields) and updated is not None:
+        await _drop_chunk_face(str(knowledge_id))
+        await _write_chunk_face(
+            str(knowledge_id), updated["content"], updated["content_type"], user_id
+        )
 
     # KN-②：写面后真重索引（修 KN-① 留档边界「不重刷 meili 索引=content/title/
     # tags 变更后检索面仍旧文」）。doc 从 DB 读真源派生（tags=链接面，与 get/list
