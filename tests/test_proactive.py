@@ -123,12 +123,14 @@ def test_default_watchers_registered():
         "experience_collect",
         "heredity_triggers",
         "pattern_extract",
+        "advisory_review",
     }
     intervals = {
         w["name"]: w["interval_seconds"] for w in asyncio.run(eng.get_status())["watchers"]
     }
     assert (
         intervals["memory_decay"]
+        > intervals["advisory_review"]
         > intervals["pattern_extract"]
         > intervals["experience_collect"]
         > intervals["heredity_triggers"]

@@ -5,6 +5,7 @@
 - experience_collect→ learn ExperienceCollector.collect（执行产物→experiences 采集）
 - heredity_triggers → heredity EvolutionEngine.evaluate_triggers（进化触发器+错误风暴熔断巡检）
 - pattern_extract   → learn LongTermLearning.extract_patterns（experiences→learned_patterns 模式提取，F2b-①）
+- advisory_review   → learn LongTermLearning.get_recommendations + ai_groups.submit_advisory_task（推荐回流消费面：改进任务上板+回群聊，DEC-④ 建议默认 B）
 
 依赖全部可注入（store/engine/db_path），测试走 tmp 数据面，生产默认零配置。
 """
@@ -79,17 +80,88 @@ async def pattern_extract(
     return {"extraction": extraction, **await learning.get_stats()}
 
 
+def advisory_task_goal(rec: dict) -> str:
+    """推荐 → 改进任务 goal 文本（确定性派生：只取 type·key 不可变身份段）。
+
+    置信度/样本数/pattern_data 会随学习更新而变——进 goal 会让同一条推荐反复
+    派生出不同 goal 绕过 at-most-once 去重（去重键=goal 全文），故稳定身份段
+    只用 pattern_type·pattern_key，动态细节进任务 constraints。
+    """
+    return "[改进建议] {}·{}".format(rec.get("type", "?"), rec.get("key", "?"))
+
+
+async def advisory_review(top_k: int = 3, db_pool: Any = None) -> dict:
+    """DEC-④ 推荐回流面消费点（建议默认 B，自决例外记 pending-decisions.md ④）：
+    定期读 learned_patterns 推荐（get_recommendations 同一读真源、ADVISORY_SCOPE
+    同一口径）→ 生成改进类任务上板 + 回群聊（ai_groups.submit_advisory_task，
+    与 B0 任务链回群聊同面）。
+
+    形态自决（可一句改道，见 pending-decisions.md ④）：
+    - 改进任务=提案上板不自动跑任务链（执行由人/既有 execute 口触发；回「④改B2」
+      即接 _run_task_chain 自动执行）
+    - at-most-once：同组同 goal 上过板（含终态）不重复上（宁少勿刷屏；回「④改B3」
+      即改为仅对未终结行去重=周期性重提）
+    - 无群组=如实空转可观测（生产无群组时零副作用）
+    - 推荐读取失败如实抛（run_watcher 记 ok=False 可见，禁静默空转）；单组单条
+      上板失败收进 errors 不掀翻其余（可见不阻断 F2b-②c-1 纪律）
+    """
+    if db_pool is None:
+        from src.database.postgres import db_pool as _db_pool
+
+        db_pool = _db_pool
+    from src.api import ai_groups
+    from src.learn.long_term import ADVISORY_SCOPE, LongTermLearning
+
+    learning = LongTermLearning(db_pool, *ADVISORY_SCOPE)
+    recs = (await learning.get_recommendations())[:top_k]
+    conn = ai_groups.get_db()
+    try:
+        groups = [
+            r["id"]
+            for r in conn.execute("SELECT id FROM ai_groups ORDER BY created_at, id").fetchall()
+        ]
+    finally:
+        conn.close()
+    result: dict = {
+        "groups": len(groups),
+        "recommendations": len(recs),
+        "created": 0,
+        "task_ids": [],
+        "skipped_existing": 0,
+        "errors": [],
+    }
+    if not groups:
+        result["reason"] = "no_groups"
+        return result
+    for gid in groups:
+        for rec in recs:
+            goal = advisory_task_goal(rec)
+            try:
+                res = await ai_groups.submit_advisory_task(gid, goal, rec)
+            except Exception as e:  # 单组单条失败不掀翻其余上板
+                result["errors"].append(f"{gid}: {type(e).__name__}: {e}")
+                continue
+            if res.get("created"):
+                result["created"] += 1
+                result["task_ids"].append(res.get("task_id"))
+            else:
+                result["skipped_existing"] += 1
+    return result
+
+
 # 行为 → 执行间隔（秒）：维护类低频、采集类中频、巡检类高频
 DEFAULT_INTERVALS: dict[str, float] = {
     "memory_decay": 6 * 3600,
     "experience_collect": 3600,
     "heredity_triggers": 1800,
     "pattern_extract": 2 * 3600,  # 滞后采集一拍（采集1h/提取2h）：积累≥2轮经验再提
+    "advisory_review": 4
+    * 3600,  # 再滞后提取一拍（提取2h/回流4h）：有模式再消费，at-most-once 不刷屏
 }
 
 
 def register_default_watchers(engine: Any) -> list[str]:
-    """把四个默认主动行为注册进 ProactiveEngine（幂等：同名覆盖同一行为）。"""
+    """把五个默认主动行为注册进 ProactiveEngine（幂等：同名覆盖同一行为）。"""
     specs = {
         "memory_decay": (partial(memory_decay), DEFAULT_INTERVALS["memory_decay"]),
         "experience_collect": (
@@ -98,6 +170,7 @@ def register_default_watchers(engine: Any) -> list[str]:
         ),
         "heredity_triggers": (partial(heredity_triggers), DEFAULT_INTERVALS["heredity_triggers"]),
         "pattern_extract": (partial(pattern_extract), DEFAULT_INTERVALS["pattern_extract"]),
+        "advisory_review": (partial(advisory_review), DEFAULT_INTERVALS["advisory_review"]),
     }
     for name, (fn, interval) in specs.items():
         engine.register_watcher(name, fn, interval_seconds=interval)

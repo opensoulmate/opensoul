@@ -1295,9 +1295,16 @@ GROUP_MSG_PUSH = "http://127.0.0.1:8092/internal/group-message"
 
 
 async def _notify_group_chat(
-    group_id: str, agent_id: str, agent_name: str, content: str, task_id: str = ""
+    group_id: str,
+    agent_id: str,
+    agent_name: str,
+    content: str,
+    task_id: str = "",
+    source: str = "task_chain",
 ):
-    """把 Agent 执行结果发进群聊消息流。
+    """把 Agent 执行结果/系统回流消息发进群聊消息流。
+    source=消息来源标记（缺省 "task_chain"=既有契约字节不变；DEC-④ advisory_review
+    消费面传 "advisory_review"）。
     落点=discussion_messages（OpenSoul与acp-proxy ws_group._persist_message共享的聊天存储，
     ws_group.py: _OPENSOUL_DB=data/ai_groups.db），实时可见性走_emit_exec_event→
     ws_group尾随task_execution_events广播。写入失败只记日志，不影响任务本体。"""
@@ -1315,7 +1322,7 @@ async def _notify_group_chat(
                     agent_name or agent_id or "SoulMate",
                     "agent_reply",
                     content,
-                    json.dumps({"source": "task_chain"}, ensure_ascii=False),
+                    json.dumps({"source": source}, ensure_ascii=False),
                     1,
                     datetime.now().isoformat(),
                     _task_tenant(conn, msg_task_id),  # F3b-③b-2：父任务行继承
@@ -1348,6 +1355,56 @@ async def _notify_group_chat(
         logger.info(f"群聊回帖已落库: group={group_id} task={task_id}")
     except Exception as e:
         logger.warning(f"群聊回帖失败(不影响任务): {e}")
+
+
+async def submit_advisory_task(group_id: str, goal: str, detail: dict) -> dict:
+    """DEC-④ advisory_review 消费面：改进类任务上板 + 回群聊（B0 同面 _notify_group_chat）。
+
+    - 提案语义：只上板不自动跑任务链（执行由人/既有 execute 口触发；若拍板要自动
+      执行回「④改B2」即在调用方接 _run_task_chain）
+    - at-most-once：同组同 goal 已存在任一行（含子任务/终态）=不重复上板（宁少
+      勿刷屏；若拍板要周期性重提回「④改B3」即改为仅对未终结行去重）
+    - 行租户键=组行继承（_group_tenant 单一权威，③b-3 成员/能力行同款）——系统
+      行为产出的任务归属群组所在租户（挂 'default' 会让组主租户看板看不到）
+    """
+    conn = get_db()
+    try:
+        if not conn.execute("SELECT id FROM ai_groups WHERE id=?", (group_id,)).fetchone():
+            return {"created": False, "reason": "group_missing"}
+        dup = conn.execute(
+            "SELECT id FROM ai_group_tasks WHERE group_id=? AND goal=? LIMIT 1",
+            (group_id, goal),
+        ).fetchone()
+        if dup:
+            return {"created": False, "reason": "already_on_board", "task_id": dup["id"]}
+        now = datetime.now().isoformat()
+        task_id = str(uuid.uuid4())[:8]
+        conn.execute(
+            "INSERT INTO ai_group_tasks (id, group_id, goal, constraints, completion_criteria, status, created_at, updated_at, tenant_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                task_id,
+                group_id,
+                goal,
+                json.dumps(detail, ensure_ascii=False),
+                json.dumps([], ensure_ascii=False),
+                "planning",
+                now,
+                now,
+                _group_tenant(conn, group_id),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    await _notify_group_chat(
+        group_id,
+        "soulmate",
+        "SoulMate",
+        f"💡 学习建议上板：{goal}",
+        task_id=task_id,
+        source="advisory_review",
+    )
+    return {"created": True, "task_id": task_id}
 
 
 async def _run_soulmate_turn(

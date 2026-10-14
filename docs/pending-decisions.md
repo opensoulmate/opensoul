@@ -9,7 +9,7 @@
 | ① | F3b-⑨b-③ 非 HTTP 面事件身份归属（9 调用点，4 子面；1c 已落 2026-10-14=F3b-⑨b-③-1c） | F3b-⑨ 审计③ | 1a/1b/1d 取"系统事件"——**已按建议默认 A 先行执行 2026-10-14（F3b-⑨b-③-1abd）** | ~~"①aA ①bA ①dA"~~ 已落，异议回「①a改B ①b改B ①d改B」即改道 |
 | ② | wakeup executor 认证轴 | F3b-⑧c 边界① | 取 C（executor=系统组件按行租户点火）——**已按建议默认 C 先行执行 2026-10-14（F3b-⑧c-①）** | ~~"②取C"~~ 已落，异议回「②改A」即 revert |
 | ③ | episodic 经验 prompt 回流消费点 | F4b-㉜ 边界③ | 维持不注入，等⑤落地 | "③维持" |
-| ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为） | "④取B" |
+| ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为）——**已按建议默认 B 先行执行 2026-10-14（DEC-④-①）** | ~~"④取B"~~ 已落，形态自决异议回「④改B2」（自动跑任务链）/「④改B3」（周期重提）/「④改A」（revert）即改道 |
 | ⑤ | Reflector 写侧触发面（执行结果回传协议） | F4b-㉚ ⑤ | 取 B（定执行结果回传协议），生态层大件 | "⑤取B/暂不做" |
 | ⑥ | a2a 取消语义扩展 | F4b-㉔ 锁死语义 | 取 B（显式 /cancel 指令），或维持 | "⑥取B/维持" |
 | ⑦ | unified 其余子搜索存储层加轴 | F3b-⑥ 边界 | 取 B 分批（events 面最小件可先行） | "⑦取B" |
@@ -66,6 +66,8 @@
 - 建议：**A**（维持，等⑤）；若要先行试水可拍 B 且仅注入 failure 行 error 字段（软建议块语义沿用 F2b-②）。
 
 ## ④ proactive 推荐回流面消费点（F2b-②c-1 复核留档）
+
+**状态：已按建议默认 B 先行执行（2026-10-14 DEC-④-①）**——依据：上拍周期日志已把本项列为下一候选（首件）+用户「权限/审批阻塞时别停工等批」铁律+①② 同款自决先例；实现=advisory_review 定期行为（get_recommendations 同一读真源/ADVISORY_SCOPE 同一口径 top_k=3→改进任务上板+回群聊 B0 同面，ai_groups.submit_advisory_task）；形态自决两点（可一句改道）：**B1 提案上板不自动跑任务链**（回「④改B2」即接 _run_task_chain 自动执行）、**at-most-once 同组同 goal 含终态不重复上**（回「④改B3」即改为仅对未终结行去重=周期重提）、全 revert=「④改A」。诚实边界：生产当前零群组=行为休眠至用户建组（无群组 reason=no_groups 空转可观测零副作用）。
 
 **现状**：proactive 固定四行为（experience_collect / pattern_extract / …，src/will/proactive_behaviors.py）无"按推荐调整行为"接缝——learned_patterns 产出的推荐只有任务执行/对话/evolve 三面消费（F2b-②②b②c-1 已落），主动行为面零消费（复核定性=无消费接缝，非断点漏修）。
 - 选项：**A** 不做 / **B** 新增 `advisory_review` 定期行为（读推荐→生成改进类任务回群/看板）/ **C** 心跳 prompt 注入推荐。
