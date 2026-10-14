@@ -140,14 +140,28 @@ async def _search_files(query: str, limit: int) -> list[dict]:
         return []
 
 
-async def _search_events(query: str, limit: int) -> list[dict]:
-    """Search event stream."""
+def _event_row_tenant(ev: dict) -> str:
+    """事件行租户键单一判法（timeline record() 同款语义，③c-2①）：
+    事件自带 tenant_id 键、缺失/空白→'default' 兜底（器官内生系统事件
+    =DEC-① 1a/1b/1d 'default' 语义）。禁在消费点另发明判法（F4b-㉗ 纪律）。"""
+    return str(ev.get("tenant_id") or "").strip() or "default"
+
+
+async def _search_events(query: str, limit: int, tenant_id: str) -> list[dict]:
+    """Search event stream（DEC-⑦-①：恒按派生租户过滤，内存缓冲面不再是系统视图）。
+
+    修前零过滤=任意租户可见全缓冲（跨租户泄露，与 timeline 面 ③c-2① 已收的
+    查询过滤不对称）。行归属判法=_event_row_tenant 单一源（事件自带键、
+    缺失/空白→'default' 兜底）；limit 只计可见命中（跨租户行不占名额）。
+    """
     try:
         from src.api.event_stream import _event_buffer
 
         query_lower = query.lower()
         matches = []
         for ev in reversed(_event_buffer):
+            if _event_row_tenant(ev) != tenant_id:
+                continue
             summary = str(ev.get("summary", "")).lower()
             organ = str(ev.get("organ", "")).lower()
             etype = str(ev.get("type", "")).lower()
@@ -396,8 +410,10 @@ async def unified_search(
     身份轴收口：user/tenant 从认证派生（bind_identity），自报值只可确认派生绑定
     ——认证请求自报他人档案=403；匿名保留自报（既有本地多档案语义）。知识子搜索
     用派生档案键（修前硬编码 'default'）、课程子搜索用派生租户过滤（修前系统视图
-    =跨租户泄露）。其余子搜索（files/events/agents/trajectory/cron/gene/echo）的
-    存储层无 user/tenant 轴，保持系统视图（诚实边界）。
+    =跨租户泄露）、events 子搜索用派生租户过滤（DEC-⑦-①，修前内存缓冲零过滤
+    =跨租户泄露；行归属=事件自带键缺失→'default' 兜底，record() 同款）。其余
+    子搜索（files/agents/trajectory/cron/gene/echo）的存储层无 user/tenant 轴，
+    保持系统视图（诚实边界，DEC-⑦ 分批拆件留待拍）。
     """
     identity = bind_identity(authorization, "", user_id)
     uid = _resolve_user_id(identity.user_id)
@@ -410,7 +426,7 @@ async def unified_search(
     if search_all or "files" in source_list:
         tasks["files"] = _search_files(q, limit)
     if search_all or "events" in source_list:
-        tasks["events"] = _search_events(q, limit)
+        tasks["events"] = _search_events(q, limit, identity.tenant_id)
     if search_all or "agents" in source_list:
         tasks["agents"] = _search_agents(q, limit)
     if search_all or "courses" in source_list:
