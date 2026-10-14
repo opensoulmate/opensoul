@@ -1,4 +1,5 @@
 import json
+import uuid as _uuid
 from uuid import UUID
 
 from src.database.meilisearch import meili_client
@@ -50,9 +51,33 @@ def _row_out(d: dict) -> dict:
     return d
 
 
-async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
-    import uuid as _uuid
+async def _replace_tags(knowledge_id: str, tag_names: list[str], user_id: UUID) -> None:
+    """链接面 tags 写入单一收口（create/update 共用，禁双源漂移）。
 
+    先清旧链接再按名重链：tags 行是用户词表（ON CONFLICT DO NOTHING 保 id 稳定、
+    解链不删词表行），knowledge_tags 链接面是条目真源（get/list 的 GROUP_CONCAT
+    读这里）。修前 update 对 tags 整个跳过=静默丢+谎报 ok（KN-①）。
+    """
+    await db_pool.execute("DELETE FROM knowledge_tags WHERE knowledge_id = $1", knowledge_id)
+    for tag_name in tag_names:
+        await db_pool.execute(
+            "INSERT INTO tags (id, name, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+            str(_uuid.uuid4()),
+            tag_name,
+            str(user_id),
+        )
+        tag = await db_pool.fetchrow(
+            "SELECT id FROM tags WHERE name = $1 AND user_id = $2", tag_name, str(user_id)
+        )
+        if tag:
+            await db_pool.execute(
+                "INSERT INTO knowledge_tags (knowledge_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                knowledge_id,
+                tag["id"],
+            )
+
+
+async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
     knowledge_id = str(_uuid.uuid4())
     await db_pool.execute(
         "INSERT INTO knowledge (id, title, content, source, content_type, metadata, user_id) "
@@ -67,24 +92,8 @@ async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
     )
     await db_pool.fetchrow("SELECT * FROM knowledge WHERE id = $1", knowledge_id)
 
-    # Add tags
-    for tag_name in data.tags:
-        tag_id = str(_uuid.uuid4())
-        await db_pool.execute(
-            "INSERT INTO tags (id, name, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-            tag_id,
-            tag_name,
-            str(user_id),
-        )
-        tag = await db_pool.fetchrow(
-            "SELECT id FROM tags WHERE name = $1 AND user_id = $2", tag_name, str(user_id)
-        )
-        if tag:
-            await db_pool.execute(
-                "INSERT INTO knowledge_tags (knowledge_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-                knowledge_id,
-                tag["id"],
-            )
+    # Add tags（链接面写入走 _replace_tags 单一收口，与 update 同源）
+    await _replace_tags(knowledge_id, data.tags, user_id)
 
     # Chunk and embed
     chunks = smart_chunk(data.content, content_type=data.content_type)
@@ -213,25 +222,48 @@ async def list_knowledge(
 async def update_knowledge(knowledge_id: UUID, data: KnowledgeUpdate, user_id: UUID) -> dict | None:
     fields = data.model_dump(exclude_unset=True)
     if not fields:
-        return await get_knowledge(knowledge_id, str(user_id))
+        return await get_knowledge(knowledge_id, user_id)
+
+    # 归属闸前置（TL-⑲ delete 同型）：行属他人/缺行=零副作用——tags 写面是
+    # 链接表副作用，无闸则他人可用 update 写坏受害者链接面
+    owned = await db_pool.fetchval(
+        "SELECT 1 FROM knowledge WHERE id = $1 AND user_id = $2", knowledge_id, str(user_id)
+    )
+    if not owned:
+        return None
 
     set_clauses = []
     values = []
-    idx = 1
     for field, value in fields.items():
-        if field != "tags":
-            set_clauses.append(f"{field} = ?")
-            values.append(value)
-            idx += 1
+        if field == "tags":
+            continue
+        if field == "metadata":
+            # 铁律：metadata 落库 json.dumps（修前裸 dict 绑参→绑定失败 500）
+            value = json.dumps(value or {})
+        set_clauses.append(f"{field} = ?")
+        values.append(value)
 
-    values.extend([knowledge_id, str(user_id)])
-    await db_pool.execute(
-        f"UPDATE knowledge SET {', '.join(set_clauses)}, updated_at = NOW() "
-        f"WHERE id = ? AND user_id = ?",
-        *values,
-    )
+    if set_clauses:
+        values.extend([knowledge_id, str(user_id)])
+        await db_pool.execute(
+            f"UPDATE knowledge SET {', '.join(set_clauses)}, updated_at = NOW() "
+            f"WHERE id = ? AND user_id = ?",
+            *values,
+        )
+    else:
+        # tags-only：行级列零变化也随改 bump updated_at（tags 是条目状态一部分；
+        # 修前此形态空 SET 拼 SQL 炸 'near , syntax error'→500）
+        await db_pool.execute(
+            "UPDATE knowledge SET updated_at = NOW() WHERE id = ? AND user_id = ?",
+            knowledge_id,
+            str(user_id),
+        )
 
-    return await get_knowledge(knowledge_id, str(user_id))
+    if "tags" in fields:
+        # 修前整个跳过=静默丢+200 回旧 tags 谎报 ok（KN-①）；现走 create 同一链接面收口
+        await _replace_tags(str(knowledge_id), fields["tags"] or [], user_id)
+
+    return await get_knowledge(knowledge_id, user_id)
 
 
 async def delete_knowledge(knowledge_id: UUID, user_id: UUID) -> bool:
