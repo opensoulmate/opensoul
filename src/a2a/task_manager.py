@@ -383,6 +383,28 @@ def _is_cancel_intent(text: str) -> bool:
     return _cancel_norm(_strip_polite(text)) in _CANCEL_PHRASES
 
 
+# 显式取消指令（pending-decisions ⑥ 建议默认 B）：消息以 `/cancel` 开头=显式
+# 指令，与闭集取消短语（_is_cancel_intent，㉔ 锁死只在 §6.3 pending 回答分支
+# 生效）刻意分开——显式指令无歧义，任何路由位（skill 路由/普通路由/pending
+# 回答）都取消承载本消息的任务。
+_EXPLICIT_CANCEL_CMD = "/cancel"
+
+
+def _explicit_cancel_command(text: str) -> bool:
+    """消息以显式 /cancel 指令开头？（命令 token 全等，宁窄勿滥）
+
+    判定：去前导空白后以 `/cancel` 开头（大小写不敏感，与 _cancel_norm 小写
+    归一同纪律），且紧随字符非 ASCII 字母/数字（token 边界：`/canceled`、
+    `/cancel123` 是别的东西不是本命令）。starts-with 语义锁死：「如何使用
+    /cancel 命令」「请 /cancel」不在行首=不是指令（containment 会误杀真查询）。
+    """
+    t = text.lstrip().lower()
+    if not t.startswith(_EXPLICIT_CANCEL_CMD):
+        return False
+    rest = t[len(_EXPLICIT_CANCEL_CMD) :]
+    return not rest or not (rest[0].isascii() and rest[0].isalnum())
+
+
 class _ArtifactChunkStream:
     """LLM 生成文本 → TaskArtifactUpdateEvent token 级分块发射（F4b-⑯b）。
 
@@ -1086,8 +1108,14 @@ class TaskManager:
         - 取消语义（F4b-㉔）：回答=取消意图（闭集全等，_is_cancel_intent）→
           TaskCancelled 任务收口 canceled，禁当查询参数 verbatim（修前「不用了」
           →搜索「不用了」fabricate 查询结果）。
+        - 显式 /cancel 指令（⑥ 建议默认 B）：消息以 `/cancel` 开头=显式取消指令
+          ——先于一切路由判定（skill 路由/普通路由/pending 回答三路同判），承载
+          本消息的任务收口 canceled（F4b-㉔ 唯一产生口），禁进 handler fabricate
+          （修前 pending 回答「/cancel」被当查询参数、含触发词时还硬跑查询）。
         """
         pending = task.metadata.pop(_PENDING_SKILL_KEY, "")
+        if _explicit_cancel_command(text):
+            raise TaskCancelled(_CANCEL_ACK)
         if pending:
             if _is_cancel_intent(text):
                 raise TaskCancelled(_CANCEL_ACK)
