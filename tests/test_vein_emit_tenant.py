@@ -346,7 +346,11 @@ class TestVeinEmitTenantInvariants:
         + store 写点/过滤/闸门 6 处带键（upload/update/complete 落行、list 过滤、
         delete/rollback 归属闸）——push_event emit 面 8 处带键零变化（+6 全在
         store 面），总数 10 handler / 14 键。
+        契约随更新（DEC-⑦-⑩ by-ID 读面归属闸）：get_file_meta/versions×2 三
+        handler 落 bind_identity（+3），by-ID 读面闸 12 处带键（meta/download×2/
+        versions×2/promote×2/auto-process×2/batch list+逐行 retrieve——push_event
+        emit 面零变化），总数 13 handler / 26 键。
         """
         src = (Path(__file__).parent.parent / "src" / "api" / "vein.py").read_text(encoding="utf-8")
-        assert src.count("identity = bind_identity(authorization)") == 10
-        assert src.count("tenant_id=identity.tenant_id") == 14
+        assert src.count("identity = bind_identity(authorization)") == 13
+        assert src.count("tenant_id=identity.tenant_id") == 26

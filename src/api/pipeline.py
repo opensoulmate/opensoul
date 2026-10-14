@@ -442,7 +442,9 @@ async def pipeline_run(
         from src.vein.file_store import FileStore
 
         store = FileStore()
-        result = store.retrieve(req.file_id)
+        # DEC-⑦-⑩ by-ID 读面归属闸：跨租户=404 与 not-found 同契约（detail 沿用
+        # "File not found in Vein" 不差分）
+        result = store.retrieve(req.file_id, tenant_id=identity.tenant_id)
         if not result:
             raise HTTPException(404, "File not found in Vein")
         data, meta = result

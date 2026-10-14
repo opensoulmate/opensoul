@@ -187,9 +187,14 @@ class FileStore:
         self._db.commit()
         return meta
 
-    def retrieve(self, file_id: str) -> tuple[bytes, FileMeta] | None:
-        """Retrieve a file by ID. Returns (data, meta) or None."""
-        meta = self.get_meta(file_id)
+    def retrieve(self, file_id: str, tenant_id: str | None = None) -> tuple[bytes, FileMeta] | None:
+        """Retrieve a file by ID. Returns (data, meta) or None.
+
+        DEC-⑦-⑩ by-ID 读面归属闸：tenant_id 显式给出=随 get_meta 同闸（跨租户回
+        None 与 not-found 同一契约，不差分泄露）；None=系统视图不闸（既有内部
+        调用面字节不变）。
+        """
+        meta = self.get_meta(file_id, tenant_id=tenant_id)
         if not meta:
             return None
         blob_path = self._blob_path(meta.content_hash)
@@ -197,9 +202,13 @@ class FileStore:
             return None
         return blob_path.read_bytes(), meta
 
-    def stream_retrieve(self, file_id: str):
-        """Generator that yields file data in chunks for streaming."""
-        meta = self.get_meta(file_id)
+    def stream_retrieve(self, file_id: str, tenant_id: str | None = None):
+        """Generator that yields file data in chunks for streaming.
+
+        DEC-⑦-⑩ by-ID 读面归属闸（retrieve 同款）：tenant_id 显式给出=跨租户回
+        (None, None) 与 not-found 同一契约；None=系统视图不闸。
+        """
+        meta = self.get_meta(file_id, tenant_id=tenant_id)
         if not meta:
             return None, None
         blob_path = self._blob_path(meta.content_hash)
@@ -207,11 +216,20 @@ class FileStore:
             return None, None
         return blob_path, meta
 
-    def get_meta(self, file_id: str) -> FileMeta | None:
+    def get_meta(self, file_id: str, tenant_id: str | None = None) -> FileMeta | None:
+        """Get file metadata by ID.
+
+        DEC-⑦-⑩ by-ID 读面归属闸（delete/rollback 归属闸同款）：tenant_id 显式
+        给出时跨租户回 None（与 not-found 同一契约，不差分泄露他租户行存在性，
+        ③c-1 纪律）；None=系统视图不闸（既有内部调用面字节不变）。
+        """
         row = self._db.execute("SELECT * FROM files WHERE file_id = ?", (file_id,)).fetchone()
         if not row:
             return None
-        return FileMeta(**dict(row))
+        meta = FileMeta(**dict(row))
+        if tenant_id is not None and file_row_tenant(meta) != tenant_id:
+            return None
+        return meta
 
     def delete(self, file_id: str, tenant_id: str | None = None) -> bool:
         """Delete a file reference. Removes blob if no other references.
@@ -310,12 +328,29 @@ class FileStore:
             return None
         return self._versions.record_version(file_id, content_hash, size, change_summary)
 
-    def get_version_history(self, file_id: str, limit: int = 50) -> list[FileVersion]:
-        """Get version history for a file."""
+    def get_version_history(
+        self, file_id: str, limit: int = 50, tenant_id: str | None = None
+    ) -> list[FileVersion]:
+        """Get version history for a file.
+
+        DEC-⑦-⑩ 归属闸（get_meta 同款）：tenant_id 显式给出时行缺失/跨租户回 []
+        （与 not-found 同契约；versions 表无行键，闸在文件行层）；None=系统视图
+        不闸（既有内部调用面字节不变）。
+        """
+        if tenant_id is not None and self.get_meta(file_id, tenant_id=tenant_id) is None:
+            return []
         return self._versions.get_history(file_id, limit)
 
-    def get_version(self, file_id: str, version_number: int) -> FileVersion | None:
-        """Get a specific version of a file."""
+    def get_version(
+        self, file_id: str, version_number: int, tenant_id: str | None = None
+    ) -> FileVersion | None:
+        """Get a specific version of a file.
+
+        DEC-⑦-⑩ 归属闸（get_meta 同款）：tenant_id 显式给出时行缺失/跨租户回
+        None（与 not-found 同契约）；None=系统视图不闸。
+        """
+        if tenant_id is not None and self.get_meta(file_id, tenant_id=tenant_id) is None:
+            return None
         return self._versions.get_version(file_id, version_number)
 
     def rollback_to_version(

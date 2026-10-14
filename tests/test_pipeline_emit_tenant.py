@@ -99,7 +99,9 @@ class _StubFileStore:
             tenant_id=tenant_id or "default",
         )
 
-    def retrieve(self, file_id):
+    def retrieve(self, file_id, tenant_id=None):
+        # 契约随更新（DEC-⑦-⑩）：retrieve 签名对齐真实 FileStore.retrieve（含
+        # by-ID 读面归属闸 tenant_id 形参），handler 新闸门不被桩吞掉。
         meta = SimpleNamespace(
             file_id=file_id,
             name="note.txt",
@@ -344,13 +346,15 @@ class TestPipelineEmitTenantInvariants:
 
         契约随更新（DEC-⑦-④）：修前 3（emit 面）；本拍 store.store 写点接派生
         租户（+1 落行键），emit 面 3 处零变化，总数 4。
+        契约随更新（DEC-⑦-⑩）：pipeline_run retrieve 读点带派生租户键（by-ID
+        读面归属闸，+1），总数 5。
         """
         pipe = chr(124)
         src = (Path(__file__).parent.parent / "src" / "api" / "pipeline.py").read_text(
             encoding="utf-8"
         )
         assert src.count("identity = bind_identity(authorization)") == 2
-        assert src.count("tenant_id=identity.tenant_id") == 4
+        assert src.count("tenant_id=identity.tenant_id") == 5
         assert src.count("push_event(") == 3
         assert src.count("authorization: str " + pipe + " None = Header(None)") == 2  # 竖线完好探针
         starts = []

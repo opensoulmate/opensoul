@@ -133,9 +133,14 @@ async def list_files(
 
 
 @router.get("/files/{file_id}")
-async def get_file_meta(file_id: str):
-    """Get file metadata by ID."""
-    meta = store.get_meta(file_id)
+async def get_file_meta(file_id: str, authorization: str | None = Header(None)):
+    """Get file metadata by ID.
+
+    DEC-⑦-⑩ by-ID 读面归属闸：tenant 由 bind_identity 派生（匿名 'default'），
+    跨租户=404 与 not-found 同一契约（不差分泄露行存在性，③c-1 纪律）。
+    """
+    identity = bind_identity(authorization)
+    meta = store.get_meta(file_id, tenant_id=identity.tenant_id)
     if not meta:
         raise HTTPException(status_code=404, detail="File not found")
     return {
@@ -154,31 +159,35 @@ async def get_file_meta(file_id: str):
 async def download_file(file_id: str, authorization: str | None = Header(None)):
     """Download a file. Streams from cache if available."""
     identity = bind_identity(authorization)
+    # DEC-⑦-⑩ by-ID 读面归属闸：先验行归属再走缓存/磁盘——缓存键全局，闸后置
+    # 于缓存命中=跨租户借缓存读他人文件内容的泄露面；跨租户=404 与 not-found
+    # 同一契约。语义收口如实记：修前"缓存命中但行缺失"仍回内容，现 by-ID 读面
+    # 一律要求行可见。
+    meta = store.get_meta(file_id, tenant_id=identity.tenant_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="File not found")
+
     # Check cache first
     cached = cache.get(f"file:{file_id}")
     if cached:
-        meta = store.get_meta(file_id)
-        if meta:
-            push_event(
-                {
-                    "organ": "vein",
-                    "emoji": "🩸",
-                    "type": "file_downloaded",
-                    "summary": f"⬇️ File downloaded (cached): {meta.name}",
-                    "detail": {"file_id": file_id},
-                },
-                tenant_id=identity.tenant_id,
-            )
+        push_event(
+            {
+                "organ": "vein",
+                "emoji": "🩸",
+                "type": "file_downloaded",
+                "summary": f"⬇️ File downloaded (cached): {meta.name}",
+                "detail": {"file_id": file_id},
+            },
+            tenant_id=identity.tenant_id,
+        )
         return StreamingResponse(
             iter([cached]),
-            media_type=meta.mime_type if meta else "application/octet-stream",
-            headers={
-                "Content-Disposition": f'attachment; filename="{meta.name if meta else file_id}"'
-            },
+            media_type=meta.mime_type,
+            headers={"Content-Disposition": f'attachment; filename="{meta.name}"'},
         )
 
     # Stream from disk
-    blob_path, meta = store.stream_retrieve(file_id)
+    blob_path, meta = store.stream_retrieve(file_id, tenant_id=identity.tenant_id)
     if not blob_path or not meta:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -280,13 +289,19 @@ async def update_file_content(
 async def get_version_history(
     file_id: str,
     limit: int = Query(default=50, ge=1, le=200),
+    authorization: str | None = Header(None),
 ):
-    """Get version history for a file."""
-    meta = store.get_meta(file_id)
+    """Get version history for a file.
+
+    DEC-⑦-⑩ by-ID 读面归属闸（get_file_meta 同款）：跨租户=404 与 not-found
+    同一契约。
+    """
+    identity = bind_identity(authorization)
+    meta = store.get_meta(file_id, tenant_id=identity.tenant_id)
     if not meta:
         raise HTTPException(status_code=404, detail="File not found")
 
-    versions = store.get_version_history(file_id, limit)
+    versions = store.get_version_history(file_id, limit, tenant_id=identity.tenant_id)
     return {
         "file_id": file_id,
         "current_version": len(versions),
@@ -304,9 +319,18 @@ async def get_version_history(
 
 
 @router.get("/files/{file_id}/versions/{version_number}")
-async def get_specific_version(file_id: str, version_number: int):
-    """Get a specific version of a file."""
-    version = store.get_version(file_id, version_number)
+async def get_specific_version(
+    file_id: str,
+    version_number: int,
+    authorization: str | None = Header(None),
+):
+    """Get a specific version of a file.
+
+    DEC-⑦-⑩ by-ID 读面归属闸（get_file_meta 同款）：跨租户=404 与 not-found
+    同一契约（detail 沿用 "Version not found" 不差分）。
+    """
+    identity = bind_identity(authorization)
+    version = store.get_version(file_id, version_number, tenant_id=identity.tenant_id)
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
 
@@ -545,12 +569,13 @@ async def promote_to_knowledge(
     if req is None:
         req = PromoteRequest()
 
-    meta = store.get_meta(file_id)
+    # DEC-⑦-⑩ by-ID 读面归属闸：跨租户 404 零副作用（不入库 knowledge/tags）
+    meta = store.get_meta(file_id, tenant_id=identity.tenant_id)
     if not meta:
         raise HTTPException(status_code=404, detail="File not found")
 
     # Read file content
-    result = store.retrieve(file_id)
+    result = store.retrieve(file_id, tenant_id=identity.tenant_id)
     if not result:
         raise HTTPException(status_code=404, detail="File content not found")
     data, _meta = result
@@ -685,12 +710,13 @@ async def auto_process_file(
     if req is None:
         req = AutoProcessRequest()
 
-    meta = store.get_meta(file_id)
+    # DEC-⑦-⑩ by-ID 读面归属闸：跨租户 404 零副作用（不进 Sense/知识入库）
+    meta = store.get_meta(file_id, tenant_id=identity.tenant_id)
     if not meta:
         raise HTTPException(status_code=404, detail="File not found")
 
     # Retrieve file content
-    result = store.retrieve(file_id)
+    result = store.retrieve(file_id, tenant_id=identity.tenant_id)
     if not result:
         raise HTTPException(status_code=404, detail="File content not found")
     data, _meta = result
@@ -921,7 +947,9 @@ async def batch_auto_process(
     """
     identity = bind_identity(authorization)
     # Get all files
-    all_files = store.list_files(limit=req.limit, offset=0)
+    # DEC-⑦-⑩ by-ID 读面归属闸：批量面同闸——列本租户行+逐行读点带派生租户键
+    # （修前 list 全租户+retrieve 零闸=批量跨租户读他人文件内容）。
+    all_files = store.list_files(limit=req.limit, offset=0, tenant_id=identity.tenant_id)
 
     # Filter by mime type if specified
     eligible = []
@@ -939,7 +967,7 @@ async def batch_auto_process(
     for f in eligible:
         try:
             # Retrieve file content
-            file_result = store.retrieve(f.file_id)
+            file_result = store.retrieve(f.file_id, tenant_id=identity.tenant_id)
             if not file_result:
                 results.append(
                     {
