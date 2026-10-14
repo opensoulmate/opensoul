@@ -43,6 +43,26 @@ def _isolate_timeline_db(tmp_path, monkeypatch):
     monkeypatch.delattr(event_bridge_mod.emit, "_timeline", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_proactive_db(tmp_path, monkeypatch):
+    """PROACTIVE_DB 全测试隔离（proactive 测试隔离，TL-① 同族）：src.will.proactive
+    模块级 proactive_engine 单例 import 即构造（db_path 构造时解析），修前缺省恒
+    ~/opensoul/data/proactive.db——任何 TestClient(src.main) 触发 lifespan 心跳
+    （register_default_watchers 重置 last_run_at=0 → 全部 watcher 立即到期 → 首
+    tick 全量跑）把测试 burst 写进生产 proactive.db（2026-10-14 只读清点 29,900
+    行、数百行/小时）。env 每用例指向 tmp + 单例每用例 retarget（构造期已过，
+    monkeypatch 覆盖实例属性 teardown 自动还原）；_db_ready/_events_memory 同步
+    复位：每用例真源=本用例 tmp 库，禁跨用例陈旧缓存/陈旧内存环。显式 db_path/
+    PROACTIVE_DB 的测试按其覆盖为准。"""
+    import src.will.proactive as proactive_mod
+
+    tmp_db = str(tmp_path / "proactive.db")
+    monkeypatch.setenv("PROACTIVE_DB", tmp_db)
+    monkeypatch.setattr(proactive_mod.proactive_engine, "db_path", tmp_db)
+    monkeypatch.setattr(proactive_mod.proactive_engine, "_db_ready", False)
+    monkeypatch.setattr(proactive_mod.proactive_engine, "_events_memory", [])
+
+
 @pytest.fixture(scope="session")
 def base_url():
     return BASE_URL

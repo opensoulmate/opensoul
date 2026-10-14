@@ -11,6 +11,7 @@ import asyncio
 import inspect
 import json
 import logging
+import os
 import sqlite3
 import time
 import uuid
@@ -42,7 +43,17 @@ class ProactiveEventAccessDenied(Exception):
 
 
 def _default_events_db() -> str:
-    """主动行为事件库默认落 data/proactive.db（与job_queue.db/ai_groups.db同款小库模式）。"""
+    """主动行为事件库路径单一解析：PROACTIVE_DB 环境变量优先（测试隔离，
+    TIMELINE_DB/NEST_DB/AGENT_REGISTRY_DB 同款先例），缺省 data/proactive.db
+    （与job_queue.db/ai_groups.db同款小库模式）。
+
+    修前缺省恒 <repo>/data/proactive.db：任何 TestClient(src.main) 触发 lifespan
+    心跳（register_default_watchers 重置 last_run_at=0 → 全部 watcher 立即到期 →
+    首 tick 全量跑）把测试 burst 写进生产 proactive.db（2026-10-14 只读清点
+    29,900 行、数百行/小时测试噪音污染可观测面）。"""
+    env = os.environ.get("PROACTIVE_DB")
+    if env:
+        return env
     return str(Path(__file__).resolve().parent.parent.parent / "data" / "proactive.db")
 
 
