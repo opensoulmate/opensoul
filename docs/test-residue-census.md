@@ -180,3 +180,49 @@ perm rules_A=0 零回归、live e2e：health knowledge_entries=5（7−2）、se
 （如实记）②「反馈层测试」4、「test」1 仍留 other（候选只点名 pipe_test.txt，范围纪律）；
 「test」1 与「反馈层测试」4 的取舍需各自证据另拍③chunks_left=0（剩余 5 行本就无块面）
 ④backup/data 报告为 data/ gitignore 本地工件。
+
+## proactive.db 历史测试噪音清点（PROACT-②，2026-10-14，决策材料件零删除零写入）
+
+**对象**：data/proactive.db proactive_events（29,908 行）——PROACT-① 定性「生产历史
+29,900 行测试噪音未清点未删（历史残留处置需拍板）」的清点件（TL-③/TL-⑭/TL-⑯
+「清点=决策材料件先落」先例；删除动作待拍板）。
+
+**分类（classify_proactive 单一源，判据=引擎写入机制非行内容）**：
+- **A 确证测试残留 26,278 行**（rule=same_second_watcher_duplicate）：同秒同 watcher
+  重复行（4,574 组，峰值 12 行/秒）。机制内证：run_watcher 串行执行且每次更新
+  last_run_at（src/will/proactive.py:159/:185），心跳 tick 每 60s 每 watcher 至多
+  跑一次（:146-157）——单一引擎每秒每 watcher 至多 1 行，同秒重复只能来自 ≥2 并发
+  写方=TestClient(src.main) lifespan 首 tick burst（PROACT-① 定性）或探针手动 /run
+  撞同秒（探针本身即测试写方）。**保守下界 21,704 行**（每组 n−1：任一组至多混入
+  1 行生产写方）。
+- **B 疑似 3,120 行**（rule=multi_row_second_singleton）：同秒多行秒内的单行——启动
+  首 tick 形态（服务重启与单 TestClient 完全同形）与多 watcher 到期心跳 tick 形态
+  （生产真实心跳同形）无法从行内容区分，按证据层裁决。
+- **U 未归类 510 行**：孤立单行秒（生产心跳/手动 run/单 TestClient 无法判定），默认
+  按真实事件不动。
+
+**证据层（只作决策材料不改判，TL-⑯ 先例）**：journal 取证（journalctl 只读，125 次
+服务启动 2026-10-10T06:57Z~2026-10-14T07:35Z）三向分层（全表 29,908=806+222+28,880）：
+- **near_start 806 行**（启动窗 ±15s，A 304+B 480+U 22）=服务启动首 tick 形态
+  （含 e2e 重启后立刻跑测试的撞窗风险，如实记）
+- **cadence 222 行**（B 119+U 80）=心跳节奏链形态（贪心链：同 watcher 相邻入选行
+  间隔 ≥ interval−5s，interval=真源 DEFAULT_INTERVALS；形状上界，链可能被同距测试
+  行抢占/接纳孤立测试行）
+- **orphan 28,880 行**（A 25,492+B 2,521+U 408）=非服务可归因形态（测试 burst 形态）
+
+**增长闸门**：PROACT-① 收口（2026-10-14 15:37 CST）之后新增 A=0/B=0/U=1——U=1 为
+live 服务自身心跳（heredity_triggers 08:05:39=启动 +1800s 精确间隔），测试 burst=0
+（in-process 隔离真稳）。闸门盯 in-process 写方；live e2e 探针（重启首 tick/手动
+/run）仍可能落行，如需收编另拍。
+
+**建议处置（待拍板，备份可整体回滚）**：①A 26,278（或保守 21,704）按清单精确删
+（TL-④ 纪律：清单精确删+删前复核+sqlite3 backup 快照+回读对账）②B/U orphan
+2,929 行（非服务可归因）建议一并删 ③near_start/cadence 1,028 行建议保留（生产服务
+生命周期与心跳可观测面）④B 内 near_start 撞窗行（e2e 重启后测试 burst 混入）可按
+秒级组人工复核。若对处置有异议随时回滚。
+
+**诚实边界**：①A 判据是机制内证非对象级硬标识——误伤面=生产用户手动 /run 与心跳/
+另一手动同秒碰撞（生产至今零真实用户使用面，如实记）②B/U 行内容与生产写方零差异
+（同代码同路径），证据层是形状/时刻推断非硬标识，cadence 为形状上界非精判 ③journal
+取证不可用时 orphan_reliable=False 禁当删除清单用（工具如实降级）④本拍零删除零
+生产写入（工具只读 file:?mode=ro），删除执行件待拍板。

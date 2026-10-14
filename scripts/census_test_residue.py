@@ -16,6 +16,7 @@
   data/ai_groups.db           -> src/api/ai_groups.py
   ~/.hermes/opensoul/immune/permission.db -> src/immune/permission_engine.py:1121
   ~/.opensoul/backups|exports|sandboxes   -> src/marrow/backup.py:52 / migrator.py:30 / src/mirror/sandbox.py:45
+  data/proactive.db            -> src/will/proactive.py:45 _default_events_db（PROACTIVE_DB env 优先）
 
 用法：
   python3 scripts/census_test_residue.py [--json data/test_residue_census.json]
@@ -23,12 +24,14 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import os
 import re
 import sqlite3
+import subprocess
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -497,6 +500,81 @@ def orphan_group_texts(conn) -> dict:
     return out
 
 
+# ---- PROACT-② proactive.db 历史测试噪音清点（只读决策材料，零删除零写入）----
+# 同秒同 watcher 重复=确证测试残留（机制内证非行内容）：ProactiveEngine.run_watcher
+# 串行执行且每次执行更新 last_run_at（src/will/proactive.py:159/:185），心跳 tick 每
+# 60s 每 watcher 至多跑一次（:146-157）——单一引擎每秒每 watcher 至多 1 行；同秒同
+# watcher 多行只能来自 >=2 并发写方=TestClient(src.main) lifespan 首 tick burst
+# （PROACT-① 定性：register_default_watchers 重置 last_run_at=0 → 全部 watcher 立即
+# 到期 → 首 tick 全量跑）或探针手动 /run 撞同秒（探针本身即测试写方）。边界如实记：
+# 生产用户手动 /run 与心跳/另一手动同秒碰撞会被误伤（生产至今零真实用户使用面）。
+A_RULE_PROACTIVE_DUP = "same_second_watcher_duplicate"
+# 同秒多行秒内的单行=疑似（B）：启动首 tick 形态（服务重启与单 TestClient 完全同形，
+# 行内容零差异）与多 watcher 到期心跳 tick 形态（生产真实心跳同形）无法从行内容区分，
+# 按证据层（journal 启动窗/心跳节奏链）裁决——证据层只作决策材料不改判（TL-⑯ 先例）。
+B_RULE_PROACTIVE_SEC_SINGLE = "multi_row_second_singleton"
+# 心跳节奏证据层用（出处 src/will/proactive_behaviors.py:153 DEFAULT_INTERVALS，
+# 禁手抄漂移——如改以真源为准）。
+PROACTIVE_INTERVALS = {
+    "memory_decay": 21600.0,
+    "experience_collect": 3600.0,
+    "heredity_triggers": 1800.0,
+    "pattern_extract": 7200.0,
+    "advisory_review": 14400.0,
+}
+# PROACT-① 收口时刻（2026-10-14 15:37 CST=07:37 UTC）：in-process 测试写方自此隔离
+# 进 tmp（PROACTIVE_DB env），此后新增 A 类行=隔离仍在漏（增长闸门，after_tl2_6 同款）。
+PROACTIVE_CUTOFF = 1791963420.0
+# 服务启动首 tick 证据层窗口（秒）：journal "Started OpenSoul Backend" 后 lifespan
+# 首 tick 全量跑落行，实测滞后 2.5~5s，+-15s 覆盖。
+PROACTIVE_START_WINDOW_S = 15.0
+
+
+def classify_proactive(watcher_sec_count, sec_row_count):
+    """proactive_events 行分类（纯函数单一源，禁在别处手抄判法）。
+
+    输入=机制事实（同秒同 watcher 行数、同秒总行数）而非行内容——判据来自引擎写入
+    机制（run_watcher 串行 + last_run_at + 60s tick）。A 优先于 B（同秒重复组里的
+    单行组外成员仍按各自组判）。
+    """
+    if watcher_sec_count >= 2:
+        return "A", A_RULE_PROACTIVE_DUP
+    if sec_row_count >= 2:
+        return "B", B_RULE_PROACTIVE_SEC_SINGLE
+    return "U", "unmatched"
+
+
+def _proactive_db():
+    """proactive.db 路径（出处 src/will/proactive.py:45 _default_events_db：PROACTIVE_DB
+    env 优先，缺省 REPO/data/proactive.db）。"""
+    env = os.environ.get("PROACTIVE_DB")
+    return Path(env) if env else REPO / "data" / "proactive.db"
+
+
+def load_journal_starts():
+    """journalctl 只读取证：opensoul 服务启动时刻（证据层输入，非分类判据）。
+
+    不可用（无 journal/超时/异常）如实返回 None——证据层缺失禁猜。
+    """
+    try:
+        proc = subprocess.run(
+            ["journalctl", "--user", "-u", "opensoul", "--since", "2026-10-09",
+             "--output=short-iso"],
+            capture_output=True, text=True, timeout=60,
+        )
+    except Exception:
+        return None
+    starts = []
+    for line in proc.stdout.splitlines():
+        if "Started OpenSoul Backend" not in line:
+            continue
+        try:
+            starts.append(datetime.fromisoformat(line.split()[0]).timestamp())
+        except ValueError:
+            continue
+    return sorted(starts)
+
+
 def ro(path: Path) -> sqlite3.Connection:
     assert path.exists(), f"missing: {path}"
     return sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True)
@@ -718,6 +796,130 @@ def census_files(out: dict) -> None:
     out["files"] = res
 
 
+def census_proactive(out):
+    """proactive.db 清点（PROACT-②）：classify_proactive 单一源分类 + 证据层。
+
+    证据层（journal 启动窗 near_start / 心跳节奏链 cadence / 其余 orphan）只作决策
+    材料不改判（TL-⑯ 先例）；orphan=非服务可归因形态（测试 burst 形态），是删除
+    候选下界——journal 不可用时 orphan_reliable=False 禁当删除清单用。
+    """
+    c = ro(_proactive_db())
+    rows = c.execute(
+        "SELECT id, watcher, started_at FROM proactive_events ORDER BY started_at, id"
+    ).fetchall()
+    sec_w = Counter()
+    sec_tot = Counter()
+    for _rid, w, ts in rows:
+        sec = ts[:19]
+        sec_w[(sec, w)] += 1
+        sec_tot[sec] += 1
+    counts = {"A": Counter(), "B": Counter(), "U": Counter()}
+    assigned = {"A": [], "B": [], "U": []}
+    excess_ids = []  # dup 组内除最早一行外=测试行数硬下界（n-1）
+    seen = Counter()
+    parsed = []  # (rid, w, epoch, cls)
+    after = {"A": 0, "B": 0, "U": 0}
+    for rid, w, ts in rows:
+        sec = ts[:19]
+        cls, rule = classify_proactive(sec_w[(sec, w)], sec_tot[sec])  # 单一源，禁手抄
+        counts[cls][w + ":" + rule] += 1
+        assigned[cls].append(rid)
+        if cls == "A":
+            k = (sec, w)
+            seen[k] += 1
+            if seen[k] > 1:
+                excess_ids.append(rid)
+        epoch = datetime.fromisoformat(ts).timestamp()
+        parsed.append((rid, w, epoch, cls))
+        if epoch > PROACTIVE_CUTOFF:
+            after[cls] += 1
+    # ---- 证据层（只作决策材料，不改判）----
+    starts = load_journal_starts()
+
+    def near_start(epoch):
+        if not starts:
+            return False
+        i = bisect.bisect_left(starts, epoch)
+        for j in (i - 1, i):
+            if 0 <= j < len(starts) and abs(starts[j] - epoch) <= PROACTIVE_START_WINDOW_S:
+                return True
+        return False
+
+    # 心跳节奏链（cadence）：同 watcher 按时间序贪心成链，相邻入选行间隔 >= interval-5
+    # ——生产心跳的形状上界（链可能被同距测试行抢占/接纳孤立测试行，如实记不精判）。
+    cadence = set()
+    last = {}
+    for rid, w, epoch, _cls in parsed:
+        interval = PROACTIVE_INTERVALS.get(w)
+        if interval is None:
+            continue
+        prev = last.get(w)
+        if prev is None or epoch - prev >= interval - 5.0:
+            cadence.add(rid)
+            last[w] = epoch
+    layer_of = {}
+    layers = {"near_start": [], "cadence": [], "orphan": []}
+    a_near_start = 0
+    for rid, w, epoch, cls in parsed:
+        if near_start(epoch):
+            layer = "near_start"
+        elif rid in cadence:
+            layer = "cadence"
+        else:
+            layer = "orphan"
+        layer_of[rid] = layer
+        layers[layer].append(rid)
+        if layer == "near_start" and cls == "A":
+            a_near_start += 1
+
+    def layer_ids(cls, layer):
+        return sorted(rid for rid in assigned[cls] if layer_of[rid] == layer)
+
+    dup_groups = {k: v for k, v in sec_w.items() if v >= 2}
+    journal_info = {
+        "available": starts is not None,
+        "service_starts": (len(starts) if starts else 0),
+        "near_window_s": PROACTIVE_START_WINDOW_S,
+    }
+    if starts:
+        journal_info["first_start_utc"] = datetime.fromtimestamp(
+            starts[0], timezone.utc).isoformat()
+        journal_info["last_start_utc"] = datetime.fromtimestamp(
+            starts[-1], timezone.utc).isoformat()
+    out["proactive"] = {
+        "db": str(_proactive_db()),
+        "total": len(rows),
+        "A": len(assigned["A"]),
+        "B": len(assigned["B"]),
+        "U": len(assigned["U"]),
+        "A_by_rule": dict(counts["A"].most_common()),
+        "B_by_rule": dict(counts["B"].most_common()),
+        "A_event_ids": sorted(assigned["A"]),
+        "A_excess_event_ids": sorted(excess_ids),
+        "B_event_ids": sorted(assigned["B"]),
+        "U_event_ids": sorted(assigned["U"]),
+        "B_near_start_ids": layer_ids("B", "near_start"),
+        "B_cadence_ids": layer_ids("B", "cadence"),
+        "B_orphan_ids": layer_ids("B", "orphan"),
+        "U_near_start_ids": layer_ids("U", "near_start"),
+        "U_cadence_ids": layer_ids("U", "cadence"),
+        "U_orphan_ids": layer_ids("U", "orphan"),
+        "facts": {
+            "by_watcher": dict(Counter(w for _r, w, _t in rows).most_common()),
+            "dup_groups": len(dup_groups),
+            "dup_group_peak_per_sec": (max(dup_groups.values()) if dup_groups else 0),
+            "A_excess_lower_bound": len(excess_ids),
+            "A_near_start_rows": a_near_start,
+            "journal": journal_info,
+            "layers_total": {k: len(v) for k, v in layers.items()},
+            "orphan_reliable": starts is not None,
+            "after_proact1_cutoff": after,
+        },
+        "note": "分类=classify_proactive 单一源（同秒同 watcher 重复=确证测试残留）；"
+                "证据层只作决策材料不改判；删除动作待拍板（TL-④ 纪律：清单精确删+备份+回读）",
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", help="把清点结果落成 JSON 工件")
@@ -727,6 +929,7 @@ def main() -> None:
     census_sqlite(out)
     census_permission(out)
     census_files(out)
+    census_proactive(out)
     text = json.dumps(out, ensure_ascii=False, indent=1, default=str)
     print(text)
     if args.json:
