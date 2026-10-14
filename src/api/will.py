@@ -1,10 +1,12 @@
 """OpenWill API — 意志系统：工作流编排、条件触发、多分支流程。"""
 
+import hmac
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.config import settings
 from src.services.tenant_binding import bind_identity
 from src.will.checkpoint import CheckpointAccessDenied
 from src.will.dag_planner import DAGPlanAccessDenied, DAGPlanner
@@ -1077,6 +1079,7 @@ async def wakeup_overview(
 # 接线：acp-proxy agent/wakeup_executor.py（a/b双实例）→ GET /wakeup/due 轮询 →
 # POST /wakeup/claim CAS领取（at-most-once，双实例不双跑）→ 执行唤醒回合 →
 # POST /wakeup/fire-result 回执（失败释放重试/上限EXHAUSTED留痕）。
+# DEC-① ②：executor 凭据=X-Executor-Token 头（见下方 _executor_token_verdict）。
 
 
 class WakeupClaimRequest(BaseModel):
@@ -1089,30 +1092,83 @@ class WakeupFireResultRequest(BaseModel):
     error: str = Field(default="", description="失败原因（ok=False时进last_fire_error留痕）")
 
 
+# DEC-① ②（F3b-⑧c 边界①收口）：executor 认证轴——共享 wakeup_executor 是系统组件
+# （与 proactive 心跳同族调度器，非用户身份非 agent 身份），凭据（X-Executor-Token
+# 头 ↔ settings.wakeup_executor_token）过=系统视图 claim 各租户到点事件、点火落
+# 行租户键（事件行自带 tenant_id，due 回包逐事件带键=点火动作按行租户归属，claim/
+# ack 只写行本身=行租户键不漂移）。缺头=既有用户轴字节不变（bind_identity 契约零
+# 变化）；带着头来而错/轴未配置=401 fail-closed——禁静默降级匿名 'default' 视图
+# （静默降级会让非 default 租户到点事件永久无人点火=静默停滞，错误必须可见）。
+
+_EXECUTOR_REJECTIONS = {
+    "bad-config": "wakeup executor axis not configured (settings.wakeup_executor_token 空)",
+    "bad-token": "wakeup executor token invalid",
+}
+
+
+def _executor_token_verdict(presented: str | None) -> str:
+    """executor 凭据单一判定口（F3b-⑤ _agent_token_verdict 同族纪律，禁两套判定）。
+
+    返回 "absent"（未带头→用户轴）/"ok"（系统视图）/"bad-config"/"bad-token"
+    （→401 fail-closed，理由如实区分、不回显凭据）。显式空串头=带着头来=按坏凭据
+    拒（禁静默降级用户轴）；hmac.compare_digest 恒时比较（F3b-④ 纪律）。
+    """
+    if presented is None:
+        return "absent"
+    if not presented:
+        return "bad-token"
+    expected = settings.wakeup_executor_token or ""
+    if not expected:
+        return "bad-config"
+    if hmac.compare_digest(presented.encode("utf-8"), expected.encode("utf-8")):
+        return "ok"
+    return "bad-token"
+
+
 @router.get("/wakeup/due")
-async def wakeup_due(authorization: str | None = Header(None)):
+async def wakeup_due(
+    authorization: str | None = Header(None),
+    x_executor_token: str | None = Header(None),
+):
     """到点应唤醒的事件（executor轮询入口；已领取/已终结的不再返回）。
 
     F3b-⑧c：按派生租户过滤（跨租户到点事件恒不返回，reason 全文不跨租户泄露）。
+    DEC-① ②：executor 凭据过=系统视图——各租户到点事件全返回，逐事件 tenant_id
+    键=点火动作落行租户键；缺头=用户轴契约零变化；带着头来而坏=401 零静默降级。
     """
     from src.will.wakeup import get_wakeup_scheduler
 
-    identity = bind_identity(authorization)
-    due = get_wakeup_scheduler().due_wakeups(tenant_id=identity.tenant_id)
+    verdict = _executor_token_verdict(x_executor_token)
+    if verdict.startswith("bad"):
+        raise HTTPException(401, _EXECUTOR_REJECTIONS[verdict])
+    if verdict == "ok":
+        due = get_wakeup_scheduler().due_wakeups(tenant_id=None)
+    else:
+        identity = bind_identity(authorization)
+        due = get_wakeup_scheduler().due_wakeups(tenant_id=identity.tenant_id)
     return {"count": len(due), "due": due}
 
 
 @router.post("/wakeup/claim")
-async def wakeup_claim(req: WakeupClaimRequest, authorization: str | None = Header(None)):
+async def wakeup_claim(
+    req: WakeupClaimRequest,
+    authorization: str | None = Header(None),
+    x_executor_token: str | None = Header(None),
+):
     """CAS领取执行权：并发领取只有一个赢家（409=已被领取/已终结/超重试上限）。
 
     F3b-⑧c：by-ID 写闸门（跨租户→403 带真因，闸门前置于状态检查）。
+    DEC-① ②：executor 凭据过=系统视图跨租户领取（身份证明先于一切，401 零副作用）；
+    领取只写事件行本身=行租户键不漂移（点火动作落行租户键）。
     """
     from src.will.wakeup import WakeupAccessDenied, get_wakeup_scheduler
 
-    identity = bind_identity(authorization)
+    verdict = _executor_token_verdict(x_executor_token)
+    if verdict.startswith("bad"):
+        raise HTTPException(401, _EXECUTOR_REJECTIONS[verdict])
+    tenant_id = None if verdict == "ok" else bind_identity(authorization).tenant_id
     try:
-        event = get_wakeup_scheduler().claim_fire(req.event_id, tenant_id=identity.tenant_id)
+        event = get_wakeup_scheduler().claim_fire(req.event_id, tenant_id=tenant_id)
     except WakeupAccessDenied as e:
         raise HTTPException(403, f"wakeup access denied: {e.reason}")
     if event is None:
@@ -1125,18 +1181,25 @@ async def wakeup_claim(req: WakeupClaimRequest, authorization: str | None = Head
 
 @router.post("/wakeup/fire-result")
 async def wakeup_fire_result(
-    req: WakeupFireResultRequest, authorization: str | None = Header(None)
+    req: WakeupFireResultRequest,
+    authorization: str | None = Header(None),
+    x_executor_token: str | None = Header(None),
 ):
     """执行结果回执：失败→释放重试或EXHAUSTED终态（mem0 §1.1失败必须可见）。
 
     F3b-⑧c：by-ID 写闸门（跨租户→403 行零改写）。
+    DEC-① ②：executor 凭据过=系统视图跨租户回执（401 零副作用先于一切写）；
+    回执只写事件行本身=行租户键不漂移。
     """
     from src.will.wakeup import WakeupAccessDenied, get_wakeup_scheduler
 
-    identity = bind_identity(authorization)
+    verdict = _executor_token_verdict(x_executor_token)
+    if verdict.startswith("bad"):
+        raise HTTPException(401, _EXECUTOR_REJECTIONS[verdict])
+    tenant_id = None if verdict == "ok" else bind_identity(authorization).tenant_id
     try:
         return get_wakeup_scheduler().ack_fire(
-            req.event_id, ok=req.ok, error=req.error, tenant_id=identity.tenant_id
+            req.event_id, ok=req.ok, error=req.error, tenant_id=tenant_id
         )
     except WakeupAccessDenied as e:
         raise HTTPException(403, f"wakeup access denied: {e.reason}")

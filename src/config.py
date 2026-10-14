@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440
 
+    # Wakeup executor 认证轴（DEC-① ②/F3b-⑧c 边界①）：共享 wakeup_executor=
+    # 系统组件（与 proactive 心跳同族调度器），凭据=X-Executor-Token 头（判定口
+    # api/will.py _executor_token_verdict）。空=轴关闭（带头即 401 fail-closed，
+    # 禁静默降级匿名 'default' 视图——那会让非 default 租户到点事件永久无人点火）。
+    wakeup_executor_token: str = ""
+
     # LLM
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"

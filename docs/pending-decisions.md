@@ -7,7 +7,7 @@
 | # | 事项 | 出处 | 建议 | 一句话拍板 |
 |---|------|------|------|-----------|
 | ① | F3b-⑨b-③ 非 HTTP 面事件身份归属（9 调用点，4 子面；1c 已落 2026-10-14=F3b-⑨b-③-1c） | F3b-⑨ 审计③ | 1a/1b/1d 取"系统事件"（1c 已收口无需拍） | "①aA ①bA ①dA" |
-| ② | wakeup executor 认证轴 | F3b-⑧c 边界① | 取 C（executor=系统组件按行租户点火） | "②取C" |
+| ② | wakeup executor 认证轴 | F3b-⑧c 边界① | 取 C（executor=系统组件按行租户点火）——**已按建议默认 C 先行执行 2026-10-14（F3b-⑧c-①）** | ~~"②取C"~~ 已落，异议回「②改A」即 revert |
 | ③ | episodic 经验 prompt 回流消费点 | F4b-㉜ 边界③ | 维持不注入，等⑤落地 | "③维持" |
 | ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为） | "④取B" |
 | ⑤ | Reflector 写侧触发面（执行结果回传协议） | F4b-㉚ ⑤ | 取 B（定执行结果回传协议），生态层大件 | "⑤取B/暂不做" |
@@ -48,6 +48,8 @@
 - 建议：**A**（系统事件，文档化）。
 
 ## ② wakeup executor 认证轴
+
+**状态：已按建议默认 C 先行执行（2026-10-14 F3b-⑧c-①）**——依据：上拍（F3b-⑨b-③-1c）周期日志已把本项列为下一候选（未带「需拍板」标）+用户「权限/审批阻塞时别停工等批」铁律+F1 先例（停问未获回复后按建议默认下拍一件）；实现=凭据轴+系统视图（选项 C 语义），**若拍板取 A/B 回一句即 revert/改道**（轴未配置时现网行为字节不变，零迁移成本）。实现摘要：settings.wakeup_executor_token 配置轴（空=轴关闭）+ _executor_token_verdict 单一判定口（hmac 恒时比较，带头而坏/轴未配置=401 fail-closed 禁静默降级）+ due/claim/fire-result 三口 executor 凭据过=系统视图（due 跨租户全返回逐事件 tenant_id 键=点火落行租户键、claim/ack 只写行本身=行租户键不漂移）。仓外件如实记：acp-proxy agent/wakeup_executor.py 需带 X-Executor-Token 头（值=运维配置的 WAKEUP_EXECUTOR_TOKEN）才真启用跨租户点火，现网 executor 不带头=行为字节不变。
 
 **现状**：due/claim/ack 三 API 已带 bind_identity（src/api/will.py:1101/:1115/:1138），但共享 executor 匿名轮询→派生 `'default'`（F3b-⑧c 边界①）：**非 default 租户的到点事件没有 executor 去点火**（生产全 'default' 行=零影响，多租户=真断点）。
 - 选项：**A** 维持（等多租户真实出现再说）/ **B** executor 持 service token 按租户逐一枚举点火 / **C** executor 走系统视图 claim 各租户到点事件、点火动作落**行租户**键。
