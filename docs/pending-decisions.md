@@ -12,7 +12,7 @@
 | ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为）——**已按建议默认 B 先行执行 2026-10-14（DEC-④-①）** | ~~"④取B"~~ 已落，形态自决异议回「④改B2」（自动跑任务链）/「④改B3」（周期重提）/「④改A」（revert）即改道 |
 | ⑤ | Reflector 写侧触发面（执行结果回传协议） | F4b-㉚ ⑤ | 取 B（定执行结果回传协议），生态层大件 | "⑤取B/暂不做" |
 | ⑥ | a2a 取消语义扩展 | F4b-㉔ 锁死语义 | 取 B（显式 /cancel 指令）——**已按建议默认 B 先行执行 2026-10-14** | ~~"⑥取B"~~ 已落，异议回「⑥改A」（revert）/「⑥维持」即改道 |
-| ⑦ | unified 其余子搜索存储层加轴 | F3b-⑥ 边界 | 取 B 分批（events 面最小件可先行）——**events 面已按建议默认 B 先行执行 2026-10-14（DEC-⑦-①）、echo 面已落 2026-10-14（DEC-⑦-②）、gene 面已落 2026-10-14（DEC-⑦-③）、files 面已落 2026-10-14（DEC-⑦-④）** | ~~"⑦取B"~~ events/echo/gene/files 四面已落，异议回「⑦改A」（revert 回系统视图）；余三面（agents/trajectory/cron）仍待拍 |
+| ⑦ | unified 其余子搜索存储层加轴 | F3b-⑥ 边界 | 取 B 分批（events 面最小件可先行）——**events 面已按建议默认 B 先行执行 2026-10-14（DEC-⑦-①）、echo 面已落 2026-10-14（DEC-⑦-②）、gene 面已落 2026-10-14（DEC-⑦-③）、files 面已落 2026-10-14（DEC-⑦-④）、agents 面已落 2026-10-15（DEC-⑦-⑤）、trajectory 面已落 2026-10-15（DEC-⑦-⑥）、cron 面已落 2026-10-15（DEC-⑦-⑦）** | ~~"⑦取B"~~ **七面全数已落（DEC-⑦-①~⑦）B 分批清单执行完毕**，异议回「⑦改A」（revert 回系统视图） |
 | ⑧ | healer 两小项（死路(a) 修复动作定义 / immune keep_last 缺省） | HEAL-② / ②b-④ | 维持现状 | "⑧维持" |
 | ⑨ | TL-⑰ B 类"三删一留"异议窗口（信息项，非决策） | TL-⑰ | 无异议即结 | 异议才回 |
 
@@ -92,9 +92,9 @@
 
 ## ⑦ unified 其余子搜索存储层加轴（F3b-⑥ 边界）
 
-**状态：events 面已按建议默认 B 先行执行（2026-10-14 DEC-⑦-①）、echo 面已落（2026-10-14 DEC-⑦-②）、gene 面已落（2026-10-14 DEC-⑦-③）、files 面已落（2026-10-14 DEC-⑦-④）**——依据：DEC-⑥-① 周期日志候选「⑦ unified 子搜索加轴」+用户「权限/审批阻塞时别停工等批」铁律+①②④⑥ 自决先例；实现=_event_row_tenant/message_row_tenant 行租户键单一判法（自带键缺失→'default' 兜底，timeline record() 同款）+子搜索恒按 bind_identity 派生租户过滤（tenant_id 必选形参禁 silent fallback）；echo 面同拍收口读真源断点（修前 new MessageDispatcher() 空历史=echo 子搜索恒空集）；**若拍板回「⑦改A」即 revert 回系统视图**。余三面（agents/trajectory/cron）存储层无轴仍系统视图，分批下一件待拍。
+**状态：events 面已按建议默认 B 先行执行（2026-10-14 DEC-⑦-①）、echo 面已落（2026-10-14 DEC-⑦-②）、gene 面已落（2026-10-14 DEC-⑦-③）、files 面已落（2026-10-15 DEC-⑦-④）、agents 面已落（2026-10-15 DEC-⑦-⑤）、trajectory 面已落（2026-10-15 DEC-⑦-⑥）、cron 面已落（2026-10-15 DEC-⑦-⑦）**——依据：DEC-⑥-① 周期日志候选「⑦ unified 子搜索加轴」+用户「权限/审批阻塞时别停工等批」铁律+①②④⑥ 自决先例；实现=各面 *_row_tenant 行租户键单一判法（自带键缺失→'default' 兜底，timeline record() 同款）+子搜索恒按 bind_identity 派生租户过滤（tenant_id 必选形参禁 silent fallback）；echo 面同拍收口读真源断点（修前 new MessageDispatcher() 空历史=echo 子搜索恒空集）；**若拍板回「⑦改A」即 revert 回系统视图**。⑦ 七面全数收口（2026-10-15 DEC-⑦-⑦ cron 面=最后一面），B 分批清单执行完毕。
 
-**现状**：unified 的 files/events/agents/trajectory/cron/gene/echo 七个子搜索存储层无 user/tenant 轴=系统视图（src/api/search.py:396-400 诚实边界）。注意：events 子搜索查的是 **event_stream._event_buffer 全局内存缓冲**（src/api/search.py:143-150），非 timeline.db（timeline 面租户过滤 ③c-2① 已落，但内存缓冲面刻意不滤=既有边界）。
+**现状**：unified 的 files/events/agents/trajectory/cron/gene/echo 七个子搜索存储层加轴已全数落地（2026-10-14~15 DEC-⑦-①~⑦，本段为决策历史记录）。注：events 子搜索查的是 **event_stream._event_buffer 全局内存缓冲**（非 timeline.db；timeline 面租户过滤 ③c-2① 另落），内存缓冲面已于 DEC-⑦-① 加租户键过滤。
 - 选项：**A** 维持系统视图 / **B** 分批加轴（逐存储面拆件，F3b-③ 系同型）/ **C** 只收 events（缓冲 dict 加租户键）。
 - 权衡：B 是跨模块大件；C 最小但缓冲是全局内存面（重启即清），隔离收益有限。
 - 建议：**B**（分批，events/echo 面最小件可先行）；或 A 维持到多租户真实出现。
