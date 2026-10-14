@@ -2,7 +2,7 @@
 
 import time
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.gene.skill_learner import (
@@ -12,7 +12,8 @@ from src.gene.skill_learner import (
     decode_cursor,
     encode_cursor,
 )
-from src.gene.templates import TemplateEngine, TemplateValidationError
+from src.gene.templates import TemplateEngine, TemplateTenantDenied, TemplateValidationError
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -103,13 +104,20 @@ async def get_template(template_id: str):
 
 
 @router.post("/templates")
-async def create_template(req: TemplateCreateRequest):
-    """Create a new template."""
+async def create_template(
+    req: TemplateCreateRequest,
+    authorization: str | None = Header(None),
+):
+    """Create a new template.（DEC-⑦-③：行租户键=bind_identity 派生禁自报）"""
+    identity = bind_identity(authorization, "", "")
     data = req.model_dump()
     if not data.get("template_id"):
         data.pop("template_id", None)
     try:
-        template = engine.create_template(data)
+        template = engine.create_template(data, tenant_id=identity.tenant_id)
+    except TemplateTenantDenied as exc:
+        # 跨租户劫持=403（F3b-③c-2②d 纪律），非 400 写入护栏
+        raise HTTPException(403, str(exc))
     except TemplateValidationError as exc:
         # 写入护栏拒绝→400（非法id/缺必填），非500
         raise HTTPException(400, str(exc))
@@ -121,9 +129,14 @@ async def create_template(req: TemplateCreateRequest):
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(template_id: str):
-    """Delete a user template (built-in templates cannot be deleted)."""
-    if not engine.delete_template(template_id):
+async def delete_template(template_id: str, authorization: str | None = Header(None)):
+    """Delete a user template (built-in templates cannot be deleted).
+
+    DEC-⑦-③：删除归属闸——tenant 由 bind_identity 派生，跨租户删除=零副作用
+    （与 not-found 同一契约不差分泄露）。
+    """
+    identity = bind_identity(authorization, "", "")
+    if not engine.delete_template(template_id, tenant_id=identity.tenant_id):
         raise HTTPException(400, "Cannot delete: template not found or is built-in")
     return {"message": f"Template '{template_id}' deleted"}
 
@@ -165,10 +178,17 @@ async def export_all_templates(
 
 
 @router.post("/templates/{template_id}/clone")
-async def clone_template(template_id: str, req: CloneRequest):
-    """Clone a template with optional overrides."""
+async def clone_template(
+    template_id: str, req: CloneRequest, authorization: str | None = Header(None)
+):
+    """Clone a template with optional overrides.（DEC-⑦-③：新行归属=克隆者派生租户）"""
+    identity = bind_identity(authorization, "", "")
     template, msg = engine.clone_template(
-        template_id, new_id=req.new_id, new_name=req.new_name, overrides=req.overrides
+        template_id,
+        new_id=req.new_id,
+        new_name=req.new_name,
+        overrides=req.overrides,
+        tenant_id=identity.tenant_id,
     )
     if not template:
         raise HTTPException(400, msg)
@@ -180,11 +200,14 @@ async def clone_template(template_id: str, req: CloneRequest):
 
 
 @router.post("/import")
-async def import_templates(req: ImportRequest):
-    """Import one or more templates from JSON."""
+async def import_templates(req: ImportRequest, authorization: str | None = Header(None)):
+    """Import one or more templates from JSON.（DEC-⑦-③：行归属=身份派生租户）"""
+    identity = bind_identity(authorization, "", "")
     results = []
     for data in req.templates:
-        template, msg = engine.import_template(data, overwrite=req.overwrite)
+        template, msg = engine.import_template(
+            data, overwrite=req.overwrite, tenant_id=identity.tenant_id
+        )
         results.append(
             {
                 "template_id": data.get("template_id", "?"),

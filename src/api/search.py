@@ -323,15 +323,22 @@ async def _search_cron_jobs(query: str, limit: int) -> list[dict]:
         return []
 
 
-async def _search_gene_templates(query: str, limit: int) -> list[dict]:
-    """Search gene templates."""
-    try:
-        from src.gene.templates import TemplateEngine
+async def _search_gene_templates(query: str, limit: int, tenant_id: str) -> list[dict]:
+    """Search gene templates（tenant_id=身份派生租户，DEC-⑦-③ 加轴）。
 
-        engine = TemplateEngine()
+    行归属判法=template_row_tenant 单一源（list_templates 内过滤，自带键缺失/
+    空白→'default' 兜底，DEC-⑦-① _event_row_tenant / ② message_row_tenant
+    同款）；过滤先于截断=limit 只计可见命中。读真源=src.api.gene 模块单例
+    registry（修前函数内 new TemplateEngine() 每调用重扫盘=与管理面内存注册表
+    双源漂移，DEC-⑦-② 读真源收口同款）。
+    """
+    try:
+        from src.api import gene as gene_api
+
+        engine = gene_api.engine
         query_lower = query.lower()
         matches = []
-        for tpl in engine.list_templates():
+        for tpl in engine.list_templates(tenant_id=tenant_id):
             name = tpl.get("name", "").lower()
             desc = tpl.get("description", "").lower()
             category = tpl.get("category", "").lower()
@@ -420,8 +427,10 @@ async def unified_search(
     =跨租户泄露）、events 子搜索用派生租户过滤（DEC-⑦-①，修前内存缓冲零过滤
     =跨租户泄露；行归属=事件自带键缺失→'default' 兜底，record() 同款）、echo
     子搜索用派生租户过滤（DEC-⑦-②，修前消息历史零过滤=跨租户泄露；行归属=
-    消息自带键缺失→'default' 兜底，message_row_tenant 同款）。其余
-    子搜索（files/agents/trajectory/cron/gene）的存储层无 user/tenant 轴，
+    消息自带键缺失→'default' 兜底，message_row_tenant 同款）、gene
+    子搜索用派生租户过滤（DEC-⑦-③，修前模板注册表零过滤=跨租户泄露；行归属=
+    模板自带键缺失→'default' 兜底，template_row_tenant 同款）。其余
+    子搜索（files/agents/trajectory/cron）的存储层无 user/tenant 轴，
     保持系统视图（诚实边界，DEC-⑦ 分批拆件留待拍）。
     """
     identity = bind_identity(authorization, "", user_id)
@@ -445,7 +454,7 @@ async def unified_search(
     if search_all or "cron" in source_list:
         tasks["cron"] = _search_cron_jobs(q, limit)
     if search_all or "gene" in source_list:
-        tasks["gene"] = _search_gene_templates(q, limit)
+        tasks["gene"] = _search_gene_templates(q, limit, identity.tenant_id)
     if search_all or "echo" in source_list:
         tasks["echo"] = _search_echo_messages(q, limit, identity.tenant_id)
 

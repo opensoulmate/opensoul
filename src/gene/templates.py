@@ -28,6 +28,10 @@ class Template:
     created_at: float = field(default_factory=time.time)
     usage_count: int = 0
     builtin: bool = False
+    # 行租户键（DEC-⑦-③ gene 子搜索存储层加轴）：自带键、缺失/空白→'default'
+    # 兜底（template_row_tenant 单一判法，DEC-⑦-① _event_row_tenant / DEC-⑦-②
+    # message_row_tenant 同款语义）；旧 JSON 无此键加载为 '' = 'default' 兼容。
+    tenant_id: str = ""
 
 
 # ── 写入护栏（2026-10-03 gene模板写入护栏轮）─────────────────────────────
@@ -44,6 +48,21 @@ _TEMPLATE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 class TemplateValidationError(ValueError):
     """写入护栏拒绝：非法template_id或缺失必填字段。API层映射为HTTP 400。"""
+
+
+class TemplateTenantDenied(TemplateValidationError):
+    """跨租户写拒（行归属不可被跨租户改写）：API层映射为HTTP 403。"""
+
+
+def template_row_tenant(template: Template) -> str:
+    """行租户键单一判法（DEC-⑦-③）：自带键、缺失/空白→'default' 兜底。
+
+    写读同源：create/import/clone 落行与 list_templates 过滤、delete 归属闸共用
+    本函数，禁消费点另发明判法（F4b-㉗ 纪律）；DEC-⑦-① _event_row_tenant /
+    DEC-⑦-② message_row_tenant 同款语义（系统/缺省写方→'default'，键派生故障
+    绝不吃掉落库）。
+    """
+    return ((template.tenant_id or "").strip()) or "default"
 
 
 def _validate_template_id(template_id: Any) -> str:
@@ -105,6 +124,7 @@ class TemplateEngine:
                     "created_at": template.created_at,
                     "usage_count": template.usage_count,
                     "builtin": template.builtin,
+                    "tenant_id": template.tenant_id,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -932,10 +952,19 @@ class TemplateEngine:
             if t.template_id not in self._templates:
                 self._templates[t.template_id] = t
 
-    def list_templates(self, category: str | None = None, tag: str | None = None) -> list[dict]:
+    def list_templates(
+        self,
+        category: str | None = None,
+        tag: str | None = None,
+        tenant_id: str | None = None,
+    ) -> list[dict]:
         with self._lock:
             templates = list(self._templates.values())
 
+        if tenant_id is not None:
+            # DEC-⑦-③ 租户过滤：显式租户恒按行租户键过滤（template_row_tenant
+            # 单一判法）；tenant_id=None=系统视图，既有调用面字节不变。
+            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
         if category:
             templates = [t for t in templates if t.category == category]
         if tag:
@@ -953,6 +982,8 @@ class TemplateEngine:
                 "variables": t.variables,
                 "usage_count": t.usage_count,
                 "builtin": t.builtin,
+                # 加性契约：行归属可观测（归一值=template_row_tenant，空白显示 'default'）
+                "tenant_id": template_row_tenant(t),
             }
             for t in sorted(templates, key=lambda x: x.created_at, reverse=True)
         ]
@@ -992,8 +1023,9 @@ class TemplateEngine:
             "variables": variables,
         }
 
-    def create_template(self, data: dict) -> Template:
-        """Create a new user template."""
+    def create_template(self, data: dict, tenant_id: str | None = None) -> Template:
+        """Create a new user template.（tenant_id=写点派生租户键，DEC-⑦-③；未提供
+        →'default' 兜底=系统写方语义，键派生故障绝不吃掉落库。）"""
         missing = [
             f
             for f in ("name", "category")
@@ -1014,13 +1046,21 @@ class TemplateEngine:
             tags=data.get("tags", []),
             config=data.get("config", {}),
             variables=data.get("variables", []),
+            tenant_id=tenant_id or "",
         )
         with self._lock:
+            existing = self._templates.get(template.template_id)
+            if existing is not None and template_row_tenant(existing) != template_row_tenant(
+                template
+            ):
+                # 行归属不可被跨租户改写（劫持闸门，F3b-③c-2②d 同款）：同名覆盖是
+                # 既有语义，仅跨租户覆盖拒绝（行零改写）。
+                raise TemplateTenantDenied(f"template_id {tid!r} belongs to another tenant")
             self._templates[template.template_id] = template
         self._save_template(template)
         return template
 
-    def delete_template(self, template_id: str) -> bool:
+    def delete_template(self, template_id: str, tenant_id: str | None = None) -> bool:
         try:
             _validate_template_id(template_id)
         except TemplateValidationError:
@@ -1030,6 +1070,10 @@ class TemplateEngine:
             if not t:
                 return False
             if t.builtin:
+                return False
+            if tenant_id is not None and template_row_tenant(t) != tenant_id:
+                # 跨租户删除=零副作用；回 False 与 not-found 同一契约（不差分泄露
+                # 他租户行存在性，③c-1 纪律）。
                 return False
             del self._templates[template_id]
 
@@ -1141,8 +1185,13 @@ class TemplateEngine:
             for t in sorted(templates, key=lambda x: x.created_at, reverse=True)
         ]
 
-    def import_template(self, data: dict, overwrite: bool = False) -> tuple[Template | None, str]:
-        """Import a template from a dict. Returns (template, message)."""
+    def import_template(
+        self, data: dict, overwrite: bool = False, tenant_id: str | None = None
+    ) -> tuple[Template | None, str]:
+        """Import a template from a dict. Returns (template, message).
+
+        tenant_id=写点派生租户键（DEC-⑦-③）；未提供→'default' 兜底=系统写方。
+        """
         required = ["name", "category"]
         for req_field in required:
             if req_field not in data:
@@ -1173,16 +1222,29 @@ class TemplateEngine:
             config=data.get("config", {}),
             variables=data.get("variables", []),
             builtin=False,  # imported templates are never builtin
+            tenant_id=tenant_id or "",
         )
+        if existing and template_row_tenant(existing) != template_row_tenant(template):
+            # 行归属不可被跨租户改写（劫持闸门，F3b-③c-2②d 同款）：按 import 契约
+            # 回 error msg 不炸整批（行零改写）。
+            return None, f"Template '{tid}' belongs to another tenant"
         with self._lock:
             self._templates[tid] = template
         self._save_template(template)
         return template, f"Template '{tid}' imported successfully"
 
     def clone_template(
-        self, source_id: str, new_id: str = "", new_name: str = "", overrides: dict | None = None
+        self,
+        source_id: str,
+        new_id: str = "",
+        new_name: str = "",
+        overrides: dict | None = None,
+        tenant_id: str | None = None,
     ) -> tuple[Template | None, str]:
-        """Clone a template with optional overrides. Returns (template, message)."""
+        """Clone a template with optional overrides. Returns (template, message).
+
+        行租户键=克隆者派生租户（DEC-⑦-③）：新行归属克隆者，不继承源行键。
+        """
         with self._lock:
             source = self._templates.get(source_id)
         if not source:
@@ -1205,7 +1267,7 @@ class TemplateEngine:
         if overrides:
             data.update(overrides)
 
-        return self.import_template(data, overwrite=True)
+        return self.import_template(data, overwrite=True, tenant_id=tenant_id)
 
     def stats(self) -> dict:
         with self._lock:

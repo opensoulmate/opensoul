@@ -12,7 +12,7 @@
 | ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为）——**已按建议默认 B 先行执行 2026-10-14（DEC-④-①）** | ~~"④取B"~~ 已落，形态自决异议回「④改B2」（自动跑任务链）/「④改B3」（周期重提）/「④改A」（revert）即改道 |
 | ⑤ | Reflector 写侧触发面（执行结果回传协议） | F4b-㉚ ⑤ | 取 B（定执行结果回传协议），生态层大件 | "⑤取B/暂不做" |
 | ⑥ | a2a 取消语义扩展 | F4b-㉔ 锁死语义 | 取 B（显式 /cancel 指令）——**已按建议默认 B 先行执行 2026-10-14** | ~~"⑥取B"~~ 已落，异议回「⑥改A」（revert）/「⑥维持」即改道 |
-| ⑦ | unified 其余子搜索存储层加轴 | F3b-⑥ 边界 | 取 B 分批（events 面最小件可先行）——**events 面已按建议默认 B 先行执行 2026-10-14（DEC-⑦-①）、echo 面已落 2026-10-14（DEC-⑦-②）** | ~~"⑦取B"~~ events/echo 两面已落，异议回「⑦改A」（revert 回系统视图）；余五面（files/agents/trajectory/cron/gene）仍待拍 |
+| ⑦ | unified 其余子搜索存储层加轴 | F3b-⑥ 边界 | 取 B 分批（events 面最小件可先行）——**events 面已按建议默认 B 先行执行 2026-10-14（DEC-⑦-①）、echo 面已落 2026-10-14（DEC-⑦-②）、gene 面已落 2026-10-14（DEC-⑦-③）** | ~~"⑦取B"~~ events/echo/gene 三面已落，异议回「⑦改A」（revert 回系统视图）；余四面（files/agents/trajectory/cron）仍待拍 |
 | ⑧ | healer 两小项（死路(a) 修复动作定义 / immune keep_last 缺省） | HEAL-② / ②b-④ | 维持现状 | "⑧维持" |
 | ⑨ | TL-⑰ B 类"三删一留"异议窗口（信息项，非决策） | TL-⑰ | 无异议即结 | 异议才回 |
 
