@@ -116,13 +116,21 @@ async def _search_knowledge(query: str, limit: int, uid: UUID) -> list[dict]:
         return []
 
 
-async def _search_files(query: str, limit: int) -> list[dict]:
-    """Search files in Vein."""
-    try:
-        from src.vein.file_store import FileStore
+async def _search_files(query: str, limit: int, tenant_id: str) -> list[dict]:
+    """Search files in Vein（tenant_id=身份派生租户，DEC-⑦-④ 加轴）。
 
-        store = FileStore()
-        files = store.list_files(name_filter=query, limit=limit)
+    行归属判法=file_row_tenant 单一源（list_files 内过滤，自带键缺失/空白→
+    'default' 兜底，DEC-⑦-① _event_row_tenant / ② message_row_tenant /
+    ③ template_row_tenant 同款）；过滤先于截断=limit 只计可见命中。读真源=
+    src.api.vein 模块单例 store（修前函数内 new FileStore() 逐调用开新 SQLite
+    连接——DB 真源无漂移面，收口=与管理面同一实例连接复用，DEC-⑦-②③
+    读真源收口同款纪律）。
+    """
+    try:
+        from src.api import vein as vein_api
+
+        store = vein_api.store
+        files = store.list_files(name_filter=query, limit=limit, tenant_id=tenant_id)
         return [
             {
                 "source": "files",
@@ -429,8 +437,10 @@ async def unified_search(
     子搜索用派生租户过滤（DEC-⑦-②，修前消息历史零过滤=跨租户泄露；行归属=
     消息自带键缺失→'default' 兜底，message_row_tenant 同款）、gene
     子搜索用派生租户过滤（DEC-⑦-③，修前模板注册表零过滤=跨租户泄露；行归属=
-    模板自带键缺失→'default' 兜底，template_row_tenant 同款）。其余
-    子搜索（files/agents/trajectory/cron）的存储层无 user/tenant 轴，
+    模板自带键缺失→'default' 兜底，template_row_tenant 同款）、files
+    子搜索用派生租户过滤（DEC-⑦-④，修前文件列表零过滤=跨租户泄露；行归属=
+    文件自带键缺失→'default' 兜底，file_row_tenant 同款）。其余
+    子搜索（agents/trajectory/cron）的存储层无 user/tenant 轴，
     保持系统视图（诚实边界，DEC-⑦ 分批拆件留待拍）。
     """
     identity = bind_identity(authorization, "", user_id)
@@ -442,7 +452,7 @@ async def unified_search(
     if search_all or "knowledge" in source_list:
         tasks["knowledge"] = _search_knowledge(q, limit, uid)
     if search_all or "files" in source_list:
-        tasks["files"] = _search_files(q, limit)
+        tasks["files"] = _search_files(q, limit, identity.tenant_id)
     if search_all or "events" in source_list:
         tasks["events"] = _search_events(q, limit, identity.tenant_id)
     if search_all or "agents" in source_list:

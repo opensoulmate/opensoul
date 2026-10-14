@@ -10,7 +10,7 @@ from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
 from src.vein.cache import CacheManager
 from src.vein.chunked import ChunkedUploader
-from src.vein.file_store import FileStore
+from src.vein.file_store import FileStore, FileTenantDenied, file_row_tenant
 
 logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
@@ -63,6 +63,7 @@ async def upload_file(
         name=file.filename or "unnamed",
         mime_type=file.content_type or "application/octet-stream",
         tags=tag_list,
+        tenant_id=identity.tenant_id,
     )
 
     # Auto-cache for hot access
@@ -101,9 +102,18 @@ async def list_files(
     tag: str | None = Query(None, description="Filter by tag"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    authorization: str | None = Header(None),
 ):
-    """List stored files with optional filters."""
-    files = store.list_files(name_filter=name, tag=tag, limit=limit, offset=offset)
+    """List stored files with optional filters.
+
+    DEC-⑦-④：tenant 由 bind_identity 派生禁自报，恒按行租户键过滤（匿名
+    'default'——单机存量行全 'default'，契约不变）；响应 entries 增加性
+    tenant_id 键（行归属可观测，file_row_tenant 归一值）。
+    """
+    identity = bind_identity(authorization)
+    files = store.list_files(
+        name_filter=name, tag=tag, limit=limit, offset=offset, tenant_id=identity.tenant_id
+    )
     return {
         "files": [
             {
@@ -114,6 +124,7 @@ async def list_files(
                 "tags": f.tags.split(",") if f.tags else [],
                 "created_at": f.created_at,
                 "content_hash": f.content_hash,
+                "tenant_id": file_row_tenant(f),
             }
             for f in files
         ],
@@ -135,6 +146,7 @@ async def get_file_meta(file_id: str):
         "tags": meta.tags.split(",") if meta.tags else [],
         "content_hash": meta.content_hash,
         "created_at": meta.created_at,
+        "tenant_id": file_row_tenant(meta),
     }
 
 
@@ -184,10 +196,14 @@ async def download_file(file_id: str, authorization: str | None = Header(None)):
 
 @router.delete("/files/{file_id}")
 async def delete_file(file_id: str, authorization: str | None = Header(None)):
-    """Delete a file and its cache entry."""
+    """Delete a file and its cache entry.
+
+    DEC-⑦-④：删除归属闸——tenant 由 bind_identity 派生，跨租户删除=零副作用
+    （store.delete 回 False→404 与 not-found 同一契约，不差分泄露）。
+    """
     identity = bind_identity(authorization)
     meta = store.get_meta(file_id)
-    if not store.delete(file_id):
+    if not store.delete(file_id, tenant_id=identity.tenant_id):
         raise HTTPException(status_code=404, detail="File not found")
     cache.invalidate(f"file:{file_id}")
     push_event(
@@ -213,21 +229,29 @@ async def update_file_content(
     change_summary: str = Form(default=""),
     authorization: str | None = Header(None),
 ):
-    """Update file content with automatic version tracking."""
+    """Update file content with automatic version tracking.
+
+    DEC-⑦-④：劫持闸——tenant 由 bind_identity 派生，跨租户按 file_id 覆盖=
+    FileTenantDenied→403（行零改写，F3b-③c-2②d 纪律）。
+    """
     identity = bind_identity(authorization)
     existing = store.get_meta(file_id)
     if not existing:
         raise HTTPException(status_code=404, detail="File not found")
 
     data = await file.read()
-    meta = store.store(
-        data=data,
-        name=file.filename or existing.name,
-        mime_type=file.content_type or existing.mime_type,
-        tags=existing.tags.split(",") if existing.tags else [],
-        file_id=file_id,
-        change_summary=change_summary,
-    )
+    try:
+        meta = store.store(
+            data=data,
+            name=file.filename or existing.name,
+            mime_type=file.content_type or existing.mime_type,
+            tags=existing.tags.split(",") if existing.tags else [],
+            file_id=file_id,
+            change_summary=change_summary,
+            tenant_id=identity.tenant_id,
+        )
+    except FileTenantDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
 
     # Update cache
     cache.put(f"file:{meta.file_id}", data)
@@ -302,9 +326,13 @@ async def rollback_file(
     version_number: int,
     authorization: str | None = Header(None),
 ):
-    """Rollback a file to a specific version."""
+    """Rollback a file to a specific version.
+
+    DEC-⑦-④：归属闸——tenant 由 bind_identity 派生，跨租户回 None→404 与
+    not-found 同一契约（零副作用）。
+    """
     identity = bind_identity(authorization)
-    meta = store.rollback_to_version(file_id, version_number)
+    meta = store.rollback_to_version(file_id, version_number, tenant_id=identity.tenant_id)
     if not meta:
         raise HTTPException(status_code=404, detail="File or version not found")
 
@@ -371,8 +399,15 @@ async def upload_chunk(
 
 
 @router.post("/upload/chunked/{upload_id}/complete")
-async def complete_chunked_upload(upload_id: str):
-    """Complete a chunked upload — reassemble and store."""
+async def complete_chunked_upload(
+    upload_id: str,
+    authorization: str | None = Header(None),
+):
+    """Complete a chunked upload — reassemble and store.
+
+    DEC-⑦-④：落库行归属=bind_identity 派生租户（匿名 'default' 契约不变）。
+    """
+    identity = bind_identity(authorization)
     session = uploader.get_session(upload_id)
     if not session:
         raise HTTPException(status_code=404, detail="Upload session not found")
@@ -392,6 +427,7 @@ async def complete_chunked_upload(upload_id: str):
         name=sess.filename,
         mime_type=sess.mime_type,
         tags=sess.tags,
+        tenant_id=identity.tenant_id,
     )
 
     # Auto-cache

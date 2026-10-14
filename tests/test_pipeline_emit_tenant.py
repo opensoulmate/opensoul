@@ -74,15 +74,29 @@ def _auth(token):
 
 
 class _StubFileStore:
-    """FileStore 桩——handler→push_event 接线是本拍被测物，vein 存储本体不进测试面。"""
+    """FileStore 桩——handler→push_event 接线是本拍被测物，vein 存储本体不进测试面。
 
-    def store(self, data, name, mime_type, tags=None):
+    契约随更新（DEC-⑦-④）：store() 签名对齐真实 FileStore.store（含 file_id/
+    change_summary/tenant_id 写点派生形参），handler 新写点接线不被桩吞掉。
+    """
+
+    def store(
+        self,
+        data,
+        name,
+        mime_type="application/octet-stream",
+        tags=None,
+        file_id=None,
+        change_summary="",
+        tenant_id=None,
+    ):
         return SimpleNamespace(
             file_id="f_stub_1",
             name=name,
             size=len(data),
             content_hash="hash-stub",
             mime_type=mime_type,
+            tenant_id=tenant_id or "default",
         )
 
     def retrieve(self, file_id):
@@ -326,13 +340,17 @@ class TestPipelineEmitTenantInvariants:
         assert rows[0]["tenant_id"] == "default"
 
     def test_all_three_call_sites_wired(self):
-        """静态接线普查：2 handler 全带派生、3 调用点全传租户键（写了必须接线）。"""
+        """静态接线普查：2 handler 全带派生、调用点全传租户键（写了必须接线）。
+
+        契约随更新（DEC-⑦-④）：修前 3（emit 面）；本拍 store.store 写点接派生
+        租户（+1 落行键），emit 面 3 处零变化，总数 4。
+        """
         pipe = chr(124)
         src = (Path(__file__).parent.parent / "src" / "api" / "pipeline.py").read_text(
             encoding="utf-8"
         )
         assert src.count("identity = bind_identity(authorization)") == 2
-        assert src.count("tenant_id=identity.tenant_id") == 3
+        assert src.count("tenant_id=identity.tenant_id") == 4
         assert src.count("push_event(") == 3
         assert src.count("authorization: str " + pipe + " None = Header(None)") == 2  # 竖线完好探针
         starts = []

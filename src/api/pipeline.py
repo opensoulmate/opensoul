@@ -303,6 +303,7 @@ async def pipeline_upload(
             name=filename,
             mime_type=mime_type,
             tags=tag_list + ["pipeline", pipeline],
+            tenant_id=identity.tenant_id,
         )
         steps.append(
             {

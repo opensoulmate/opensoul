@@ -339,7 +339,14 @@ class TestVeinEmitTenantInvariants:
         assert _rows(tl_db) == []
 
     def test_all_eight_call_sites_wired(self):
-        """静态接线普查：8 handler 全带派生、8 调用点全传租户键（写了必须接线）。"""
+        """静态接线普查：handler 全带派生、调用点全传租户键（写了必须接线）。
+
+        契约随更新（DEC-⑦-④ files 子搜索存储层加轴）：修前 8/8（emit 面）；
+        本拍新增 list_files 与 chunked complete 两 handler 落 bind_identity（+2）
+        + store 写点/过滤/闸门 6 处带键（upload/update/complete 落行、list 过滤、
+        delete/rollback 归属闸）——push_event emit 面 8 处带键零变化（+6 全在
+        store 面），总数 10 handler / 14 键。
+        """
         src = (Path(__file__).parent.parent / "src" / "api" / "vein.py").read_text(encoding="utf-8")
-        assert src.count("identity = bind_identity(authorization)") == 8
-        assert src.count("tenant_id=identity.tenant_id") == 8
+        assert src.count("identity = bind_identity(authorization)") == 10
+        assert src.count("tenant_id=identity.tenant_id") == 14

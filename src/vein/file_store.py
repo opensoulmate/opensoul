@@ -24,6 +24,29 @@ class FileMeta:
     tags: str  # comma-separated
     created_at: float
     ref_count: int
+    # 行租户键（DEC-⑦-④ files 子搜索存储层加轴）：自带键、缺失/空白→'default'
+    # 兜底（file_row_tenant 单一判法，DEC-⑦-① _event_row_tenant / ②
+    # message_row_tenant / ③ template_row_tenant 同款语义）；存量行随迁移回填
+    # 'default'（与 F3 实测分布一致）。
+    tenant_id: str = ""
+
+
+class FileTenantDenied(Exception):
+    """跨租户写拒（行归属不可被跨租户改写）：API层映射为HTTP 403。
+
+    DEC-⑦-③ TemplateTenantDenied 同款（劫持闸语义，F3b-③c-2②d 纪律）。
+    """
+
+
+def file_row_tenant(meta: FileMeta) -> str:
+    """行租户键单一判法（DEC-⑦-④）：自带键、缺失/空白→'default' 兜底。
+
+    写读同源：store() 落行与 list_files 过滤、delete/rollback 归属闸、API 加性
+    tenant_id 键共用本函数，禁消费点另发明判法（F4b-㉗ 纪律）；DEC-⑦-①
+    _event_row_tenant / ② message_row_tenant / ③ template_row_tenant 同款语义
+    （系统/缺省写方→'default'，键派生故障绝不吃掉落库）。
+    """
+    return ((meta.tenant_id or "").strip()) or "default"
 
 
 class FileStore:
@@ -49,11 +72,23 @@ class FileStore:
                 mime_type  TEXT DEFAULT 'application/octet-stream',
                 tags       TEXT DEFAULT '',
                 created_at REAL NOT NULL,
-                ref_count  INTEGER DEFAULT 1
+                ref_count  INTEGER DEFAULT 1,
+                tenant_id  TEXT NOT NULL DEFAULT 'default'
             );
             CREATE INDEX IF NOT EXISTS idx_files_hash ON files(content_hash);
             CREATE INDEX IF NOT EXISTS idx_files_name ON files(name);
         """)
+        self._db.commit()
+        # 老库自愈（C1 幂等双轨，③c-2① 先例）：CREATE TABLE IF NOT EXISTS 不补列，
+        # 存量库按 PRAGMA 探测补 tenant_id 列（常量默认='default' 回填存量行，
+        # 与 F3 实测分布一致）；租户索引必须在补列之后建（③c-2① 坑延续）。
+        cols = {r[1] for r in self._db.execute("PRAGMA table_info(files)").fetchall()}
+        if "tenant_id" not in cols:
+            self._db.execute(
+                "ALTER TABLE files ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
+            )
+            self._db.commit()
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_files_tenant ON files(tenant_id)")
         self._db.commit()
 
     # ── Core Operations ──────────────────────────────────────
@@ -66,18 +101,31 @@ class FileStore:
         tags: list[str] | None = None,
         file_id: str | None = None,
         change_summary: str = "",
+        tenant_id: str | None = None,
     ) -> FileMeta:
-        """Store a file with deduplication. Returns metadata."""
+        """Store a file with deduplication. Returns metadata.
+
+        tenant_id=写点派生租户键（DEC-⑦-④）；未提供/空白→'default' 兜底=系统
+        写方语义（file_row_tenant 单一判法，键派生故障绝不吃掉落库）。
+        """
         content_hash = hashlib.sha256(data).hexdigest()
         size = len(data)
         now = time.time()
         fid = file_id or hashlib.md5(f"{name}{now}{content_hash[:8]}".encode()).hexdigest()[:16]
         tag_str = ",".join(tags) if tags else ""
+        # 行归属=写点派生租户（写读同一判法：落行值即 file_row_tenant 归一值）
+        meta = FileMeta(fid, name, content_hash, size, mime_type, tag_str, now, 1, tenant_id or "")
+        row_tenant = file_row_tenant(meta)
+        meta.tenant_id = row_tenant
 
         # Check if this is an update to an existing file
         existing_meta = self.get_meta(fid) if file_id else None
 
         if existing_meta:
+            if file_row_tenant(existing_meta) != row_tenant:
+                # 行归属不可被跨租户改写（劫持闸，DEC-⑦-③ TemplateTenantDenied
+                # 同款，F3b-③c-2②d 纪律）：跨租户按 file_id 覆盖=拒绝且行零改写。
+                raise FileTenantDenied(f"file_id {fid!r} belongs to another tenant")
             # UPDATE existing file
             # Store the new blob if content changed
             if existing_meta.content_hash != content_hash:
@@ -90,14 +138,25 @@ class FileStore:
                     fid, content_hash, size, change_summary or "File updated"
                 )
 
-            # Update the existing record
+            # Update the existing record（tenant_id 不进 SET：行归属=首次写入粘性，
+            # 同租户更新绝不洗键，③a _persist COALESCE 粘性同款语义）
             self._db.execute(
                 "UPDATE files SET name = ?, content_hash = ?, size = ?, mime_type = ?, tags = ?, created_at = ? "
                 "WHERE file_id = ?",
                 (name, content_hash, size, mime_type, tag_str, now, fid),
             )
             self._db.commit()
-            return FileMeta(fid, name, content_hash, size, mime_type, tag_str, now, 1)
+            return FileMeta(
+                fid,
+                name,
+                content_hash,
+                size,
+                mime_type,
+                tag_str,
+                now,
+                1,
+                tenant_id=file_row_tenant(existing_meta),
+            )
 
         # NEW file — check for dedup by content hash
         existing_hash = self._db.execute(
@@ -105,14 +164,15 @@ class FileStore:
         ).fetchone()
 
         if existing_hash:
-            # Content already exists, just add a new reference
+            # Content already exists, just add a new reference（行键=本写方租户，
+            # 跨租户同内容各落各的行键；blob 共享=内容寻址既有语义）
             self._db.execute(
-                "INSERT INTO files (file_id, name, content_hash, size, mime_type, tags, created_at, ref_count) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
-                (fid, name, content_hash, size, mime_type, tag_str, now),
+                "INSERT INTO files (file_id, name, content_hash, size, mime_type, tags, created_at, ref_count, tenant_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)",
+                (fid, name, content_hash, size, mime_type, tag_str, now, row_tenant),
             )
             self._db.commit()
-            return FileMeta(fid, name, content_hash, size, mime_type, tag_str, now, 1)
+            return meta
 
         # Store the actual blob
         blob_path = self._blob_path(content_hash)
@@ -120,12 +180,12 @@ class FileStore:
         blob_path.write_bytes(data)
 
         self._db.execute(
-            "INSERT INTO files (file_id, name, content_hash, size, mime_type, tags, created_at, ref_count) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
-            (fid, name, content_hash, size, mime_type, tag_str, now),
+            "INSERT INTO files (file_id, name, content_hash, size, mime_type, tags, created_at, ref_count, tenant_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)",
+            (fid, name, content_hash, size, mime_type, tag_str, now, row_tenant),
         )
         self._db.commit()
-        return FileMeta(fid, name, content_hash, size, mime_type, tag_str, now, 1)
+        return meta
 
     def retrieve(self, file_id: str) -> tuple[bytes, FileMeta] | None:
         """Retrieve a file by ID. Returns (data, meta) or None."""
@@ -153,10 +213,17 @@ class FileStore:
             return None
         return FileMeta(**dict(row))
 
-    def delete(self, file_id: str) -> bool:
-        """Delete a file reference. Removes blob if no other references."""
+    def delete(self, file_id: str, tenant_id: str | None = None) -> bool:
+        """Delete a file reference. Removes blob if no other references.
+
+        DEC-⑦-④ 删除归属闸（DEC-⑦-③ delete_template 同款）：tenant_id 显式给出时
+        跨租户删除=零副作用回 False（与 not-found 同一契约，不差分泄露他租户行
+        存在性，③c-1 纪律）；None=系统视图不闸（既有内部调用面字节不变）。
+        """
         meta = self.get_meta(file_id)
         if not meta:
+            return False
+        if tenant_id is not None and file_row_tenant(meta) != tenant_id:
             return False
 
         self._db.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
@@ -180,8 +247,14 @@ class FileStore:
         tag: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> list[FileMeta]:
-        """List files with optional filters."""
+        """List files with optional filters.
+
+        DEC-⑦-④ 租户过滤：tenant_id 显式给出=恒按行租户键过滤（行键写点归一+
+        迁移回填，SQL 等值=file_row_tenant 等值；过滤先于截断=limit 只计可见命中，
+        跨租户行不占名额）；None=系统视图，既有调用面字节不变。
+        """
         query = "SELECT * FROM files WHERE 1=1"
         params: list = []
 
@@ -191,6 +264,9 @@ class FileStore:
         if tag:
             query += " AND tags LIKE ?"
             params.append(f"%{tag}%")
+        if tenant_id is not None:
+            query += " AND tenant_id = ?"
+            params.append(tenant_id)
 
         query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
@@ -242,14 +318,22 @@ class FileStore:
         """Get a specific version of a file."""
         return self._versions.get_version(file_id, version_number)
 
-    def rollback_to_version(self, file_id: str, version_number: int) -> FileMeta | None:
-        """Rollback a file to a specific version."""
+    def rollback_to_version(
+        self, file_id: str, version_number: int, tenant_id: str | None = None
+    ) -> FileMeta | None:
+        """Rollback a file to a specific version.
+
+        DEC-⑦-④ 归属闸（delete 同款）：tenant_id 显式给出时跨租户回 None（与
+        not-found 同一契约零副作用）；None=系统视图不闸。
+        """
         version = self._versions.get_version(file_id, version_number)
         if not version:
             return None
 
         meta = self.get_meta(file_id)
         if not meta:
+            return None
+        if tenant_id is not None and file_row_tenant(meta) != tenant_id:
             return None
 
         # Check if the version's content blob exists
