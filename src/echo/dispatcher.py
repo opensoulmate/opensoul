@@ -44,6 +44,17 @@ class Message:
     error: str = ""
     target: str = ""
     priority: int = 5  # 1=highest, 10=lowest
+    tenant_id: str = "default"
+
+
+def message_row_tenant(raw: object) -> str:
+    """行租户键单一判法（DEC-⑦-① _event_row_tenant 同款语义：自带键缺失/空白
+    →'default' 兜底）。raw=Message 对象（读侧过滤）或原始租户值（写侧落行），
+    写读同一判法禁双源漂移（F4b-㉗ 纪律）。
+    """
+    if hasattr(raw, "tenant_id"):
+        raw = getattr(raw, "tenant_id")
+    return str(raw or "").strip() or "default"
 
 
 @dataclass
@@ -85,9 +96,20 @@ class MessageDispatcher:
             )
 
     def send(
-        self, channel: Channel, title: str, content: str, target: str = "", priority: int = 5
+        self,
+        channel: Channel,
+        title: str,
+        content: str,
+        target: str = "",
+        priority: int = 5,
+        tenant_id: str = "",
     ) -> SendResult:
-        """Send a message via specified channel."""
+        """Send a message via specified channel.
+
+        tenant_id=行租户键（DEC-⑦-② echo 面存储层加轴）：显式提供=发送者身份
+        派生租户落行；未提供/空白→'default' 兜底（系统发送方=DEC-① 系统事件
+        语义，键派生故障绝不吃掉落库）。
+        """
         self._counter += 1
         msg_id = f"msg_{int(time.time())}_{self._counter}"
 
@@ -99,6 +121,7 @@ class MessageDispatcher:
             timestamp=time.time(),
             target=target,
             priority=priority,
+            tenant_id=message_row_tenant(tenant_id),
         )
 
         config = self._channels.get(channel)
@@ -120,12 +143,16 @@ class MessageDispatcher:
 
         return result
 
-    def send_all(self, title: str, content: str, priority: int = 5) -> list[SendResult]:
+    def send_all(
+        self, title: str, content: str, priority: int = 5, tenant_id: str = ""
+    ) -> list[SendResult]:
         """Broadcast to all enabled channels."""
         results = []
         for channel, config in self._channels.items():
             if config.enabled:
-                results.append(self.send(channel, title, content, priority=priority))
+                results.append(
+                    self.send(channel, title, content, priority=priority, tenant_id=tenant_id)
+                )
         return results
 
     def _dispatch(self, msg: Message, config: ChannelConfig) -> SendResult:
@@ -483,11 +510,20 @@ class MessageDispatcher:
         except Exception as e:
             return SendResult(success=False, msg_id=msg.msg_id, channel="discord", error=str(e))
 
-    def history(self, limit: int = 50, channel: Channel | None = None) -> list[dict]:
+    def history(
+        self, limit: int = 50, channel: Channel | None = None, tenant_id: str | None = None
+    ) -> list[dict]:
+        """读面加轴（DEC-⑦-②）：tenant_id=None=系统视图全量（既有调用面字节不变）
+        ，显式租户=恒按行租户键过滤（判法=message_row_tenant 单一源）；过滤先于
+        截断=limit 只计可见命中（DEC-⑦-① 同款）。
+        """
         with self._lock:
             entries = list(self._history)
         if channel:
             entries = [e for e in entries if e.channel == channel]
+        if tenant_id is not None:
+            key = message_row_tenant(tenant_id)
+            entries = [e for e in entries if message_row_tenant(e) == key]
         return [
             {
                 "msg_id": e.msg_id,

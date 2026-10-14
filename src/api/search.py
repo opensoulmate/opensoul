@@ -353,15 +353,22 @@ async def _search_gene_templates(query: str, limit: int) -> list[dict]:
         return []
 
 
-async def _search_echo_messages(query: str, limit: int) -> list[dict]:
-    """Search echo message history."""
-    try:
-        from src.echo.dispatcher import MessageDispatcher
+async def _search_echo_messages(query: str, limit: int, tenant_id: str) -> list[dict]:
+    """Search echo message history（tenant_id=身份派生租户，DEC-⑦-② 加轴）。
 
-        dispatcher = MessageDispatcher()
+    行归属判法=message_row_tenant 单一源（dispatcher.history 内过滤，自带键
+    缺失/空白→'default' 兜底，DEC-⑦-① _event_row_tenant 同款）；过滤先于
+    截断=limit 只计可见命中。读真源=src.api.echo 模块单例 dispatcher 的共享
+    历史（修前函数内 new MessageDispatcher() 空历史=echo 子搜索恒空集，
+    wired-but-not-functional——加轴前必须先能读到真历史，否则过滤不可观测）。
+    """
+    try:
+        from src.api import echo as echo_api
+
+        dispatcher = echo_api.dispatcher
         query_lower = query.lower()
         matches = []
-        for msg in dispatcher.history(limit=200):
+        for msg in dispatcher.history(limit=200, tenant_id=tenant_id):
             title = msg.get("title", "").lower()
             content = msg.get("content", "").lower()
             channel = msg.get("channel", "").lower()
@@ -411,8 +418,10 @@ async def unified_search(
     ——认证请求自报他人档案=403；匿名保留自报（既有本地多档案语义）。知识子搜索
     用派生档案键（修前硬编码 'default'）、课程子搜索用派生租户过滤（修前系统视图
     =跨租户泄露）、events 子搜索用派生租户过滤（DEC-⑦-①，修前内存缓冲零过滤
-    =跨租户泄露；行归属=事件自带键缺失→'default' 兜底，record() 同款）。其余
-    子搜索（files/agents/trajectory/cron/gene/echo）的存储层无 user/tenant 轴，
+    =跨租户泄露；行归属=事件自带键缺失→'default' 兜底，record() 同款）、echo
+    子搜索用派生租户过滤（DEC-⑦-②，修前消息历史零过滤=跨租户泄露；行归属=
+    消息自带键缺失→'default' 兜底，message_row_tenant 同款）。其余
+    子搜索（files/agents/trajectory/cron/gene）的存储层无 user/tenant 轴，
     保持系统视图（诚实边界，DEC-⑦ 分批拆件留待拍）。
     """
     identity = bind_identity(authorization, "", user_id)
@@ -438,7 +447,7 @@ async def unified_search(
     if search_all or "gene" in source_list:
         tasks["gene"] = _search_gene_templates(q, limit)
     if search_all or "echo" in source_list:
-        tasks["echo"] = _search_echo_messages(q, limit)
+        tasks["echo"] = _search_echo_messages(q, limit, identity.tenant_id)
 
     # Run all searches in parallel
     results_list = await asyncio.gather(*tasks.values(), return_exceptions=True)

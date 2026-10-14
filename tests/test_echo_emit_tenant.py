@@ -78,7 +78,8 @@ class _StubDispatcher:
     """MessageDispatcher 桩——handler→push_event 接线是本拍被测物，
     消息投递本体（console/webhook/网络）不进测试面。"""
 
-    def send(self, channel, title, content, target, priority):
+    def send(self, channel, title, content, target, priority, tenant_id=None):
+        # tenant_id=DEC-⑦-② 行租户键形参（桩只接收不投递，接线是被测物）
         return SimpleNamespace(
             success=True,
             msg_id="msg_stub_1",
@@ -279,13 +280,15 @@ class TestEchoEmitTenantInvariants:
         assert rows[0]["tenant_id"] == "default"
 
     def test_all_three_call_sites_wired(self):
-        """静态接线普查：3 handler 全带派生、3 调用点全传租户键（写了必须接线）。"""
+        """静态接线普查：4 handler 全带派生（send/broadcast/send_from_template/
+        create_template）、6 注入点全传租户键（3 push_event+3 消息行，DEC-⑦-②
+        消息行归属）（写了必须接线）。"""
         pipe = chr(124)
         src = (Path(__file__).parent.parent / "src" / "api" / "echo.py").read_text(encoding="utf-8")
-        assert src.count("identity = bind_identity(authorization)") == 3
-        assert src.count("tenant_id=identity.tenant_id") == 3
+        assert src.count("identity = bind_identity(authorization)") == 4
+        assert src.count("tenant_id=identity.tenant_id") == 6
         assert src.count("push_event(") == 3
-        assert src.count("authorization: str " + pipe + " None = Header(None)") == 3  # 竖线完好探针
+        assert src.count("authorization: str " + pipe + " None = Header(None)") == 4  # 竖线完好探针
         starts = []
         i = 0
         while True:

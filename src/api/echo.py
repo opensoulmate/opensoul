@@ -61,6 +61,7 @@ async def send_message(
         content=req.content,
         target=req.target,
         priority=req.priority,
+        tenant_id=identity.tenant_id,
     )
 
     # Emit event
@@ -85,9 +86,20 @@ async def send_message(
 
 
 @router.post("/broadcast")
-async def broadcast_message(req: BroadcastRequest):
-    """Broadcast a message to all enabled channels."""
-    results = dispatcher.send_all(title=req.title, content=req.content, priority=req.priority)
+async def broadcast_message(
+    req: BroadcastRequest,
+    authorization: str | None = Header(None),
+):
+    """Broadcast a message to all enabled channels.
+
+    身份轴（DEC-⑦-② 行归属）：bind_identity 派生租户落消息行（修前零身份轴
+    =广播消息恒落 'default'，租户用户搜不到自己的广播=自我不可见）；坏 token
+    401 先于任何发送（F3b-⑤ 纪律）。
+    """
+    identity = bind_identity(authorization)
+    results = dispatcher.send_all(
+        title=req.title, content=req.content, priority=req.priority, tenant_id=identity.tenant_id
+    )
     return {
         "results": [
             {"success": r.success, "msg_id": r.msg_id, "channel": r.channel, "error": r.error}
@@ -430,6 +442,7 @@ async def send_from_template(
         content=rendered["content"],
         target=req.target,
         priority=req.priority,
+        tenant_id=identity.tenant_id,
     )
 
     push_event(
