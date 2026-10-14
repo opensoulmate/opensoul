@@ -136,6 +136,16 @@ def event_row_tenant(event: TrajectoryEvent) -> str:
     return ((event.tenant_id or "").strip()) or DEFAULT_TENANT
 
 
+def score_row_tenant(score: "TrajectoryScore") -> str:
+    """score 行租户键单一判法（DEC-⑦-⑨）：自带键、缺失/空白→'default' 兜底。
+
+    评分行归属=父 session 行继承（add_score 单写点，③b-2「写点租户键=父行
+    继承」/add_event 同款）；本函数=落行归一与加性 tenant_id 键共用判法
+    （写读同源，F4b-㉗ 纪律）。
+    """
+    return ((score.tenant_id or "").strip()) or DEFAULT_TENANT
+
+
 class ScoreDataType(StrEnum):
     """langfuse Score data types."""
 
@@ -169,6 +179,11 @@ class TrajectoryScore:
     comment: str = ""
     source: str = "api"
     created_at: str = ""
+    # 行租户键（DEC-⑦-⑨ trajectory_scores 加轴）：自带键、缺失/空白→
+    # 'default' 兜底（score_row_tenant 单一判法）；行归属=父 session 行继承
+    # （add_score 单写点，③b-2/add_event 写点=父行继承同款），存量行随迁移
+    # 回填 'default'。
+    tenant_id: str = ""
 
     def __post_init__(self):
         if not self.id:
@@ -286,12 +301,28 @@ class TrajectoryStore:
                 data_type TEXT NOT NULL DEFAULT 'numeric',
                 comment TEXT NOT NULL DEFAULT '',
                 source TEXT NOT NULL DEFAULT 'api',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                tenant_id TEXT NOT NULL DEFAULT 'default'
             )
         """)
         await db_pool.execute("""
             CREATE INDEX IF NOT EXISTS idx_traj_scores_session
             ON trajectory_scores(session_id, name)
+        """)
+        # Migration: scores 行租户键（DEC-⑦-⑨，C1 幂等双轨）——必须在
+        # CREATE TABLE 之后跑（新库 DDL 已带列→duplicate 安全吞；老库补列）
+        # 且租户索引必须在补列之后建（③c-2① 坑延续）。
+        try:
+            await db_pool.execute(
+                "ALTER TABLE trajectory_scores ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
+            )
+        except Exception as exc:
+            msg = str(exc).lower()
+            if "duplicate column" not in msg and "already exists" not in msg:
+                raise
+        await db_pool.execute("""
+            CREATE INDEX IF NOT EXISTS idx_traj_scores_tenant
+            ON trajectory_scores(tenant_id)
         """)
 
     # ── Session CRUD ─────────────────────────────────────────
@@ -855,7 +886,14 @@ class TrajectoryStore:
     # ── Scores (langfuse Score layer) ────────────────────────
 
     async def add_score(self, score: TrajectoryScore) -> TrajectoryScore:
-        """Persist a quality score against a session (optionally one event)."""
+        """Persist a quality score against a session (optionally one event).
+
+        DEC-⑦-⑨：评分行归属=父 session 行继承（add_event「写点租户键=父行
+        继承」同款，③b-2 外部写方回帖语义——eval_loop/llm_judge/human 等外部
+        评分方经 HTTP/store 落分同样随父行归属，会话拥有者可见自己会话的全部
+        评分）；父行缺失/键空白→'default' 兜底不掉落库（键派生故障绝不吃掉落
+        库，③b-2 旁路纪律）。
+        """
         await self.ensure_tables()
         if not score.session_id:
             raise ValueError("score.session_id is required")
@@ -865,11 +903,16 @@ class TrajectoryStore:
             raise ValueError(f"score.data_type must be one of {[t.value for t in ScoreDataType]}")
         if score.source not in SCORE_SOURCES:
             raise ValueError(f"score.source must be one of {list(SCORE_SOURCES)}")
+        parent = await db_pool.fetchrow(
+            "SELECT tenant_id FROM trajectory_sessions WHERE id = ?", score.session_id
+        )
+        score.tenant_id = (dict(parent).get("tenant_id") if parent else "") or ""
+        score.tenant_id = score_row_tenant(score)
         await db_pool.execute(
             """INSERT INTO trajectory_scores
                (id, session_id, trace_id, name, value, string_value,
-                data_type, comment, source, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                data_type, comment, source, created_at, tenant_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             score.id,
             score.session_id,
             score.trace_id,
@@ -880,6 +923,7 @@ class TrajectoryStore:
             score.comment,
             score.source,
             score.created_at,
+            score.tenant_id,
         )
         return score
 
@@ -889,7 +933,14 @@ class TrajectoryStore:
         name: str = "",
         source: str = "",
         limit: int = 100,
+        tenant_id: str | None = None,
     ) -> list[TrajectoryScore]:
+        """读评分（DEC-⑦-⑨ 租户过滤）。
+
+        tenant_id 显式给出=恒按行租户键过滤（行键=父行继承落行归一+迁移回填，
+        SQL 等值=score_row_tenant 等值；过滤先于截断=limit 只计可见命中）；
+        None=系统视图，既有调用面字节不变。
+        """
         await self.ensure_tables()
         clauses = []
         params: list[Any] = []
@@ -902,6 +953,9 @@ class TrajectoryStore:
         if source:
             clauses.append("source = ?")
             params.append(source)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         params.append(limit)
         rows = await db_pool.fetch(
@@ -910,11 +964,22 @@ class TrajectoryStore:
         )
         return [self._row_to_score(r) for r in rows]
 
-    async def get_score_summary(self, session_id: str = "") -> dict:
-        """Aggregate scores per name — the "is it getting better" query."""
+    async def get_score_summary(self, session_id: str = "", tenant_id: str | None = None) -> dict:
+        """Aggregate scores per name — the "is it getting better" query.
+
+        DEC-⑦-⑨：tenant_id 显式给出=恒按行租户键过滤（聚合不得泄露全局分布，
+        ③c-2① stats 纪律）；None=系统视图字节不变。
+        """
         await self.ensure_tables()
-        where = " WHERE session_id = ?" if session_id else ""
-        params: tuple = (session_id,) if session_id else ()
+        clauses = []
+        params: list[Any] = []
+        if session_id:
+            clauses.append("session_id = ?")
+            params.append(session_id)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
         rows = await db_pool.fetch(
             f"""SELECT name,
                        COUNT(*) as cnt,
@@ -1239,7 +1304,7 @@ class TrajectoryStore:
 
     def _row_to_score(self, row) -> TrajectoryScore:
         d = dict(row)
-        return TrajectoryScore(
+        s = TrajectoryScore(
             id=d["id"],
             session_id=d.get("session_id", ""),
             trace_id=d.get("trace_id"),
@@ -1250,7 +1315,11 @@ class TrajectoryStore:
             comment=d.get("comment", ""),
             source=d.get("source", "api"),
             created_at=d.get("created_at", ""),
+            tenant_id=d.get("tenant_id") or "",
         )
+        # 加性 tenant_id 键归一（score_row_tenant 单一判法，写读同源）
+        s.tenant_id = score_row_tenant(s)
+        return s
 
 
 # Singleton

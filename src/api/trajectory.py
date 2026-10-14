@@ -508,24 +508,43 @@ async def list_scores(
     name: str = Query(default=""),
     source: str = Query(default=""),
     limit: int = Query(default=100, ge=1, le=500),
+    authorization: str | None = Header(None),
 ):
-    """List scores attached to a session."""
+    """List scores attached to a session.
+
+    DEC-⑦-⑨：恒按派生租户过滤（tenant=bind_identity 派生禁自报，匿名
+    'default'——单机存量行全 'default'，契约不变；跨租户评分恒不可见）。
+    """
+    identity = bind_identity(authorization)
     session = await trajectory_store.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
     scores = await trajectory_store.get_scores(
-        session_id=session_id, name=name, source=source, limit=limit
+        session_id=session_id,
+        name=name,
+        source=source,
+        limit=limit,
+        tenant_id=identity.tenant_id,
     )
     return {"session_id": session_id, "scores": [s.to_dict() for s in scores]}
 
 
 @router.get("/sessions/{session_id}/scores/summary")
-async def score_summary(session_id: str):
-    """Aggregate scores per name — the 'is it getting better' query."""
+async def score_summary(
+    session_id: str,
+    authorization: str | None = Header(None),
+):
+    """Aggregate scores per name — the 'is it getting better' query.
+
+    DEC-⑦-⑨：恒按派生租户过滤（聚合不得泄露全局分布，③c-2① stats 纪律）。
+    """
+    identity = bind_identity(authorization)
     session = await trajectory_store.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
-    return await trajectory_store.get_score_summary(session_id=session_id)
+    return await trajectory_store.get_score_summary(
+        session_id=session_id, tenant_id=identity.tenant_id
+    )
 
 
 # ── Event Types ──────────────────────────────────────────────

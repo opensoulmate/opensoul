@@ -180,7 +180,8 @@ class TestTrajectoryStore:
             await self.store.ensure_tables()
             # 2 tables + 2 索引 + end_at migration ALTER + 2 租户 ALTER
             # + 2 租户索引 + scores table（DEC-⑦-⑥ 行租户键迁移随契约演进）
-            assert pool.execute.call_count == 10
+            # + scores 租户 ALTER + scores 租户索引（DEC-⑦-⑨ scores 加轴随契约演进）
+            assert pool.execute.call_count == 12
 
     @pytest.mark.asyncio
     async def test_create_session(self):
@@ -196,9 +197,9 @@ class TestTrajectoryStore:
             assert session.tags == ["tag1"]
             assert session.status == "running"
             assert session.tenant_id == "default"  # DEC-⑦-⑥ 缺省='default' 系统写方
-            # create_session calls ensure_tables (10 calls) + INSERT (1 call)
-            # （DEC-⑦-⑥ 迁移 DDL 随契约演进；hijack SELECT 是 fetchrow 不计）
-            assert pool.execute.call_count == 11
+            # create_session calls ensure_tables (12 calls) + INSERT (1 call)
+            # （DEC-⑦-⑥/⑦-⑧b 迁移 DDL 随契约演进；hijack SELECT 是 fetchrow 不计）
+            assert pool.execute.call_count == 13
 
     @pytest.mark.asyncio
     async def test_add_event(self):
@@ -219,9 +220,9 @@ class TestTrajectoryStore:
             assert result.token_usage == 10
             assert result.duration_ms == 50.0
             assert result.tenant_id == "default"  # DEC-⑦-⑥ 父行缺失→'default' 兜底
-            # add_event calls ensure_tables (10) + INSERT + UPDATE
+            # add_event calls ensure_tables (12) + INSERT + UPDATE
             # （DEC-⑦-⑥ 父行 SELECT 是 fetchrow 不计）
-            assert pool.execute.call_count == 12
+            assert pool.execute.call_count == 14
 
     @pytest.mark.asyncio
     async def test_list_sessions(self):
@@ -381,5 +382,5 @@ class TestTrajectoryStore:
         )
         with patch("src.trajectory.store.db_pool", pool):
             assert await self.store.delete_session("s1") is True
-            # delete_session: ensure_tables (10) + DELETE scores/events/session
-            assert pool.execute.call_count == 13
+            # delete_session: ensure_tables (12) + DELETE scores/events/session
+            assert pool.execute.call_count == 15
