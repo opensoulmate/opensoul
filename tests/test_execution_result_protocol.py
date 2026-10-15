@@ -238,7 +238,7 @@ class TestProtocolFace:
         """落库失败如实 500（C2 禁谎报 ok）：record 抛错不得回 recorded=True。"""
         import src.learn.experience as exp_mod
 
-        async def _boom(self, action, result, verification, task_ctx):
+        async def _boom(self, action, result, verification, task_ctx, result_key=""):
             raise RuntimeError("db down")
 
         monkeypatch.setattr(exp_mod.ExperienceMemory, "record", _boom)

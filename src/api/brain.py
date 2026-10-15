@@ -70,6 +70,10 @@ class ExecutionResultRequest(BaseModel):
     file_path: str = ""
     test_output: dict | None = None
     diff: str = ""
+    # DEC-⑤-①b 幂等键（自决见 pending-decisions ⑪）：显式声明"这一份报告"的
+    # 身份，同 result_id 重复回传不重复落库；未给=证据指纹派生（同份证据的重试
+    # 同样幂等，证据变化=另一次观测各记一行）
+    result_id: str = ""
 
 
 class FeedbackRequest(BaseModel):
@@ -371,7 +375,7 @@ async def execution_result(req: ExecutionResultRequest, authorization: str | Non
 
     from src.cortex.reflector import Reflector
     from src.database.postgres import db_pool
-    from src.learn.experience import ExperienceMemory
+    from src.learn.experience import ExperienceMemory, execution_result_key
     from src.models.cognitive import Intent, TaskContext
 
     if db_pool is None:
@@ -407,14 +411,31 @@ async def execution_result(req: ExecutionResultRequest, authorization: str | Non
     # 真 Verification：成败由检查派生（_check_intent_match 为确定性判定无 LLM）
     verification = await Reflector().reflect(req.action, result, task_ctx)
 
+    # DEC-⑤-①b 幂等键单一派生口（key 语义自决见 pending-decisions ⑪）：
+    # 显式 result_id 优先，未给=证据指纹派生（网络重试/重复回传同键）
+    result_key = execution_result_key(req.result_id, req.model_dump())
+
     # 落库失败如实 500（禁谎报 ok）；行归属=派生租户（匿名='default' 契约不变）
     try:
-        await ExperienceMemory(db_pool, identity.tenant_id, req.agent_id).record(
-            req.action, result, verification, task_ctx
+        rec = await ExperienceMemory(db_pool, identity.tenant_id, req.agent_id).record(
+            req.action, result, verification, task_ctx, result_key=result_key
         )
     except Exception as e:
         logger.warning("执行结果经验落库失败: %s", e)
         raise HTTPException(status_code=500, detail=f"经验落库失败: {e}")
+
+    if rec.get("duplicate"):
+        # 同键重复回传：不落新行，如实回报首行结果（禁谎报 recorded=True）
+        return {
+            "status": "ok",
+            "duplicate": True,
+            "recorded": False,
+            "outcome": rec.get("outcome"),
+            "checks": [],
+            "error": rec.get("error"),
+            "fix": rec.get("fix"),
+            "result_key": result_key,
+        }
 
     return {
         "status": "ok",
@@ -425,6 +446,8 @@ async def execution_result(req: ExecutionResultRequest, authorization: str | Non
         "error": verification.error,
         "fix": verification.fix,
         "recorded": True,
+        "duplicate": False,
+        "result_key": result_key,
     }
 
 

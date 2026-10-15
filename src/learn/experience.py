@@ -1,5 +1,6 @@
 """Experience Memory — SQLite存储版本，多租户隔离。"""
 
+import hashlib
 import json
 import logging
 import time
@@ -14,6 +15,41 @@ logger = logging.getLogger(__name__)
 # F4b-㉜ 扫描上界单一源（get_relevant_experience/get_similar_failures 共用，
 # 禁两处字面 LIMIT 漂移——F4b-㉗ 纪律）：按 outcome 类各扫描至多 100 行再评分。
 _QUERY_SCAN_LIMIT = 100
+
+# DEC-⑤-①b 幂等键"身份字段"单一源——哪些字段定义"这一份执行结果"（显式
+# result_id 在场时整份证据不参与定键，客户端声明即身份；未给才走证据指纹）。
+_RESULT_KEY_FIELDS = (
+    "task_id",
+    "action",
+    "goal",
+    "target_files",
+    "exit_code",
+    "exception",
+    "error",
+    "file_written",
+    "file_path",
+    "test_output",
+    "diff",
+)
+
+
+def execution_result_key(result_id: str, report: dict) -> str:
+    """执行结果回传幂等键单一派生口（DEC-⑤-①b；key 语义自决见 pending-decisions ⑪）。
+
+    - 显式 result_id 非空白 → 客户端声明身份（"explicit:"+result_id）：同 id 重复
+      回传即同一份报告，证据差异不拆行（客户端要区分两次上报就给不同 id）。
+    - 未给 → 证据指纹派生（"derived:"+sha256(规范 JSON)）：同份证据的网络重试/
+      重复回传同键（at-most-once 不重复落库），证据变化（如 exit_code 改变=另一次
+      观测）异键各记一行。
+    键刻意不含租户/agent：作用域=行键 (tenant_id, agent_id)，跨租户同键互不去重
+    （防去重面变跨租户信息通道）。
+    """
+    rid = (result_id or "").strip()
+    if rid:
+        return "explicit:" + rid
+    scope = {k: report.get(k) for k in _RESULT_KEY_FIELDS}
+    canonical = json.dumps(scope, ensure_ascii=False, sort_keys=True, default=str)
+    return "derived:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 class ExperienceMemory:
@@ -41,7 +77,8 @@ class ExperienceMemory:
                     fix TEXT,
                     relevance_score REAL DEFAULT 1.0,
                     created_at REAL NOT NULL,
-                    metadata TEXT DEFAULT '{}'
+                    metadata TEXT DEFAULT '{}',
+                    result_key TEXT
                 )
             """)
             await self.db.execute("""
@@ -52,38 +89,104 @@ class ExperienceMemory:
                 CREATE INDEX IF NOT EXISTS idx_exp_outcome
                 ON experiences(tenant_id, agent_id, outcome)
             """)
+            # C1 幂等自愈：老库补列（CREATE TABLE IF NOT EXISTS 不给既有表加列）
+            cols = await self.db.fetch("PRAGMA table_info(experiences)")
+            if not any(c["name"] == "result_key" for c in cols):
+                await self.db.execute("ALTER TABLE experiences ADD COLUMN result_key TEXT")
+            # 幂等键唯一索引=at-most-once 的结构保证（非查重守卫）；必须在补列之后
+            # 建（③c-2① 坑：老库先建索引=no such column）。NULL 键在 SQLite 唯一
+            # 索引下互不撞（既有无键行/空键行为语义零变化）。
+            await self.db.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_exp_result_key
+                ON experiences(tenant_id, agent_id, result_key)
+            """)
         self._initialized = True
 
     async def record(
-        self, action: str, result: dict, verification: Verification, task_ctx: TaskContext
-    ):
-        """记录一次行动结果"""
-        await self._ensure_table()
-        if not self.db:
-            return
+        self,
+        action: str,
+        result: dict,
+        verification: Verification,
+        task_ctx: TaskContext,
+        result_key: str = "",
+    ) -> dict:
+        """记录一次行动结果。
 
+        DEC-⑤-①b 重复回传幂等：result_key 非空时按 (tenant_id, agent_id, result_key)
+        at-most-once——同键重复回传不重复落库，返回首行 outcome/error/fix
+        （duplicate=True, recorded=False，禁谎报 recorded=True）；空键=既有语义
+        逐字不变（每次都记一行）。键唯一索引兜底并发撞键（撞键=回读首行如实报
+        duplicate，非吞错）。返回 dict 为加性契约（既有调用方不读返回值零影响）。
+        """
+        await self._ensure_table()
         outcome = "success" if verification.success else "failure"
-        await self.db.execute(
-            """INSERT INTO experiences
-               (tenant_id, agent_id, action, intent_summary, outcome, error, fix, relevance_score, created_at, metadata)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                self.tenant_id,
-                self.agent_id,
-                action[:500],
-                task_ctx.intent.goal if task_ctx.intent else "unknown",
-                outcome,
-                verification.error,
-                verification.fix,
-                1.0,
-                time.time(),
-                # DEC-⑤-① 回传协议溯源：task_id 进 metadata（铁律 json.dumps；
-                # 无 task_id=空对象，既有形状零变化）
-                json.dumps({"task_id": task_ctx.task_id} if task_ctx.task_id else {}),
-            ),
-        )
+        db = self.db
+        if not db:
+            return {"recorded": False, "duplicate": False, "outcome": outcome}
+
+        async def _find_existing():
+            return await db.fetchrow(
+                """SELECT outcome, error, fix FROM experiences
+                   WHERE tenant_id = ? AND agent_id = ? AND result_key = ? LIMIT 1""",
+                (self.tenant_id, self.agent_id, result_key),
+            )
+
+        if result_key:
+            existing = await _find_existing()
+            if existing is not None:
+                return {
+                    "recorded": False,
+                    "duplicate": True,
+                    "outcome": existing["outcome"],
+                    "error": existing["error"],
+                    "fix": existing["fix"],
+                }
+
+        try:
+            await db.execute(
+                """INSERT INTO experiences
+                   (tenant_id, agent_id, action, intent_summary, outcome, error, fix, relevance_score, created_at, metadata, result_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    self.tenant_id,
+                    self.agent_id,
+                    action[:500],
+                    task_ctx.intent.goal if task_ctx.intent else "unknown",
+                    outcome,
+                    verification.error,
+                    verification.fix,
+                    1.0,
+                    time.time(),
+                    # DEC-⑤-① 回传协议溯源：task_id 进 metadata（铁律 json.dumps；
+                    # 无 task_id=空对象，既有形状零变化）
+                    json.dumps({"task_id": task_ctx.task_id} if task_ctx.task_id else {}),
+                    result_key or None,
+                ),
+            )
+        except Exception:
+            # 并发同键撞唯一索引：回读首行如实报 duplicate（at-most-once 语义收口）；
+            # 非撞键故障照常上抛（禁吞错假 duplicate）
+            if not result_key:
+                raise
+            existing = await _find_existing()
+            if existing is None:
+                raise
+            return {
+                "recorded": False,
+                "duplicate": True,
+                "outcome": existing["outcome"],
+                "error": existing["error"],
+                "fix": existing["fix"],
+            }
         # 老化淘汰
         await self._aging_prune()
+        return {
+            "recorded": True,
+            "duplicate": False,
+            "outcome": outcome,
+            "error": verification.error,
+            "fix": verification.fix,
+        }
 
     async def get_relevant_experience(self, intent: Intent) -> list[Experience]:
         """获取和当前意图相关的历史经验。
