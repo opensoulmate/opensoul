@@ -280,15 +280,16 @@ class TestEchoEmitTenantInvariants:
         assert rows[0]["tenant_id"] == "default"
 
     def test_all_three_call_sites_wired(self):
-        """静态接线普查：4 handler 全带派生（send/broadcast/send_from_template/
-        create_template）、6 注入点全传租户键（3 push_event+3 消息行，DEC-⑦-②
-        消息行归属）（写了必须接线）。"""
+        """静态接线普查：5 handler 全带派生（send/broadcast/send_from_template/
+        create_template/message_history——⑦-⑬ /history 读面收编）、7 注入点全传
+        租户键（3 push_event+3 消息行+1 history 读面，DEC-⑦-② 消息行归属）
+        （写了必须接线）。"""
         pipe = chr(124)
         src = (Path(__file__).parent.parent / "src" / "api" / "echo.py").read_text(encoding="utf-8")
-        assert src.count("identity = bind_identity(authorization)") == 4
-        assert src.count("tenant_id=identity.tenant_id") == 6
+        assert src.count("identity = bind_identity(authorization)") == 5
+        assert src.count("tenant_id=identity.tenant_id") == 7
         assert src.count("push_event(") == 3
-        assert src.count("authorization: str " + pipe + " None = Header(None)") == 4  # 竖线完好探针
+        assert src.count("authorization: str " + pipe + " None = Header(None)") == 5  # 竖线完好探针
         starts = []
         i = 0
         while True:

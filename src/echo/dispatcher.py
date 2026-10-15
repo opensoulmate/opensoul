@@ -534,6 +534,7 @@ class MessageDispatcher:
                 "error": e.error,
                 "timestamp": e.timestamp,
                 "priority": e.priority,
+                "tenant_id": message_row_tenant(e),
             }
             for e in sorted(entries, key=lambda x: x.timestamp, reverse=True)[:limit]
         ]

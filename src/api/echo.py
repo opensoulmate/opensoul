@@ -248,15 +248,23 @@ async def channels_health():
 async def message_history(
     limit: int = Query(default=50, ge=1, le=500),
     channel: str = Query(default=None),
+    authorization: str | None = Header(None),
 ):
-    """Get message sending history."""
+    """Get message sending history.
+
+    读面归属闸（DEC-⑦-⑬）：tenant 从认证身份派生（bind_identity）禁自报，恒按
+    行租户键过滤（匿名='default' 面=DEC-⑦-①② 匿名面同款，key=message_row_tenant
+    单一源）；坏 token 401 先于读取（F3b-⑤ 身份证明先于一切）。history(tenant_id=
+    None) 系统视图仍为内部调用面保留（DEC-⑦-② 边界③，消费方自查身份）。
+    """
+    identity = bind_identity(authorization)
     ch = None
     if channel:
         try:
             ch = Channel(channel)
         except ValueError:
             raise HTTPException(400, f"Invalid channel: {channel}")
-    return {"messages": dispatcher.history(limit=limit, channel=ch)}
+    return {"messages": dispatcher.history(limit=limit, channel=ch, tenant_id=identity.tenant_id)}
 
 
 # ── Stats ──────────────────────────────────────────────────
