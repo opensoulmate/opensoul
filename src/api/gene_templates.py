@@ -18,8 +18,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
+
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
@@ -594,6 +596,30 @@ def _init():
 _init()
 
 
+# ── 行租户键（DEC-⑦-⑰ 实例面加轴）───────────────────────────────────────
+
+
+def instance_row_tenant(row: dict[str, Any]) -> str:
+    """行租户键单一判法（写读同源，DEC-⑦-① _event_row_tenant / ⑦-③
+    template_row_tenant 同款语义）：自带键、缺失/空白→'default' 兜底。
+
+    实例行（instantiate 落行）与能力行（=实例行继承落键）共用本判法；
+    /instances 过滤、delete 归属闸、/capabilities 读面、/dashboard 聚合
+    全部走这里，禁消费点另发明判法（F4b-㉗ 纪律）。旧持久化 JSON 无键
+    =历史单租户数据走兜底兼容，键派生故障绝不吃掉落库。
+    """
+    val = row.get("tenant_id")
+    return (val.strip() if isinstance(val, str) else "") or "default"
+
+
+def _instance_view(row: dict[str, Any]) -> dict[str, Any]:
+    """实例行输出视图：加性键 tenant_id=归一值（⑦-③ 输出加性键同款），
+    只改返回 dict 不就地改内存本体（_apply_history_limit 同纪律）。"""
+    view = dict(row)
+    view["tenant_id"] = instance_row_tenant(row)
+    return view
+
+
 # ── Helper: Instantiate Adapter ──────────────────────────────────────────
 
 
@@ -698,11 +724,18 @@ def _register_capabilities(
     instance_id: str,
     template: dict[str, Any],
     instance_name: str,
+    tenant_id: str = "default",
 ) -> list[str]:
-    """Register capabilities for a new adapter instance."""
+    """Register capabilities for a new adapter instance.
+
+    能力行=实例行继承落键（DEC-⑦-⑰；能力行随实例生灭——_register_capabilities
+    /delete_instance 同键，行归属单一权威=父实例行的租户键，自带键被顶替语义
+    同 ③b-2 外部写方回帖）。
+    """
     cap_ids: list[str] = []
     cap_descriptions = template.get("capabilities", [])
     adapter_type = template.get("adapter_type", "unknown")
+    row_tenant = instance_row_tenant({"tenant_id": tenant_id})
 
     for desc in cap_descriptions:
         cap_id = f"cap-{uuid.uuid4().hex[:8]}"
@@ -715,6 +748,7 @@ def _register_capabilities(
             "actions": template.get("capability_actions", []),
             "tags": template.get("tags", []),
             "registered_at": time.time(),
+            "tenant_id": row_tenant,
         }
         _capabilities[cap_id] = entry
         cap_ids.append(cap_id)
@@ -814,14 +848,22 @@ async def delete_template(template_id: str):
 
 
 @router.post("/adapter-templates/{template_id}/instantiate")
-async def instantiate_template(template_id: str, req: InstantiateRequest):
+async def instantiate_template(
+    template_id: str,
+    req: InstantiateRequest,
+    authorization: str | None = Header(default=None),
+):
     """Create a running adapter instance from a template.
 
     1. Merge user params with template defaults
     2. Configure the underlying adapter
     3. Register capabilities
     4. Return the instance ID
+
+    实例行归属（DEC-⑦-⑰）：tenant 由 bind_identity 派生禁自报（请求体带
+    tenant_id 字段被 pydantic 忽略不进落行），匿名='default' 契约不变。
     """
+    identity = bind_identity(authorization, "", "")
     template = _templates.get(template_id)
     if not template:
         raise HTTPException(404, f"Template '{template_id}' not found")
@@ -864,11 +906,14 @@ async def instantiate_template(template_id: str, req: InstantiateRequest):
         "created_at": time.time(),
         "last_activity": time.time(),
         "activity_count": 0,
+        "tenant_id": identity.tenant_id,
     }
 
     # Register capabilities
     if req.auto_configure:
-        cap_ids = _register_capabilities(instance_id, template, instance_name)
+        cap_ids = _register_capabilities(
+            instance_id, template, instance_name, tenant_id=identity.tenant_id
+        )
         instance["capabilities"] = cap_ids
 
     _instances[instance_id] = instance
@@ -886,23 +931,40 @@ async def instantiate_template(template_id: str, req: InstantiateRequest):
         "status": "active",
         "capabilities_count": len(instance["capabilities"]),
         "configure_result": result,
+        "tenant_id": identity.tenant_id,
     }
 
 
 @router.get("/instances")
-async def list_instances():
-    """List all running adapter instances."""
+async def list_instances(authorization: str | None = Header(default=None)):
+    """List running adapter instances (DEC-⑦-⑰ 恒按行租户键过滤).
+
+    tenant 由 bind_identity 派生禁自报；匿名='default' 面（旧行为不变——
+    生产存量行全 'default'）；count=可见数（过滤先于计数）。
+    """
+    identity = bind_identity(authorization, "", "")
+    visible = [
+        _instance_view(inst)
+        for inst in _instances.values()
+        if instance_row_tenant(inst) == identity.tenant_id
+    ]
     return {
-        "instances": list(_instances.values()),
-        "count": len(_instances),
+        "instances": visible,
+        "count": len(visible),
+        "tenant_id": identity.tenant_id,
     }
 
 
 @router.delete("/instances/{instance_id}")
-async def delete_instance(instance_id: str):
-    """Remove an adapter instance and its capabilities."""
+async def delete_instance(instance_id: str, authorization: str | None = Header(default=None)):
+    """Remove an adapter instance and its capabilities.
+
+    归属闸（DEC-⑦-⑰）：跨租户与 not-found 同契约（③c-1 纪律）不差分泄露
+    行存在性，行与能力零破坏。
+    """
+    identity = bind_identity(authorization, "", "")
     inst = _instances.get(instance_id)
-    if not inst:
+    if not inst or instance_row_tenant(inst) != identity.tenant_id:
         raise HTTPException(404, f"Instance '{instance_id}' not found")
 
     # Remove associated capabilities
@@ -926,14 +988,22 @@ async def delete_instance(instance_id: str):
 async def list_capabilities(
     adapter_type: str | None = None,
     search: str | None = None,
+    authorization: str | None = Header(default=None),
 ):
     """List all registered capabilities.
 
     Agents query this to discover what integrations are available and
     what they can do. Filter by adapter_type or free-text search.
+
+    DEC-⑦-⑰：能力行=实例行继承落键（instance_row_tenant 单一判法），
+    读面恒按派生租户过滤（匿名='default' 面）；adapter_types 聚合同作用域
+    （⑦-⑭ 聚合禁泄露全局分布）。
     """
+    identity = bind_identity(authorization, "", "")
     results = []
     for cid, cap in _capabilities.items():
+        if instance_row_tenant(cap) != identity.tenant_id:
+            continue
         if adapter_type and cap.get("adapter_type") != adapter_type:
             continue
         if search and search.lower() not in cap.get("description", "").lower():
@@ -952,16 +1022,27 @@ async def list_capabilities(
     return {
         "capabilities": unique_results,
         "count": len(unique_results),
-        "adapter_types": list(set(c.get("adapter_type", "") for c in _capabilities.values())),
+        "adapter_types": list(set(c.get("adapter_type", "") for c in results)),
+        "tenant_id": identity.tenant_id,
     }
 
 
 @router.get("/dashboard")
-async def get_dashboard():
-    """Integration dashboard — statistics and recent activity."""
+async def get_dashboard(authorization: str | None = Header(default=None)):
+    """Integration dashboard — statistics and recent activity.
+
+    DEC-⑦-⑰：实例/能力派生聚合恒按派生租户（⑦-⑭ 聚合禁泄露全局分布——
+    修前 total_instances/instances_by_* /recent_instances 全局可见）；模板
+    计数与 available_adapter_types 保持全局（模板目录面=共享 catalog 边界，
+    共享语义需拍板）。
+    """
+    identity = bind_identity(authorization, "", "")
+    my_instances = [i for i in _instances.values() if instance_row_tenant(i) == identity.tenant_id]
+    my_caps = [c for c in _capabilities.values() if instance_row_tenant(c) == identity.tenant_id]
+
     # Count by adapter type
     type_counts: dict[str, int] = {}
-    for inst in _instances.values():
+    for inst in my_instances:
         atype = inst.get("adapter_type", "unknown")
         type_counts[atype] = type_counts.get(atype, 0) + 1
 
@@ -971,14 +1052,14 @@ async def get_dashboard():
 
     # Recent activity (last 10 instances by creation time)
     recent = sorted(
-        _instances.values(),
+        my_instances,
         key=lambda i: i.get("created_at", 0),
         reverse=True,
     )[:10]
 
     # Status breakdown
     status_counts: dict[str, int] = {}
-    for inst in _instances.values():
+    for inst in my_instances:
         s = inst.get("status", "unknown")
         status_counts[s] = status_counts.get(s, 0) + 1
 
@@ -987,8 +1068,8 @@ async def get_dashboard():
             "total_templates": len(_templates),
             "builtin_templates": builtin_count,
             "custom_templates": custom_count,
-            "total_instances": len(_instances),
-            "total_capabilities": len(_capabilities),
+            "total_instances": len(my_instances),
+            "total_capabilities": len(my_caps),
         },
         "instances_by_type": type_counts,
         "instances_by_status": status_counts,
@@ -1006,6 +1087,7 @@ async def get_dashboard():
         "available_adapter_types": sorted(
             set(t.get("adapter_type", "") for t in _templates.values())
         ),
+        "tenant_id": identity.tenant_id,
     }
 
 
