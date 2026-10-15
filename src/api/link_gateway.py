@@ -65,6 +65,8 @@ class WebhookEndpoint:
     direction: WebhookDirection
     url: str = ""  # target URL for outgoing; callback URL for incoming
     secret: str = ""
+    # register 签发回调凭据（DEC-⑬ 外部回调入口鉴权化，明文只回注册响应一次）
+    callback_token: str = ""
     headers: dict = field(default_factory=dict)
     payload_parser: str = ""  # optional parser expression (e.g. jq-like path)
     description: str = ""
@@ -86,6 +88,8 @@ class ExternalSystem:
     url: str = ""
     auth_type: str = ""  # "bearer", "basic", "api_key", "none"
     auth_value: str = ""  # token, "user:pass", api key, etc.
+    # register 签发回调凭据（DEC-⑬ 外部回调入口鉴权化，明文只回注册响应一次）
+    callback_token: str = ""
     headers: dict = field(default_factory=dict)
     capabilities: list[str] = field(default_factory=list)
     description: str = ""
@@ -276,6 +280,18 @@ def _gate_webhook(webhook_id: str, tenant_id: str) -> WebhookEndpoint:
     return wh
 
 
+def _callback_token_ok(row_token: str, presented: str) -> bool:
+    """外部回调凭据单一判定口（DEC-⑬ heartbeat/incoming 共用，禁两套判法漂移）。
+
+    claim 回调身份必须持 register 签发 callback_token（F3b-④/⑤ 同族
+    "claim 注册身份必须持 register 签发 token"），hmac 恒时比较；
+    缺失/空白/不匹配一律 False（fail-closed：无证可验=拒）。
+    """
+    if not row_token or not presented:
+        return False
+    return hmac.compare_digest(str(row_token), str(presented))
+
+
 async def _send_with_retry(
     url: str,
     payload: dict,
@@ -346,12 +362,14 @@ async def register_webhook(req: WebhookRegisterRequest, authorization: str | Non
     """Register a new webhook endpoint (incoming or outgoing)."""
     identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
     webhook_id = f"wh-{uuid.uuid4().hex[:8]}"
+    callback_token = uuid.uuid4().hex  # register 签发回调凭据（DEC-⑬，F3b-④ 同款）
     wh = WebhookEndpoint(
         webhook_id=webhook_id,
         name=req.name,
         direction=WebhookDirection(req.direction),
         url=req.url,
         secret=req.secret,
+        callback_token=callback_token,
         headers=req.headers,
         payload_parser=req.payload_parser,
         description=req.description,
@@ -372,6 +390,8 @@ async def register_webhook(req: WebhookRegisterRequest, authorization: str | Non
         "name": wh.name,
         "direction": wh.direction.value,
         "incoming_url": f"/api/link/webhooks/{webhook_id}/incoming",
+        # 明文只回这一次（list 面不回吐，F3b-④ register token 同款）
+        "callback_token": wh.callback_token,
     }
 
 
@@ -420,14 +440,26 @@ async def receive_incoming_webhook(webhook_id: str, request: Request):
     if len(body) > MAX_PAYLOAD_BYTES:
         raise HTTPException(413, "Payload too large (max 1 MB)")
 
-    # Verify signature if secret is configured
+    # 凭据证明先于一切副作用（DEC-⑬ 外部回调入口鉴权化统一拍板取 B）：
+    # claim 回调身份必须持 register 签发凭据——X-Callback-Token=注册签发
+    # callback_token（F3b-④/⑤ 同族），或既有 HMAC 签名=wh.secret 等效证明
+    # （发方持 secret 即持证，签名面契约零变化）；两证全无/全错=401 零副作用
+    # （trigger_count 不动、零事件落库）。fail-closed：无证可验=拒（register
+    # 恒签发 token=生产不可达"无证"行）。
+    sig = request.headers.get("X-Signature", "") or request.headers.get("X-Hub-Signature-256", "")
+    sig_ok = False
     if wh.secret:
-        sig = request.headers.get("X-Signature", "") or request.headers.get(
-            "X-Hub-Signature-256", ""
-        )
         expected = f"sha256={hmac.new(wh.secret.encode(), body, hashlib.sha256).hexdigest()}"
-        if not hmac.compare_digest(sig, expected):
-            raise HTTPException(401, "Invalid signature")
+        sig_ok = hmac.compare_digest(sig, expected)
+    presented = (request.headers.get("X-Callback-Token") or "").strip()
+    if not (sig_ok or _callback_token_ok(wh.callback_token, presented)):
+        if not sig and not presented:
+            raise HTTPException(
+                401,
+                "callback credential missing: present X-Callback-Token "
+                "(or X-Signature when secret is configured)",
+            )
+        raise HTTPException(401, "invalid callback credential")
 
     # Parse payload
     try:
@@ -531,6 +563,7 @@ async def register_system(req: SystemRegisterRequest, authorization: str | None 
     """Register an external system for bidirectional integration."""
     identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
     system_id = f"sys-{uuid.uuid4().hex[:8]}"
+    callback_token = uuid.uuid4().hex  # register 签发回调凭据（DEC-⑬，F3b-④ 同款）
     sys = ExternalSystem(
         system_id=system_id,
         name=req.name,
@@ -538,6 +571,7 @@ async def register_system(req: SystemRegisterRequest, authorization: str | None 
         url=req.url,
         auth_type=req.auth_type,
         auth_value=req.auth_value,
+        callback_token=callback_token,
         headers=req.headers,
         capabilities=req.capabilities,
         description=req.description,
@@ -559,6 +593,8 @@ async def register_system(req: SystemRegisterRequest, authorization: str | None 
         "type": sys.type,
         "status": sys.status,
         "capabilities": sys.capabilities,
+        # 明文只回这一次（list 面不回吐，F3b-④ register token 同款）
+        "callback_token": sys.callback_token,
     }
 
 
@@ -593,14 +629,26 @@ async def list_systems(authorization: str | None = Header(None)):
 
 
 @router.post("/systems/{system_id}/heartbeat")
-async def system_heartbeat(system_id: str):
+async def system_heartbeat(system_id: str, request: Request):
     """
     Record a heartbeat from an external system.
     If no heartbeat received within 2× the interval, system is marked offline.
+
+    DEC-⑬ 外部回调入口鉴权化：claim 心跳身份必须持 register 签发
+    callback_token（X-Callback-Token），缺/错=401 零副作用。
     """
     sys = _systems.get(system_id)
     if not sys:
         raise HTTPException(404, "External system not found")
+
+    # 凭据证明先于一切副作用（DEC-⑬）：修前任意人可伪造心跳把 offline 顶成
+    # online、抬 heartbeat_count——缺/错凭据 401（last_heartbeat/heartbeat_count/
+    # status 一字不动）；fail-closed 同 incoming。
+    presented = (request.headers.get("X-Callback-Token") or "").strip()
+    if not _callback_token_ok(sys.callback_token, presented):
+        if not presented:
+            raise HTTPException(401, "callback credential missing: present X-Callback-Token")
+        raise HTTPException(401, "invalid callback credential")
 
     sys.last_heartbeat = time.time()
     sys.heartbeat_count += 1

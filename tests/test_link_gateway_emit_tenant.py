@@ -402,20 +402,31 @@ def test_ws_dual_tenant(env):
 
 def test_incoming_webhook_boundary_default(env):
     """receive_incoming_webhook=外部 webhook 入口：垃圾 Authorization 不得被
-    bind_identity 语义 401 打断（外部 webhook 真回归面），事件照旧 'default' 兜底。"""
+    bind_identity 语义 401 打断（外部 webhook 真回归面），事件照旧 'default' 兜底。
+    DEC-⑬ 鉴权化后 401 只来自回调凭据轴（X-Callback-Token），与 Authorization
+    两条身份轴互不顶替（F3b-⑤ 同款）——持证时垃圾 Authorization 照收。"""
     r = _register_webhook(env, name="wh-in")
     assert r.status_code == 200
     wh_id = r.json()["webhook_id"]
+    tok = r.json()["callback_token"]
     r = env["client"].post(
         f"/api/link/webhooks/{wh_id}/incoming",
         json={"data": "third-party"},
-        headers={"Authorization": "Bearer garbage-not-a-jwt"},
+        headers={"Authorization": "Bearer garbage-not-a-jwt", "X-Callback-Token": tok},
     )
-    assert r.status_code == 200  # 非 401（边界锁死）
+    assert r.status_code == 200  # 非 401（Authorization 不打断，边界锁死）
     rows = _rows(env["tl_db"])
     types = {rw["event_type"] for rw in rows}
     assert "webhook_received" in types and "webhook_ingress" in types
     assert all(rw["tenant_id"] == "default" for rw in rows)
+    # 401 只来自回调凭据轴：垃圾 Authorization 单独（无证）=401，真因非 Authorization
+    r2 = env["client"].post(
+        f"/api/link/webhooks/{wh_id}/incoming",
+        json={"data": "x"},
+        headers={"Authorization": "Bearer garbage-not-a-jwt"},
+    )
+    assert r2.status_code == 401
+    assert "X-Callback-Token" in r2.json()["detail"]
 
 
 # ── 静态接线普查（写了≠接线了）──────────────────────────────────────

@@ -18,6 +18,7 @@
 | ⑩ | builtin starter 目录跨租户共享语义 | DEC-⑦-③ 边界② | 取 B（共享只读目录）——**已按建议默认 B 先行执行 2026-10-15（DEC-⑩-①）** | ~~"⑩取B"~~ 已落，异议回「⑩改A」（revert 回严格过滤）即改道 |
 | ⑪ | 执行结果回传幂等键语义（DEC-⑤-① 重复回传不幂等） | DEC-⑤-① 诚实边界 | 取 B（显式 result_id 优先+证据指纹派生兜底）——**已按建议默认 B 先行执行 2026-10-15（DEC-⑤-①b）** | ~~"⑪取B"~~ 已落，异议回「⑪改C」（只认显式 key）/「⑪改A」（revert）即改道 |
 | ⑫ | /api/link/events·/stats·/health 路由遮蔽收口·归属 | 1c-③ 边界② | 取 B（归属拆分：OpenLink 留 canonical、gateway 三读面迁 /api/link/gateway/*）——**已按建议默认 B 先行执行 2026-10-16（F3b-⑨b-③-1c-⑥）** | ~~"⑫取B"~~ 已落，异议回「⑫改A」（回遮蔽死路由态）/「⑫改C」（三路径归 gateway）即改道 |
+| ⑬ | 外部回调入口鉴权化统一拍板（heartbeat+incoming） | 1c-④ 边界锁死自注留档 | 取 B（register 签发回调 token，回调必须持证）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑬）** | ~~"⑬取B"~~ 已落，异议回「⑬改A」（revert 回 id 即凭证）/「⑬改C」（改全局共享 secret）即改道 |
 
 ---
 
@@ -145,6 +146,16 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：C 需改 admin-ui link 页+event_stream 轮询+7 处健康监测等 10+ 活消费方（破坏活契约）；A 留死路由=静默断点持续（违背「写了≠接线了」）；B 零活契约变化（OpenLink 面逐键不变）+死面复活（1c-③ 租户过滤面生产可达）+两组件同名读面各归各（gateway 面自带 component 判别键）。
 - 建议：**B**。
 - 诚实边界：①若有外部调用方曾按 /api/link/events 期望 gateway 数据——修前该期望本就落空（拿到的是 OpenLink 数据），迁移后须改调 /api/link/gateway/*；本仓内调用点已全数随更新（3 测试文件 11 处+2 e2e 探针）②遮蔽根因以「路径拆分」收口而非「同名合并」——两读面数据面不同（connector 事件 vs 集成事件）不可合并③FastAPI 新版 include_router 惰性挂载（app.routes 只见 _IncludedRouter 不展开子路由）——重复路由检测真源=router.routes 自身 route 表（测试注释记档，防未来误用 app.routes 写出空转断言：首版断言在旧代码 3P 假绿被控制组逼出后修真）。
+
+## ⑬ 外部回调入口鉴权化统一拍板（heartbeat+incoming，1c-④ 边界锁死自注留档）
+
+**状态：已按建议默认 B 先行执行（2026-10-16 DEC-⑬）**——依据：F3b-⑨b-③-1c-⑥ 周期日志候选首件「外部回调入口鉴权化统一拍板（heartbeat+incoming，可按 DEC 自决先例下拍）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑫ 自决先例。实现=**register 签发回调 token**（F3b-④/⑤「claim 注册身份必须持 register 签发 token」同族同哲学）：WebhookEndpoint/ExternalSystem 增 callback_token（register 签发 uuid4().hex，明文只回注册响应一次、list 面不回吐）+ `_callback_token_ok` 单一判定口（hmac 恒时比较，heartbeat/incoming 两入口共用禁两套判法漂移）——两回调入口必须持 **X-Callback-Token**（incoming 另收既有 wh.secret HMAC 签名为等效证明：发方持 secret 即持证，签名面契约零变化）；缺/错=401 零副作用（trigger_count/事件落库/heartbeat_count/status 一字不动）；fail-closed 无证可验=拒（register 恒签发 token=生产不可达"无证"行）。既有契约零变化（测试锁死）：缺行 404/disabled 503/413 载荷上限、回调入口非用户 JWT 轴（1a 语义延续：跨租户用户 JWT + 行 token 照收、垃圾 Authorization 不打断——401 只来自回调凭据轴，与 Authorization 两条身份轴互不顶替 F3b-⑤ 同款）。**若拍板回一句即改道：「⑬改A」=revert 本拍（回 id 即凭证无鉴权）、「⑬改C」=改全局共享 secret（env 配置所有回调共用）**。
+
+**现状**（1c-④ 边界锁死测试自注「鉴权化需与 incoming 入口统一拍板，1a 待拍面同类」+ live 修前实证 200）：两外部回调入口零鉴权——`POST /api/link/webhooks/{webhook_id}/incoming`（webhook_id 即凭证，secret HMAC 可选=不配即全开）、`POST /api/link/systems/{system_id}/heartbeat`（system_id 即凭证）——任意人可伪造心跳把 offline 顶成 online/抬 heartbeat_count、伪造 webhook 注入事件/改 trigger_count。
+- 选项：**A** 维持（id 即凭证）/ **B** register 签发回调 token（回调必须持证）/ **C** 全局共享 secret（env 配置，所有回调共用一把）。
+- 权衡：A=伪造面持续（心跳/webhook 均可被任意人伪造，1c-④ 已实证跨租户借用面）；C 共享秘密一漏全漏、且与 register 签发语义不同族（F3b-④/⑤ 哲学=每注册身份各持各证）；B 与 agent 注册 token 同族，每注册行独立凭据、泄漏半径单行、发方凭据=注册时交付（与 webhook secret/agent token 交付方式同款）。
+- 建议：**B**。
+- 诚实边界：①凭据是 bearer 型共享秘密非请求签名（incoming 的 HMAC 签名面保留为等效证明，未强制签名）②token 无轮换/撤销端点（重注册=新行新 token；_webhooks/_systems 内存注册表重启即清=行本身无持久撤销面）③admin-ui 不展示 callback_token（API 注册响应可见，UI 面另拍）④link.py receive_webhook（OpenLink connector webhook 入口）不在本拍——① 1a 已拍 A（外部 webhook 绝不因 Authorization 401，契约锁死），如需同款 token 化另拍⑤soma_connector 心跳（X-Component-Token）/agent 心跳（X-Agent-Token）各有自有凭据轴不在本拍⑥404/503 契约先于凭据检查=入口存在性可被探知（既有契约不变优先，如需凭据前置另拍）。
 
 ## 附：锚点核验
 

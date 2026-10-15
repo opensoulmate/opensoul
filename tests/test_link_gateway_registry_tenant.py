@@ -354,14 +354,17 @@ def test_broadcast_only_foreign_targets_400(env):
 
 
 def test_heartbeat_external_entry_untouched(env):
-    """heartbeat=外部系统回调入口（system_id 即凭证），跨租户心跳照收=既有语义
-    字节不动（鉴权化需与 incoming 入口统一拍板，1a 待拍面同类）。"""
+    """heartbeat=外部系统回调入口：跨租户心跳照收=既有语义（回调入口非用户
+    JWT 轴）字节不动；鉴权化已按 DEC-⑬ 与 incoming 统一拍板收口（行 token
+    必持，缺/错 401 见 test_link_gateway_callback_auth）。"""
     lg = env["lg"]
     sys_row = _seed_system(lg, "sys-a1", "tenant-a")
+    sys_row.callback_token = "tok-a1"
     _mk_user(env, "u-a", "tenant-a")
     ub = _mk_user(env, "u-b", "tenant-b")
     r = env["client"].post(
-        "/api/link/systems/sys-a1/heartbeat", headers=_auth(_ent_token(ub, "u-b"))
+        "/api/link/systems/sys-a1/heartbeat",
+        headers={**_auth(_ent_token(ub, "u-b")), "X-Callback-Token": "tok-a1"},
     )
     assert r.status_code == 200
     assert sys_row.heartbeat_count == 1
@@ -369,11 +372,16 @@ def test_heartbeat_external_entry_untouched(env):
 
 
 def test_incoming_external_entry_untouched(env):
-    """incoming=外部 webhook 回调入口（webhook_id 即凭证），匿名跨租户照收=
-    1a 待拍面边界锁死（行为字节不动）。"""
+    """incoming=外部 webhook 回调入口：匿名照收（事件 'default' 兜底=1a 语义）
+    行为不变；鉴权化已按 DEC-⑬ 统一拍板收口（X-Callback-Token 必持）。"""
     lg = env["lg"]
-    _seed_webhook(lg, "wh-a1", "tenant-a")
-    r = env["client"].post("/api/link/webhooks/wh-a1/incoming", json={"data": "probe"})
+    wh = _seed_webhook(lg, "wh-a1", "tenant-a")
+    wh.callback_token = "tok-a1"
+    r = env["client"].post(
+        "/api/link/webhooks/wh-a1/incoming",
+        json={"data": "probe"},
+        headers={"X-Callback-Token": "tok-a1"},
+    )
     assert r.status_code == 200
     assert r.json()["received"] is True
 
