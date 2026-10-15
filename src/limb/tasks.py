@@ -92,6 +92,7 @@ class TaskTemplate:
     actions: list[Action]
     variables: list[dict] = field(default_factory=list)  # [{name, description, default}]
     tags: list[str] = field(default_factory=list)
+    tenant_id: str = "default"
 
     def to_dict(self) -> dict:
         return {
@@ -103,6 +104,9 @@ class TaskTemplate:
             "actions": [a.to_dict() for a in self.actions],
             "variables": self.variables,
             "tags": self.tags,
+            # 加性键（DEC-⑦-㉒）：行归属可观测（归一值）+builtin 可见性标记
+            "tenant_id": template_row_tenant(self),
+            "builtin": is_builtin(self.template_id),
         }
 
 
@@ -222,3 +226,34 @@ BUILTIN_TEMPLATES = [
         tags=["screenshot", "capture"],
     ),
 ]
+
+
+class TemplateTenantDenied(Exception):
+    """跨租户/builtin 写拒（行归属不可被跨租户改写、共享≠可写）：API 层映射 HTTP 403。"""
+
+
+BUILTIN_TEMPLATE_IDS = frozenset(t.template_id for t in BUILTIN_TEMPLATES)
+
+
+def is_builtin(template_id: str) -> bool:
+    """builtin 判法单一源（DEC-⑦-㉒）：种子 starter 目录=BUILTIN_TEMPLATES 派生
+    id 集（禁第二套名单手抄漂移 F4b-㉗ 纪律），=系统共享只读目录（DEC-⑩-① 语义）。"""
+    return template_id in BUILTIN_TEMPLATE_IDS
+
+
+def template_row_tenant(raw: object) -> str:
+    """行租户键单一判法（DEC-⑦-㉒；DEC-⑦-② message_row_tenant / ⑦-㉑ echo
+    template_row_tenant 同款语义：自带键缺失/空白→'default' 兜底，键派生故障
+    绝不吃掉落库）。raw=TaskTemplate 行对象（读侧过滤）或原始租户值（写侧落行），
+    写读同一判法禁双源漂移（F4b-㉗ 纪律）。"""
+    if hasattr(raw, "tenant_id"):
+        raw = getattr(raw, "tenant_id")
+    return str(raw or "").strip() or "default"
+
+
+def template_visible_to(template: TaskTemplate, tenant_id: str) -> bool:
+    """读面可见性单一判法（DEC-⑦-㉒；DEC-⑩-① builtin 跨租户共享语义）：builtin=
+    系统共享只读目录对全租户可见，其余行恒按行租户键（内部走 template_row_tenant
+    单一判法禁另发明 F4b-㉗ 纪律）。写面不适用本判法——delete/创建覆盖恒按行归属
+    +builtin 保护（共享≠可写），写读判法刻意分开两个单一源（echo/gene 同款）。"""
+    return is_builtin(template.template_id) or template_row_tenant(template) == tenant_id

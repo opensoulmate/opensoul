@@ -17,7 +17,17 @@ from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum
 
-from src.limb.tasks import BUILTIN_TEMPLATES, Action, ActionType, StepResult, TaskTemplate
+from src.limb.tasks import (
+    BUILTIN_TEMPLATES,
+    Action,
+    ActionType,
+    StepResult,
+    TaskTemplate,
+    TemplateTenantDenied,
+    is_builtin,
+    template_row_tenant,
+    template_visible_to,
+)
 
 
 class TaskStatus(StrEnum):
@@ -149,9 +159,15 @@ class RPAExecutor:
         template_id: str,
         variables: dict | None = None,
         name: str = "",
+        tenant_id: str | None = None,
     ) -> RPATask | None:
-        """Create a task from a template with variable substitution."""
-        template = self._templates.get(template_id)
+        """Create a task from a template with variable substitution.
+
+        tenant_id=显式租户=实例化源读归属闸（DEC-⑦-㉒，get_template 单点闸覆盖：
+        跨租户回 None 与 not-found 同契约，零副作用禁拿他人模板内容跑实例化，
+        ⑦-⑫ instantiate 源读闸同款）；None=系统视图字节不变。
+        """
+        template = self.get_template(template_id, tenant_id=tenant_id)
         if not template:
             return None
 
@@ -344,17 +360,46 @@ class RPAExecutor:
 
     # ── Templates ──────────────────────────────────────────
 
-    def list_templates(self, category: str | None = None) -> list[dict]:
+    def list_templates(
+        self, category: str | None = None, tenant_id: str | None = None
+    ) -> list[dict]:
+        """tenant_id=显式租户=恒按 template_visible_to 过滤（builtin 共享目录全
+        租户可见+其余行按行归属，DEC-⑩-①）；None=系统视图字节不变。"""
         templates = list(self._templates.values())
+        if tenant_id is not None:
+            templates = [t for t in templates if template_visible_to(t, tenant_id)]
         if category:
             templates = [t for t in templates if t.category == category]
         return [t.to_dict() for t in templates]
 
-    def get_template(self, template_id: str) -> TaskTemplate | None:
-        return self._templates.get(template_id)
+    def get_template(self, template_id: str, tenant_id: str | None = None) -> TaskTemplate | None:
+        """by-ID 读唯一入口=归属闸单点（DEC-⑦-㉒，⑦-⑩ get_meta / ⑦-⑫
+        get_template 单点闸同款）：显式租户=跨租户回 None 与 not-found 同契约
+        不差分泄露行存在性（③c-1 纪律），builtin=系统共享目录全租户可见
+        （DEC-⑩-①）；None=系统视图字节不变。实例化源读（create_from_template）
+        全经本口=未来消费方无法绕闸。"""
+        template = self._templates.get(template_id)
+        if template is None:
+            return None
+        if tenant_id is not None and not template_visible_to(template, tenant_id):
+            return None
+        return template
 
-    def create_template(self, data: dict) -> TaskTemplate:
+    def create_template(self, data: dict, tenant_id: str | None = None) -> TaskTemplate:
+        """写点行归属（DEC-⑦-㉒）：tenant_id 落行（缺失/空白→'default' 兜底=
+        系统写方，键派生故障绝不吃掉落库）。写面语义：builtin=系统共享只读目录
+        （共享≠可写，⑦-㉑ builtin 改/删恒拒同款）；行归属不可被跨租户改写
+        （⑦-③ 创建劫持闸同款）——显式租户覆盖他租户行=TemplateTenantDenied
+        行零改写；None=系统视图字节不变。"""
         template_id = data.get("template_id") or f"tpl-{uuid.uuid4().hex[:8]}"
+        existing = self._templates.get(template_id)
+        if existing is not None:
+            if is_builtin(template_id):
+                raise TemplateTenantDenied(f"built-in template '{template_id}' is shared read-only")
+            if tenant_id is not None and template_row_tenant(existing) != template_row_tenant(
+                tenant_id
+            ):
+                raise TemplateTenantDenied(f"template '{template_id}' belongs to another tenant")
         actions = [Action.from_dict(a) for a in data.get("actions", [])]
         template = TaskTemplate(
             template_id=template_id,
@@ -364,20 +409,33 @@ class RPAExecutor:
             actions=actions,
             variables=data.get("variables", []),
             tags=data.get("tags", []),
+            tenant_id=template_row_tenant(tenant_id),
         )
         self._templates[template_id] = template
         return template
 
-    def delete_template(self, template_id: str) -> bool:
-        # Don't allow deleting built-in templates
-        for tpl in BUILTIN_TEMPLATES:
-            if tpl.template_id == template_id:
-                return False
+    def delete_template(self, template_id: str, tenant_id: str | None = None) -> bool:
+        # Don't allow deleting built-in templates（builtin 判法单一源 is_builtin
+        # 禁第二套名单手抄 F4b-㉗；builtin 恒拒=共享≠可写 DEC-⑦-㉑ 同款）
+        if is_builtin(template_id):
+            return False
+        existing = self._templates.get(template_id)
+        if existing is None:
+            return False
+        # 写面恒按行归属（template_visible_to 不适用——共享≠可写）；跨租户=与
+        # not-found 同契约（同回 False→同响应）不差分泄露行存在性（③c-1 纪律）
+        if tenant_id is not None and template_row_tenant(existing) != template_row_tenant(
+            tenant_id
+        ):
+            return False
         return self._templates.pop(template_id, None) is not None
 
     # ── Stats ──────────────────────────────────────────────
 
-    def stats(self) -> dict:
+    def stats(self, tenant_id: str | None = None) -> dict:
+        """tenant_id=显式租户=templates 计数恒按可见集聚合（禁泄露全局分布，
+        ⑦-⑭⑰ 同款）；其余键为任务面计数（任务面无行租户轴不在本拍）；
+        None=系统视图字节不变（/health 监控面）。"""
         with self._lock:
             by_status = {}
             for t in self._tasks.values():
@@ -393,7 +451,11 @@ class RPAExecutor:
                 "success_rate": round(self._total_succeeded / self._total_executed * 100, 1)
                 if self._total_executed
                 else 0,
-                "templates": len(self._templates),
+                "templates": sum(
+                    1
+                    for t in self._templates.values()
+                    if tenant_id is None or template_visible_to(t, tenant_id)
+                ),
             }
 
     def get_history(self, limit: int = 50) -> list[dict]:
