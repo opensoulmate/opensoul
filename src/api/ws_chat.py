@@ -463,6 +463,25 @@ async def _get_learned_advisory(text: str) -> tuple[str, bool]:
         return "", True
 
 
+async def _get_episodic_advisory(text: str) -> tuple[str, bool]:
+    """DEC-③-① episodic 回流对话面：相似失败经验 error → 发给 agent 的软建议块。
+
+    取数口=src.learn.experience.episodic_advisory_for 单一源（与任务执行/chat
+    面同口径，pending-decisions ③ 试水形态 B：仅 failure 行 error 字段）。
+    返回 (建议块, 取数是否失败)。episodic 层故障不阻断对话但必须可见
+    （F2b-②"禁静默"纪律：episodic-context-error 日志 + info 帧）；
+    无命中=("", False) 零注入（宁缺勿滥）。
+    """
+    try:
+        from src.learn.experience import episodic_advisory_for
+
+        block, _n = await episodic_advisory_for(text)
+        return block, False
+    except Exception as exc:
+        logger.warning("episodic-context-error: %s", exc)
+        return "", True
+
+
 @router.websocket("/chat")
 async def chat_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time chat.
@@ -473,7 +492,7 @@ async def chat_websocket(websocket: WebSocket):
     - Server sends: {"type": "chunk", "text": "..."} (streaming chunks)
     - Server sends: {"type": "agent_event", "event": "output|stderr|tool_call|heartbeat", "text": "..."}
       (agent_proxy 模式过程可见事件；stdout 响应行走 chunk，其余事件走此帧不混入响应文本)
-    - Server sends: {"type": "info", "message": "..."} (过程提示，如学习建议获取失败；未知 type 客户端忽略即兼容)
+    - Server sends: {"type": "info", "message": "..."} (过程提示，如学习建议/失败教训获取失败；未知 type 客户端忽略即兼容)
     - Server sends: {"type": "done", "text": "...", "source": "..."} (final response)
     - Server sends: {"type": "error", "message": "..."} (on error)
     """
@@ -527,8 +546,19 @@ async def chat_websocket(websocket: WebSocket):
                     await websocket.send_json(
                         {"type": "info", "message": "学习建议获取失败（不影响对话）。"}
                     )
+                # DEC-③-① episodic 回流对话面：相似失败经验 error → 软建议块
+                # （与 F2b-②b learned 块并列的第二条回流轴，仅 failure 行 error
+                # 字段；取数用原文防 learned 块污染相关度输入；无关=零注入。
+                # 取数失败可见不阻断：info 帧 + episodic-context-error 日志）
+                episodic, epi_failed = await _get_episodic_advisory(text)
+                if epi_failed:
+                    await websocket.send_json(
+                        {"type": "info", "message": "历史失败教训获取失败（不影响对话）。"}
+                    )
                 if advisory:
                     text = f"{text}\n\n{advisory}"
+                if episodic:
+                    text = f"{text}\n\n{episodic}"
 
                 # Signal thinking
                 await websocket.send_json({"type": "thinking"})

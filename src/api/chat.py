@@ -96,6 +96,25 @@ async def _get_learned_advisory(query: str) -> tuple[str, bool]:
         return "", True
 
 
+async def _get_episodic_advisory(query: str) -> tuple[str, bool]:
+    """DEC-③-① episodic 回流对话面：相似失败经验 error → prompt 软建议块。
+
+    取数口=src.learn.experience.episodic_advisory_for 单一源（与任务执行面
+    同口径，pending-decisions ③ 试水形态 B：仅 failure 行 error 字段）。
+    返回 (建议块, 取数是否失败)。episodic 层故障不阻断 chat 但必须可见
+    （F2b-②"禁静默"纪律：episodic-context-error 日志 + 调用方可见面）；
+    无命中=("", False) 零注入（宁缺勿滥）。
+    """
+    try:
+        from src.learn.experience import episodic_advisory_for
+
+        block, _n = await episodic_advisory_for(query)
+        return block, False
+    except Exception as exc:
+        logger.warning("episodic-context-error: %s", exc)
+        return "", True
+
+
 def _redact_outbound(text: str) -> str:
     """P0-4: 出站脱敏，防止API key/token泄漏到LLM provider。失败时原样返回。"""
     try:
@@ -293,11 +312,12 @@ def _attribute_chat_context(
     session_key: str = "",
     actual_prompt_tokens: int | None = None,
     advisory: str = "",
+    episodic: str = "",
 ) -> dict | None:
     """P1: 上下文逐项token归因（claude-code SDKContextUsage移植）。
 
     每次LLM请求把上下文构成逐项记账：hippo记忆逐条 / RAG chunk逐块 / 用户问题
-    （F2b-②b 起含学习建议块逐行），并按模型窗口计算percentage与over_limit（hard_limit vs compaction_window）。
+    （F2b-②b 起含学习建议块逐行、DEC-③-① 起含失败教训块逐行），并按模型窗口计算percentage与over_limit（hard_limit vs compaction_window）。
     观测性旁路：任何失败只debug日志，不阻断chat主路径（fail-safe）。
     """
     try:
@@ -321,6 +341,17 @@ def _attribute_chat_context(
                         kind=KIND_IMPROVEMENT,
                         name=f"learned_advisory[{i}]",
                         source="learn.long_term",
+                        tokens=estimate_tokens(ln),
+                    )
+                )
+        if episodic:
+            epi_lines = [ln for ln in episodic.splitlines() if ln.strip()]
+            for i, ln in enumerate(epi_lines):
+                items.append(
+                    ContextItem(
+                        kind=KIND_IMPROVEMENT,
+                        name=f"episodic_advisory[{i}]",
+                        source="learn.experience",
                         tokens=estimate_tokens(ln),
                     )
                 )
@@ -400,8 +431,15 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
         advisory, adv_failed = await _get_learned_advisory(question)
         if adv_failed:
             yield f"data: {json.dumps({'type': 'info', 'content': '学习建议获取失败（不影响回答）。'})}\n\n"
+        # DEC-③-① episodic 回流对话面：相似失败经验 error → prompt 软建议块
+        # （与 F2b-②b learned 块并列的第二条回流轴，仅 failure 行 error 字段；
+        # 无关=零注入。取数故障可见不阻断：info 帧 + episodic-context-error 日志）
+        episodic, epi_failed = await _get_episodic_advisory(question)
+        if epi_failed:
+            yield f"data: {json.dumps({'type': 'info', 'content': '历史失败教训获取失败（不影响回答）。'})}\n\n"
+        advisory_all = "\n\n".join(x for x in (advisory, episodic) if x)
         # 降级：不返回error，继续走LLM路径（模型路由接线：按mode选target+备target重试）
-        prompt = f"{question}\n\n{advisory}" if advisory else question
+        prompt = f"{question}\n\n{advisory_all}" if advisory_all else question
         attempts, _meta = _route_llm_targets(question)
         # P0-6决策延迟回填：路由决策先记pending，真实结果在本请求内回填同一条目
         dec_id = _route_decision_begin(question, _meta, attempts)
@@ -414,6 +452,7 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
             provider=(attempts[0].get("provider", "") if attempts else ""),
             session_key=str(user_id),
             advisory=advisory,
+            episodic=episodic,
         )
         attempt_log: list = []
         last_exc: Exception | None = None
@@ -493,13 +532,18 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
     advisory, adv_failed = await _get_learned_advisory(question)
     if adv_failed:
         yield f"data: {json.dumps({'type': 'info', 'content': '学习建议获取失败（不影响回答）。'})}\n\n"
+    # DEC-③-① episodic 回流对话面：与 learned 块并列的第二条回流轴（无关=零注入）
+    episodic, epi_failed = await _get_episodic_advisory(question)
+    if epi_failed:
+        yield f"data: {json.dumps({'type': 'info', 'content': '历史失败教训获取失败（不影响回答）。'})}\n\n"
+    advisory_all = "\n\n".join(x for x in (advisory, episodic) if x)
 
     # Send sources first
     yield f"data: {json.dumps({'type': 'sources', 'content': sources})}\n\n"
 
     prompt = f"""Based on the following context, answer the question. If the context doesn't contain enough information, say so.
 {memory_ctx}
-{advisory}
+{advisory_all}
 Context:
 {context}
 
@@ -523,6 +567,7 @@ Answer:"""
         provider=(attempts[0].get("provider", "") if attempts else ""),
         session_key=str(user_id),
         advisory=advisory,
+        episodic=episodic,
     )
     attempt_log = []
     last_exc: Exception | None = None
@@ -626,10 +671,14 @@ async def chat(req: ChatRequest, user_id: UUID):
     # F2b-②b 推荐回流对话面：learned_patterns → prompt 软建议块（无关=零注入；
     # 取数失败=learned-context-error 日志可见，非流式无 SSE 面故只有日志可见面）
     advisory, _adv_failed = await _get_learned_advisory(req.question)
+    # DEC-③-① episodic 回流对话面：与 learned 块并列的第二条回流轴（无关=零注入；
+    # 取数失败=episodic-context-error 日志可见，非流式无 SSE 面故只有日志可见面）
+    episodic, _epi_failed = await _get_episodic_advisory(req.question)
+    advisory_all = "\n\n".join(x for x in (advisory, episodic) if x)
 
     prompt = f"""Based on the following context, answer the question. If the context doesn't contain enough information, say so.
 {memory_ctx}
-{advisory}
+{advisory_all}
 Context:
 {context}
 
@@ -689,6 +738,7 @@ Answer:"""
         session_key=str(user_id),
         actual_prompt_tokens=nonstream_usage,
         advisory=advisory,
+        episodic=episodic,
     )
     if answer is None:
         return {
