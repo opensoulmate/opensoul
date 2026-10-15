@@ -42,14 +42,16 @@ class TemplateInstantiateRequest(BaseModel):
 
 
 @router.post("/tasks")
-async def create_task(req: TaskCreateRequest):
+async def create_task(req: TaskCreateRequest, authorization: str | None = Header(default=None)):
     """Create a new RPA task."""
+    identity = bind_identity(authorization)
     task = executor.create_task(
         name=req.name,
         actions=req.actions,
         priority=req.priority,
         tags=req.tags,
         variables=req.variables,
+        tenant_id=identity.tenant_id,
     )
     return task.to_dict()
 
@@ -58,41 +60,47 @@ async def create_task(req: TaskCreateRequest):
 async def list_tasks(
     status: str = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
+    authorization: str | None = Header(default=None),
 ):
     """List RPA tasks."""
-    return {"tasks": executor.list_tasks(status=status, limit=limit)}
+    identity = bind_identity(authorization)
+    return {"tasks": executor.list_tasks(status=status, limit=limit, tenant_id=identity.tenant_id)}
 
 
 @router.get("/tasks/{task_id}")
-async def get_task(task_id: str):
+async def get_task(task_id: str, authorization: str | None = Header(default=None)):
     """Get task details with results."""
-    task = executor.get_task(task_id)
+    identity = bind_identity(authorization)
+    task = executor.get_task(task_id, tenant_id=identity.tenant_id)
     if not task:
         raise HTTPException(404, "Task not found")
     return task.to_dict(include_results=True)
 
 
 @router.post("/tasks/{task_id}/execute")
-async def execute_task(task_id: str):
+async def execute_task(task_id: str, authorization: str | None = Header(default=None)):
     """Execute a queued task."""
-    task = executor.execute_task(task_id)
+    identity = bind_identity(authorization)
+    task = executor.execute_task(task_id, tenant_id=identity.tenant_id)
     if not task:
         raise HTTPException(404, "Task not found")
     return task.to_dict(include_results=True)
 
 
 @router.post("/tasks/{task_id}/cancel")
-async def cancel_task(task_id: str):
+async def cancel_task(task_id: str, authorization: str | None = Header(default=None)):
     """Cancel a task."""
-    if not executor.cancel_task(task_id):
+    identity = bind_identity(authorization)
+    if not executor.cancel_task(task_id, tenant_id=identity.tenant_id):
         raise HTTPException(400, "Task cannot be cancelled")
     return {"message": "cancelled", "task_id": task_id}
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str):
+async def delete_task(task_id: str, authorization: str | None = Header(default=None)):
     """Delete a task."""
-    if not executor.delete_task(task_id):
+    identity = bind_identity(authorization)
+    if not executor.delete_task(task_id, tenant_id=identity.tenant_id):
         raise HTTPException(400, "Cannot delete running task")
     return {"message": "deleted", "task_id": task_id}
 
@@ -162,9 +170,12 @@ async def instantiate_template(
 
 
 @router.get("/history")
-async def get_history(limit: int = Query(default=50)):
+async def get_history(
+    limit: int = Query(default=50), authorization: str | None = Header(default=None)
+):
     """Get task execution history."""
-    return {"history": executor.get_history(limit=limit)}
+    identity = bind_identity(authorization)
+    return {"history": executor.get_history(limit=limit, tenant_id=identity.tenant_id)}
 
 
 # ── Health / Stats ─────────────────────────────────────────

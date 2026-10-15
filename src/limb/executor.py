@@ -45,6 +45,19 @@ class TaskPriority(int, Enum):
     CRITICAL = 10
 
 
+def task_row_tenant(raw: object) -> str:
+    """任务行租户键单一判法（DEC-⑦-㉔；DEC-⑦-② message_row_tenant /
+    ⑦-㉒ template_row_tenant / ⑦-⑳ v2_event_row_tenant 同款语义：自带键
+    缺失/空白→'default' 兜底，键派生故障绝不吃掉落库）。raw=RPATask 行对象
+    （读侧过滤）/历史 dict 行/原始租户值（写侧落行）三形同收，写读同一判法
+    禁双源漂移（F4b-㉗ 纪律）。"""
+    if isinstance(raw, dict):
+        raw = raw.get("tenant_id")
+    elif hasattr(raw, "tenant_id"):
+        raw = getattr(raw, "tenant_id")
+    return str(raw or "").strip() or "default"
+
+
 @dataclass
 class RPATask:
     """A single RPA task with ordered steps."""
@@ -62,6 +75,7 @@ class RPATask:
     error: str = ""
     tags: list[str] = field(default_factory=list)
     variables: dict = field(default_factory=dict)
+    tenant_id: str = "default"
 
     @property
     def progress(self) -> float:
@@ -91,6 +105,8 @@ class RPATask:
             "completed_at": self.completed_at,
             "error": self.error,
             "tags": self.tags,
+            # 加性键（DEC-⑦-㉔）：行归属可观测（归一值）
+            "tenant_id": task_row_tenant(self),
         }
         if include_results:
             d["results"] = [
@@ -120,6 +136,8 @@ class RPAExecutor:
         self._max_concurrent = max_concurrent
         self._max_history = max_history
         self._running_count = 0
+        self._tenant_running: dict[str, int] = {}
+        self._tenant_counters: dict[str, dict[str, int]] = {}
         self._total_executed = 0
         self._total_succeeded = 0
         self._total_failed = 0
@@ -137,8 +155,13 @@ class RPAExecutor:
         priority: int = TaskPriority.NORMAL,
         tags: list[str] | None = None,
         variables: dict | None = None,
+        tenant_id: str | None = None,
     ) -> RPATask:
-        """Create a new RPA task."""
+        """Create a new RPA task.
+
+        写点行归属（DEC-⑦-㉔）：tenant_id 落行（缺失/空白→'default' 兜底，
+        键派生故障绝不吃掉落库）。
+        """
         task_id = f"task-{uuid.uuid4().hex[:8]}"
         parsed_actions = [Action.from_dict(a) for a in actions]
         task = RPATask(
@@ -148,6 +171,7 @@ class RPAExecutor:
             priority=priority,
             tags=tags or [],
             variables=variables or {},
+            tenant_id=task_row_tenant(tenant_id),
         )
         with self._lock:
             self._tasks[task_id] = task
@@ -166,6 +190,9 @@ class RPAExecutor:
         tenant_id=显式租户=实例化源读归属闸（DEC-⑦-㉒，get_template 单点闸覆盖：
         跨租户回 None 与 not-found 同契约，零副作用禁拿他人模板内容跑实例化，
         ⑦-⑫ instantiate 源读闸同款）；None=系统视图字节不变。
+
+        双职（DEC-⑦-㉔，⑦-⑫ clone 双职同款）：同一 tenant_id 同时=源读闸
+        +产物任务行归属（闭 ⑦-㉒ 留档「instantiate 产物任务无行键」）。
         """
         template = self.get_template(template_id, tenant_id=tenant_id)
         if not template:
@@ -194,26 +221,50 @@ class RPAExecutor:
             actions=[a.to_dict() for a in actions],
             tags=template.tags,
             variables=vars,
+            tenant_id=tenant_id,
         )
 
-    def get_task(self, task_id: str) -> RPATask | None:
-        return self._tasks.get(task_id)
+    def _gate_task(self, task_id: str, tenant_id: str | None = None) -> RPATask | None:
+        """by-ID 归属闸单点（DEC-⑦-㉔；⑦-⑫ get_template / ⑦-㉒
+        by-ID 闸同款）：显式租户=跨租户回 None 与 not-found 同契约不差分泄露
+        行存在性（③c-1 纪律），闸前置（跨租户恒 None 禁状态差分泄露）；
+        None=系统视图字节不变。get/execute/cancel/delete 四 by-ID 面全经
+        本口=未来消费方无法绕闸。"""
+        task = self._tasks.get(task_id)
+        if task is None:
+            return None
+        if tenant_id is not None and task_row_tenant(task) != task_row_tenant(tenant_id):
+            return None
+        return task
+
+    def get_task(self, task_id: str, tenant_id: str | None = None) -> RPATask | None:
+        return self._gate_task(task_id, tenant_id)
 
     def list_tasks(
         self,
         status: str | None = None,
         limit: int = 50,
+        tenant_id: str | None = None,
     ) -> list[dict]:
+        """tenant_id=显式租户=恒按 task_row_tenant 过滤（过滤先于截断防跨租户
+        行占名额，⑦-⑬ 同款）；None=系统视图字节不变。
+        """
         with self._lock:
             tasks = list(self._tasks.values())
+        if tenant_id is not None:
+            key = task_row_tenant(tenant_id)
+            tasks = [t for t in tasks if task_row_tenant(t) == key]
         if status:
             tasks = [t for t in tasks if t.status.value == status]
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         return [t.to_dict() for t in tasks[:limit]]
 
-    def cancel_task(self, task_id: str) -> bool:
+    def cancel_task(self, task_id: str, tenant_id: str | None = None) -> bool:
+        """by-ID 写面归属闸（DEC-⑦-㉔）：跨租户=与缺行同一 False 同契约
+        不差分泄露行存在性（③c-1），闸前置禁状态差分；None=系统视图字节不变。
+        """
         with self._lock:
-            task = self._tasks.get(task_id)
+            task = self._gate_task(task_id, tenant_id)
             if not task or task.status not in (TaskStatus.QUEUED, TaskStatus.RUNNING):
                 return False
             task.status = TaskStatus.CANCELLED
@@ -222,9 +273,13 @@ class RPAExecutor:
                 self._queue.remove(task_id)
         return True
 
-    def delete_task(self, task_id: str) -> bool:
+    def delete_task(self, task_id: str, tenant_id: str | None = None) -> bool:
+        """by-ID 写面归属闸（DEC-⑦-㉔）：跨租户=与缺行同一 False 同契约
+        （同响应）不差分泄露行存在性+行零破坏（③b-3）；闸前置禁状态差分；
+        None=系统视图字节不变。
+        """
         with self._lock:
-            task = self._tasks.get(task_id)
+            task = self._gate_task(task_id, tenant_id)
             if not task:
                 return False
             if task.status == TaskStatus.RUNNING:
@@ -234,9 +289,13 @@ class RPAExecutor:
 
     # ── Execution ──────────────────────────────────────────
 
-    def execute_task(self, task_id: str) -> RPATask | None:
-        """Execute a task synchronously (for demo/testing)."""
-        task = self._tasks.get(task_id)
+    def execute_task(self, task_id: str, tenant_id: str | None = None) -> RPATask | None:
+        """Execute a task synchronously (for demo/testing).
+
+        by-ID 写面归属闸（DEC-⑦-㉔）：跨租户=与缺行同一 None 同契约
+        （API 404），零副作用禁拿他人任务跑执行；None=系统视图字节不变。
+        """
+        task = self._gate_task(task_id, tenant_id)
         if not task:
             return None
         if task.status != TaskStatus.QUEUED:
@@ -245,6 +304,8 @@ class RPAExecutor:
         task.status = TaskStatus.RUNNING
         task.started_at = time.time()
         self._running_count += 1
+        run_key = task_row_tenant(task)
+        self._tenant_running[run_key] = self._tenant_running.get(run_key, 0) + 1
 
         try:
             for i, action in enumerate(task.actions):
@@ -279,6 +340,7 @@ class RPAExecutor:
 
         finally:
             self._running_count -= 1
+            self._tenant_running[run_key] = self._tenant_running.get(run_key, 0) - 1
 
         return task
 
@@ -433,10 +495,41 @@ class RPAExecutor:
     # ── Stats ──────────────────────────────────────────────
 
     def stats(self, tenant_id: str | None = None) -> dict:
-        """tenant_id=显式租户=templates 计数恒按可见集聚合（禁泄露全局分布，
-        ⑦-⑭⑰ 同款）；其余键为任务面计数（任务面无行租户轴不在本拍）；
+        """tenant_id=显式租户=任务面计数键恒按行租户键聚合作用域（DEC-⑦-㉔
+        收口 ⑦-㉒ 留档「stats 任务计数键不随租户」：total_tasks/by_status/
+        queue_length 按行键过滤、running/total_* 按分租户桶计数，禁泄露全局
+        分布 ⑦-⑭⑰ 同款）+templates 计数恒按可见集聚合（⑦-㉒）；
         None=系统视图字节不变（/health 监控面）。"""
         with self._lock:
+            if tenant_id is not None:
+                key = task_row_tenant(tenant_id)
+                visible = [t for t in self._tasks.values() if task_row_tenant(t) == key]
+                by_status = {}
+                for t in visible:
+                    by_status[t.status.value] = by_status.get(t.status.value, 0) + 1
+                bucket = self._tenant_counters.get(
+                    key, {"executed": 0, "succeeded": 0, "failed": 0}
+                )
+                executed = bucket["executed"]
+                return {
+                    "total_tasks": len(visible),
+                    "by_status": by_status,
+                    "queue_length": sum(
+                        1
+                        for tid in self._queue
+                        if (t := self._tasks.get(tid)) is not None and task_row_tenant(t) == key
+                    ),
+                    "running": self._tenant_running.get(key, 0),
+                    "total_executed": executed,
+                    "total_succeeded": bucket["succeeded"],
+                    "total_failed": bucket["failed"],
+                    "success_rate": round(bucket["succeeded"] / executed * 100, 1)
+                    if executed
+                    else 0,
+                    "templates": sum(
+                        1 for t in self._templates.values() if template_visible_to(t, key)
+                    ),
+                }
             by_status = {}
             for t in self._tasks.values():
                 by_status[t.status.value] = by_status.get(t.status.value, 0) + 1
@@ -458,13 +551,27 @@ class RPAExecutor:
                 ),
             }
 
-    def get_history(self, limit: int = 50) -> list[dict]:
-        return self._history[-limit:]
+    def get_history(self, limit: int = 50, tenant_id: str | None = None) -> list[dict]:
+        """tenant_id=显式租户=恒按行租户键过滤（过滤先于截断防跨租户行占
+        名额，⑦-⑬ 同款；行键=任务行继承 ③b-2）；None=系统视图字节不变。
+        """
+        rows = self._history
+        if tenant_id is not None:
+            key = task_row_tenant(tenant_id)
+            rows = [h for h in rows if task_row_tenant(h) == key]
+        return rows[-limit:]
 
     # ── Helpers ────────────────────────────────────────────
 
     def _record_history(self, task: RPATask):
         self._total_executed += 1
+        key = task_row_tenant(task)
+        bucket = self._tenant_counters.setdefault(key, {"executed": 0, "succeeded": 0, "failed": 0})
+        bucket["executed"] += 1
+        if task.status == TaskStatus.COMPLETED:
+            bucket["succeeded"] += 1
+        elif task.status == TaskStatus.FAILED:
+            bucket["failed"] += 1
         self._history.append(
             {
                 "task_id": task.task_id,
@@ -474,6 +581,8 @@ class RPAExecutor:
                 "elapsed_seconds": task.elapsed_seconds,
                 "error": task.error,
                 "completed_at": task.completed_at,
+                # 行键=任务行继承（DEC-⑦-㉔，③b-2 父行继承）
+                "tenant_id": key,
             }
         )
         if len(self._history) > self._max_history:

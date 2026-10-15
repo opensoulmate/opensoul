@@ -378,7 +378,17 @@ class TestStatsScope:
         assert sb["templates"] == 5
         assert anon["templates"] == 4  # 仅 builtin（default 无自定义行）
         assert health["templates"] == 6  # /health 系统视图=全量（4 builtin + 2）
-        assert sa["total_tasks"] == health["total_tasks"]  # 任务面键不在本拍不随租户
+        # 契约随更新（DEC-⑦-㉔）：stats 任务面键随租户作用域（修前断言=任务面键
+        # 不随租户恒等于全局，⑦-㉒ 留档「任务面键不在本拍」收口，断言意图=钉死
+        # stats 任务面键行为，随本拍契约更新）
+        env["eng"].create_task(name="t-a", actions=[], tenant_id="tenant-a")
+        sa = c.get("/api/limb/stats", headers=_token(env["user_a"])).json()
+        sb = c.get("/api/limb/stats", headers=_token(env["user_b"])).json()
+        health = c.get("/api/limb/health").json()
+        assert sa["total_tasks"] == 1  # A 只见己行
+        assert sb["total_tasks"] == 0  # B 不见面
+        assert health["total_tasks"] == 1  # /health 系统视图=全量
+        assert sa["templates"] == 5 and health["templates"] == 6  # templates 作用域零回归
 
 
 # ── ⑨ 鉴权（坏 token 401 先于读/写零副作用） ─────────────────────
