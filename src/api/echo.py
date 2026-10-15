@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.echo.dispatcher import Channel, MessageDispatcher
-from src.echo.templates import TemplateEngine
+from src.echo.templates import TemplateEngine, is_builtin, template_row_tenant
 from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
 
@@ -280,8 +280,9 @@ async def echo_stats(
     无 tenant_id 自报参数），total/sent/failed 恒按行租户键聚合（匿名='default' 面=
     DEC-⑦-⑬ 同款，key=message_row_tenant 单一源）；坏 token 401 先于读取（F3b-⑤
     身份证明先于一切）。dispatcher.stats(tenant_id=None) 系统视图仍为 /health 监控面
-    与内部调用面保留（字节不变）。templates 聚合无行租户键（echo 模板存储层无轴）
-    保持全局如实（诚实边界）；tenant_id 加性键=聚合作用域可观测（⑦-③④⑤ 同款）。
+    与内部调用面保留（字节不变）。templates 聚合随 DEC-⑦-㉑ 加轴（收口 ⑦-⑭
+    诚实边界「echo 模板存储层无轴」：恒按 template_visible_to 可见集聚合）；
+    tenant_id 加性键=聚合作用域可观测（⑦-③④⑤ 同款）。
     """
     identity = bind_identity(authorization)
     return {
@@ -289,7 +290,7 @@ async def echo_stats(
         "component": "OpenEcho",
         "tenant_id": identity.tenant_id,
         **dispatcher.stats(tenant_id=identity.tenant_id),
-        "templates": template_engine.stats(),
+        "templates": template_engine.stats(tenant_id=identity.tenant_id),
     }
 
 
@@ -357,15 +358,25 @@ class TemplateSendRequest(BaseModel):
 
 
 @router.get("/templates")
-async def list_templates(category: str = Query(default=None)):
-    """List all message templates."""
-    return {"templates": template_engine.list_templates(category=category)}
+async def list_templates(
+    category: str = Query(default=None),
+    authorization: str | None = Header(None),
+):
+    """List all message templates.（DEC-⑦-㉑ 读面加轴：tenant 从认证身份派生
+    禁自报，恒按可见集过滤（builtin 共享目录+行归属，⑩-① 语义）；坏 token
+    401 先于读取 F3b-⑤。）"""
+    identity = bind_identity(authorization)
+    return {
+        "templates": template_engine.list_templates(category=category, tenant_id=identity.tenant_id)
+    }
 
 
 @router.get("/templates/{template_id}")
-async def get_template(template_id: str):
-    """Get a specific template."""
-    tpl = template_engine.get(template_id)
+async def get_template(template_id: str, authorization: str | None = Header(None)):
+    """Get a specific template.（DEC-⑦-㉑ by-ID 归属闸：跨租户 404 与 not-found
+    同契约不差分泄露行存在性（③c-1）；坏 token 401 先于读取 F3b-⑤。）"""
+    identity = bind_identity(authorization)
+    tpl = template_engine.get(template_id, tenant_id=identity.tenant_id)
     if not tpl:
         raise HTTPException(404, "Template not found")
     return {
@@ -381,6 +392,8 @@ async def get_template(template_id: str):
         "usage_count": tpl.usage_count,
         "last_used": tpl.last_used,
         "created_at": tpl.created_at,
+        "tenant_id": template_row_tenant(tpl),
+        "builtin": is_builtin(tpl.template_id),
     }
 
 
@@ -399,6 +412,7 @@ async def create_template(
         channel=req.channel,
         category=req.category,
         icon=req.icon,
+        tenant_id=identity.tenant_id,
     )
     push_event(
         {
@@ -418,18 +432,26 @@ async def create_template(
 
 
 @router.patch("/templates/{template_id}")
-async def update_template(template_id: str, req: TemplateUpdateRequest):
-    """Update an existing template."""
+async def update_template(
+    template_id: str,
+    req: TemplateUpdateRequest,
+    authorization: str | None = Header(None),
+):
+    """Update an existing template.（DEC-⑦-㉑ 写面归属闸：跨租户/builtin 404 与
+    not-found 同契约零改写；坏 token 401 先于写 F3b-⑤。）"""
+    identity = bind_identity(authorization)
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
-    if not template_engine.update(template_id, **updates):
+    if not template_engine.update(template_id, tenant_id=identity.tenant_id, **updates):
         raise HTTPException(404, "Template not found or no changes")
     return {"message": "updated", "template_id": template_id}
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(template_id: str):
-    """Delete a template."""
-    if not template_engine.delete(template_id):
+async def delete_template(template_id: str, authorization: str | None = Header(None)):
+    """Delete a template.（DEC-⑦-㉑ 写面归属闸：跨租户 404 零副作用与 not-found
+    同契约、builtin 恒拒（共享≠可写）；坏 token 401 先于写 F3b-⑤。）"""
+    identity = bind_identity(authorization)
+    if not template_engine.delete(template_id, tenant_id=identity.tenant_id):
         raise HTTPException(404, "Template not found")
     return {"message": "deleted", "template_id": template_id}
 
@@ -442,7 +464,9 @@ async def send_from_template(
 ):
     """Render a template and send the message immediately."""
     identity = bind_identity(authorization)
-    rendered = template_engine.render_template(template_id, req.variables)
+    rendered = template_engine.render_template(
+        template_id, req.variables, tenant_id=identity.tenant_id
+    )
     if not rendered:
         raise HTTPException(404, "Template not found")
 
@@ -491,9 +515,16 @@ async def send_from_template(
 
 
 @router.post("/templates/{template_id}/preview")
-async def preview_template(template_id: str, req: TemplateSendRequest):
-    """Preview a rendered template without sending."""
-    rendered = template_engine.render_template(template_id, req.variables)
+async def preview_template(
+    template_id: str,
+    req: TemplateSendRequest,
+    authorization: str | None = Header(None),
+):
+    """Preview a rendered template without sending.（DEC-⑦-㉑ 读可见性闸同 get。）"""
+    identity = bind_identity(authorization)
+    rendered = template_engine.render_template(
+        template_id, req.variables, tenant_id=identity.tenant_id
+    )
     if not rendered:
         raise HTTPException(404, "Template not found")
     return rendered

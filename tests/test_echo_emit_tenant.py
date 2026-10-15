@@ -147,9 +147,11 @@ def _create_tpl(c, headers=None):
     )
 
 
-def _send_tpl(c, echo_api, headers=None):
+def _send_tpl(c, echo_api, headers=None, create_tenant=""):
+    """建模板（写点带租户键）再发送。DEC-⑦-㉑ 后跨租户不可渲染，事件归属测试
+    的模板须归发送者租户（断言意图=事件行随发送者身份派生，零丢失）。"""
     tpl = echo_api.template_engine.create(
-        name="t", title_template="Hello", content_template="World"
+        name="t", title_template="Hello", content_template="World", tenant_id=create_tenant
     )
     return c.post(
         f"/api/echo/templates/{tpl.template_id}/send",
@@ -185,7 +187,7 @@ class TestEchoEmitTenantWiring:
     def test_template_sent_event_row_tenant_derived(self, echo_env):
         c, tl_db, ent_db, _es, echo_api, _tp = echo_env
         uid = _insert_ent_user(ent_db, "carol", "tenant-echo-c")
-        r = _send_tpl(c, echo_api, _auth(_ent_token(uid, "carol")))
+        r = _send_tpl(c, echo_api, _auth(_ent_token(uid, "carol")), create_tenant="tenant-echo-c")
         assert r.status_code == 200
         rows = [x for x in _rows(tl_db) if x["event_type"] == "template_sent"]
         assert len(rows) == 1
@@ -208,7 +210,12 @@ class TestEchoEmitTenantWiring:
         time.sleep(0.02)  # evt id 含 ms 时间戳，防同 ms 去重假阴（②b-1 坑延续）
         assert _send(c, _auth(_ent_token(uid_a, "u_a"))).status_code == 200
         time.sleep(0.02)
-        assert _send_tpl(c, echo_api, _auth(_ent_token(uid_b, "u_b"))).status_code == 200
+        assert (
+            _send_tpl(
+                c, echo_api, _auth(_ent_token(uid_b, "u_b")), create_tenant="tenant-dual-b"
+            ).status_code
+            == 200
+        )
         rows = _rows(tl_db)
         ms = [x for x in rows if x["event_type"] == "message_sent"]
         ts = [x for x in rows if x["event_type"] == "template_sent"]
@@ -280,16 +287,20 @@ class TestEchoEmitTenantInvariants:
         assert rows[0]["tenant_id"] == "default"
 
     def test_all_three_call_sites_wired(self):
-        """静态接线普查：6 handler 全带派生（send/broadcast/send_from_template/
+        """静态接线普查：11 handler 全带派生（send/broadcast/send_from_template/
         create_template/message_history——⑦-⑬ /history 读面收编/echo_stats——
-        ⑦-⑭ 聚合面收编）、8 注入点全传租户键（3 push_event+3 消息行+1 history
-        读面+1 stats 聚合面，DEC-⑦-② 消息行归属）（写了必须接线）。"""
+        ⑦-⑭ 聚合面收编 + 模板面 5：list/get/update/delete/preview——DEC-⑦-㉑）、
+        16 注入点全传租户键（3 push_event+3 消息行+1 history 读面+1 dispatcher
+        stats 聚合面+8 模板面（create 落行/list/get/update/delete/render×2/
+        template stats 聚合），DEC-⑦-② 消息行归属）（写了必须接线）。"""
         pipe = chr(124)
         src = (Path(__file__).parent.parent / "src" / "api" / "echo.py").read_text(encoding="utf-8")
-        assert src.count("identity = bind_identity(authorization)") == 6
-        assert src.count("tenant_id=identity.tenant_id") == 8
+        assert src.count("identity = bind_identity(authorization)") == 11
+        assert src.count("tenant_id=identity.tenant_id") == 16
         assert src.count("push_event(") == 3
-        assert src.count("authorization: str " + pipe + " None = Header(None)") == 6  # 竖线完好探针
+        assert (
+            src.count("authorization: str " + pipe + " None = Header(None)") == 11
+        )  # 竖线完好探针
         starts = []
         i = 0
         while True:
