@@ -988,14 +988,31 @@ class TemplateEngine:
             for t in sorted(templates, key=lambda x: x.created_at, reverse=True)
         ]
 
-    def get_template(self, template_id: str) -> Template | None:
+    def get_template(self, template_id: str, tenant_id: str | None = None) -> Template | None:
+        """by-ID 唯一行读取口归属闸（DEC-⑦-⑫）：显式租户=跨租户回 None 与
+        not-found 同契约不差分泄露行存在性（③c-1 纪律，delete 归属闸同款判法
+        template_row_tenant）；tenant_id=None=系统视图字节不变。get/instantiate/
+        export/clone 源读全经本口（⑦-⑩ file_store get_meta 单点闸覆盖全读面
+        同款）。"""
         with self._lock:
-            return self._templates.get(template_id)
+            t = self._templates.get(template_id)
+        if t is not None and tenant_id is not None and template_row_tenant(t) != tenant_id:
+            return None
+        return t
 
-    def instantiate(self, template_id: str, variable_values: dict | None = None) -> dict:
-        """Create an instance from a template with variable substitution."""
-        with self._lock:
-            template = self._templates.get(template_id)
+    def instantiate(
+        self,
+        template_id: str,
+        variable_values: dict | None = None,
+        tenant_id: str | None = None,
+    ) -> dict:
+        """Create an instance from a template with variable substitution.
+
+        tenant_id=显式租户=源读归属闸（DEC-⑦-⑫）：跨租户与 not-found 同契约
+        （回同一 error 文案不差分泄露），且零副作用——usage_count 不写他人行；
+        None=系统视图字节不变。
+        """
+        template = self.get_template(template_id, tenant_id=tenant_id)
         if not template:
             return {"success": False, "error": f"Template '{template_id}' not found"}
 
@@ -1138,10 +1155,13 @@ class TemplateEngine:
             for t in sorted(results, key=lambda x: x.created_at, reverse=True)
         ]
 
-    def export_template(self, template_id: str) -> dict | None:
-        """Export a template as a JSON-serializable dict."""
-        with self._lock:
-            t = self._templates.get(template_id)
+    def export_template(self, template_id: str, tenant_id: str | None = None) -> dict | None:
+        """Export a template as a JSON-serializable dict.
+
+        tenant_id=显式租户=源读归属闸（DEC-⑦-⑫，get_template 单点闸覆盖）：
+        跨租户与 not-found 同契约回 None；None=系统视图字节不变。
+        """
+        t = self.get_template(template_id, tenant_id=tenant_id)
         if not t:
             return None
         return {
@@ -1244,9 +1264,11 @@ class TemplateEngine:
         """Clone a template with optional overrides. Returns (template, message).
 
         行租户键=克隆者派生租户（DEC-⑦-③）：新行归属克隆者，不继承源行键。
+        tenant_id 双职（DEC-⑦-⑫ 源读归属闸，⑦-⑪ fork 源闸同款）：源读可见性
+        +新行归属——跨租户源=与缺源同一文案同契约（零克隆副作用，禁拿他人内容
+        跑克隆）；None=系统视图字节不变。
         """
-        with self._lock:
-            source = self._templates.get(source_id)
+        source = self.get_template(source_id, tenant_id=tenant_id)
         if not source:
             return None, f"Source template '{source_id}' not found"
 

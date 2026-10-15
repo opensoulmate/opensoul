@@ -210,7 +210,10 @@ def test_create_bad_token_401_zero_row(env):
 
 def test_import_and_clone_attribution(env):
     """POST /api/gene/import 与 /clone：行归属=身份派生租户；clone 新行归属
-    克隆者不继承源行键。"""
+    克隆者不继承源行键（DEC-⑦-⑫ 契约随更新：clone 源读归属闸后跨租户源克隆
+    拒收=与缺源同契约，原「B 克隆 A」例改跨租户拒收+同租户克隆+系统视图不继承
+    三向断言——「克隆归克隆者不继承源行键」断言意图零丢失，收口的是跨租户源
+    可读面=⑦-③ 边界⑤ 留档件）。"""
     from src.gene.templates import template_row_tenant
 
     client, eng = env["client"], env["engine"]
@@ -223,13 +226,30 @@ def test_import_and_clone_attribution(env):
     assert r.json()["imported"] == 1
     assert template_row_tenant(eng.get_template("probe-imp")) == "tenant-a"
 
-    r2 = client.post(
+    # 跨租户源克隆=拒收（DEC-⑦-⑫ 源读归属闸，与缺源同契约）+零副作用
+    bad = client.post(
         "/api/gene/templates/probe-imp/clone",
         json={"new_id": "probe-imp-copy"},
         headers=_token(env["user_tenant_b"]),
     )
+    assert bad.status_code == 400
+    assert bad.json()["detail"] == "Source template 'probe-imp' not found"
+    assert eng.get_template("probe-imp-copy") is None  # 零克隆副作用
+    assert template_row_tenant(eng.get_template("probe-imp")) == "tenant-a"  # 源行键不动
+
+    # 同租户克隆：新行归属克隆者
+    r2 = client.post(
+        "/api/gene/templates/probe-imp/clone",
+        json={"new_id": "probe-imp-copy"},
+        headers=_token(env["user_tenant_a"]),
+    )
     assert r2.status_code == 200
-    assert template_row_tenant(eng.get_template("probe-imp-copy")) == "tenant-b"
+    assert template_row_tenant(eng.get_template("probe-imp-copy")) == "tenant-a"
+
+    # 系统视图克隆（tenant_id=None 既有语义）：新行 'default' 不继承源行键
+    sysc, _ = eng.clone_template("probe-imp", new_id="probe-imp-sys")
+    assert sysc is not None
+    assert template_row_tenant(eng.get_template("probe-imp-sys")) == "default"
     assert template_row_tenant(eng.get_template("probe-imp")) == "tenant-a"  # 源行键不动
 
 

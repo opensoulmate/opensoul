@@ -83,9 +83,14 @@ async def list_tags():
 
 
 @router.get("/templates/{template_id}")
-async def get_template(template_id: str):
-    """Get template details."""
-    t = engine.get_template(template_id)
+async def get_template(
+    template_id: str,
+    authorization: str | None = Header(None),
+):
+    """Get template details.（DEC-⑦-⑫：by-ID 读面归属闸——tenant 由
+    bind_identity 派生禁自报，跨租户与 not-found 同契约 404 不差分泄露。）"""
+    identity = bind_identity(authorization, "", "")
+    t = engine.get_template(template_id, tenant_id=identity.tenant_id)
     if not t:
         raise HTTPException(404, "Template not found")
     return {
@@ -142,9 +147,15 @@ async def delete_template(template_id: str, authorization: str | None = Header(N
 
 
 @router.post("/templates/{template_id}/instantiate")
-async def instantiate_template(template_id: str, req: InstantiateRequest):
-    """Create an instance from a template with variable substitution."""
-    result = engine.instantiate(template_id, req.variables)
+async def instantiate_template(
+    template_id: str,
+    req: InstantiateRequest,
+    authorization: str | None = Header(None),
+):
+    """Create an instance from a template with variable substitution.
+    （DEC-⑦-⑫：源读归属闸——跨租户与 not-found 同契约 404，零副作用。）"""
+    identity = bind_identity(authorization, "", "")
+    result = engine.instantiate(template_id, req.variables, tenant_id=identity.tenant_id)
     if not result["success"]:
         raise HTTPException(404, result["error"])
     return result
@@ -154,9 +165,14 @@ async def instantiate_template(template_id: str, req: InstantiateRequest):
 
 
 @router.get("/templates/{template_id}/export")
-async def export_template(template_id: str):
-    """Export a single template as JSON."""
-    data = engine.export_template(template_id)
+async def export_template(
+    template_id: str,
+    authorization: str | None = Header(None),
+):
+    """Export a single template as JSON.（DEC-⑦-⑫：源读归属闸——get_template
+    单点闸覆盖，跨租户与 not-found 同契约 404。）"""
+    identity = bind_identity(authorization, "", "")
+    data = engine.export_template(template_id, tenant_id=identity.tenant_id)
     if not data:
         raise HTTPException(404, "Template not found")
     return {"template": data, "format": "opensoul-gene-v1"}
