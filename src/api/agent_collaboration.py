@@ -1,5 +1,6 @@
 """Agent Collaboration Protocol — registration, messaging, handoff, WebSocket channel."""
 
+import asyncio
 import hmac
 import json
 import logging
@@ -32,6 +33,10 @@ DB_PATH = Path(
 )
 
 DEFAULT_TENANT = "default"
+
+# 连接期凭据周期重校验节拍（F3b-④b；link_gateway 1c-⑤ 同族语义）：
+# 每拍重跑 _agent_token_verdict 单一判定口。
+TOKEN_REVALIDATE_INTERVAL_S = 60.0
 
 # In-memory WebSocket connection registry
 _ws_connections: dict[str, WebSocket] = {}
@@ -524,6 +529,46 @@ def _agent_token_verdict(conn: sqlite3.Connection, agent_id: str, provided: str)
     return bool(provided) and hmac.compare_digest(provided, expected)
 
 
+async def _agent_ws_token_watchdog(websocket: WebSocket, agent_id: str, token: str):
+    """WS 连接期凭据周期重校验（F3b-④b；link_gateway 1c-⑤ 同族语义）。
+
+    每 TOKEN_REVALIDATE_INTERVAL_S 秒重跑 _agent_token_verdict（单一判定口，
+    与握手/HTTP /message 同源禁第二套判法）：
+    - verdict False（claim 注册身份但凭据缺失/不匹配——token 轮换、重注册换
+      token、连接后才注册的顶号重开面）→ close 1008（与握手拒绝同语义），禁
+      持失效凭据继续收发/顶号；看门狗自行清理 _ws_connections（仅当映射的连接
+      是自己——禁误删同名新连接的投递注册），finally 幂等兜底。
+    - verdict True（凭据仍有效）/None（未注册语义，②d 契约）→ 继续服务；
+      行删除=降级未注册语义（同 ②d 轴），重注册后持旧凭据连接随 False 关闭。
+    - 判定口瞬断（DB 故障）→ 记录可见后继续，故障≠失效凭据禁误杀。
+    诚实边界：失效与关闭之间 <= TOKEN_REVALIDATE_INTERVAL_S 秒有界滞后（周期
+    重校验语义固有）；连接期内凭据字符串不变（重校验的是同一凭据当前效力）。
+    """
+    while True:
+        await asyncio.sleep(TOKEN_REVALIDATE_INTERVAL_S)
+        try:
+            conn = _get_db()
+            try:
+                verdict = _agent_token_verdict(conn, agent_id, token)
+            finally:
+                conn.close()
+        except Exception as exc:
+            logger.warning("agent WS token revalidation probe failed for %s: %s", agent_id, exc)
+            continue
+        if verdict is False:
+            logger.warning(
+                "Agent WS closed by revalidation: invalid/missing token for registered agent %s",
+                agent_id,
+            )
+            try:
+                await websocket.close(code=1008, reason="invalid agent token")
+            except Exception:
+                pass
+            if _ws_connections.get(agent_id) is websocket:
+                del _ws_connections[agent_id]
+            return
+
+
 @router.websocket("/ws/agent/{agent_id}")
 async def agent_ws(websocket: WebSocket, agent_id: str):
     """Real-time bidirectional channel for an agent.
@@ -554,6 +599,12 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
     )
     conn.commit()
     conn.close()
+
+    # 连接期凭据周期重校验（F3b-④b）：所有连接起看门狗——claim 注册身份的
+    # 凭据失效（轮换/重注册/连接后才注册）=close 1008；凭据有效/未注册继续服务。
+    watchdog = asyncio.create_task(
+        _agent_ws_token_watchdog(websocket, agent_id, _ws_presented_token(websocket))
+    )
 
     try:
         while True:
@@ -641,7 +692,11 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
     except Exception as exc:
         logger.warning("Agent WS error for %s: %s", agent_id, exc)
     finally:
-        _ws_connections.pop(agent_id, None)
+        watchdog.cancel()  # 连接结束收看门狗，禁悬挂任务（清理幂等兜底在下方 pop）
+        # 清理只摘自己的注册（F3b-④b）：同名后连接已在 _ws_connections 时，
+        # 先连接离场禁误删后连接的投递注册。
+        if _ws_connections.get(agent_id) is websocket:
+            del _ws_connections[agent_id]
         offline_now = datetime.now(UTC).isoformat()
         conn = _get_db()
         conn.execute(
