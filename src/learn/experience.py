@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import re
 import time
 from datetime import datetime
 from typing import Optional
@@ -336,3 +337,71 @@ class ExperienceMemory:
             "success_count": success,
             "failure_count": total - success,
         }
+
+
+# ── DEC-③-① episodic 失败经验软注入（pending-decisions ③ 试水形态 B） ──────
+# 与 F2b-② learned 块（learned_patterns 语义层）并列的第二条回流轴：episodic
+# 原始经验（experiences）失败行 error 字段 → 执行 prompt 软建议块。C 形态
+# （fix 真数据注入）解锁条件=DEC-⑤-① 仓外回传方产生真数据，届时另拍。
+
+_EPISODIC_ERROR_MAX_CHARS = 200
+
+
+def _episodic_error_text(exp) -> str:
+    """failure 行 error 字段归一文本（非 failure/空 error 返回空串=不入块）。
+
+    试水形态 B 纪律：仅 error 字段进 prompt（intent_summary/fix 等一律不注入，
+    测试锁死）；换行折叠为单行、超长截断如实带省略号。
+    """
+    if getattr(exp, "outcome", None) != "failure":
+        return ""
+    err = (getattr(exp, "error", None) or "").strip()
+    if not err:
+        return ""
+    err = re.sub(r"\s+", " ", err)
+    if len(err) > _EPISODIC_ERROR_MAX_CHARS:
+        err = err[:_EPISODIC_ERROR_MAX_CHARS] + "…"
+    return err
+
+
+def format_episodic_advisory_for_prompt(items, top_k: int = 3) -> str:
+    """失败经验 → 执行 prompt 软建议块（纯函数；无可用项返回空串=零注入）。
+
+    软建议块语义沿用 F2b-② format_advisory_for_prompt：免责块头（仅供参考、
+    与任务要求冲突时以任务要求为准）+ 软上下文不覆盖任务本体。
+    """
+    errs = [t for t in (_episodic_error_text(e) for e in (items or [])) if t][:top_k]
+    if not errs:
+        return ""
+    lines = [f"{i}. {err}" for i, err in enumerate(errs, 1)]
+    return (
+        "【历史失败提醒】来自本系统执行类似任务的历史失败教训，仅供参考；"
+        "与任务要求冲突时以任务要求为准：\n" + "\n".join(lines)
+    )
+
+
+async def episodic_advisory_for(goal: str, db_pool=None, top_k: int = 3) -> tuple[str, int]:
+    """episodic 回流通用取数口（DEC-③-①）：相似失败经验 error → 建议块。
+
+    与 learned_advisory_for（F2b-②b）同款纪律：口径 ADVISORY_SCOPE 单一源
+    （学习产出在哪写就去哪读）、异常如实抛禁静默吞（降级可见性归消费方）。
+    检索走 ExperienceMemory.get_similar_failures（F4b-㉚ 相关度真源：字面相关
+    门槛 0.2，无关零注入宁缺勿滥）。返回 (建议块, 条数)，无命中=("", 0)。
+    """
+    if db_pool is None:
+        from src.database.postgres import db_pool as _db_pool
+
+        db_pool = _db_pool
+    from src.learn.long_term import ADVISORY_SCOPE
+
+    memory = ExperienceMemory(db_pool, *ADVISORY_SCOPE)
+    intent = Intent(
+        user_prompt=goal,
+        target_files=[],
+        modify_scope="single_file",
+        goal="modify",
+        change_size="small",
+    )
+    failures = await memory.get_similar_failures(intent)
+    items = [f for f in failures if _episodic_error_text(f)][:top_k]
+    return format_episodic_advisory_for_prompt(items, top_k=top_k), len(items)

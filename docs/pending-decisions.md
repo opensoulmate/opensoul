@@ -8,7 +8,7 @@
 |---|------|------|------|-----------|
 | ① | F3b-⑨b-③ 非 HTTP 面事件身份归属（9 调用点，4 子面；1c 已落 2026-10-14=F3b-⑨b-③-1c） | F3b-⑨ 审计③ | 1a/1b/1d 取"系统事件"——**已按建议默认 A 先行执行 2026-10-14（F3b-⑨b-③-1abd）** | ~~"①aA ①bA ①dA"~~ 已落，异议回「①a改B ①b改B ①d改B」即改道 |
 | ② | wakeup executor 认证轴 | F3b-⑧c 边界① | 取 C（executor=系统组件按行租户点火）——**已按建议默认 C 先行执行 2026-10-14（F3b-⑧c-①）** | ~~"②取C"~~ 已落，异议回「②改A」即 revert |
-| ③ | episodic 经验 prompt 回流消费点 | F4b-㉜ 边界③ | 维持不注入，等⑤落地 | "③维持" |
+| ③ | episodic 经验 prompt 回流消费点 | F4b-㉜ 边界③ | 维持不注入，等⑤落地——**⑤ 接收面已落（2026-10-15 DEC-⑤-①）而 fix 真数据 0 行（仓外回传方未接入），已按 doc 明示试水形态 B 先行执行 2026-10-15（DEC-③-①：仅注入 failure 行 error 字段）** | ~~"③维持"~~ 已落试水 B，异议回「③改A」（revert 回不注入）/「③改C」（等 fix 数据改注入 fix）即改道 |
 | ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为）——**已按建议默认 B 先行执行 2026-10-14（DEC-④-①）** | ~~"④取B"~~ 已落，形态自决异议回「④改B2」（自动跑任务链）/「④改B3」（周期重提）/「④改A」（revert）即改道 |
 | ⑤ | Reflector 写侧触发面（执行结果回传协议） | F4b-㉚ ⑤ | 取 B（定执行结果回传协议），生态层大件——**OpenSoul 接收面已按建议默认 B 先行执行 2026-10-15（DEC-⑤-①）** | ~~"⑤取B/暂不做"~~ 已落接收面，异议回「⑤改A」即 revert；仓外回传方待接入 |
 | ⑥ | a2a 取消语义扩展 | F4b-㉔ 锁死语义 | 取 B（显式 /cancel 指令）——**已按建议默认 B 先行执行 2026-10-14** | ~~"⑥取B"~~ 已落，异议回「⑥改A」（revert）/「⑥维持」即改道 |
@@ -62,7 +62,9 @@
 
 ## ③ episodic 经验 prompt 回流消费点（F4b-㉜ 边界③）
 
-**现状**：brain think 响应 `experience` 观测键（src/api/brain.py:199-215，count+top-3 items）只观测不决策；生产 experiences 980 行 fix 列全空、action 多为不透明 ID（chat_turn:*/job:*）→经验行独有信息=失败错误原文+成败观测，注入执行 prompt=噪声风险（F4b-㉜ 已评估）。
+**状态：已按 doc 明示试水形态 B 先行执行（2026-10-15 DEC-③-①）**——依据：上拍（DEC-⑤-①b）候选「③ episodic 回流（等 fix 真数据）」的 C 形态解锁条件实测未满足（生产 experiences 1,537 行 fix 列 0 行、result_key 0 行=仓外回传方至今零回传），A（维持）=无限期停滞；doc 原文已明示「若要先行试水可拍 B 且仅注入 failure 行 error 字段（软建议块语义沿用 F2b-②）」+用户「别停工等批」铁律+DEC 自决先例。实现=**试水形态 B**：episodic_advisory_for 取数口（ExperienceMemory.get_similar_failures F4b-㉚ 相关度真源：字面相关门槛，无关零注入宁缺勿滥）+format_episodic_advisory_for_prompt 纯函数（**仅 failure 行 error 字段**——intent_summary/fix 等一律不进 prompt，测试锁死；软建议块自带免责）+_execute_task_impl 与 F2b-② learned 块并列第二块注入（故障不阻断但 learned-context-error 可见）。**若拍板改判回一句即改道：「③改A」=revert 本拍（回不注入）、「③改C」=等 fix 真数据后改注入 fix**。诚实边界：①相关度=字面字符二元组非语义 embedding（F4b-㉚ 既有口径）②仅任务执行面注入（chat/ws_chat 面未接，需要另拍）③命中失败经验会同时抬升风险评估（F4b-㉚ 既有设计）→确认门禁，与注入同源同刻发生。
+
+**现状**：brain think 响应 `experience` 观测键（src/api/brain.py:199-215，count+top-3 items）只观测不决策；生产 experiences 1537 行 fix 列全空、error 非空 22 行（真数据=试水 B 的注入源）、action 多为不透明 ID（chat_turn:*/job:*）→经验行独有信息=失败错误原文+成败观测，注入执行 prompt=噪声风险（F4b-㉜ 已评估）。
 - 选项：**A** 维持不注入 / **B** 失败错误原文 top-k 注入执行 prompt / **C** 先落⑤（Reflector 补 fix 采集）再注入。
 - 权衡：B 立刻可做但注入的是噪声（无 fix 的错误原文对执行帮助有限）；C 依赖⑤。
 - 建议：**A**（维持，等⑤）；若要先行试水可拍 B 且仅注入 failure 行 error 字段（软建议块语义沿用 F2b-②）。

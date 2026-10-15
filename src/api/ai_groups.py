@@ -1855,6 +1855,17 @@ async def _learned_advisory_for(run_goal: str) -> tuple[str, int]:
     return await learned_advisory_for(run_goal)
 
 
+async def _episodic_advisory_for(run_goal: str) -> tuple[str, int]:
+    """DEC-③-① episodic 回流取数口：相似失败经验 error → 执行 prompt 建议块。
+
+    读真源已收编 src.learn.experience.episodic_advisory_for 单一源（F2b-②
+    _learned_advisory_for 同款模块接缝）。返回 (建议块, 条数)，无命中=("", 0)。
+    """
+    from src.learn.experience import episodic_advisory_for
+
+    return await episodic_advisory_for(run_goal)
+
+
 async def _execute_task_impl(
     group_id: str, task_id: str, req: "ExecuteTaskRequest", confirmed: bool = False
 ) -> dict:
@@ -2007,7 +2018,7 @@ async def _execute_task_impl(
         try:
             advisory, advisory_n = await _learned_advisory_for(run_goal)
             if advisory:
-                exec_goal = f"{run_goal}\n\n{advisory}"
+                exec_goal = f"{exec_goal}\n\n{advisory}"
                 _emit_exec_event(
                     group_id,
                     task_id,
@@ -2022,6 +2033,30 @@ async def _execute_task_impl(
                 req.agent_id,
                 "learned-context-error",
                 f"推荐回流失败(不阻断执行): {e}",
+            )
+
+        # ── DEC-③-① episodic 回流执行：相似失败经验 error → 执行prompt（pending
+        # -decisions ③ 试水形态 B，与 F2b-② learned 块并列的第二条回流轴）——
+        # 仅 failure 行 error 字段、软建议块自带免责；episodic 层自身故障不阻断
+        # 执行但必须可见（learned-context-error 同族可见面，禁静默）。
+        try:
+            episodic, episodic_n = await _episodic_advisory_for(run_goal)
+            if episodic:
+                exec_goal = f"{exec_goal}\n\n{episodic}"
+                _emit_exec_event(
+                    group_id,
+                    task_id,
+                    req.agent_id,
+                    "learned-context",
+                    f"历史失败教训注入执行prompt：{episodic_n}条（experiences→执行）",
+                )
+        except Exception as e:
+            _emit_exec_event(
+                group_id,
+                task_id,
+                req.agent_id,
+                "learned-context-error",
+                f"episodic回流失败(不阻断执行): {e}",
             )
 
         async def _on_exec_event(etype: str, line: str):
