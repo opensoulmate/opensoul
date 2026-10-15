@@ -60,9 +60,20 @@ class InstantiateRequest(BaseModel):
 async def list_templates(
     category: str = Query(default=None),
     tag: str = Query(default=None),
+    authorization: str | None = Header(None),
 ):
-    """List available templates."""
-    return {"templates": engine.list_templates(category=category, tag=tag)}
+    """List available templates.（DEC-⑩-① 目录语义：可见=共享 builtin starter
+    目录+本租户行（template_visible_to 单一判法）；tenant 由 bind_identity 派生
+    禁自报，匿名='default' 面；修前本端点零鉴权恒系统视图=任意调用方可见全部
+    租户行（⑦ 系列漏网点，与 search/categories 同面不对称），同拍收口。）"""
+    identity = bind_identity(authorization, "", "")
+    return {
+        "templates": engine.list_templates(
+            category=category, tag=tag, tenant_id=identity.tenant_id
+        ),
+        # 加性契约：目录作用域可观测（⑦-⑭ 同款）
+        "tenant_id": identity.tenant_id,
+    }
 
 
 @router.get("/templates/search/{query}")

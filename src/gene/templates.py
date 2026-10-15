@@ -65,6 +65,19 @@ def template_row_tenant(template: Template) -> str:
     return ((template.tenant_id or "").strip()) or "default"
 
 
+def template_visible_to(template: Template, tenant_id: str) -> bool:
+    """读面可见性单一判法（DEC-⑩-① builtin starter 目录跨租户共享）。
+
+    builtin starter 目录=系统共享只读目录（author='system'、builtin=True、引擎
+    启动即注册、非任何租户的数据）对全租户可见；其余行恒按行租户键（内部仍走
+    template_row_tenant 单一判法，禁另发明归属判法 F4b-㉗ 纪律）。写面不适用
+    本判法——delete/创建劫持闸/import 覆盖仍按行归属+builtin 保护（共享≠可写），
+    写读判法刻意分开两个单一源。DEC-⑦-③ 边界②「严格过滤宁窄勿滥」为暂行，
+    本拍按 pending-decisions ⑩ 建议默认 B 收口为共享目录（异议回「⑩改A」即 revert）。
+    """
+    return template.builtin or template_row_tenant(template) == tenant_id
+
+
 def _validate_template_id(template_id: Any) -> str:
     """校验template_id安全合规（白名单字符集），非法即raise TemplateValidationError。"""
     if not isinstance(template_id, str) or not _TEMPLATE_ID_RE.match(template_id):
@@ -962,9 +975,10 @@ class TemplateEngine:
             templates = list(self._templates.values())
 
         if tenant_id is not None:
-            # DEC-⑦-③ 租户过滤：显式租户恒按行租户键过滤（template_row_tenant
-            # 单一判法）；tenant_id=None=系统视图，既有调用面字节不变。
-            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+            # DEC-⑦-③ 租户过滤 + DEC-⑩-① 共享目录：显式租户可见=template_visible_to
+            # 单一判法（builtin starter 目录全租户共享 + 行归属）；tenant_id=None=
+            # 系统视图，既有调用面字节不变。
+            templates = [t for t in templates if template_visible_to(t, tenant_id)]
         if category:
             templates = [t for t in templates if t.category == category]
         if tag:
@@ -989,14 +1003,17 @@ class TemplateEngine:
         ]
 
     def get_template(self, template_id: str, tenant_id: str | None = None) -> Template | None:
-        """by-ID 唯一行读取口归属闸（DEC-⑦-⑫）：显式租户=跨租户回 None 与
-        not-found 同契约不差分泄露行存在性（③c-1 纪律，delete 归属闸同款判法
-        template_row_tenant）；tenant_id=None=系统视图字节不变。get/instantiate/
+        """by-ID 唯一行读取口可见性闸（DEC-⑦-⑫ 归属闸 + DEC-⑩-① 共享目录）：
+        显式租户=可见性走 template_visible_to 单一判法（builtin starter 目录全租户
+        共享 + 行归属），跨租户回 None 与 not-found 同契约不差分泄露行存在性
+        （③c-1 纪律）；tenant_id=None=系统视图字节不变。get/instantiate/
         export/clone 源读全经本口（⑦-⑩ file_store get_meta 单点闸覆盖全读面
         同款）。"""
         with self._lock:
             t = self._templates.get(template_id)
-        if t is not None and tenant_id is not None and template_row_tenant(t) != tenant_id:
+        if t is not None and tenant_id is not None and not template_visible_to(t, tenant_id):
+            # DEC-⑩-①：可见性走 template_visible_to 单一判法（builtin 共享目录+
+            # 行归属），跨租户仍与 not-found 同契约不差分泄露行存在性。
             return None
         return t
 
@@ -1114,13 +1131,13 @@ class TemplateEngine:
     def categories(self, tenant_id: str | None = None) -> list[dict]:
         """List all categories with template counts.
 
-        tenant_id=显式租户=bulk 聚合恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        tenant_id=显式租户=bulk 聚合恒按 template_visible_to 可见性判法过滤（DEC-⑦-⑯ 加轴+DEC-⑩-① 共享目录，内部 template_row_tenant
         单一判法禁字面手抄 F4b-㉗ 纪律）；None=系统视图字节不变（/health 监控面）。
         """
         with self._lock:
             templates = list(self._templates.values())
         if tenant_id is not None:
-            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+            templates = [t for t in templates if template_visible_to(t, tenant_id)]
         cats: dict[str, int] = {}
         for t in templates:
             cats[t.category] = cats.get(t.category, 0) + 1
@@ -1129,13 +1146,13 @@ class TemplateEngine:
     def tags(self, tenant_id: str | None = None) -> list[dict]:
         """List all tags with usage counts.
 
-        tenant_id=显式租户=bulk 聚合恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        tenant_id=显式租户=bulk 聚合恒按 template_visible_to 可见性判法过滤（DEC-⑦-⑯ 加轴+DEC-⑩-① 共享目录，内部 template_row_tenant
         单一判法）；None=系统视图字节不变。
         """
         with self._lock:
             templates = list(self._templates.values())
         if tenant_id is not None:
-            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+            templates = [t for t in templates if template_visible_to(t, tenant_id)]
         tag_counts: dict[str, int] = {}
         for t in templates:
             for tag in t.tags:
@@ -1145,7 +1162,7 @@ class TemplateEngine:
     def search(self, query: str, tenant_id: str | None = None) -> list[dict]:
         """Search templates by name, description, or tags.
 
-        tenant_id=显式租户=bulk 读恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        tenant_id=显式租户=bulk 读恒按 template_visible_to 可见性判法过滤（DEC-⑦-⑯ 加轴+DEC-⑩-① 共享目录，内部 template_row_tenant
         单一判法）；None=系统视图字节不变。行输出加性键 tenant_id=行归属可观测
         （⑦-③ list_templates 同款加性契约，与之形状逐键对齐）。
         """
@@ -1153,7 +1170,7 @@ class TemplateEngine:
         with self._lock:
             templates = list(self._templates.values())
         if tenant_id is not None:
-            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+            templates = [t for t in templates if template_visible_to(t, tenant_id)]
         results = [
             t
             for t in templates
@@ -1211,7 +1228,7 @@ class TemplateEngine:
     ) -> list[dict]:
         """Export all templates (optionally filtered).
 
-        tenant_id=显式租户=bulk 读恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        tenant_id=显式租户=bulk 读恒按 template_visible_to 可见性判法过滤（DEC-⑦-⑯ 加轴+DEC-⑩-① 共享目录，内部 template_row_tenant
         单一判法）；None=系统视图字节不变。导出 dict=import 回灌 payload 形状
         保持纯净不注入行键（bundle 顶层作用域键由 API 面给，⑦-⑫ export_template
         单条导出同款形状）。
@@ -1219,7 +1236,7 @@ class TemplateEngine:
         with self._lock:
             templates = list(self._templates.values())
         if tenant_id is not None:
-            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+            templates = [t for t in templates if template_visible_to(t, tenant_id)]
         if category:
             templates = [t for t in templates if t.category == category]
         if not include_builtin:
@@ -1331,14 +1348,14 @@ class TemplateEngine:
     def stats(self, tenant_id: str | None = None) -> dict:
         """bulk 聚合统计。
 
-        tenant_id=显式租户=聚合恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        tenant_id=显式租户=聚合恒按 template_visible_to 可见性判法过滤（DEC-⑦-⑯ 加轴+DEC-⑩-① 共享目录，内部 template_row_tenant
         单一判法；逐键只算可见行禁泄露全局分布，⑦-⑭ echo /stats 同款）；
         None=系统视图字节不变（/health 监控面）。
         """
         with self._lock:
             templates = list(self._templates.values())
         if tenant_id is not None:
-            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+            templates = [t for t in templates if template_visible_to(t, tenant_id)]
         categories = {}
         for t in templates:
             categories[t.category] = categories.get(t.category, 0) + 1

@@ -101,9 +101,9 @@ def test_get_template_gate_three_way(env):
     assert eng.get_template("gate-get", tenant_id="default") is None
     assert eng.get_template("gate-get") is not None  # 系统视图字节不变
     assert eng.get_template("no-such", tenant_id="tenant-b") is None  # 缺行同契约
-    # builtin 严格过滤延续（⑦-③ 边界② 裁决：非 default 租户不见 starter 目录）
+    # DEC-⑩-① 契约随更新：builtin starter 目录=共享只读目录，全租户可见
     assert eng.get_template("agent-rag-assistant", tenant_id="default") is not None
-    assert eng.get_template("agent-rag-assistant", tenant_id="tenant-a") is None
+    assert eng.get_template("agent-rag-assistant", tenant_id="tenant-a") is not None
 
 
 def test_instantiate_gate_zero_side_effect(env):

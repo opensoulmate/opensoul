@@ -378,7 +378,8 @@ def test_result_shape_and_match_semantics_unchanged(env):
 
 def test_system_view_none_and_single_tenant_contract(env):
     """list_templates(tenant_id=None)=系统视图全量（既有调用面字节不变）；单租户全
-    'default' 时匿名全见=本地单机契约零变化（builtin 行键='default' 同款兜底）。"""
+    'default' 时匿名全见=本地单机契约零变化。DEC-⑩-① 契约随更新：非 default 租户
+    见共享 builtin 目录（修前 0 行）但 default 用户行恒不可见。"""
     from src.gene.templates import template_row_tenant
 
     client, eng = env["client"], env["engine"]
@@ -386,7 +387,11 @@ def test_system_view_none_and_single_tenant_contract(env):
     all_rows = eng.list_templates()
     assert len(eng.list_templates(tenant_id=None)) == len(all_rows) > 3
     assert len(eng.list_templates(tenant_id="default")) == len(all_rows)  # 单租户全 default
-    assert len(eng.list_templates(tenant_id="tenant-a")) == 0
+    rows_a = eng.list_templates(tenant_id="tenant-a")
+    assert all(r["builtin"] for r in rows_a)  # 只见共享目录，default 用户行恒不可见
+    assert {r["template_id"] for r in rows_a} == {
+        r["template_id"] for r in all_rows if r["builtin"]
+    }
     assert all(
         template_row_tenant(eng.get_template(r["template_id"])) == "default" for r in all_rows
     )
