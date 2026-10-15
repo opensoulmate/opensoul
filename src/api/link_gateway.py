@@ -107,12 +107,24 @@ class GatewayEvent:
     attempt: int = 1
 
 
+@dataclass
+class WsSubscriber:
+    """An active WebSocket subscriber with its handshake-derived tenant.
+
+    tenant_id=握手时 bind_identity 派生租户键——WS relay 广播消息路由隔离的
+    单一归属源（F3b-⑨b-③-1c 边界② 收口）。
+    """
+
+    ws: WebSocket
+    tenant_id: str
+
+
 # ── In-Memory Stores ────────────────────────────────────────
 
 _webhooks: dict[str, WebhookEndpoint] = {}
 _systems: dict[str, ExternalSystem] = {}
 _events: deque[GatewayEvent] = deque(maxlen=MAX_EVENTS)
-_ws_clients: list[WebSocket] = []  # active WebSocket subscribers
+_ws_clients: list[WsSubscriber] = []  # active WebSocket subscribers (each carries its tenant)
 
 
 # ── Request / Response Schemas ──────────────────────────────
@@ -698,12 +710,15 @@ def _ws_presented_token(ws: WebSocket) -> str:
 async def websocket_proxy(ws: WebSocket):
     """
     WebSocket endpoint for real-time bidirectional communication.
-    External clients connect here; messages are broadcast to all
-    connected WS subscribers and forwarded to the Nerve bus.
+    External clients connect here; messages are broadcast to connected
+    WS subscribers of the sender's tenant and forwarded to the Nerve bus.
 
     F3b-⑨b-③-1c：身份轴——凭据双源取参→bind_identity 派生租户键带入事件；
     坏 token 握手拒绝（accept 前 close 1008，身份证明先于一切 F3b-⑤），
     未提供=匿名 'default' 契约不变。
+    F3b-⑨b-③-1c 边界② 收口：WS relay 广播消息路由隔离——广播只走发方
+    租户键（WsSubscriber.tenant_id=握手派生单一归属源），跨租户零投递，
+    禁全局内存面互通；发方自身照旧不收自己的广播。
     """
     try:
         identity = bind_identity(_ws_presented_token(ws) or None)
@@ -714,7 +729,7 @@ async def websocket_proxy(ws: WebSocket):
     tenant = identity.tenant_id
 
     await ws.accept()
-    _ws_clients.append(ws)
+    _ws_clients.append(WsSubscriber(ws=ws, tenant_id=tenant))
     logger.info("WS client connected (%d active)", len(_ws_clients))
 
     # Notify via event bus
@@ -757,13 +772,17 @@ async def websocket_proxy(ws: WebSocket):
                 )
             except Exception as exc:
                 logging.getLogger(__name__).debug("probe skipped: %s", exc)
-            # Broadcast to all other connected WS clients
+            # Broadcast to other connected WS clients of the same tenant
+            # （F3b-⑨b-③-1c 边界② 收口：WS relay 广播消息路由隔离——按发方
+            # 租户键路由，跨租户零投递禁全局互通）
             disconnected = []
-            for client in _ws_clients:
-                if client is ws:
+            for sub in _ws_clients:
+                if sub.ws is ws:
+                    continue
+                if sub.tenant_id != tenant:
                     continue
                 try:
-                    await client.send_text(
+                    await sub.ws.send_text(
                         json.dumps(
                             {
                                 "from": "relay",
@@ -774,7 +793,7 @@ async def websocket_proxy(ws: WebSocket):
                         )
                     )
                 except Exception:
-                    disconnected.append(client)
+                    disconnected.append(sub)
 
             # Clean up disconnected clients
             for dc in disconnected:
@@ -785,8 +804,9 @@ async def websocket_proxy(ws: WebSocket):
     except Exception as e:
         logger.debug("WS error: %s", e)
     finally:
-        if ws in _ws_clients:
-            _ws_clients.remove(ws)
+        for sub in list(_ws_clients):
+            if sub.ws is ws:
+                _ws_clients.remove(sub)
         logger.info("WS client disconnected (%d active)", len(_ws_clients))
 
 
