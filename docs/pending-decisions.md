@@ -10,7 +10,7 @@
 | ② | wakeup executor 认证轴 | F3b-⑧c 边界① | 取 C（executor=系统组件按行租户点火）——**已按建议默认 C 先行执行 2026-10-14（F3b-⑧c-①）** | ~~"②取C"~~ 已落，异议回「②改A」即 revert |
 | ③ | episodic 经验 prompt 回流消费点 | F4b-㉜ 边界③ | 维持不注入，等⑤落地 | "③维持" |
 | ④ | proactive 推荐回流面消费点 | F2b-②c-1 复核留档 | 取 B（新增 advisory_review 定期行为）——**已按建议默认 B 先行执行 2026-10-14（DEC-④-①）** | ~~"④取B"~~ 已落，形态自决异议回「④改B2」（自动跑任务链）/「④改B3」（周期重提）/「④改A」（revert）即改道 |
-| ⑤ | Reflector 写侧触发面（执行结果回传协议） | F4b-㉚ ⑤ | 取 B（定执行结果回传协议），生态层大件 | "⑤取B/暂不做" |
+| ⑤ | Reflector 写侧触发面（执行结果回传协议） | F4b-㉚ ⑤ | 取 B（定执行结果回传协议），生态层大件——**OpenSoul 接收面已按建议默认 B 先行执行 2026-10-15（DEC-⑤-①）** | ~~"⑤取B/暂不做"~~ 已落接收面，异议回「⑤改A」即 revert；仓外回传方待接入 |
 | ⑥ | a2a 取消语义扩展 | F4b-㉔ 锁死语义 | 取 B（显式 /cancel 指令）——**已按建议默认 B 先行执行 2026-10-14** | ~~"⑥取B"~~ 已落，异议回「⑥改A」（revert）/「⑥维持」即改道 |
 | ⑦ | unified 其余子搜索存储层加轴 | F3b-⑥ 边界 | 取 B 分批（events 面最小件可先行）——**events 面已按建议默认 B 先行执行 2026-10-14（DEC-⑦-①）、echo 面已落 2026-10-14（DEC-⑦-②）、gene 面已落 2026-10-14（DEC-⑦-③）、files 面已落 2026-10-14（DEC-⑦-④）、agents 面已落 2026-10-15（DEC-⑦-⑤）、trajectory 面已落 2026-10-15（DEC-⑦-⑥）、cron 面已落 2026-10-15（DEC-⑦-⑦）** | ~~"⑦取B"~~ **七面全数已落（DEC-⑦-①~⑦）B 分批清单执行完毕**，异议回「⑦改A」（revert 回系统视图） |
 | ⑧ | healer 两小项（死路(a) 修复动作定义 / immune keep_last 缺省） | HEAL-② / ②b-④ | 维持现状 | "⑧维持" |
@@ -75,6 +75,8 @@
 - 建议：**B**（消费点=AI 群组改进任务，与 B0 任务链回群聊同面），具体形态需用户拍。
 
 ## ⑤ Reflector 写侧触发面（F4b-㉚ ⑤）
+
+**状态：OpenSoul 接收面已按建议默认 B 先行执行（2026-10-15 DEC-⑤-①）**——依据：DEC-⑦-⑳ 周期日志候选首件「⑤ Reflector 执行结果回传协议」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①②④⑥⑦ 自决先例。实现=**执行结果回传协议 OpenSoul 半边**：`POST /api/brain/execution-result` 接收面（agent 回传执行证据 test_output/exit_code/exception/file_written/diff→Reflector 汇总真 Verification，成败由检查派生禁客户端自报 success→ExperienceMemory.record 落 experiences 含 fix 列）+ Reflector exit_code 证据检查（退出码→真 Verification，pending-decisions 原文「test_output/exit code」两证据全收）+ task_id 溯源进 metadata。**仓外回传方（acp-proxy/OpenMate 侧在执行完真回传）如实记=待生态层接入**（F3b-⑧c-① wakeup executor 同款「仓外件」边界：接收面已就绪、现网行为零变化=无人回传则无新行）；③（episodic 经验 prompt 回流）的解锁条件=fix 列有真数据，回传方接入后自然解锁。**若拍板改判回一句即改道：「⑤改A」=revert 本拍（接收面移除）**。
 
 **现状**：src/cortex/reflector.py:22 `Reflector.reflect()` 全仓零生产调用（grep 实证），`Verification → ExperienceMemory.record` 整链零调用=experiences 的 fix 列恒空的根因（连带③）。硬接的障碍：本仓执行模型=外部 agent 代理，**无 file_written / test_output / diff 结果形态**，伪造 outcome 违 ExperienceCollector"绝不伪造 outcome"纪律。
 - 选项：**A** 不接（维持）/ **B** 定义执行结果回传协议（agent 执行完回传 test_output/exit code→真 Verification）/ **C** 从 job_queue 结果推断成败。
