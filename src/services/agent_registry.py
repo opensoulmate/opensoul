@@ -135,13 +135,23 @@ def list_registered(tenant_id: str | None = None) -> list[dict]:
         conn.close()
 
 
-def get_entry(agent_id: str) -> dict | None:
+def get_entry(agent_id: str, tenant_id: str | None = None) -> dict | None:
+    """by-ID 唯一行读取口归属闸（DEC-⑦-⑮）：显式租户=跨租户回 None 与 not-found
+    同契约，不差分泄露行存在性（③c-1 纪律；⑦-⑫ TemplateEngine.get_template 单点
+    归属闸同款，判法 agent_row_tenant 单一源禁消费点另发明）；tenant_id=None=
+    系统视图字节不变（既有调用面零变化）。acp_agent_registry 的 by-ID 读唯一入口
+    ——闸收在单一读源本体=未来消费方构造上无法绕闸（⑦-⑩ get_meta 单点闸覆盖全
+    读面同款）；_record 内行读属写路径劫持闸（跨租户 raise 语义刻意不同）不并入。
+    """
     conn = _conn()
     try:
         row = conn.execute(
             "SELECT * FROM acp_agent_registry WHERE agent_id=?", (str(agent_id),)
         ).fetchone()
-        return _row_to_dict(row) if row else None
+        entry = _row_to_dict(row) if row else None
+        if entry is not None and tenant_id is not None and agent_row_tenant(entry) != tenant_id:
+            return None
+        return entry
     finally:
         conn.close()
 
