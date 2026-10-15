@@ -431,12 +431,16 @@ def test_static_wiring_census():
     pipe = chr(124)
     assert "str " + pipe + " None" in src  # 竖线完好探针
     assert "str *** None" not in src
-    # 4 HTTP handler 各恰 1 身份派生 + WS 1（bind_identity(_ws_presented_token...)
-    assert src.count("identity = bind_identity(authorization)") == 4
+    # 5 HTTP handler 各恰 1 身份派生（4 声明/写面 + /events 读面 F3b-⑨b-③-1c-③）
+    # + WS 1 + SSE 1（_http_presented_token 双源取参）
+    assert src.count("identity = bind_identity(authorization)") == 5
     assert src.count("bind_identity(_ws_presented_token(ws)") == 1
-    # 注入点：identity 派生 5（4 handler 事件/出站 + broadcast 双点）+ helper 形参 4 + WS 3
+    assert src.count("bind_identity(_http_presented_token(request)") == 1
+    # 注入点：identity 派生 5（4 handler 事件/出站 + broadcast 双点）+ helper 形参 3 + WS 3
     assert src.count("tenant_id=identity.tenant_id") == 5
-    assert src.count("tenant_id=tenant_id") == 4
+    assert src.count("tenant_id=tenant_id") == 3
     assert src.count("tenant_id=tenant,") == 3
+    # 行归属落行 2（GatewayEvent 行键 + push_event 同键，F3b-⑨b-③-1c-③ 单一判法）
+    assert src.count("tenant_id=row_tenant") == 2
     # _record_event/_send_with_retry 形参收口
     assert src.count("tenant_id: str " + pipe + " None = None") == 2

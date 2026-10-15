@@ -105,6 +105,7 @@ class GatewayEvent:
     status: str = "ok"  # "ok", "error", "retrying"
     error: str = ""
     attempt: int = 1
+    tenant_id: str = "default"  # 行租户键（F3b-⑨b-③-1c-③ 事件读面加轴）
 
 
 @dataclass
@@ -181,9 +182,12 @@ def _record_event(
     """Record a gateway event and push to Nerve bus.
 
     F3b-⑨b-③-1c：tenant_id=身份派生租户键（⑨b-① 桥注入口）——用户面调用点
-    带 bind_identity 派生租户，事件行归属身份真源；未提供（外部 webhook 入口
-    1a 待拍面）='default' 兜底，行为字节不变。
+    带 bind_identity 派生租户；F3b-⑨b-③-1c-③：事件行归属落行（落
+    GatewayEvent.tenant_id 行键，事件读面 /events 与 /stream SSE 恒按行
+    租户键过滤）。缺失/空白→'default' 兜底（外部 webhook 入口 1a 待拍面
+    =匿名语义），键派生故障绝不吃掉落库。
     """
+    row_tenant = str(tenant_id or "").strip() or "default"
     evt = GatewayEvent(
         event_id=f"gw-{uuid.uuid4().hex[:12]}",
         timestamp=time.time(),
@@ -195,6 +199,7 @@ def _record_event(
         status=status,
         error=error,
         attempt=attempt,
+        tenant_id=row_tenant,
     )
     _events.append(evt)
 
@@ -214,12 +219,24 @@ def _record_event(
                     "status": status,
                 },
             },
-            tenant_id=tenant_id,
+            tenant_id=row_tenant,
         )
     except Exception as exc:
         logging.getLogger(__name__).debug("probe skipped: %s", exc)
 
     return evt
+
+
+def _event_row_tenant(evt: GatewayEvent) -> str:
+    """事件行租户键单一判法（DEC-⑦-① _event_row_tenant / ②~㉕b 家族同款）：
+    事件自带键、缺失/空白→'default' 兜底。"""
+    return str(getattr(evt, "tenant_id", "") or "").strip() or "default"
+
+
+def _scoped_events(tenant_id: str) -> list[GatewayEvent]:
+    """事件读面恒过滤单一判法（/events 与 /stream SSE 共用，禁两套判法漂移）：
+    只回行租户键==请求者派生租户的事件行。"""
+    return [e for e in _events if _event_row_tenant(e) == tenant_id]
 
 
 async def _send_with_retry(
@@ -553,9 +570,17 @@ async def get_events(
     source: str = Query(default=""),
     direction: str = Query(default=""),
     event_type: str = Query(default=""),
+    authorization: str | None = Header(None),
 ):
-    """Get integration event history with optional filters."""
-    events = list(_events)
+    """Get integration event history with optional filters.
+
+    F3b-⑨b-③-1c-③：tenant_id=bind_identity 派生租户（匿名='default' 契约
+    不变），事件读面恒按行租户键过滤（_scoped_events 单一判法）；total=
+    请求者租户作用域计数（分租户计数桶，禁泄露全局分布）。
+    """
+    identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
+    scoped = _scoped_events(identity.tenant_id)
+    events = scoped
     if source:
         events = [e for e in events if e.source == source]
     if direction:
@@ -578,7 +603,7 @@ async def get_events(
             }
             for e in events[-limit:]
         ],
-        "total": len(_events),
+        "total": len(scoped),
     }
 
 
@@ -650,20 +675,26 @@ async def broadcast_to_systems(req: BroadcastRequest, authorization: str | None 
 # ── SSE Subscription ────────────────────────────────────────
 
 
-@router.get("/stream")
-async def sse_event_stream(
-    source: str = Query(default=""),
-    event_type: str = Query(default=""),
-):
-    """
-    Server-Sent Events stream for real-time integration events.
-    Clients connect here to receive live event notifications.
-    """
+def _http_presented_token(request: Request) -> str:
+    """HTTP 身份凭证取参双源（F3b-④ WS 同款语义）：`?token=` query（浏览器
+    EventSource 无法自设头，主口）优先，Authorization 头（fetch 等客户端）
+    兜底。返回原始凭证串（bind_identity._bearer_token 归一 Bearer 前缀），
+    未提供=空串=匿名。"""
+    token = (request.query_params.get("token") or "").strip()
+    if token:
+        return token
+    return (request.headers.get("authorization") or "").strip()
+
+
+def _sse_event_lines(tenant_id: str, source: str, event_type: str):
+    """SSE 帧生成器（F3b-⑨b-③-1c-③ 提取为模块级可测面）：只发行租户键==
+    tenant_id 的事件（_scoped_events 单一判法，跨租户零帧）；source /
+    event_type 过滤语义字节不变。"""
 
     async def event_generator():
         last_seen = 0
         while True:
-            current = list(_events)
+            current = _scoped_events(tenant_id)
             for evt in current:
                 if evt.timestamp <= last_seen:
                     continue
@@ -686,8 +717,27 @@ async def sse_event_stream(
                 last_seen = max(last_seen, evt.timestamp)
             await asyncio.sleep(1.0)
 
+    return event_generator()
+
+
+@router.get("/stream")
+async def sse_event_stream(
+    request: Request,
+    source: str = Query(default=""),
+    event_type: str = Query(default=""),
+):
+    """
+    Server-Sent Events stream for real-time integration events.
+    Clients connect here to receive live event notifications.
+
+    F3b-⑨b-③-1c-③：身份轴——凭据双源取参→bind_identity 派生租户键（坏
+    token 首字节前 401，身份证明先于一切 F3b-⑤），事件读面恒按行租户键
+    过滤（跨租户零帧），未提供=匿名 'default' 契约不变。
+    """
+
+    identity = bind_identity(_http_presented_token(request) or None)
     return StreamingResponse(
-        event_generator(),
+        _sse_event_lines(identity.tenant_id, source, event_type),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
