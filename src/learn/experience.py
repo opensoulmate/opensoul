@@ -65,8 +65,8 @@ class ExperienceMemory:
         outcome = "success" if verification.success else "failure"
         await self.db.execute(
             """INSERT INTO experiences
-               (tenant_id, agent_id, action, intent_summary, outcome, error, fix, relevance_score, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (tenant_id, agent_id, action, intent_summary, outcome, error, fix, relevance_score, created_at, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 self.tenant_id,
                 self.agent_id,
@@ -77,6 +77,9 @@ class ExperienceMemory:
                 verification.fix,
                 1.0,
                 time.time(),
+                # DEC-⑤-① 回传协议溯源：task_id 进 metadata（铁律 json.dumps；
+                # 无 task_id=空对象，既有形状零变化）
+                json.dumps({"task_id": task_ctx.task_id} if task_ctx.task_id else {}),
             ),
         )
         # 老化淘汰

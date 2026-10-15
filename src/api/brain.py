@@ -48,6 +48,30 @@ class VerifyRequest(BaseModel):
     result: dict = {}
 
 
+class ExecutionResultRequest(BaseModel):
+    """执行结果回传协议（DEC-⑤-①，pending-decisions ⑤ 取 B）——agent 执行完回传
+    执行证据，服务端 Reflector 汇总真 Verification（成败由检查派生，禁客户端自报
+    success）→ ExperienceMemory.record 落 experiences（fix 列闭环——修前
+    reflect→record 整链全仓零生产调用、experiences.fix 恒空）。证据字段与
+    Reflector 检查一一对应：exception/error→系统异常、file_written/file_path→
+    语法校验、test_output（{"passed": bool, "error": ...}）→功能校验、
+    exit_code→退出码、diff+target_files→意图匹配。"""
+
+    tenant_id: str = "default"
+    agent_id: str = "default"
+    task_id: str = ""
+    action: str = Field(min_length=1)  # 做了什么（experiences.action）
+    goal: str = ""  # 意图摘要（experiences.intent_summary；空→"unknown"）
+    target_files: list[str] = []
+    exit_code: int | None = None
+    exception: bool = False
+    error: str | None = None
+    file_written: bool = False
+    file_path: str = ""
+    test_output: dict | None = None
+    diff: str = ""
+
+
 class FeedbackRequest(BaseModel):
     tenant_id: str = "default"
     user_id: str = "default"
@@ -332,6 +356,76 @@ async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
         logger.warning("元认知结果记账失败（不阻断验证）: %s", e)
 
     return {"status": "verified", "memorized": True}
+
+
+@router.post("/execution-result")
+async def execution_result(req: ExecutionResultRequest, authorization: str | None = Header(None)):
+    """执行结果回传协议接收面（DEC-⑤-①）：回传证据→Reflector 真 Verification→
+    experiences 落库（含 fix）。与 /verify 分工：/verify=元认知成败账本
+    （metacognition_log），本面=经验+Verification（experiences 含 fix 列），互补
+    非重复。读取消费走既有面（get_relevant_experience/get_similar_failures/
+    get_failure_fixes→think/推荐/evolve），本面只写不读。
+    """
+    # F3b-② 身份派生收口（同 think/verify：tenant 从认证派生禁自报）
+    identity = bind_identity(authorization, req.tenant_id)
+
+    from src.cortex.reflector import Reflector
+    from src.database.postgres import db_pool
+    from src.learn.experience import ExperienceMemory
+    from src.models.cognitive import Intent, TaskContext
+
+    if db_pool is None:
+        # C2 禁谎报：record() 对 db=None 是静默 no-op，若不拦则响应 recorded=True
+        # 是假的——经验库没连上必须如实报错
+        raise HTTPException(status_code=500, detail="经验库未连接（db_pool 为 None）")
+
+    # 证据 dict=Reflector 既有消费形状（只带回传方真给的证据，未给=不造检查项）
+    result: dict = {}
+    if req.exception:
+        result["exception"] = True
+    if req.error:
+        result["error"] = req.error
+    if req.file_written:
+        result["file_written"] = True
+        result["file_path"] = req.file_path
+    if req.test_output is not None:
+        result["test_output"] = req.test_output
+    if req.exit_code is not None:
+        result["exit_code"] = req.exit_code
+    if req.diff:
+        result["diff"] = req.diff
+
+    intent = Intent(
+        user_prompt=req.action,
+        target_files=list(req.target_files),
+        modify_scope="single_file" if len(req.target_files) <= 1 else "multi_file",
+        goal=req.goal or "unknown",
+        change_size="small",
+    )
+    task_ctx = TaskContext(task_id=req.task_id, user_input=req.action, intent=intent)
+
+    # 真 Verification：成败由检查派生（_check_intent_match 为确定性判定无 LLM）
+    verification = await Reflector().reflect(req.action, result, task_ctx)
+
+    # 落库失败如实 500（禁谎报 ok）；行归属=派生租户（匿名='default' 契约不变）
+    try:
+        await ExperienceMemory(db_pool, identity.tenant_id, req.agent_id).record(
+            req.action, result, verification, task_ctx
+        )
+    except Exception as e:
+        logger.warning("执行结果经验落库失败: %s", e)
+        raise HTTPException(status_code=500, detail=f"经验落库失败: {e}")
+
+    return {
+        "status": "ok",
+        "outcome": "success" if verification.success else "failure",
+        "checks": [
+            {"name": c.name, "passed": c.passed, "error": c.error} for c in verification.checks
+        ],
+        "error": verification.error,
+        "fix": verification.fix,
+        "recorded": True,
+    }
 
 
 @router.post("/remember")

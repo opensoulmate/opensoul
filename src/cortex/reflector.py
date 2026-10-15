@@ -40,6 +40,18 @@ class Reflector:
             test_ok = result["test_output"].get("passed", False)
             checks.append(CheckItem("功能校验", test_ok, result["test_output"].get("error")))
 
+        # 3b. 进程退出码检查（DEC-⑤-① 执行结果回传协议：agent 回传 exit_code→
+        # 真 Verification；仅在回传方声明 exit_code 时检查=零既有行为变化）
+        if result.get("exit_code") is not None:
+            code_ok = result["exit_code"] == 0
+            checks.append(
+                CheckItem(
+                    "退出码",
+                    code_ok,
+                    None if code_ok else f"进程退出码 {result['exit_code']}",
+                )
+            )
+
         # 4. 意图匹配检查
         if result.get("diff") and task_ctx.intent:
             intent_match = await self._check_intent_match(result["diff"], task_ctx.intent)
@@ -108,4 +120,6 @@ class Reflector:
                 suggestions.append("改动与预期不符，建议用增量编辑重试")
             elif c.name == "功能校验":
                 suggestions.append(f"功能测试失败：{c.error}")
+            elif c.name == "退出码":
+                suggestions.append(f"进程非零退出（{c.error}），检查执行日志后重试")
         return "; ".join(suggestions) if suggestions else "请人工检查"
