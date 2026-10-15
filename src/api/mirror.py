@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from src.mirror import isolation
 from src.mirror.sandbox import SandboxManager, SandboxNotActive
-from src.mirror.templates import SandboxTemplateEngine
+from src.mirror.templates import SandboxTemplateEngine, is_builtin, template_row_tenant
 from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
 
@@ -294,13 +294,15 @@ async def cleanup_expired():
 
 
 @router.get("/stats")
-async def mirror_stats():
-    """Get OpenMirror statistics."""
+async def mirror_stats(authorization: str | None = Header(None)):
+    """Get OpenMirror statistics.（templates 聚合恒按派生租户可见集——
+    DEC-⑦-㉒b；沙箱管理面计数无行租户轴不在本拍。）"""
+    identity = bind_identity(authorization)
     return {
         "status": "ok",
         "component": "OpenMirror",
         **manager.stats(),
-        "templates": template_engine.stats(),
+        "templates": template_engine.stats(tenant_id=identity.tenant_id),
     }
 
 
@@ -341,15 +343,22 @@ class SandboxFromTemplateRequest(BaseModel):
 
 
 @router.get("/templates")
-async def list_sandbox_templates(category: str = Query(default=None)):
-    """List all sandbox templates."""
-    return {"templates": template_engine.list_templates(category=category)}
+async def list_sandbox_templates(
+    category: str = Query(default=None), authorization: str | None = Header(None)
+):
+    """List all sandbox templates.（tenant 从认证派生禁自报——DEC-⑦-㉒b）"""
+    identity = bind_identity(authorization)
+    return {
+        "templates": template_engine.list_templates(category=category, tenant_id=identity.tenant_id)
+    }
 
 
 @router.get("/templates/{template_id}")
-async def get_sandbox_template(template_id: str):
-    """Get a specific sandbox template."""
-    tpl = template_engine.get(template_id)
+async def get_sandbox_template(template_id: str, authorization: str | None = Header(None)):
+    """Get a specific sandbox template.（by-ID 归属闸 DEC-⑦-㉒b：跨租户与
+    not-found 同契约 404 不差分泄露）"""
+    identity = bind_identity(authorization)
+    tpl = template_engine.get(template_id, tenant_id=identity.tenant_id)
     if not tpl:
         raise HTTPException(404, "Template not found")
     return {
@@ -363,6 +372,8 @@ async def get_sandbox_template(template_id: str):
         "category": tpl.category,
         "usage_count": tpl.usage_count,
         "created_at": tpl.created_at,
+        "tenant_id": template_row_tenant(tpl),
+        "builtin": is_builtin(tpl.template_id),
     }
 
 
@@ -381,6 +392,7 @@ async def create_sandbox_template(
         variables=req.variables,
         tags=req.tags,
         category=req.category,
+        tenant_id=identity.tenant_id,
     )
     push_event(
         {
@@ -399,9 +411,11 @@ async def create_sandbox_template(
 
 
 @router.delete("/templates/{template_id}")
-async def delete_sandbox_template(template_id: str):
-    """Delete a sandbox template."""
-    if not template_engine.delete(template_id):
+async def delete_sandbox_template(template_id: str, authorization: str | None = Header(None)):
+    """Delete a sandbox template.（写面归属闸 DEC-⑦-㉒b：builtin 恒拒/
+    跨租户=False 与 not-found 同契约 404 不差分泄露）"""
+    identity = bind_identity(authorization)
+    if not template_engine.delete(template_id, tenant_id=identity.tenant_id):
         raise HTTPException(404, "Template not found")
     return {"message": "deleted", "template_id": template_id}
 
@@ -414,7 +428,9 @@ async def create_sandbox_from_template(
 ):
     """Create a sandbox from a template with optional overrides."""
     identity = bind_identity(authorization)
-    instance = template_engine.instantiate(template_id, overrides=req.variables)
+    instance = template_engine.instantiate(
+        template_id, overrides=req.variables, tenant_id=identity.tenant_id
+    )
     if not instance:
         raise HTTPException(404, "Template not found")
 

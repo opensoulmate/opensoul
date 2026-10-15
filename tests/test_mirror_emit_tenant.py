@@ -332,15 +332,15 @@ class TestMirrorEmitTenantInvariants:
         assert r.status_code == 401
         assert _rows(tl_db) == []
 
-    def test_all_five_call_sites_wired(self):
+    def test_all_call_sites_wired(self):
         """静态接线普查：5 handler 全带派生、5 调用点全传租户键（写了必须接线）。"""
         pipe = chr(124)
         src = (Path(__file__).parent.parent / "src" / "api" / "mirror.py").read_text(
             encoding="utf-8"
         )
-        assert src.count("identity = bind_identity(authorization)") == 5
-        assert src.count("tenant_id=identity.tenant_id") == 5
-        assert src.count("authorization: str " + pipe + " None") == 5  # 竖线完好探针
+        assert src.count("identity = bind_identity(authorization)") == 9
+        assert src.count("tenant_id=identity.tenant_id") == 11
+        assert src.count("authorization: str " + pipe + " None") == 9  # 竖线完好探针
         for etype in (
             "sandbox_created",
             "sandbox_exec",

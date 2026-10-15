@@ -54,6 +54,16 @@ def _isolate_echo_templates_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_mirror_templates_db(tmp_path, monkeypatch):
+    """MIRROR_TEMPLATES_DB 全测试隔离（DEC-⑦-㉒b 增补，ECHO_TEMPLATES_DB 同族）：
+    src.api.mirror 模块级 template_engine 单例 import 即构造（修前缺省恒生产
+    data/mirror/templates.db）——测试进程 import 会把迁移 SQL 提前触发进生产库
+    （⑦-㉑ Gate3 同型缺口）。env 每用例指向 tmp；显式 db_path/MIRROR_TEMPLATES_DB
+    的测试按其覆盖为准。"""
+    monkeypatch.setenv("MIRROR_TEMPLATES_DB", str(tmp_path / "mirror_templates.db"))
+
+
+@pytest.fixture(autouse=True)
 def _isolate_proactive_db(tmp_path, monkeypatch):
     """PROACTIVE_DB 全测试隔离（proactive 测试隔离，TL-① 同族）：src.will.proactive
     模块级 proactive_engine 单例 import 即构造（db_path 构造时解析），修前缺省恒
