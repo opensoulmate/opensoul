@@ -70,6 +70,7 @@ class WebhookEndpoint:
     last_triggered: float = 0.0
     trigger_count: int = 0
     error_count: int = 0
+    tenant_id: str = "default"  # 行租户键（F3b-⑨b-③-1c-④ 注册面加轴）
 
 
 @dataclass
@@ -89,6 +90,7 @@ class ExternalSystem:
     created_at: float = field(default_factory=time.time)
     last_heartbeat: float = 0.0
     heartbeat_count: int = 0
+    tenant_id: str = "default"  # 行租户键（F3b-⑨b-③-1c-④ 注册面加轴）
 
 
 @dataclass
@@ -239,6 +241,38 @@ def _scoped_events(tenant_id: str) -> list[GatewayEvent]:
     return [e for e in _events if _event_row_tenant(e) == tenant_id]
 
 
+def _webhook_row_tenant(wh: WebhookEndpoint) -> str:
+    """webhook 注册行租户键单一判法（DEC-⑦-① _event_row_tenant / ②~㉕b 家族
+    同款，F3b-⑨b-③-1c-④ 注册面加轴）：行自带键、缺失/空白→'default' 兜底。"""
+    return str(getattr(wh, "tenant_id", "") or "").strip() or "default"
+
+
+def _system_row_tenant(sys: ExternalSystem) -> str:
+    """外部系统注册行租户键单一判法（同家族同款）。"""
+    return str(getattr(sys, "tenant_id", "") or "").strip() or "default"
+
+
+def _scoped_webhooks(tenant_id: str) -> list[WebhookEndpoint]:
+    """webhook 注册表读面恒过滤单一判法（/webhooks list 真消费）：只回行
+    租户键==请求者派生租户的注册行。"""
+    return [w for w in _webhooks.values() if _webhook_row_tenant(w) == tenant_id]
+
+
+def _scoped_systems(tenant_id: str) -> list[ExternalSystem]:
+    """外部系统注册表恒过滤单一判法（/systems list 与 /broadcast 选靶共用，
+    禁两套判法漂移）：只回行租户键==请求者派生租户的注册行。"""
+    return [s for s in _systems.values() if _system_row_tenant(s) == tenant_id]
+
+
+def _gate_webhook(webhook_id: str, tenant_id: str) -> WebhookEndpoint:
+    """webhook by-ID 归属闸（DEC-⑦-⑩ 家族「跨租户与 not-found 同契约」）：
+    跨租户与缺行同回 404 同文案，禁差分泄露存在性；命中回行。"""
+    wh = _webhooks.get(webhook_id)
+    if wh is None or _webhook_row_tenant(wh) != tenant_id:
+        raise HTTPException(404, "Webhook endpoint not found")
+    return wh
+
+
 async def _send_with_retry(
     url: str,
     payload: dict,
@@ -318,6 +352,7 @@ async def register_webhook(req: WebhookRegisterRequest, authorization: str | Non
         headers=req.headers,
         payload_parser=req.payload_parser,
         description=req.description,
+        tenant_id=identity.tenant_id,
     )
     _webhooks[webhook_id] = wh
 
@@ -338,8 +373,14 @@ async def register_webhook(req: WebhookRegisterRequest, authorization: str | Non
 
 
 @router.get("/webhooks")
-async def list_webhooks():
-    """List all registered webhook endpoints."""
+async def list_webhooks(authorization: str | None = Header(None)):
+    """List all registered webhook endpoints.
+
+    F3b-⑨b-③-1c-④：tenant_id=bind_identity 派生租户（匿名='default' 契约
+    不变），注册表读面恒按行租户键过滤（_scoped_webhooks 单一判法，跨租户
+    行不可见）；行内加性键 tenant_id（行归属可观测）。
+    """
+    identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
     return {
         "webhooks": [
             {
@@ -352,8 +393,9 @@ async def list_webhooks():
                 "error_count": w.error_count,
                 "last_triggered": w.last_triggered,
                 "created_at": w.created_at,
+                "tenant_id": _webhook_row_tenant(w),
             }
-            for w in _webhooks.values()
+            for w in _scoped_webhooks(identity.tenant_id)
         ]
     }
 
@@ -440,9 +482,9 @@ async def push_to_external(req: WebhookPushRequest, authorization: str | None = 
     Supports retry with exponential backoff (1s, 2s, 4s).
     """
     identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
-    wh = _webhooks.get(req.webhook_id)
-    if not wh:
-        raise HTTPException(404, "Webhook endpoint not found")
+    wh = _gate_webhook(
+        req.webhook_id, identity.tenant_id
+    )  # by-ID 归属闸：跨租户与 not-found 同契约
 
     target_url = req.target_url or wh.url
     if not target_url:
@@ -496,6 +538,7 @@ async def register_system(req: SystemRegisterRequest, authorization: str | None 
         headers=req.headers,
         capabilities=req.capabilities,
         description=req.description,
+        tenant_id=identity.tenant_id,
     )
     _systems[system_id] = sys
 
@@ -517,8 +560,14 @@ async def register_system(req: SystemRegisterRequest, authorization: str | None 
 
 
 @router.get("/systems")
-async def list_systems():
-    """List all registered external systems."""
+async def list_systems(authorization: str | None = Header(None)):
+    """List all registered external systems.
+
+    F3b-⑨b-③-1c-④：tenant_id=bind_identity 派生租户（匿名='default' 契约
+    不变），注册表读面恒按行租户键过滤（_scoped_systems 单一判法，跨租户
+    行不可见）；行内加性键 tenant_id（行归属可观测）。
+    """
+    identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
     return {
         "systems": [
             {
@@ -533,8 +582,9 @@ async def list_systems():
                 "last_heartbeat": s.last_heartbeat,
                 "heartbeat_count": s.heartbeat_count,
                 "created_at": s.created_at,
+                "tenant_id": _system_row_tenant(s),
             }
-            for s in _systems.values()
+            for s in _scoped_systems(identity.tenant_id)
         ]
     }
 
@@ -617,9 +667,14 @@ async def broadcast_to_systems(req: BroadcastRequest, authorization: str | None 
     Each system gets the message via its configured URL with auth headers.
     """
     identity = bind_identity(authorization)  # 身份证明先于一切（F3b-⑤）
-    targets = _systems.values()
+    # 选靶恒按行租户键过滤（_scoped_systems 单一判法，F3b-⑨b-③-1c-④）：
+    # 跨租户系统零投递；显式 target_system_ids 里的跨租户/未知 id 与缺行同
+    # 契约（与既有未知 id 同款跳过，禁差分泄露存在性）。
+    scoped_by_id = {s.system_id: s for s in _scoped_systems(identity.tenant_id)}
     if req.target_system_ids:
-        targets = [_systems[sid] for sid in req.target_system_ids if sid in _systems]
+        targets = [scoped_by_id[sid] for sid in req.target_system_ids if sid in scoped_by_id]
+    else:
+        targets = list(scoped_by_id.values())
 
     if not targets:
         raise HTTPException(400, "No target systems found")
