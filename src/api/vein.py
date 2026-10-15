@@ -391,14 +391,23 @@ async def rollback_file(
 
 
 @router.post("/upload/chunked/init")
-async def init_chunked_upload(body: UploadSessionCreate):
-    """Initialize a chunked upload session."""
+async def init_chunked_upload(
+    body: UploadSessionCreate,
+    authorization: str | None = Header(None),
+):
+    """Initialize a chunked upload session.
+
+    DEC-⑦-㉕：会话行归属=bind_identity 派生租户（匿名 'default' 契约不变、
+    无自报轴）；坏 token 401 先于建会话零副作用。
+    """
+    identity = bind_identity(authorization)
     session = uploader.create_session(
         filename=body.filename,
         total_size=body.total_size,
         chunk_size=body.chunk_size,
         mime_type=body.mime_type,
         tags=body.tags,
+        tenant_id=identity.tenant_id,
     )
     return session.to_dict()
 
@@ -408,14 +417,20 @@ async def upload_chunk(
     upload_id: str,
     chunk_index: int,
     file: UploadFile = File(...),
+    authorization: str | None = Header(None),
 ):
-    """Upload a single chunk."""
-    session = uploader.get_session(upload_id)
+    """Upload a single chunk.
+
+    DEC-⑦-㉕：归属闸——跨租户会话与 not-found 同 404 同 detail 不差分泄露，
+    分片字节零落盘（禁向他人会话投毒）。
+    """
+    identity = bind_identity(authorization)
+    session = uploader.get_session(upload_id, tenant_id=identity.tenant_id)
     if not session:
         raise HTTPException(status_code=404, detail="Upload session not found")
 
     data = await file.read()
-    updated = uploader.upload_chunk(upload_id, chunk_index, data)
+    updated = uploader.upload_chunk(upload_id, chunk_index, data, tenant_id=identity.tenant_id)
     if not updated:
         raise HTTPException(status_code=400, detail="Failed to store chunk")
 
@@ -432,7 +447,7 @@ async def complete_chunked_upload(
     DEC-⑦-④：落库行归属=bind_identity 派生租户（匿名 'default' 契约不变）。
     """
     identity = bind_identity(authorization)
-    session = uploader.get_session(upload_id)
+    session = uploader.get_session(upload_id, tenant_id=identity.tenant_id)
     if not session:
         raise HTTPException(status_code=404, detail="Upload session not found")
     if not session.is_complete:
@@ -441,7 +456,7 @@ async def complete_chunked_upload(
             detail=f"Upload incomplete: {session.progress}% ({len(session.received_chunks)}/{session.total_chunks} chunks)",
         )
 
-    result = uploader.assemble(upload_id)
+    result = uploader.assemble(upload_id, tenant_id=identity.tenant_id)
     if not result:
         raise HTTPException(status_code=500, detail="Failed to assemble chunks")
 
@@ -471,24 +486,44 @@ async def complete_chunked_upload(
 
 
 @router.get("/upload/chunked/{upload_id}")
-async def get_upload_status(upload_id: str):
-    """Get the status of a chunked upload session."""
-    session = uploader.get_session(upload_id)
+async def get_upload_status(
+    upload_id: str,
+    authorization: str | None = Header(None),
+):
+    """Get the status of a chunked upload session.
+
+    DEC-⑦-㉕：归属闸——跨租户与 not-found 同 404 同 detail（⑦-㉔ 同契约）。
+    """
+    identity = bind_identity(authorization)
+    session = uploader.get_session(upload_id, tenant_id=identity.tenant_id)
     if not session:
         raise HTTPException(status_code=404, detail="Upload session not found")
     return session.to_dict()
 
 
 @router.get("/upload/chunked")
-async def list_uploads():
-    """List all active upload sessions."""
-    return {"sessions": uploader.list_sessions()}
+async def list_uploads(authorization: str | None = Header(None)):
+    """List all active upload sessions.
+
+    DEC-⑦-㉕：读面恒按派生租户过滤（匿名 'default' 契约不变；修前零鉴权恒
+    全量=任意调用方可见全部租户文件名）。
+    """
+    identity = bind_identity(authorization)
+    return {"sessions": uploader.list_sessions(tenant_id=identity.tenant_id)}
 
 
 @router.delete("/upload/chunked/{upload_id}")
-async def cancel_upload(upload_id: str):
-    """Cancel and cleanup an upload session."""
-    if not uploader.cleanup(upload_id):
+async def cancel_upload(
+    upload_id: str,
+    authorization: str | None = Header(None),
+):
+    """Cancel and cleanup an upload session.
+
+    DEC-⑦-㉕：归属闸——跨租户与 not-found 同 404 同 detail+行零破坏
+    （不删他人分片目录 ③b-3）。
+    """
+    identity = bind_identity(authorization)
+    if not uploader.cleanup(upload_id, tenant_id=identity.tenant_id):
         raise HTTPException(status_code=404, detail="Upload session not found")
     return {"status": "ok", "upload_id": upload_id}
 
