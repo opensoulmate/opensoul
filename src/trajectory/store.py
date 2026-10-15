@@ -783,6 +783,7 @@ class TrajectoryStore:
         status: str = "ok",
         token_usage: int | None = None,
         termination: str = "",
+        tenant_id: str | None = None,
     ) -> TrajectoryEvent | None:
         """Close a span-style event: stamp ``end_at`` and derive duration.
 
@@ -794,12 +795,17 @@ class TrajectoryStore:
         ``termination``（P1-15 五终止条件词汇，agent/termination.py）合入事件
         metadata（metadata.termination）——回合被哪个终止条件收口落 trace；
         空串=正常完成，metadata 不动（向后兼容零变化）。
+
+        DEC-⑦-⑲ 写面归属闸：显式 tenant_id=跨租户改写拒——改写权威=get_event
+        同一父 session 行闸门（⑦-⑪ 单一权威禁双判法漂移；本写面同时改事件行
+        与 session.total_tokens，父行可见性恰好护住两处改动），跨租户/缺行=回
+        None 与 not-found 同契约不差分泄露且 UPDATE 前置零改写；None=系统视图
+        字节不变（既有内部调用/测试零变化）。
         """
         await self.ensure_tables()
-        row = await db_pool.fetchrow("SELECT * FROM trajectory_events WHERE id = ?", event_id)
-        if not row:
+        ev = await self.get_event(event_id, tenant_id=tenant_id)
+        if not ev:
             return None
-        ev = self._row_to_event(row)
         now = datetime.now(UTC)
         end_at = now.isoformat()
         duration = 0.0

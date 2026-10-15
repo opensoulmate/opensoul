@@ -475,13 +475,28 @@ class EventEndRequest(BaseModel):
 
 
 @router.post("/events/{event_id}/end")
-async def end_event(event_id: str, req: EventEndRequest | None = None):
-    """Close a span-style event — stamps end_at and derives duration_ms."""
+async def end_event(
+    event_id: str,
+    req: EventEndRequest | None = None,
+    authorization: str | None = Header(None),
+):
+    """Close a span-style event — stamps end_at and derives duration_ms.
+
+    DEC-⑦-⑲ 写面归属闸：tenant=bind_identity 派生禁自报（匿名 'default' 契约
+    不变——单机存量行全 'default'，acp-proxy trajectory_recorder 匿名收口自
+    建 span 的既有链零回归）；跨租户改写=404 与 not-found 同契约不差分泄露且
+    行零改写（store.end_event 同闸）。
+    """
+    identity = bind_identity(authorization)
     status = req.status if req else "ok"
     token_usage = req.token_usage if req else None
     termination = (req.termination if req else "") or ""
     event = await trajectory_store.end_event(
-        event_id, status=status, token_usage=token_usage, termination=termination
+        event_id,
+        status=status,
+        token_usage=token_usage,
+        termination=termination,
+        tenant_id=identity.tenant_id,
     )
     if not event:
         raise HTTPException(404, "Event not found")
