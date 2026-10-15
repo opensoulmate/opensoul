@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
-from src.vein.cache import CacheManager
+from src.vein.cache import CacheManager, cache_row_tenant
 from src.vein.chunked import ChunkedUploader
 from src.vein.file_store import FileStore, FileTenantDenied, file_row_tenant
 
@@ -66,8 +66,8 @@ async def upload_file(
         tenant_id=identity.tenant_id,
     )
 
-    # Auto-cache for hot access
-    cache.put(f"file:{meta.file_id}", data)
+    # Auto-cache for hot access（DEC-⑦-㉕b：行归属=文件行租户键）
+    cache.put(f"file:{meta.file_id}", data, tenant_id=file_row_tenant(meta))
 
     # Emit event
     push_event(
@@ -167,8 +167,8 @@ async def download_file(file_id: str, authorization: str | None = Header(None)):
     if not meta:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Check cache first
-    cached = cache.get(f"file:{file_id}")
+    # Check cache first（㉕b：缓存行键与文件行同租户，行内核对）
+    cached = cache.get(f"file:{file_id}", tenant_id=identity.tenant_id)
     if cached:
         push_event(
             {
@@ -214,7 +214,7 @@ async def delete_file(file_id: str, authorization: str | None = Header(None)):
     meta = store.get_meta(file_id)
     if not store.delete(file_id, tenant_id=identity.tenant_id):
         raise HTTPException(status_code=404, detail="File not found")
-    cache.invalidate(f"file:{file_id}")
+    cache.invalidate(f"file:{file_id}", tenant_id=identity.tenant_id)
     push_event(
         {
             "organ": "vein",
@@ -262,8 +262,8 @@ async def update_file_content(
     except FileTenantDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc))
 
-    # Update cache
-    cache.put(f"file:{meta.file_id}", data)
+    # Update cache（㉕b：行归属=文件行租户键）
+    cache.put(f"file:{meta.file_id}", data, tenant_id=file_row_tenant(meta))
 
     push_event(
         {
@@ -364,7 +364,7 @@ async def rollback_file(
     result = store.retrieve(file_id)
     if result:
         data, _ = result
-        cache.put(f"file:{file_id}", data)
+        cache.put(f"file:{file_id}", data, tenant_id=file_row_tenant(meta))
 
     push_event(
         {
@@ -469,8 +469,8 @@ async def complete_chunked_upload(
         tenant_id=identity.tenant_id,
     )
 
-    # Auto-cache
-    cache.put(f"file:{meta.file_id}", data)
+    # Auto-cache（㉕b：行归属=文件行租户键）
+    cache.put(f"file:{meta.file_id}", data, tenant_id=file_row_tenant(meta))
 
     # Cleanup temp chunks
     uploader.cleanup(upload_id)
@@ -533,52 +533,92 @@ async def cancel_upload(
 
 @router.get("/cache/stats")
 async def get_cache_stats():
-    """Get cache statistics."""
+    """Get cache statistics.
+
+    DEC-⑦-㉕b：系统视图（计数含全部租户行，/api/vein/health 消费计数字节
+    不变，㉕ health 计数同款纪律）。
+    """
     return cache.stats
 
 
 @router.get("/cache/{key}")
-async def get_cached(key: str):
-    """Get a cached value by key."""
-    data = cache.get(key)
-    if data is None:
+async def get_cached(key: str, authorization: str | None = Header(None)):
+    """Get a cached value by key.
+
+    DEC-⑦-㉕b：读面归属闸——tenant 由 bind_identity 派生（匿名 'default'
+    契约不变、无自报轴），跨租户与 miss 同 404 同 detail 不差分泄露 ③c-1
+    （file: 热缓存行同样不得经此面跨租户直读）。
+    """
+    identity = bind_identity(authorization)
+    entry = cache.get_entry(key, tenant_id=identity.tenant_id)
+    if entry is None:
         raise HTTPException(status_code=404, detail="Cache miss or expired")
-    return {"key": key, "size": len(data), "data": data.hex()[:100] + "..."}
+    return {
+        "key": key,
+        "size": entry.size,
+        "data": entry.data.hex()[:100] + "...",
+        "tenant_id": cache_row_tenant(entry),
+    }
 
 
 @router.put("/cache")
-async def put_cache(body: CachePutRequest):
-    """Put a value into the cache."""
+async def put_cache(body: CachePutRequest, authorization: str | None = Header(None)):
+    """Put a value into the cache.
+
+    DEC-⑦-㉕b：写点归属=bind_identity 派生租户（匿名 'default' 契约不变、
+    请求体无 tenant 自报轴）；同 key 异租户=两个独立缓存行互不覆盖（③a
+    幂等键隔离同款语义收口，修前全局单键=跨租户互覆盖）。
+    """
+    identity = bind_identity(authorization)
     import base64
 
     try:
         data = base64.b64decode(body.data)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid base64 data")
-    cache.put(body.key, data, ttl=body.ttl)
-    return {"status": "ok", "key": body.key, "size": len(data)}
+    entry = cache.put(body.key, data, ttl=body.ttl, tenant_id=identity.tenant_id)
+    return {
+        "status": "ok",
+        "key": body.key,
+        "size": len(data),
+        "tenant_id": cache_row_tenant(entry),
+    }
 
 
 @router.delete("/cache/{key}")
-async def invalidate_cache(key: str):
-    """Invalidate a specific cache entry."""
-    if not cache.invalidate(key):
+async def invalidate_cache(key: str, authorization: str | None = Header(None)):
+    """Invalidate a specific cache entry.
+
+    DEC-⑦-㉕b：删面归属闸——tenant 由 bind_identity 派生，跨租户=404 与
+    not-found 同 detail 不差分泄露+行零破坏（他人缓存行一个字节不动 ③b-3）。
+    """
+    identity = bind_identity(authorization)
+    if not cache.invalidate(key, tenant_id=identity.tenant_id):
         raise HTTPException(status_code=404, detail="Key not in cache")
     return {"status": "ok", "key": key}
 
 
 @router.post("/cache/clear")
-async def clear_cache():
-    """Clear all cache entries."""
-    count = cache.clear()
-    return {"status": "ok", "cleared": count}
+async def clear_cache(authorization: str | None = Header(None)):
+    """Clear the caller's tenant cache entries.
+
+    DEC-⑦-㉕b：bulk 清理恒按行租户键清（防"只给租户"变相清全史，③a purge
+    同款纪律）；tenant 由 bind_identity 派生、无自报轴。
+    """
+    identity = bind_identity(authorization)
+    count = cache.clear(tenant_id=identity.tenant_id)
+    return {"status": "ok", "cleared": count, "tenant_id": cache_row_tenant(identity.tenant_id)}
 
 
 @router.post("/cache/cleanup")
-async def cleanup_cache():
-    """Remove expired cache entries."""
-    count = cache.cleanup_expired()
-    return {"status": "ok", "removed": count}
+async def cleanup_cache(authorization: str | None = Header(None)):
+    """Remove expired cache entries of the caller's tenant.
+
+    DEC-⑦-㉕b：bulk 清理恒按行租户键（clear 同款纪律，跨租户过期行不代删）。
+    """
+    identity = bind_identity(authorization)
+    count = cache.cleanup_expired(tenant_id=identity.tenant_id)
+    return {"status": "ok", "removed": count, "tenant_id": cache_row_tenant(identity.tenant_id)}
 
 
 # ── Promote to Knowledge ───────────────────────────────────
