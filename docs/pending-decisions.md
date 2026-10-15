@@ -15,6 +15,7 @@
 | ⑦ | unified 其余子搜索存储层加轴 | F3b-⑥ 边界 | 取 B 分批（events 面最小件可先行）——**events 面已按建议默认 B 先行执行 2026-10-14（DEC-⑦-①）、echo 面已落 2026-10-14（DEC-⑦-②）、gene 面已落 2026-10-14（DEC-⑦-③）、files 面已落 2026-10-14（DEC-⑦-④）、agents 面已落 2026-10-15（DEC-⑦-⑤）、trajectory 面已落 2026-10-15（DEC-⑦-⑥）、cron 面已落 2026-10-15（DEC-⑦-⑦）** | ~~"⑦取B"~~ **七面全数已落（DEC-⑦-①~⑦）B 分批清单执行完毕**，异议回「⑦改A」（revert 回系统视图） |
 | ⑧ | healer 两小项（死路(a) 修复动作定义 / immune keep_last 缺省） | HEAL-② / ②b-④ | 维持现状 | "⑧维持" |
 | ⑨ | TL-⑰ B 类"三删一留"异议窗口（信息项，非决策） | TL-⑰ | 无异议即结 | 异议才回 |
+| ⑩ | builtin starter 目录跨租户共享语义 | DEC-⑦-③ 边界② | 取 B（共享只读目录）——**已按建议默认 B 先行执行 2026-10-15（DEC-⑩-①）** | ~~"⑩取B"~~ 已落，异议回「⑩改A」（revert 回严格过滤）即改道 |
 
 ---
 
@@ -111,6 +112,15 @@
 TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证流量=真实安全日志史）**保留**、exec/pipeline/brain 1,098 行（夹具探针，出处逐字钉）**已删**。备份 `data/backups/timeline_b_pre_delete_*` 可整体回滚。无需决策，有异议回一句即可。
 
 ---
+
+## ⑩ builtin starter 目录跨租户共享语义（DEC-⑦-③ 边界②）
+
+**状态：已按建议默认 B 先行执行（2026-10-15 DEC-⑩-①）**——依据：DEC-⑤-① 周期日志候选首件「builtin 共享语义（需拍板）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①②④⑥⑦⑤ 自决先例。实现=**共享只读目录**：`template_visible_to` 读面可见性单一判法（builtin 对全租户可见，其余行恒按行归属 template_row_tenant 单一源）+ 七读面真消费（list/get/categories/tags/search/export_all/stats）+ 目录列表面 GET /api/gene/templates 漏网点同拍收口（修前零鉴权恒系统视图=任意调用方可见全部租户行，⑦ 系列漏网）。**写面零变化**（测试锁死）：delete builtin 恒拒、创建劫持闸/import 覆盖仍按行归属（共享≠可写）。**若拍板取 A 回一句即改道：「⑩改A」=revert 本拍（回严格过滤，非 default 租户不见 starter 目录）**；选项 C（每租户复制）未做（管理复杂度高，需另行拍板）。
+
+**现状**（DEC-⑦-③ 边界② 留档）：builtin 模板（author='system'、builtin=True、引擎启动注册 22 条 starter）行键='default'（缺省兜底），严格过滤下非 default 租户的 gene 搜索/列表/categories/tags/stats/export/get/instantiate 全部不见 starter 目录=多租户下新租户目录空、"starter 目录"语义不成立。严格过滤是 ⑦ 租户轴机械化的暂行边界（"暂与其他面同款严格过滤宁窄勿滥"）。
+- 选项：**A** 维持严格过滤（builtin 归 'default' 独享）/ **B** 共享只读目录（builtin 对全租户可见可 instantiate/clone，写面保护不变）/ **C** 每租户复制一份。
+- 权衡：A 让每个新租户从空目录起步，starter 语义不成立；C 需复制管理+漂移风险。B 共享的是系统内容非租户数据=零泄露面，与「用户行恒不跨租户」并存（测试双向锁死）。
+- 建议：**B**（builtin=系统 starter 目录，非任何租户的数据；严格过滤是机械副作用）。
 
 ## 附：锚点核验
 
