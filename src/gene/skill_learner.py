@@ -96,6 +96,39 @@ SOURCE_UNKNOWN = "unknown"
 # extract（真实学习行）**硬拒绝**——真实学习行必须逐条走delete_skill留DELETE审计。
 PURGEABLE_SOURCES = ("test", "seed")
 
+# ── 行租户键（DEC-⑦-⑱ skill_learner 面加轴）──────────────────────
+# learned_skills / skill_audit 两表行租户键：写点归属（extract 落行）+读面恒
+# 过滤（list/count/categories/find_relevant/get_stats/audit_tail/history）+by-ID
+# 归属闸（usage/delete/revert/current_state）共用 skill_row_tenant 单一判法，
+# 禁消费点另发明判法（F4b-㉗ 纪律）；DEC-⑦-① _event_row_tenant / ⑦-③
+# template_row_tenant 同款语义（系统/缺省写方→'default'，键派生故障绝不吃掉落库）。
+DEFAULT_SKILL_TENANT = "default"
+
+
+def skill_row_tenant(row) -> str:
+    """行租户键单一判法（DEC-⑦-⑱）：自带键、缺失/空白/无键→'default' 兜底。
+
+    dict / sqlite3.Row / None 全形态可用（读面 dict(row) 与查询行共用）；
+    写读同源：extract 落行、读面过滤、by-ID 归属闸与 skill_audit 行继承共用本函数。
+    """
+    val = ""
+    if isinstance(row, dict):
+        val = row.get("tenant_id") or ""
+    elif row is not None:
+        try:
+            val = row["tenant_id"] or ""
+        except (KeyError, IndexError, TypeError):
+            val = ""
+    return str(val).strip() or DEFAULT_SKILL_TENANT
+
+
+class SkillTenantDenied(Exception):
+    """跨租户写拒（行归属不可被跨租户改写）：API 层映射为 HTTP 403。
+
+    DEC-⑦-③ TemplateTenantDenied / ⑦-⑤ AgentTenantDenied 同族——extract 对
+    既有行的 UPDATE 是写面，跨租户同 skill_id=劫持，拒且行零改写。
+    """
+
 
 # ── keyset分页游标（"分页offset稳定性"挂账解法的编解码面） ──────────────
 # 游标=排序键三元组(activity_at, created_at, skill_id)的不透明串："act:created:id"。
@@ -149,6 +182,7 @@ class Skill:
     source_session: str = ""
     source: str = "extract"  # 来源provenance（见SKILL_SOURCES）
     audit_event: str = ""  # 本次extract落的审计事件：ADD / UPDATE（mem0 §1.2记账）
+    tenant_id: str = ""  # 行租户键（DEC-⑦-⑱，skill_row_tenant 归一值）
 
     @property
     def success_rate(self) -> float:
@@ -194,7 +228,8 @@ class SkillLearner:
                     last_used_at REAL DEFAULT 0,
                     tags TEXT DEFAULT '[]',
                     source_session TEXT DEFAULT '',
-                    source TEXT DEFAULT ''
+                    source TEXT DEFAULT '',
+                    tenant_id TEXT NOT NULL DEFAULT 'default'
                 )
             """)
             # source列schema迁移（存量库ALTER + 回填）：来源列上线前的行**不猜来源**，
@@ -203,13 +238,26 @@ class SkillLearner:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(learned_skills)")}
             if "source" not in cols:
                 conn.execute("ALTER TABLE learned_skills ADD COLUMN source TEXT DEFAULT ''")
+            if "tenant_id" not in cols:
+                conn.execute(
+                    "ALTER TABLE learned_skills ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
+                )
             conn.execute(
                 "UPDATE learned_skills SET source = ? WHERE source = ''",
                 (SOURCE_UNKNOWN,),
             )
+            conn.execute(
+                "UPDATE learned_skills SET tenant_id = ? WHERE tenant_id IS NULL OR tenant_id = ''",
+                (DEFAULT_SKILL_TENANT,),
+            )
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_skills_category
                 ON learned_skills(category, success_count)
+            """)
+            # 租户索引必须在补列之后建（③c-2① 坑延续）
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_skills_tenant
+                ON learned_skills(tenant_id)
             """)
             # 进化审计表（mem0 §1.2 可直接抄的schema：old/new/event，此处加FAIL分支）
             # "这条技能是被谁、因为哪次执行、从什么改成什么"全程可追溯
@@ -222,14 +270,46 @@ class SkillLearner:
                     new_json TEXT DEFAULT '',
                     actor TEXT DEFAULT '',
                     reason TEXT DEFAULT '',
-                    created_at REAL NOT NULL
+                    created_at REAL NOT NULL,
+                    tenant_id TEXT NOT NULL DEFAULT 'default'
                 )
             """)
+            acols = {r[1] for r in conn.execute("PRAGMA table_info(skill_audit)")}
+            if "tenant_id" not in acols:
+                conn.execute(
+                    "ALTER TABLE skill_audit ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
+                )
+            conn.execute(
+                "UPDATE skill_audit SET tenant_id = ? WHERE tenant_id IS NULL OR tenant_id = ''",
+                (DEFAULT_SKILL_TENANT,),
+            )
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_skill_audit_skill
                 ON skill_audit(skill_id, audit_id)
             """)
+            # 租户索引必须在补列之后建（③c-2① 坑延续）
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_skill_audit_tenant
+                ON skill_audit(tenant_id)
+            """)
             conn.commit()
+
+    def _audit_tenant(self, skill_id: str, tenant_id: str | None) -> str:
+        """审计行归属（③b-2 父行继承+缺行兜底同款）：显式键优先；未提供→
+        learned_skills 行继承→缺行（FAIL 无提炼行族谱）→'default'。
+        """
+        if tenant_id is not None and str(tenant_id).strip():
+            return skill_row_tenant({"tenant_id": tenant_id})
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    "SELECT tenant_id FROM learned_skills WHERE skill_id = ?",
+                    (skill_id,),
+                ).fetchone()
+            return skill_row_tenant(row) if row is not None else DEFAULT_SKILL_TENANT
+        except Exception:
+            return DEFAULT_SKILL_TENANT  # 键派生故障绝不吃掉落库（旁路纪律）
 
     def _audit(
         self,
@@ -239,18 +319,21 @@ class SkillLearner:
         new: dict | None = None,
         actor: str = "",
         reason: str = "",
+        tenant_id: str | None = None,
     ) -> None:
         """写一条进化审计记录（mem0 §1.2 schema: old/new/event）。
 
         记账失败绝不阻塞主流程（CowAgent记账哲学），但必须大声记日志——
         静默丢审计=记账体系失真（mem0 §1.1 失败可见）。
+        行归属（DEC-⑦-⑱）=显式键→父行继承→'default'（_audit_tenant 单一源）。
         """
+        tenant_val = self._audit_tenant(skill_id, tenant_id)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     """INSERT INTO skill_audit
-                       (skill_id, event, old_json, new_json, actor, reason, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       (skill_id, event, old_json, new_json, actor, reason, created_at, tenant_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         skill_id,
                         event,
@@ -259,6 +342,7 @@ class SkillLearner:
                         actor,
                         reason,
                         time.time(),
+                        tenant_val,
                     ),
                 )
                 conn.commit()
@@ -285,6 +369,7 @@ class SkillLearner:
         max_per_skill: int | None = None,
         max_total: int | None = None,
         fail_max_age_days: float | None = None,
+        tenant_id: str | None = None,
     ) -> dict:
         """审计账本retention三层裁剪（每层都守回滚语义红线）。
 
@@ -306,16 +391,29 @@ class SkillLearner:
             raise ValueError("invalid retention params (caps >= 1, age >= 0)")
 
         events = ",".join(f"'{e}'" for e in self.AUDIT_STATE_EVENTS)
+        # 租户作用域（DEC-⑦-⑱）：tenant_id=显式=三层裁剪恒按行租户键（外层
+        # DELETE 同带键——"只给租户"的裁剪不得变相清他租户历史，F3b-③c-1
+        # prune 纪律；窗口/红线锚点同键=红线"每技能最近一次状态变更"按
+        # (租户, 技能) 语义）；None=系统视图全量字节不变。
+        t_scope = ""
+        t_where = ""
+        tps: list = []
+        if tenant_id is not None:
+            t_val = skill_row_tenant({"tenant_id": tenant_id})
+            t_scope = " AND tenant_id = ?"
+            t_where = " WHERE tenant_id = ?"
+            tps = [t_val]
         anchor_sql = (
-            f"SELECT MAX(audit_id) FROM skill_audit WHERE event IN ({events}) GROUP BY skill_id"
+            f"SELECT MAX(audit_id) FROM skill_audit WHERE event IN ({events})"
+            f"{t_scope} GROUP BY skill_id"
         )
         with sqlite3.connect(self.db_path) as conn:
-            before = conn.execute("SELECT COUNT(*) FROM skill_audit").fetchone()[0]
+            before = conn.execute(f"SELECT COUNT(*) FROM skill_audit{t_where}", tps).fetchone()[0]
             # ① 过龄FAIL（非回滚依据，先清噪声）
             cutoff = time.time() - fail_max_age_days * 86400
             deleted_fail = conn.execute(
-                "DELETE FROM skill_audit WHERE event = 'FAIL' AND created_at < ?",
-                (cutoff,),
+                f"DELETE FROM skill_audit WHERE event = 'FAIL' AND created_at < ?{t_scope}",
+                (cutoff, *tps),
             ).rowcount
             # ② per-skill上限：每技能最新N行 ∪ 红线锚点行
             deleted_per_skill = conn.execute(
@@ -325,25 +423,25 @@ class SkillLearner:
                                    ROW_NUMBER() OVER (
                                        PARTITION BY skill_id ORDER BY audit_id DESC
                                    ) AS rn
-                            FROM skill_audit
+                            FROM skill_audit{t_where}
                         ) WHERE rn <= ?
                         UNION {anchor_sql}
-                    )""",
-                (max_per_skill,),
+                    ){t_scope}""",
+                (*tps, max_per_skill, *tps, *tps),
             ).rowcount
             # ③ 全局上限：最新M行 ∪ 红线锚点行（子查询包一层：ORDER BY/LIMIT只作用于自身）
             deleted_total = conn.execute(
                 f"""DELETE FROM skill_audit WHERE audit_id NOT IN (
                         SELECT audit_id FROM (
-                            SELECT audit_id FROM skill_audit
+                            SELECT audit_id FROM skill_audit{t_where}
                             ORDER BY audit_id DESC LIMIT ?
                         )
                         UNION {anchor_sql}
-                    )""",
-                (max_total,),
+                    ){t_scope}""",
+                (*tps, max_total, *tps, *tps),
             ).rowcount
             conn.commit()
-            after = conn.execute("SELECT COUNT(*) FROM skill_audit").fetchone()[0]
+            after = conn.execute(f"SELECT COUNT(*) FROM skill_audit{t_where}", tps).fetchone()[0]
 
         return {
             "before": before,
@@ -359,36 +457,66 @@ class SkillLearner:
         d["old"] = json.loads(d["old_json"]) if d["old_json"] else None
         d["new"] = json.loads(d["new_json"]) if d["new_json"] else None
         del d["old_json"], d["new_json"]
+        # 加性契约：行归属可观测（归一值=skill_row_tenant，⑦-③④⑤ 同款）
+        d["tenant_id"] = skill_row_tenant(d)
         return d
 
-    def history(self, skill_id: str, limit: int = 50) -> list[dict]:
-        """审计历史（mem0 §1.2 history()查询接口）：这条技能被谁、因为哪次执行、从什么改成什么。"""
+    def history(self, skill_id: str, limit: int = 50, tenant_id: str | None = None) -> list[dict]:
+        """审计历史（mem0 §1.2 history()查询接口）：这条技能被谁、因为哪次执行、从什么改成什么。
+
+        tenant_id=显式租户=恒按行租户键过滤（DEC-⑦-⑱）；None=系统视图字节不变。
+        """
+        sql = "SELECT * FROM skill_audit WHERE skill_id = ?"
+        params: list = [skill_id]
+        if tenant_id is not None:
+            sql += " AND tenant_id = ?"
+            params.append(skill_row_tenant({"tenant_id": tenant_id}))
+        sql += " ORDER BY audit_id DESC LIMIT ?"
+        params.append(int(limit))
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """SELECT * FROM skill_audit WHERE skill_id = ?
-                   ORDER BY audit_id DESC LIMIT ?""",
-                (skill_id, limit),
-            ).fetchall()
+            rows = conn.execute(sql, params).fetchall()
         return [self._audit_row_to_dict(r) for r in rows]
 
-    def audit_tail(self, limit: int = 50) -> list[dict]:
-        """跨技能的最近审计事件（ADD/UPDATE/DELETE/FAIL），新→旧。"""
+    def audit_tail(self, limit: int = 50, tenant_id: str | None = None) -> list[dict]:
+        """跨技能的最近审计事件（ADD/UPDATE/DELETE/FAIL），新→旧。
+
+        tenant_id=显式租户=恒按行租户键过滤（DEC-⑦-⑱）；None=系统视图字节不变。
+        """
+        sql = "SELECT * FROM skill_audit"
+        params: list = []
+        if tenant_id is not None:
+            sql += " WHERE tenant_id = ?"
+            params.append(skill_row_tenant({"tenant_id": tenant_id}))
+        sql += " ORDER BY audit_id DESC LIMIT ?"
+        params.append(int(limit))
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM skill_audit ORDER BY audit_id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            rows = conn.execute(sql, params).fetchall()
         return [self._audit_row_to_dict(r) for r in rows]
 
-    def delete_skill(self, skill_id: str, actor: str = "api", reason: str = "") -> bool:
-        """删除技能并记DELETE审计（old留档=回滚依据，mem0 §1.2 is_deleted语义）。"""
+    def delete_skill(
+        self,
+        skill_id: str,
+        actor: str = "api",
+        reason: str = "",
+        tenant_id: str | None = None,
+    ) -> bool:
+        """删除技能并记DELETE审计（old留档=回滚依据，mem0 §1.2 is_deleted语义）。
+
+        tenant_id=显式租户=归属闸（DEC-⑦-⑱）：跨租户回 False 与缺行同契约
+        不差分泄露行存在性；None=系统视图字节不变。
+        """
+        gate_sql = "SELECT * FROM learned_skills WHERE skill_id = ?"
+        gate_params: list = [skill_id]
+        del_sql = "DELETE FROM learned_skills WHERE skill_id = ?"
+        if tenant_id is not None:
+            gate_sql += " AND tenant_id = ?"
+            del_sql += " AND tenant_id = ?"
+            gate_params.append(skill_row_tenant({"tenant_id": tenant_id}))
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM learned_skills WHERE skill_id = ?", (skill_id,)
-            ).fetchone()
+            row = conn.execute(gate_sql, gate_params).fetchone()
             if row is None:
                 return False
             old = {
@@ -408,12 +536,18 @@ class SkillLearner:
                 "created_at": row["created_at"],
                 "last_used_at": row["last_used_at"],
             }
-            conn.execute("DELETE FROM learned_skills WHERE skill_id = ?", (skill_id,))
+            conn.execute(del_sql, gate_params)
             conn.commit()
-        self._audit(skill_id, "DELETE", old=old, actor=actor, reason=reason)
+        self._audit(skill_id, "DELETE", old=old, actor=actor, reason=reason, tenant_id=tenant_id)
         return True
 
-    def purge_by_source(self, source: str, actor: str = "ops", reason: str = "") -> dict:
+    def purge_by_source(
+        self,
+        source: str,
+        actor: str = "ops",
+        reason: str = "",
+        tenant_id: str | None = None,
+    ) -> dict:
         """按来源整批清除（"测试marker字符串识别"挂账的清理端解法）。
 
         只允许清PURGEABLE_SOURCES（test测试垃圾 / seed标准技能可重新播种）；
@@ -432,21 +566,31 @@ class SkillLearner:
                 f"purge refused for source={source!r} (allowed: {PURGEABLE_SOURCES}; "
                 "real learned rows must go through delete_skill with audit)"
             )
+        # 租户作用域（F3b-③a purge 纪律："只给租户"的清理不得变相清全史）：
+        # tenant_id=显式=技能行+审计行恒按行租户键清；None=系统视图全量字节不变。
+        scope_sql = ""
+        scope_params: list = []
+        if tenant_id is not None:
+            scope_sql = " AND tenant_id = ?"
+            scope_params.append(skill_row_tenant({"tenant_id": tenant_id}))
         with sqlite3.connect(self.db_path) as conn:
             ids = [
                 r[0]
                 for r in conn.execute(
-                    "SELECT skill_id FROM learned_skills WHERE source = ?", (source,)
+                    f"SELECT skill_id FROM learned_skills WHERE source = ?{scope_sql}",
+                    [source, *scope_params],
                 ).fetchall()
             ]
             if not ids:
                 return {"source": source, "deleted_skills": 0, "deleted_audit": 0}
             placeholders = ",".join("?" for _ in ids)
             deleted_skills = conn.execute(
-                "DELETE FROM learned_skills WHERE source = ?", (source,)
+                f"DELETE FROM learned_skills WHERE source = ?{scope_sql}",
+                [source, *scope_params],
             ).rowcount
             deleted_audit = conn.execute(
-                f"DELETE FROM skill_audit WHERE skill_id IN ({placeholders})", ids
+                f"DELETE FROM skill_audit WHERE skill_id IN ({placeholders}){scope_sql}",
+                [*ids, *scope_params],
             ).rowcount
             conn.commit()
         logger.info(
@@ -484,22 +628,39 @@ class SkillLearner:
         d["tags"] = json.loads(d["tags"] or "[]")
         return d
 
-    def current_state(self, skill_id: str) -> dict | None:
-        """技能当前全量状态（learned_skills整行），不存在=已删除态(None)。"""
+    def current_state(self, skill_id: str, tenant_id: str | None = None) -> dict | None:
+        """技能当前全量状态（learned_skills整行），不存在=已删除态(None)。
+
+        tenant_id=显式租户=归属闸（DEC-⑦-⑱）：跨租户与缺行同契约回 None；
+        None=系统视图字节不变。
+        """
+        sql = "SELECT * FROM learned_skills WHERE skill_id = ?"
+        params: list = [skill_id]
+        if tenant_id is not None:
+            sql += " AND tenant_id = ?"
+            params.append(skill_row_tenant({"tenant_id": tenant_id}))
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM learned_skills WHERE skill_id = ?", (skill_id,)
-            ).fetchone()
-        return self._skill_row_state(row) if row else None
+            row = conn.execute(sql, params).fetchone()
+        state = self._skill_row_state(row) if row else None
+        if state is not None:
+            state["tenant_id"] = skill_row_tenant(state)  # 加性键（归一值）
+        return state
 
-    def _pick_event(self, skill_id: str, audit_id: int | None) -> dict | None:
+    def _pick_event(
+        self, skill_id: str, audit_id: int | None, tenant_id: str | None = None
+    ) -> dict | None:
         """选定回滚目标事件。
 
         - 显式audit_id：回滚到该事件发生之前（含ADD→删除技能、REVERT→再翻回去）。
         - 缺省：最近一次有状态变更的事件（UPDATE/DELETE/REVERT）=一键回滚上一次改动；
           只有ADD史的技能不自动选（防误删），必须显式传audit_id。
         """
+        tenant_sql = ""
+        tenant_params: list = []
+        if tenant_id is not None:
+            tenant_sql = " AND tenant_id = ?"
+            tenant_params.append(skill_row_tenant({"tenant_id": tenant_id}))
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             if audit_id is None:
@@ -509,18 +670,20 @@ class SkillLearner:
                 placeholders = ",".join("?" for _ in events)
                 row = conn.execute(
                     f"SELECT * FROM skill_audit WHERE skill_id = ?"
-                    f" AND event IN ({placeholders})"
+                    f" AND event IN ({placeholders}){tenant_sql}"
                     " ORDER BY audit_id DESC LIMIT 1",
-                    (skill_id, *events),
+                    (skill_id, *events, *tenant_params),
                 ).fetchone()
             else:
                 row = conn.execute(
-                    "SELECT * FROM skill_audit WHERE skill_id = ? AND audit_id = ?",
-                    (skill_id, audit_id),
+                    f"SELECT * FROM skill_audit WHERE skill_id = ? AND audit_id = ?{tenant_sql}",
+                    (skill_id, audit_id, *tenant_params),
                 ).fetchone()
         return self._audit_row_to_dict(row) if row else None
 
-    def revert_preview(self, skill_id: str, audit_id: int | None = None) -> dict | None:
+    def revert_preview(
+        self, skill_id: str, audit_id: int | None = None, tenant_id: str | None = None
+    ) -> dict | None:
         """回滚预览（Agent Zero _time_travel：破坏性动作前先看清diff）——零写入。
 
         返回action（restore/update/delete）+逐字段changes{from,to}；
@@ -528,7 +691,9 @@ class SkillLearner:
         变更→ValueError——可回滚事件集单一真源=AUDIT_STATE_EVENTS（API透出给前端
         决定按钮可见性，不再两端各硬编码一份）。
         """
-        event = self._pick_event(skill_id, audit_id)
+        # 归属闸（DEC-⑦-⑱）：审计事件与当前行同按显式租户过滤——跨租户恒
+        # _pick_event None=与缺行同契约不差分泄露（含已删技能的恢复面）。
+        event = self._pick_event(skill_id, audit_id, tenant_id=tenant_id)
         if event is None:
             return None
         if event["event"] not in self.AUDIT_STATE_EVENTS:
@@ -536,7 +701,7 @@ class SkillLearner:
                 f"audit event {event['audit_id']} is {event['event']} (no skill state to revert)"
             )
         target = event["old"]  # 该事件发生之前的状态；None=之前不存在（回滚=删除）
-        current = self.current_state(skill_id)
+        current = self.current_state(skill_id, tenant_id=tenant_id)
         changes = {}
         for f in self.STATE_FIELDS:
             cur_v = current.get(f) if current else None
@@ -552,11 +717,29 @@ class SkillLearner:
             "target": target,
         }
 
-    def _apply_state(self, skill_id: str, target: dict | None, current: dict | None) -> None:
-        """把learned_skills行写成target状态（None=删除行）。target没记录的字段保留当前值。"""
+    def _apply_state(
+        self,
+        skill_id: str,
+        target: dict | None,
+        current: dict | None,
+        tenant_id: str | None = None,
+    ) -> None:
+        """把learned_skills行写成target状态（None=删除行）。target没记录的字段保留当前值。
+
+        行归属（DEC-⑦-⑱）：恢复 INSERT 落键=显式键→current 行键→'default'；
+        UPDATE 粘性不洗键（行归属=首次写入）；DELETE 带闸防跨租户改删。
+        """
+        row_tenant = skill_row_tenant(
+            {"tenant_id": tenant_id} if tenant_id is not None else (current or {})
+        )
         with sqlite3.connect(self.db_path) as conn:
             if target is None:
-                conn.execute("DELETE FROM learned_skills WHERE skill_id = ?", (skill_id,))
+                del_sql = "DELETE FROM learned_skills WHERE skill_id = ?"
+                del_params: list = [skill_id]
+                if tenant_id is not None:
+                    del_sql += " AND tenant_id = ?"
+                    del_params.append(row_tenant)
+                conn.execute(del_sql, del_params)
                 conn.commit()
                 return
             base = dict(current or {})
@@ -584,9 +767,9 @@ class SkillLearner:
                     """INSERT INTO learned_skills
                        (name, description, category, code_template, parameters,
                         usage_count, success_count, avg_duration_ms,
-                        created_at, last_used_at, tags, source_session, source, skill_id)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    vals + (skill_id,),
+                        created_at, last_used_at, tags, source_session, source, skill_id, tenant_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    vals + (skill_id, row_tenant),
                 )
             else:
                 conn.execute(
@@ -605,6 +788,7 @@ class SkillLearner:
         audit_id: int | None = None,
         actor: str = "api",
         reason: str = "",
+        tenant_id: str | None = None,
     ) -> dict | None:
         """一键回滚：技能状态恢复到目标审计事件发生之前（Agent Zero travel/revert）。
 
@@ -612,11 +796,11 @@ class SkillLearner:
         - 回滚本身记REVERT审计（old=回滚前、new=恢复后）——回滚可再被回滚（travel链不断）。
         - 审计表只追加不改写（进化引擎保护区：回滚点/审计本身不可被改写）。
         """
-        preview = self.revert_preview(skill_id, audit_id)
+        preview = self.revert_preview(skill_id, audit_id, tenant_id=tenant_id)
         if preview is None:
             return None
         target, current = preview["target"], preview["current"]
-        self._apply_state(skill_id, target, current)
+        self._apply_state(skill_id, target, current, tenant_id=tenant_id)
         self._audit(
             skill_id,
             "REVERT",
@@ -624,6 +808,7 @@ class SkillLearner:
             new=target if target is not None else {"deleted": True},
             actor=actor,
             reason=(f"{reason} revert_to_before_audit_id={preview['event']['audit_id']}".strip()),
+            tenant_id=tenant_id,
         )
         logger.info(
             f"Reverted skill {skill_id} to before audit_id={preview['event']['audit_id']} "
@@ -644,6 +829,7 @@ class SkillLearner:
         tool_calls: list[dict],
         success: bool,
         source: str = "extract",
+        tenant_id: str | None = None,
     ) -> Skill | None:
         """Extract a reusable skill from an execution.
 
@@ -654,6 +840,10 @@ class SkillLearner:
 
         source=写入来源（SKILL_SOURCES之一）：生产学习链缺省extract；测试/E2E脚本
         显式传test（清理端purge_by_source按列精确打击，不再marker猜名字）。
+
+        tenant_id=行租户键（DEC-⑦-⑱）：写点归属=显式派生键落行，未提供→
+        'default'（系统/缺省写方语义，⑦-③ create 同款）；既有行 UPDATE 粘性
+        不洗键；跨租户同 skill_id=劫持→SkillTenantDenied 行零改写（⑦-③⑤ 同族）。
         """
         if source not in SKILL_SOURCES:
             raise ValueError(f"unknown skill source: {source!r} (allowed: {SKILL_SOURCES})")
@@ -672,6 +862,10 @@ class SkillLearner:
 
         skill_id = f"skill_{hashlib.sha256(f'{task_description}:{tool_sequence}'.encode()).hexdigest()[:12]}"
 
+        # 行租户键（DEC-⑦-⑱）：写点归属单一判法（skill_row_tenant），键派生
+        # 故障绝不吃掉落库（③b-2 旁路纪律）。
+        row_tenant = skill_row_tenant({"tenant_id": tenant_id})
+
         if not success:
             # 失败记忆分支：可见、可按skill_id检索到失败族谱（mem0 §1.1 静默吞错误=失败记忆失真）
             self._audit(
@@ -683,12 +877,13 @@ class SkillLearner:
                 },
                 actor=session_id,
                 reason="execution failed",
+                tenant_id=row_tenant,
             )
             # 使用遥测真实接线（02:15轮遗留"record_usage无调用方"销账）：失败执行也是
             # "使用"——usage_count+1、success_count不动，success_rate随失败下降，
             # find_relevant排序自动降权。技能族尚无成功提炼行时updated=False纯no-op
             # （没技能可归因，只留FAIL审计，不落learned_skills行）。
-            usage = self.record_usage(skill_id, success=False)
+            usage = self.record_usage(skill_id, success=False, tenant_id=row_tenant)
             logger.warning(
                 f"Recorded failed execution into failure memory (skill family {skill_id}): "
                 f"{task_description[:50]}"
@@ -743,13 +938,17 @@ class SkillLearner:
             existing = conn.execute(
                 "SELECT * FROM learned_skills WHERE skill_id = ?", (skill.skill_id,)
             ).fetchone()
+            # 劫持闸（DEC-⑦-⑱）：行归属不可被跨租户改写——同 skill_id（同任务+
+            # 同工具序列的内容哈希）落在他租户名下=拒，行/计数零改写（⑦-③⑤ 同族）。
+            if existing is not None and skill_row_tenant(existing) != row_tenant:
+                raise SkillTenantDenied(f"skill {skill.skill_id!r} belongs to another tenant")
             if existing is None:
                 conn.execute(
                     """INSERT INTO learned_skills
                        (skill_id, name, description, category, code_template,
                         parameters, usage_count, success_count, avg_duration_ms,
-                        created_at, last_used_at, tags, source_session, source)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        created_at, last_used_at, tags, source_session, source, tenant_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         skill.skill_id,
                         skill.name,
@@ -765,6 +964,7 @@ class SkillLearner:
                         json.dumps(skill.tags),
                         session_id,
                         source,
+                        row_tenant,
                     ),
                 )
                 event, old = "ADD", None
@@ -834,8 +1034,10 @@ class SkillLearner:
             new=snapshot,
             actor=session_id,
             reason="extract_from_execution",
+            tenant_id=row_tenant,
         )
         skill.audit_event = event
+        skill.tenant_id = row_tenant
         logger.info(f"Extracted skill: {skill.name} ({skill.category}) [{event}]")
         return skill
 
@@ -894,7 +1096,12 @@ class SkillLearner:
     _ACTIVITY_SQL = "(CASE WHEN last_used_at > 0 THEN last_used_at ELSE created_at END)"
 
     def list_skills(
-        self, category: str = "", limit: int = 100, offset: int = 0, after=None
+        self,
+        category: str = "",
+        limit: int = 100,
+        offset: int = 0,
+        after=None,
+        tenant_id: str | None = None,
     ) -> list[dict]:
         """技能库库存盘点（learned_skills全量，最近活动新→旧）——回滚UI/审计视图的枚举端。
 
@@ -917,6 +1124,11 @@ class SkillLearner:
         sql = "SELECT * FROM learned_skills"
         params: list = []
         where: list[str] = []
+        if tenant_id is not None:
+            # 租户过滤（DEC-⑦-⑱）：显式租户恒按行租户键过滤（skill_row_tenant
+            # 单一判法）；None=系统视图字节不变。过滤先于截断（limit 只计可见行）。
+            where.append("tenant_id = ?")
+            params.append(skill_row_tenant({"tenant_id": tenant_id}))
         if category:
             where.append(f"{self._CATEGORY_NORM_SQL} = ?")
             params.append(category)
@@ -945,10 +1157,14 @@ class SkillLearner:
             d["category"] = d.get("category") or "general"  # 口径归一与facet/过滤同源
             d["source"] = d.get("source") or SOURCE_UNKNOWN  # 来源列口径归一（不猜）
             d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])
+            # 加性契约：行归属可观测（归一值=skill_row_tenant，⑦-③④⑤ 同款）
+            d["tenant_id"] = skill_row_tenant(d)
             out.append(d)
         return out
 
-    def list_skills_page(self, category: str = "", limit: int = 100, after=None) -> dict:
+    def list_skills_page(
+        self, category: str = "", limit: int = 100, after=None, tenant_id: str | None = None
+    ) -> dict:
         """keyset分页单页：{skills, has_more, next_cursor}——"还有下一页"的真值页。
 
         has_more用limit+1探底（多取一行看是否存在）而不是"offset+len<total"推算：
@@ -957,7 +1173,9 @@ class SkillLearner:
         时空串——前端只在has_more时消费游标。
         """
         limit = int(limit)
-        rows = self.list_skills(category=category, limit=limit + 1, after=after)
+        rows = self.list_skills(
+            category=category, limit=limit + 1, after=after, tenant_id=tenant_id
+        )
         has_more = len(rows) > limit
         page = rows[:limit]
         return {
@@ -966,7 +1184,7 @@ class SkillLearner:
             "next_cursor": encode_cursor(page[-1]) if has_more and page else "",
         }
 
-    def count_skills(self, category: str = "") -> int:
+    def count_skills(self, category: str = "", tenant_id: str | None = None) -> int:
         """库存总数（与list_skills同口径过滤）——分页"还有多少没显示"的真源。
 
         list_skills受limit/offset截断（生产库122技能 vs 默认limit=100曾把count=100
@@ -974,13 +1192,20 @@ class SkillLearner:
         """
         sql = "SELECT COUNT(*) FROM learned_skills"
         params: list = []
+        where: list[str] = []
+        if tenant_id is not None:
+            # 租户过滤（DEC-⑦-⑱）：COUNT 恒按行租户键（禁泄露全局分布，⑦-⑭ 同款）
+            where.append("tenant_id = ?")
+            params.append(skill_row_tenant({"tenant_id": tenant_id}))
         if category:
-            sql += f" WHERE {self._CATEGORY_NORM_SQL} = ?"
+            where.append(f"{self._CATEGORY_NORM_SQL} = ?")
             params.append(category)
+        if where:
+            sql += " WHERE " + " AND ".join(where)
         with sqlite3.connect(self.db_path) as conn:
             return int(conn.execute(sql, params).fetchone()[0])
 
-    def category_counts(self) -> list[dict]:
+    def category_counts(self, tenant_id: str | None = None) -> list[dict]:
         """分类facet（过滤控件真值源）——每category条数，计数降序、同数按分类名典序。
 
         faceted-search语义：facet是**库存全局分布，不受category过滤影响**——过滤后
@@ -988,16 +1213,30 @@ class SkillLearner:
         控件的选项集+计数不许从分页rows推断（limit截断会漏分类=指标说谎）；计数
         与count_skills(category)同一张表同一归一口径，两面数字必须相等。
         """
-        sql = (
-            f"SELECT {self._CATEGORY_NORM_SQL} AS cat, COUNT(*) AS n"
-            " FROM learned_skills GROUP BY cat ORDER BY n DESC, cat ASC"
-        )
+        sql = f"SELECT {self._CATEGORY_NORM_SQL} AS cat, COUNT(*) AS n FROM learned_skills"
+        params: list = []
+        if tenant_id is not None:
+            # facet 聚合同作用域（DEC-⑦-⑱/⑦-⑭ 同款：禁泄露全局分布）
+            sql += " WHERE tenant_id = ?"
+            params.append(skill_row_tenant({"tenant_id": tenant_id}))
+        sql += " GROUP BY cat ORDER BY n DESC, cat ASC"
         with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(sql).fetchall()
+            rows = conn.execute(sql, params).fetchall()
         return [{"category": r[0], "count": int(r[1])} for r in rows]
 
-    def find_relevant(self, task_description: str, limit: int = 3) -> list[dict]:
-        """Find skills relevant to a task description."""
+    def find_relevant(
+        self, task_description: str, limit: int = 3, tenant_id: str | None = None
+    ) -> list[dict]:
+        """Find skills relevant to a task description.
+
+        tenant_id=显式租户=候选全集恒按行租户键过滤（DEC-⑦-⑱）；None=系统视图
+        字节不变。相关性评分对可见全集做（既有语义）。
+        """
+        sql = "SELECT * FROM learned_skills"
+        sql_params: list = []
+        if tenant_id is not None:
+            sql += " WHERE tenant_id = ?"
+            sql_params.append(skill_row_tenant({"tenant_id": tenant_id}))
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             # 候选全集而非usage序窗口（冷启动盲区修复）：先按usage开LIMIT*3窗口
@@ -1005,7 +1244,7 @@ class SkillLearner:
             # 占满的窗口——再相关也查不到（live API实锤：135行库中12条(2,2)旧测试
             # 行把9窗口占满→刚提炼的技能recommend查无此技能）。相关性/评分对全集
             # 做，最后才按relevance_score截limit；表规模（学习技能数）远够全扫。
-            rows = conn.execute("SELECT * FROM learned_skills").fetchall()
+            rows = conn.execute(sql, sql_params).fetchall()
 
         # 三因子评分（generative-agents recency+importance+relevance范式的技能侧）：
         #   relevance  = 0.6*名字覆盖 + 0.4*描述覆盖（CJK bigram/词token覆盖度，见
@@ -1028,6 +1267,8 @@ class SkillLearner:
             # success_rate如实回填（learned_skills行里没这列，此前recommend恒返回
             # get缺省0.0——指标说谎：真实成败率被0.0掩盖）
             d["success_rate"] = _success_rate(d["usage_count"], d["success_count"])
+            # 加性契约：行归属可观测（归一值=skill_row_tenant）
+            d["tenant_id"] = skill_row_tenant(d)
             name_cov = _token_coverage(
                 task_tokens, d.get("name") or "", _relevance_tokens(d.get("name"))
             )
@@ -1054,9 +1295,9 @@ class SkillLearner:
         scored.sort(key=lambda x: x["relevance_score"], reverse=True)
         return scored[:limit]
 
-    def get_context_prompt(self, task_description: str) -> str:
+    def get_context_prompt(self, task_description: str, tenant_id: str | None = None) -> str:
         """Generate skill context for system prompt injection."""
-        skills = self.find_relevant(task_description, limit=2)
+        skills = self.find_relevant(task_description, limit=2, tenant_id=tenant_id)
         if not skills:
             return ""
 
@@ -1071,30 +1312,37 @@ class SkillLearner:
 
         return "\n".join(lines)
 
-    def record_usage(self, skill_id: str, success: bool) -> dict:
+    def record_usage(self, skill_id: str, success: bool, tenant_id: str | None = None) -> dict:
         """使用遥测单一入口：记一次"技能被使用"（成功/失败）。
 
         usage_count恒+1；success_count仅成功时+1；last_used_at=使用时刻。
         skill_id无learned_skills行时纯no-op（updated=False，没技能可归因不落新行）。
+        tenant_id=显式租户=归属闸（DEC-⑦-⑱）：跨租户与缺行同契约（updated=False
+        →API 404）不差分泄露行存在性；None=系统视图字节不变。
         返回更新后计数（可观测：调用方/日志能立刻看到success_rate漂移）。
         刻意不写审计：USAGE遥测量大，skill_audit记"进化变更"（ADD/UPDATE/DELETE/
         FAIL/REVERT），计数变更的留痕由extract路径的UPDATE审计承担。
         """
+        gate_sql = ""
+        gate_params: list = []
+        if tenant_id is not None:
+            gate_sql = " AND tenant_id = ?"
+            gate_params.append(skill_row_tenant({"tenant_id": tenant_id}))
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             conn.execute(
-                """UPDATE learned_skills SET
+                f"""UPDATE learned_skills SET
                    usage_count = usage_count + 1,
                    success_count = success_count + ?,
                    last_used_at = ?
-                   WHERE skill_id = ?""",
-                (1 if success else 0, time.time(), skill_id),
+                   WHERE skill_id = ?{gate_sql}""",
+                (1 if success else 0, time.time(), skill_id, *gate_params),
             )
             conn.commit()
             row = conn.execute(
-                """SELECT usage_count, success_count FROM learned_skills
-                   WHERE skill_id = ?""",
-                (skill_id,),
+                f"""SELECT usage_count, success_count FROM learned_skills
+                   WHERE skill_id = ?{gate_sql}""",
+                (skill_id, *gate_params),
             ).fetchone()
         if row is None:
             return {
@@ -1112,19 +1360,40 @@ class SkillLearner:
             "success_rate": _success_rate(usage_count, success_count),
         }
 
-    def get_stats(self) -> dict:
+    def get_stats(self, tenant_id: str | None = None) -> dict:
+        """技能库统计。tenant_id=显式租户=逐键恒按行租户键聚合（DEC-⑦-⑱/
+        ⑦-⑭ 同款禁泄露全局分布）；None=系统视图（/health 监控面）字节不变。
+        """
+        sk_sql = ""
+        au_sql = ""
+        sk_params: list = []
+        au_params: list = []
+        if tenant_id is not None:
+            tval = skill_row_tenant({"tenant_id": tenant_id})
+            sk_sql = " WHERE tenant_id = ?"
+            au_sql = " WHERE tenant_id = ?"
+            sk_params = [tval]
+            au_params = [tval]
         with sqlite3.connect(self.db_path) as conn:
-            total = conn.execute("SELECT COUNT(*) FROM learned_skills").fetchone()[0]
+            total = conn.execute(
+                f"SELECT COUNT(*) FROM learned_skills{sk_sql}", sk_params
+            ).fetchone()[0]
             by_category = conn.execute(
-                "SELECT category, COUNT(*) FROM learned_skills GROUP BY category"
+                f"SELECT category, COUNT(*) FROM learned_skills{sk_sql} GROUP BY category",
+                sk_params,
             ).fetchall()
             top = conn.execute(
-                """SELECT name, usage_count, success_count
-                   FROM learned_skills ORDER BY usage_count DESC LIMIT 5"""
+                f"""SELECT name, usage_count, success_count
+                   FROM learned_skills{sk_sql} ORDER BY usage_count DESC LIMIT 5""",
+                sk_params,
             ).fetchall()
-            audit_total = conn.execute("SELECT COUNT(*) FROM skill_audit").fetchone()[0]
+            audit_total = conn.execute(
+                f"SELECT COUNT(*) FROM skill_audit{au_sql}", au_params
+            ).fetchone()[0]
             failed = conn.execute(
                 "SELECT COUNT(*) FROM skill_audit WHERE event = 'FAIL'"
+                + (" AND tenant_id = ?" if tenant_id is not None else ""),
+                au_params,
             ).fetchone()[0]
 
         return {

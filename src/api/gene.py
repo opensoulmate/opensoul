@@ -9,6 +9,7 @@ from src.gene.skill_learner import (
     PURGEABLE_SOURCES,
     SKILL_SOURCES,
     SkillLearner,
+    SkillTenantDenied,
     decode_cursor,
     encode_cursor,
 )
@@ -353,8 +354,13 @@ class SkillUsageRequest(BaseModel):
 
 
 @router.post("/skill/extract")
-async def extract_skill(req: SkillExtractRequest):
-    """Extract a skill from execution log."""
+async def extract_skill(req: SkillExtractRequest, authorization: str | None = Header(None)):
+    """Extract a skill from execution log.
+
+    DEC-⑦-⑱：行租户键=bind_identity 派生禁自报（匿名='default' 契约不变）；
+    跨租户同 skill_id=劫持→403 行零改写（SkillTenantDenied）。
+    """
+    identity = bind_identity(authorization, "", "")
     import ast
     import json
 
@@ -387,13 +393,18 @@ async def extract_skill(req: SkillExtractRequest):
         for tc in tool_calls
     ]
 
-    skill = skill_learner.extract_from_execution(
-        session_id=f"skill_{int(time.time() * 1000)}",
-        task_description=req.task_description,
-        tool_calls=tool_calls,
-        success=req.success,
-        source=req.source,
-    )
+    try:
+        skill = skill_learner.extract_from_execution(
+            session_id=f"skill_{int(time.time() * 1000)}",
+            task_description=req.task_description,
+            tool_calls=tool_calls,
+            success=req.success,
+            source=req.source,
+            tenant_id=identity.tenant_id,
+        )
+    except SkillTenantDenied as exc:
+        # 劫持拒（DEC-⑦-⑱）：行归属不可被跨租户改写——403 带真因行零改写
+        raise HTTPException(403, str(exc))
     if not skill:
         # 失败执行已进失败记忆分支（skill_audit FAIL，mem0 §1.1失败可见）——
         # 这里400表达"没提炼出技能"，但失败本身已留痕，非静默丢弃
@@ -408,13 +419,16 @@ async def extract_skill(req: SkillExtractRequest):
         "event": skill.audit_event,
         # 来源如实回显（粘性规则后生效值：真实行被test触碰不降级）
         "source": skill.source,
+        # 加性契约：行归属可观测（DEC-⑦-⑱ 归一值）
+        "tenant_id": skill.tenant_id,
     }
 
 
 @router.post("/skill/recommend")
-async def recommend_skills(req: SkillRecommendRequest):
-    """Recommend skills for a task."""
-    skills = skill_learner.find_relevant(req.task_description)
+async def recommend_skills(req: SkillRecommendRequest, authorization: str | None = Header(None)):
+    """Recommend skills for a task.（DEC-⑦-⑱：候选恒按派生租户过滤）"""
+    identity = bind_identity(authorization, "", "")
+    skills = skill_learner.find_relevant(req.task_description, tenant_id=identity.tenant_id)
     return {
         "skills": [
             {
@@ -439,6 +453,7 @@ async def list_learned_skills(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     cursor: str = Query(default=""),
+    authorization: str | None = Header(None),
 ):
     """技能库库存列表（learned_skills全量，最近活动新→旧）——回滚UI/审计视图的枚举端。
 
@@ -456,17 +471,22 @@ async def list_learned_skills(
     categories=分类facet单一真源（全局分布，**不受category过滤影响**——前端过滤
     chip的选项集+计数据此渲染，不从分页rows推断）；total随category过滤变。
     """
-    total = skill_learner.count_skills(category=category)
+    identity = bind_identity(authorization, "", "")
+    total = skill_learner.count_skills(category=category, tenant_id=identity.tenant_id)
     if cursor:
         try:
-            page = skill_learner.list_skills_page(category=category, limit=limit, after=cursor)
+            page = skill_learner.list_skills_page(
+                category=category, limit=limit, after=cursor, tenant_id=identity.tenant_id
+            )
         except ValueError as e:
             raise HTTPException(400, f"bad cursor: {e}")
         skills = page["skills"]
         has_more = page["has_more"]
         next_cursor = page["next_cursor"]
     else:
-        skills = skill_learner.list_skills(category=category, limit=limit, offset=offset)
+        skills = skill_learner.list_skills(
+            category=category, limit=limit, offset=offset, tenant_id=identity.tenant_id
+        )
         has_more = offset + len(skills) < total
         # offset模也回填游标：前端翻页中途切游标模不丢进度
         next_cursor = encode_cursor(skills[-1]) if skills and has_more else ""
@@ -479,36 +499,59 @@ async def list_learned_skills(
         "has_more": has_more,
         "next_cursor": next_cursor,
         "revertible_events": list(SkillLearner.AUDIT_STATE_EVENTS),
-        "categories": skill_learner.category_counts(),
+        "categories": skill_learner.category_counts(tenant_id=identity.tenant_id),
+        # 加性契约：聚合作用域可观测（DEC-⑦-⑭ 同款）
+        "tenant_id": identity.tenant_id,
     }
 
 
 @router.post("/skill/{skill_id}/usage")
-async def report_skill_usage(skill_id: str, req: SkillUsageRequest):
+async def report_skill_usage(
+    skill_id: str,
+    req: SkillUsageRequest,
+    authorization: str | None = Header(None),
+):
     """技能使用回执（使用遥测）：消费方用完推荐技能后回执成败。
 
     usage_count恒+1、success_count仅成功时+1——success_rate随真实成败漂移，
     find_relevant排序据此降权/提权（record_usage单一入口）。
     """
-    result = skill_learner.record_usage(skill_id, success=req.success)
+    identity = bind_identity(authorization, "", "")
+    # 归属闸（DEC-⑦-⑱）：跨租户与缺行同契约 404 不差分泄露行存在性
+    result = skill_learner.record_usage(skill_id, success=req.success, tenant_id=identity.tenant_id)
     if not result["updated"]:
         raise HTTPException(404, f"skill not found: {skill_id}")
-    return {"skill_id": skill_id, **result}
+    return {"skill_id": skill_id, **result, "tenant_id": identity.tenant_id}
 
 
 @router.get("/skill/{skill_id}/context")
-async def skill_context(skill_id: str, task: str = Query(default="")):
-    """Get skill context for prompt injection."""
-    return {"context": skill_learner.get_context_prompt(task)}
+async def skill_context(
+    skill_id: str,
+    task: str = Query(default=""),
+    authorization: str | None = Header(None),
+):
+    """Get skill context for prompt injection.（DEC-⑦-⑱：候选恒按派生租户过滤）"""
+    identity = bind_identity(authorization, "", "")
+    return {"context": skill_learner.get_context_prompt(task, tenant_id=identity.tenant_id)}
 
 
 # ── Skill进化审计（mem0 §1.2 记账：谁/何时/从什么改成什么） ────────
 
 
 @router.get("/skill/audit")
-async def skill_audit_tail(limit: int = Query(default=50, ge=1, le=500)):
-    """最近的技能审计事件（ADD/UPDATE/DELETE/FAIL），新→旧。"""
-    return {"events": skill_learner.audit_tail(limit=limit)}
+async def skill_audit_tail(
+    limit: int = Query(default=50, ge=1, le=500),
+    authorization: str | None = Header(None),
+):
+    """最近的技能审计事件（ADD/UPDATE/DELETE/FAIL），新→旧。
+
+    DEC-⑦-⑱：恒按派生租户过滤（匿名='default' 契约不变）。
+    """
+    identity = bind_identity(authorization, "", "")
+    return {
+        "events": skill_learner.audit_tail(limit=limit, tenant_id=identity.tenant_id),
+        "tenant_id": identity.tenant_id,
+    }
 
 
 @router.post("/skill/audit/prune")
@@ -516,39 +559,63 @@ async def prune_skill_audit(
     max_per_skill: int = Query(default=None, ge=1),
     max_total: int = Query(default=None, ge=1),
     fail_max_age_days: float = Query(default=None, ge=0),
+    authorization: str | None = Header(None),
 ):
     """审计账本retention三层裁剪（过龄FAIL→per-skill上限→全局上限）。
 
     回滚语义红线：每技能最近一次状态变更事件（ADD/UPDATE/DELETE/REVERT）永不清除。
     参数缺省走skill_learner.audit_retention配置；返回各层删除计数。
     """
+    identity = bind_identity(authorization, "", "")
     try:
+        # 租户作用域（DEC-⑦-⑱）：裁剪恒限派生租户（F3b-③c-1 prune 纪律）
         result = skill_learner.prune_audit(
             max_per_skill=max_per_skill,
             max_total=max_total,
             fail_max_age_days=fail_max_age_days,
+            tenant_id=identity.tenant_id,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return result
+    return {**result, "tenant_id": identity.tenant_id}
 
 
 @router.get("/skill/{skill_id}/history")
-async def skill_history(skill_id: str, limit: int = Query(default=50, ge=1, le=500)):
-    """单个技能的审计历史——这条策略是被谁、因为哪次执行、从什么改成什么。"""
-    return {"skill_id": skill_id, "events": skill_learner.history(skill_id, limit=limit)}
+async def skill_history(
+    skill_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+    authorization: str | None = Header(None),
+):
+    """单个技能的审计历史——这条策略是被谁、因为哪次执行、从什么改成什么。
+
+    DEC-⑦-⑱：恒按派生租户过滤（跨租户=空面与空历史同契约不差分泄露）。
+    """
+    identity = bind_identity(authorization, "", "")
+    return {
+        "skill_id": skill_id,
+        "events": skill_learner.history(skill_id, limit=limit, tenant_id=identity.tenant_id),
+        "tenant_id": identity.tenant_id,
+    }
 
 
 @router.delete("/skill/{skill_id}")
-async def delete_learned_skill(skill_id: str, reason: str = Query(default="")):
-    """删除学习型技能并记DELETE审计（old留档=回滚依据）。"""
-    if not skill_learner.delete_skill(skill_id, reason=reason):
+async def delete_learned_skill(
+    skill_id: str,
+    reason: str = Query(default=""),
+    authorization: str | None = Header(None),
+):
+    """删除学习型技能并记DELETE审计（old留档=回滚依据）。
+
+    DEC-⑦-⑱：删除归属闸——跨租户=零副作用与 not-found 同契约 404。
+    """
+    identity = bind_identity(authorization, "", "")
+    if not skill_learner.delete_skill(skill_id, reason=reason, tenant_id=identity.tenant_id):
         raise HTTPException(404, f"skill not found: {skill_id}")
     return {"status": "deleted", "skill_id": skill_id}
 
 
 @router.post("/skill/purge-source")
-async def purge_skills_by_source(req: SkillPurgeRequest):
+async def purge_skills_by_source(req: SkillPurgeRequest, authorization: str | None = Header(None)):
     """按来源整批清除测试/播种artifact（"测试marker字符串识别"挂账的清理端）。
 
     只接受可purge来源（test/seed）；extract（真实学习行）硬拒绝——真实学习行必须
@@ -559,24 +626,35 @@ async def purge_skills_by_source(req: SkillPurgeRequest):
             400,
             f"purge refused for source: {req.source!r} (allowed: {list(PURGEABLE_SOURCES)})",
         )
+    identity = bind_identity(authorization, "", "")
     try:
-        result = skill_learner.purge_by_source(req.source, reason=req.reason)
+        # 租户作用域（DEC-⑦-⑱）：清理恒限派生租户（F3b-③a purge 纪律——
+        # "只给租户"的清理不得变相清全史）
+        result = skill_learner.purge_by_source(
+            req.source, reason=req.reason, tenant_id=identity.tenant_id
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return {"status": "purged", **result}
+    return {"status": "purged", **result, "tenant_id": identity.tenant_id}
 
 
 # ── 进化回滚（Agent Zero _time_travel：preview先行 + travel/revert） ──
 
 
 @router.get("/skill/{skill_id}/revert-preview")
-async def skill_revert_preview(skill_id: str, audit_id: int = Query(default=None)):
+async def skill_revert_preview(
+    skill_id: str,
+    audit_id: int = Query(default=None),
+    authorization: str | None = Header(None),
+):
     """回滚预览（Agent Zero _time_travel preview）：逐字段diff看清将发生什么，零写入。
 
     缺省audit_id=预览"回滚上一次改动"；显式audit_id=预览回到该事件之前。
     """
+    identity = bind_identity(authorization, "", "")
     try:
-        preview = skill_learner.revert_preview(skill_id, audit_id)
+        # 归属闸（DEC-⑦-⑱）：跨租户与缺行同契约 404 不差分泄露
+        preview = skill_learner.revert_preview(skill_id, audit_id, tenant_id=identity.tenant_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
     if preview is None:
@@ -589,13 +667,18 @@ async def revert_learned_skill(
     skill_id: str,
     audit_id: int = Query(default=None),
     reason: str = Query(default=""),
+    authorization: str | None = Header(None),
 ):
     """一键回滚：技能恢复到目标审计事件之前的状态（缺省=上一次改动）。
 
     回滚本身记REVERT审计（可再回滚）；审计表只追加不改写。
     """
+    identity = bind_identity(authorization, "", "")
     try:
-        result = skill_learner.revert_skill(skill_id, audit_id, actor="api", reason=reason)
+        # 归属闸（DEC-⑦-⑱）：跨租户与缺行同契约 404 零副作用
+        result = skill_learner.revert_skill(
+            skill_id, audit_id, actor="api", reason=reason, tenant_id=identity.tenant_id
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
     if result is None:
