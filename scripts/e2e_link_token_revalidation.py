@@ -4,8 +4,9 @@
 跑法：python3 scripts/e2e_link_token_revalidation.py（服务 :8090 已部署本拍代码）。
 真 websockets 客户端：持 token 连接真活（同租户 relay 正对照）→ SQL 停用用户行
 → 生产节拍（TOKEN_REVALIDATE_INTERVAL_S=60s）内收到 close=凭据失效连接真被关
-（修前：永续收发）；有效凭据对照连接同窗存活=禁误杀；/api/link/stats ws_clients
-真减=清理真发生。自清痕：WS 全关、enterprise 用户/nest 租户/timeline 探针行全清。
+（修前：永续收发）；有效凭据对照连接同窗存活=禁误杀；/api/link/gateway/stats
+ws_clients 真减=清理真发生（1c-⑥ 遮蔽收口后计数真可观测）。自清痕：WS 全关、
+enterprise 用户/nest 租户/timeline 探针行全清。
 """
 
 import json
@@ -144,11 +145,20 @@ def main():
         ok, got = v2.silent(timeout=3.0)
         check("victim 连接真活（同租户 relay 正对照）", not ok and got is not None, str(got))
 
-        code, st = jreq("GET", "/api/link/stats")
-        # 生产路由遮蔽面（1c-③ 边界⑤ 记档）：/api/link/stats 被 OpenLink 同
-        # 前缀先挂遮蔽=非 gateway stats 面，ws_clients 计数不可经此观测；清理
-        # 证据=上方 close 事件+keep 存活+单测 _ws_clients 清理断言，勿在此自伤。
-        check("stats 面=遮蔽面如实（非 gateway 计数）", "ws_clients" not in st, str(sorted(st.keys()))[:80])
+        code, st = jreq("GET", "/api/link/gateway/stats")
+        # 路由遮蔽收口（DEC-⑫/1c-⑥）：gateway stats 面迁 /api/link/gateway/
+        # stats 后生产可达=ws_clients 计数真可经此观测（修前被 OpenLink 遮蔽）。
+        check(
+            "gateway stats 面可达+连接期计数==4（4 连接全在场）",
+            "ws_clients" in st and st.get("ws_clients") == 4,
+            str(sorted(st.keys()))[:80] + f" ws_clients={st.get('ws_clients')}",
+        )
+        code2, st2 = jreq("GET", "/api/link/stats")
+        check(
+            "/api/link/stats 归 OpenLink（canonical 归属回归）",
+            st2.get("component") == "OpenLink",
+            str(sorted(st2.keys()))[:80],
+        )
 
         # 停用 victim 用户行=凭据失效（bind_identity 401）
         set_active(users["vic"][0], 0)
@@ -163,8 +173,18 @@ def main():
         check("有效凭据连接存活（禁误杀）", not ok and got is not None, str(got))
 
         # 清理证据：victim 双连接已关（上面 closed 双真）+keep 面停用窗后仍真互通；
-        # _ws_clients 行级清理由单测 test_ws_close_when_identity_deactivated 锁死
-        # （stats 面被遮蔽不可观测，1c-③ 边界⑤）。
+        # gateway stats 面收口（1c-⑥）后 _ws_clients 计数真可观测=清理真发生直接
+        # 证据（4→≤2：victim 对被摘、keep 对仍在场；单测
+        # test_ws_close_when_identity_deactivated 同锁）。
+        st3 = {}
+        dropped = False
+        for _ in range(15):
+            code3, st3 = jreq("GET", "/api/link/gateway/stats")
+            if code3 == 200 and st3.get("ws_clients", 99) <= 2:
+                dropped = True
+                break
+            time.sleep(1.0)
+        check("ws_clients 真减（victim 对清理真发生 4→≤2）", dropped, str(st3.get("ws_clients")))
         k1.send({"probe": MARK + "-post"})
         ok2, got2 = k2.silent(timeout=3.0)
         check("清理后 keep 面仍真互通（victim 面已关）", not ok2 and got2 is not None, str(got2))

@@ -617,7 +617,7 @@ async def system_heartbeat(system_id: str):
 # ── Integration Event History ───────────────────────────────
 
 
-@router.get("/events")
+@router.get("/gateway/events")
 async def get_events(
     limit: int = Query(default=50, ge=1, le=1000),
     source: str = Query(default=""),
@@ -626,6 +626,11 @@ async def get_events(
     authorization: str | None = Header(None),
 ):
     """Get integration event history with optional filters.
+
+    路径归属（F3b-⑨b-③-1c-⑥ 路由遮蔽收口 DEC-⑫ 自决）：/api/link/events
+    归 OpenLink（link.py 活消费方：admin-ui link 页/event_stream 轮询/健康
+    监测），本面迁 /api/link/gateway/events——修前同前缀先挂 link_router
+    遮蔽本面=生产死路由（1c-③ 边界② 留档）。
 
     F3b-⑨b-③-1c-③：tenant_id=bind_identity 派生租户（匿名='default' 契约
     不变），事件读面恒按行租户键过滤（_scoped_events 单一判法）；total=
@@ -987,9 +992,12 @@ async def websocket_proxy(ws: WebSocket):
 # ── Gateway Stats ───────────────────────────────────────────
 
 
-@router.get("/stats")
+@router.get("/gateway/stats")
 async def gateway_stats():
-    """Get Link Gateway statistics."""
+    """Get Link Gateway statistics.
+
+    路径归属（F3b-⑨b-③-1c-⑥）：/api/link/stats 归 OpenLink，本面迁
+    /api/link/gateway/stats（修前被同前缀先挂的 link_router 遮蔽=生产死路由）。"""
     return {
         "status": "ok",
         "component": "LinkGateway",
@@ -1002,9 +1010,12 @@ async def gateway_stats():
     }
 
 
-@router.get("/health")
+@router.get("/gateway/health")
 async def gateway_health():
-    """Link Gateway health check."""
+    """Link Gateway health check.
+
+    路径归属（F3b-⑨b-③-1c-⑥）：/api/link/health 归 OpenLink，本面迁
+    /api/link/gateway/health（修前被同前缀先挂的 link_router 遮蔽=生产死路由）。"""
     return {
         "status": "ok",
         "component": "LinkGateway",

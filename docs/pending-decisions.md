@@ -17,6 +17,7 @@
 | ⑨ | TL-⑰ B 类"三删一留"异议窗口（信息项，非决策） | TL-⑰ | 无异议即结 | 异议才回 |
 | ⑩ | builtin starter 目录跨租户共享语义 | DEC-⑦-③ 边界② | 取 B（共享只读目录）——**已按建议默认 B 先行执行 2026-10-15（DEC-⑩-①）** | ~~"⑩取B"~~ 已落，异议回「⑩改A」（revert 回严格过滤）即改道 |
 | ⑪ | 执行结果回传幂等键语义（DEC-⑤-① 重复回传不幂等） | DEC-⑤-① 诚实边界 | 取 B（显式 result_id 优先+证据指纹派生兜底）——**已按建议默认 B 先行执行 2026-10-15（DEC-⑤-①b）** | ~~"⑪取B"~~ 已落，异议回「⑪改C」（只认显式 key）/「⑪改A」（revert）即改道 |
+| ⑫ | /api/link/events·/stats·/health 路由遮蔽收口·归属 | 1c-③ 边界② | 取 B（归属拆分：OpenLink 留 canonical、gateway 三读面迁 /api/link/gateway/*）——**已按建议默认 B 先行执行 2026-10-16（F3b-⑨b-③-1c-⑥）** | ~~"⑫取B"~~ 已落，异议回「⑫改A」（回遮蔽死路由态）/「⑫改C」（三路径归 gateway）即改道 |
 
 ---
 
@@ -134,6 +135,16 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：C 完全依赖回传方配合（仓外回传方未接入=现网重试仍重复落行）；A 保持重复计数缺陷；B 兼顾"无人配合也幂等"（同份证据=同键）与"客户端可显式声明报告身份"，证据变化（exit_code 改变等=另一次观测）异键各记一行不吞真实观测。
 - 建议：**B**。
 - 诚实边界：①90 天老化淘汰（既有 _aging_prune）删行后同键可再记一行（键随行释放）②并发同键由 UNIQUE 索引兜底（撞键回读首行如实 duplicate，非吞错）③键指纹=字面证据字段哈希非语义等价判定（"语义相同"但字面不同的两份报告=两行）④显式 result_id 同 id 不同证据=同一报告（客户端声明即身份，要区分两次上报就给不同 id）。
+
+## ⑫ /api/link/events·/stats·/health 路由遮蔽收口·归属（1c-③ 边界② 留档）
+
+**状态：已按建议默认 B 先行执行（2026-10-16 F3b-⑨b-③-1c-⑥）**——依据：F3b-④b 周期日志候选首件「路由遮蔽收口（需拍板：/api/link/events·/stats·/health 归属）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①②③④⑤⑥⑦⑩⑪ 自决先例。实现=**归属拆分**：/api/link/events·/stats·/health 归 OpenLink（link.py 活消费方：admin-ui link 页/event_stream 轮询/7 处健康监测/admin_actions——活面契约逐键不变），link_gateway 三读面迁 **/api/link/gateway/events·/stats·/health**（修前被同前缀先挂的 link_router 遮蔽=生产死路由，live 修前实证三路径全回 OpenLink、gateway 面不可达；1c-③ 刚落的租户过滤事件面「单测已验活面不可达」一并收口）；gateway 其余活面（/webhooks /systems /push /broadcast /stream /ws）路径字节不变。回归锁死 tests/test_link_route_shadowing.py 4 例（main.py 挂载序静态/canonical 归属逐键不变/gateway 三读面真可达/link 命名空间 (method,path) 零重复）。**若拍板回一句即改道：「⑫改A」=gateway 三读面回 /api/link/* 且接受遮蔽（回修前死路由态）、「⑫改C」=三路径归 gateway、OpenLink 面迁走（需同步改 admin-ui/监测等 10+ 活消费方）**。
+
+**现状**（1c-③ 边界② 留档）：main.py 两 router 同挂 /api/link、link_router 先挂→OpenLink /events /stats /health 与 LinkGateway 同名三读面被遮蔽=生产死路由（gateway 读面 wired-but-not-functional：1c-③ 租户过滤事件面单测已验而活面不可达）；公共 API 归属未定。
+- 选项：**A** 维持遮蔽（归属 OpenLink，gateway 三读面留死/删）/ **B** 归属拆分（OpenLink 留 canonical、gateway 三读面迁 /api/link/gateway/*）/ **C** 三路径归 gateway（OpenLink 面迁走）。
+- 权衡：C 需改 admin-ui link 页+event_stream 轮询+7 处健康监测等 10+ 活消费方（破坏活契约）；A 留死路由=静默断点持续（违背「写了≠接线了」）；B 零活契约变化（OpenLink 面逐键不变）+死面复活（1c-③ 租户过滤面生产可达）+两组件同名读面各归各（gateway 面自带 component 判别键）。
+- 建议：**B**。
+- 诚实边界：①若有外部调用方曾按 /api/link/events 期望 gateway 数据——修前该期望本就落空（拿到的是 OpenLink 数据），迁移后须改调 /api/link/gateway/*；本仓内调用点已全数随更新（3 测试文件 11 处+2 e2e 探针）②遮蔽根因以「路径拆分」收口而非「同名合并」——两读面数据面不同（connector 事件 vs 集成事件）不可合并③FastAPI 新版 include_router 惰性挂载（app.routes 只见 _IncludedRouter 不展开子路由）——重复路由检测真源=router.routes 自身 route 表（测试注释记档，防未来误用 app.routes 写出空转断言：首版断言在旧代码 3P 假绿被控制组逼出后修真）。
 
 ## 附：锚点核验
 

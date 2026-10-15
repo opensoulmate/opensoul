@@ -244,9 +244,9 @@ def test_events_cross_tenant_isolated(env):
     _seed(env)
     ua = _mk_user(env, "u-a", "tenant-a")
     ub = _mk_user(env, "u-b", "tenant-b")
-    ra = env["client"].get("/api/link/events", headers=_auth(_ent_token(ua, "u-a")))
-    rb = env["client"].get("/api/link/events", headers=_auth(_ent_token(ub, "u-b")))
-    rd = env["client"].get("/api/link/events")
+    ra = env["client"].get("/api/link/gateway/events", headers=_auth(_ent_token(ua, "u-a")))
+    rb = env["client"].get("/api/link/gateway/events", headers=_auth(_ent_token(ub, "u-b")))
+    rd = env["client"].get("/api/link/gateway/events")
     assert ra.status_code == rb.status_code == rd.status_code == 200
     sa = {e["source"] for e in ra.json()["events"]}
     sb = {e["source"] for e in rb.json()["events"]}
@@ -259,9 +259,9 @@ def test_events_cross_tenant_isolated(env):
 def test_events_total_scoped(env):
     _seed(env)
     ua = _mk_user(env, "u-a", "tenant-a")
-    ra = env["client"].get("/api/link/events", headers=_auth(_ent_token(ua, "u-a")))
+    ra = env["client"].get("/api/link/gateway/events", headers=_auth(_ent_token(ua, "u-a")))
     assert ra.json()["total"] == 2  # 作用域计数，非全局 4
-    rd = env["client"].get("/api/link/events")
+    rd = env["client"].get("/api/link/gateway/events")
     assert rd.json()["total"] == 1
 
 
@@ -269,7 +269,7 @@ def test_events_filters_compose_with_tenant(env):
     _seed(env)
     ua = _mk_user(env, "u-a", "tenant-a")
     r = env["client"].get(
-        "/api/link/events",
+        "/api/link/gateway/events",
         params={"source": "src-a2", "direction": "outbound"},
         headers=_auth(_ent_token(ua, "u-a")),
     )
@@ -279,14 +279,16 @@ def test_events_filters_compose_with_tenant(env):
     # 异租户同 source 名零泄露（过滤先组合租户）
     ub = _mk_user(env, "u-b", "tenant-b")
     rb = env["client"].get(
-        "/api/link/events", params={"source": "src-a2"}, headers=_auth(_ent_token(ub, "u-b"))
+        "/api/link/gateway/events",
+        params={"source": "src-a2"},
+        headers=_auth(_ent_token(ub, "u-b")),
     )
     assert rb.json()["events"] == []
 
 
 def test_events_shape_unchanged(env):
     _seed(env)
-    r = env["client"].get("/api/link/events")
+    r = env["client"].get("/api/link/gateway/events")
     assert set(r.json().keys()) == {"events", "total"}
     assert set(r.json()["events"][0].keys()) == {
         "event_id",
@@ -303,7 +305,7 @@ def test_events_shape_unchanged(env):
 
 def test_events_bad_token_401(env):
     _seed(env)
-    r = env["client"].get("/api/link/events", headers=_auth("not-a-jwt"))
+    r = env["client"].get("/api/link/gateway/events", headers=_auth("not-a-jwt"))
     assert r.status_code == 401
 
 

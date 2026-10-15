@@ -383,7 +383,7 @@ def test_stats_system_view_unchanged(env):
     lg = env["lg"]
     _seed_webhook(lg, "wh-a1", "tenant-a")
     _seed_webhook(lg, "wh-b1", "tenant-b")
-    r = env["client"].get("/api/link/stats")
+    r = env["client"].get("/api/link/gateway/stats")
     assert r.status_code == 200
     assert r.json()["webhooks"] == 2  # 全局计数（系统视图）
     assert r.json()["systems"] == 0

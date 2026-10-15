@@ -7,9 +7,9 @@
 跑），再断言跨租户窗口内零帧。事件可区分=push 事件 source=webhook_id（每
 租户独立 webhook_id）。自清痕：租户/用户/timeline 探针行全清，remaining=0。
 
-顺带取证（信息项非断言）：/api/link/events 现被 OpenLink 路由遮蔽
-（main.py 先挂载 link_router 同前缀同路径），gateway 的 /events 读面生产
-不可达——租户过滤单测已验，活面断言落在 /stream。
+顺带断言（1c-⑥ 路由遮蔽收口后）：/api/link/gateway/events=真 gateway 读面
+（events+total 双键真可达），/api/link/events 归 OpenLink（canonical 归属
+回归）——修前 gateway /events 被 OpenLink 同前缀先挂遮蔽=生产死路由。
 """
 
 import json
@@ -187,13 +187,18 @@ def main():
             assert code == 200 and r.get("status") == "ok", f"push {tag} {code} {r}"
         check("三面事件已生成（push ok）", len(wh_ids) == 3, str(wh_ids))
 
-        # 信息项：/events 遮蔽事实取证
-        code, r = jreq("GET", "/api/link/events?limit=5")
-        shadowed = "total" not in r
+        # 1c-⑥ 路由遮蔽收口：gateway 读面真可达（修前被 OpenLink 遮蔽=死路由）
+        code, r = jreq("GET", "/api/link/gateway/events?limit=5")
         check(
-            "info /events 现被 OpenLink 路由遮蔽（gateway 读面生产不可达，单测已验）",
-            True,
-            f"code={code} keys={sorted(r.keys())} shadowed={shadowed}",
+            "gateway /events 读面生产可达（events+total 双键）",
+            code == 200 and set(r.keys()) == {"events", "total"},
+            f"code={code} keys={sorted(r.keys())}",
+        )
+        code, r2 = jreq("GET", "/api/link/events?limit=5")
+        check(
+            "/api/link/events 归 OpenLink（canonical 归属回归）",
+            "total" not in r2,
+            f"code={code} keys={sorted(r2.keys())}",
         )
 
         # ① 同租户正对照（A 流真收到 A 事件）+ 跨租户零帧

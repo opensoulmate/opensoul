@@ -372,7 +372,7 @@ def test_stats_ws_clients_contract(env):
     a = _open(env, _path(tok))
     b = _open(env, _path(tok))
     try:
-        r = env["client"].get("/api/link/stats")
+        r = env["client"].get("/api/link/gateway/stats")
         assert r.status_code == 200
         data = r.json()
         assert data["ws_clients"] == 2  # 键集与语义不变（全局计数）
