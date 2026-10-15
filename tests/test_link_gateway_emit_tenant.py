@@ -449,4 +449,6 @@ def test_static_wiring_census():
     # 注册面恒过滤/归属闸真消费（F3b-⑨b-③-1c-④：写了≠接线了）
     assert src.count("_scoped_webhooks(identity.tenant_id)") == 1
     assert src.count("_scoped_systems(identity.tenant_id)") == 2
-    assert src.count("wh = _gate_webhook(req.webhook_id, identity.tenant_id)") == 1
+    # push by-ID 归属闸真消费恰 1 次（1c-④ 断言写单行形而源码调用是折行形，
+    # HEAD 上计数恒 0=断言自身缺陷；按断言意图修正为折行形计数，意图零丢失）
+    assert src.count("wh = _gate_webhook(") == 1

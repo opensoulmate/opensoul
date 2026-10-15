@@ -43,6 +43,9 @@ RETRY_ATTEMPTS = 3
 RETRY_DELAYS = [1.0, 2.0, 4.0]  # exponential backoff: 1s, 2s, 4s
 HTTP_TIMEOUT = 30.0
 HEARTBEAT_INTERVAL = 60.0  # seconds
+# 连接期凭据重校验节拍（F3b-⑨b-③-1c-⑤）：WS /ws 与 SSE /stream 长连接
+# 握手后每此秒数重跑 bind_identity；吊销/过期与关闭之间有界滞后。
+TOKEN_REVALIDATE_INTERVAL_S = 60.0
 
 
 # ── Data Models ─────────────────────────────────────────────
@@ -741,15 +744,32 @@ def _http_presented_token(request: Request) -> str:
     return (request.headers.get("authorization") or "").strip()
 
 
-def _sse_event_lines(tenant_id: str, source: str, event_type: str):
+def _sse_event_lines(tenant_id: str, source: str, event_type: str, token=None):
     """SSE 帧生成器（F3b-⑨b-③-1c-③ 提取为模块级可测面）：只发行租户键==
     tenant_id 的事件（_scoped_events 单一判法，跨租户零帧）；source /
-    event_type 过滤语义字节不变。"""
+    event_type 过滤语义字节不变。
+
+    token：连接期凭据重校验（F3b-⑨b-③-1c-⑤）——提供了 token 的连接每
+    TOKEN_REVALIDATE_INTERVAL_S 秒重跑 bind_identity（单一派生口）：凭据
+    失效（JWT 过期/用户停用或消失）=结束流（禁凭失效凭据继续收帧），派生
+    租户变化=跟随新派生（scope re-key，禁持陈旧绑定继续服务）。未提供
+    token（匿名 'default' 面）=无凭据可失效，不重校验，行为字节不变。
+    """
 
     async def event_generator():
         last_seen = 0
+        scope = tenant_id
+        next_check = time.time() + TOKEN_REVALIDATE_INTERVAL_S
         while True:
-            current = _scoped_events(tenant_id)
+            if token and time.time() >= next_check:
+                try:
+                    fresh = bind_identity(token)
+                except HTTPException as exc:
+                    logger.warning("link SSE token revalidation failed: %s", exc.detail)
+                    return
+                scope = fresh.tenant_id
+                next_check = time.time() + TOKEN_REVALIDATE_INTERVAL_S
+            current = _scoped_events(scope)
             for evt in current:
                 if evt.timestamp <= last_seen:
                     continue
@@ -792,7 +812,12 @@ async def sse_event_stream(
 
     identity = bind_identity(_http_presented_token(request) or None)
     return StreamingResponse(
-        _sse_event_lines(identity.tenant_id, source, event_type),
+        _sse_event_lines(
+            identity.tenant_id,
+            source,
+            event_type,
+            token=_http_presented_token(request),
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -809,6 +834,39 @@ def _ws_presented_token(ws: WebSocket) -> str:
     if token:
         return token
     return (ws.headers.get("authorization") or "").strip()
+
+
+async def _ws_token_watchdog(ws, me, token):
+    """WS 连接期凭据周期重校验（F3b-⑨b-③-1c-⑤）。
+
+    每 TOKEN_REVALIDATE_INTERVAL_S 秒重跑 bind_identity（单一派生口）：
+    - 凭据失效（JWT 过期/签名失效/用户停用或消失）→ close 1008（与握手
+      拒绝同语义），禁凭失效凭据继续收发；主循环 receive 因此结束，finally
+      清理 _ws_clients。
+    - 派生租户变化 → me.tenant_id re-key（键来源=bind_identity 单一派生口，
+      禁持陈旧绑定继续服务；消息循环每条消息取最新键，路由/事件归属随之）。
+    诚实边界：吊销/过期与关闭之间有 ≤ TOKEN_REVALIDATE_INTERVAL_S 秒有界
+    滞后（周期重校验语义固有）；连接期内 bearer token 字符串不变（重校验
+    的是同一凭据的当前效力，非轮换）。
+    """
+    while True:
+        await asyncio.sleep(TOKEN_REVALIDATE_INTERVAL_S)
+        try:
+            fresh = bind_identity(token)
+        except HTTPException as exc:
+            logger.warning("link WS token revalidation failed: %s", exc.detail)
+            try:
+                await ws.close(code=1008, reason="invalid token")
+            except Exception:
+                pass
+            # 看门狗自行清理订阅条目：服务端 close 后主循环 receive 未必即刻
+            # 退出（不能把清理挂在 receive 抛错上=禁泄漏），finally 清理幂等兜底。
+            if me in _ws_clients:
+                _ws_clients.remove(me)
+            return
+        if fresh.tenant_id != me.tenant_id:
+            logger.info("link WS tenant re-key: %s -> %s", me.tenant_id, fresh.tenant_id)
+            me.tenant_id = fresh.tenant_id
 
 
 @router.websocket("/ws")
@@ -834,8 +892,16 @@ async def websocket_proxy(ws: WebSocket):
     tenant = identity.tenant_id
 
     await ws.accept()
-    _ws_clients.append(WsSubscriber(ws=ws, tenant_id=tenant))
+    me = WsSubscriber(ws=ws, tenant_id=tenant)
+    _ws_clients.append(me)
     logger.info("WS client connected (%d active)", len(_ws_clients))
+
+    # 连接期凭据重校验（F3b-⑨b-③-1c-⑤）：持 token 的连接起看门狗周期重跑
+    # bind_identity——凭据失效=close 1008（与握手拒绝同语义，禁凭失效凭据
+    # 继续收发），派生租户变化=me.tenant_id re-key（消息循环每条消息取最新
+    # 键，路由/事件归属随之）。匿名连接无凭据可失效，不看门狗，行为字节不变。
+    ws_token = _ws_presented_token(ws)
+    watchdog = asyncio.create_task(_ws_token_watchdog(ws, me, ws_token)) if ws_token else None
 
     # Notify via event bus
     _record_event(
@@ -849,6 +915,7 @@ async def websocket_proxy(ws: WebSocket):
     try:
         while True:
             data = await ws.receive_text()
+            tenant = me.tenant_id  # 重校验 re-key 生效点：每条消息取最新派生键
             try:
                 payload = json.loads(data)
             except json.JSONDecodeError:
@@ -909,6 +976,8 @@ async def websocket_proxy(ws: WebSocket):
     except Exception as e:
         logger.debug("WS error: %s", e)
     finally:
+        if watchdog is not None:
+            watchdog.cancel()
         for sub in list(_ws_clients):
             if sub.ws is ws:
                 _ws_clients.remove(sub)
