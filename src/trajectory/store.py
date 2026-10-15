@@ -384,12 +384,21 @@ class TrajectoryStore:
         )
         return s
 
-    async def get_session(self, session_id: str) -> TrajectorySession | None:
+    async def get_session(
+        self, session_id: str, tenant_id: str | None = None
+    ) -> TrajectorySession | None:
+        """by-ID 读面归属闸（DEC-⑦-⑪）：tenant_id 显式给出=按行租户键判定
+        可见（session_row_tenant 单一判法），跨租户回 None 与 not-found 同
+        契约不差分泄露行存在性（⑦-⑩ get_file_meta 同款，③c-1 纪律）；None=
+        系统视图字节不变（写闸/内部系统调用面沿用）。"""
         await self.ensure_tables()
         row = await db_pool.fetchrow("SELECT * FROM trajectory_sessions WHERE id = ?", session_id)
         if not row:
             return None
-        return self._row_to_session(row)
+        session = self._row_to_session(row)
+        if tenant_id is not None and session_row_tenant(session) != tenant_id:
+            return None
+        return session
 
     async def list_sessions(
         self,
@@ -583,8 +592,19 @@ class TrajectoryStore:
         )
         return event
 
-    async def get_events(self, session_id: str, limit: int = 500) -> list[TrajectoryEvent]:
+    async def get_events(
+        self, session_id: str, limit: int = 500, tenant_id: str | None = None
+    ) -> list[TrajectoryEvent]:
+        """by-ID 读面归属闸（DEC-⑦-⑪）：读取权威=父 session 行闸门（③b-2
+        读取权威=父行同款；事件行键=add_event 父行继承派生键，两键生产恒等，
+        会话拥有者可见自己会话的全部事件）。显式 tenant_id 下父行不可见=
+        回 [] 与空事件同契约；None=系统视图字节不变。"""
         await self.ensure_tables()
+        if (
+            tenant_id is not None
+            and await self.get_session(session_id, tenant_id=tenant_id) is None
+        ):
+            return []
         rows = await db_pool.fetch(
             """SELECT * FROM trajectory_events
                WHERE session_id = ?
@@ -595,10 +615,23 @@ class TrajectoryStore:
         )
         return [self._row_to_event(r) for r in rows]
 
-    async def get_event(self, event_id: str) -> TrajectoryEvent | None:
+    async def get_event(
+        self, event_id: str, tenant_id: str | None = None
+    ) -> TrajectoryEvent | None:
+        """by-ID 读面归属闸（DEC-⑦-⑪）：读取权威=父 session 行闸门（get_events
+        同权威）；显式 tenant_id 下父行不可见=回 None 与 not-found 同契约；
+        None=系统视图字节不变。"""
         await self.ensure_tables()
         row = await db_pool.fetchrow("SELECT * FROM trajectory_events WHERE id = ?", event_id)
-        return self._row_to_event(row) if row else None
+        if not row:
+            return None
+        event = self._row_to_event(row)
+        if (
+            tenant_id is not None
+            and await self.get_session(event.session_id, tenant_id=tenant_id) is None
+        ):
+            return None
+        return event
 
     @staticmethod
     def _search_where(
@@ -812,8 +845,13 @@ class TrajectoryStore:
         ev.metadata_json = new_meta_json
         return ev
 
-    async def get_trace_tree(self, session_id: str, limit: int = 500) -> dict:
+    async def get_trace_tree(
+        self, session_id: str, limit: int = 500, tenant_id: str | None = None
+    ) -> dict:
         """Build the nested observation tree for a session.
+
+        DEC-⑦-⑪ 归属闸：tenant_id 透传 get_events 同一父行权威闸（跨租户=
+        空树与无事件同契约，API 层另有 get_session 404 前置同契约收口）。
 
         langfuse Trace→Observation model: ``parent_event_id`` links become
         parent/child edges, each node carries subtree rollups (events /
@@ -822,7 +860,7 @@ class TrajectoryStore:
         roots and cycles are cut by treating the cycle member as a root.
         """
         await self.ensure_tables()
-        events = await self.get_events(session_id, limit=limit)
+        events = await self.get_events(session_id, limit=limit, tenant_id=tenant_id)
         nodes: dict[str, dict] = {}
         order: list[str] = []
         for ev in events:
@@ -1023,7 +1061,10 @@ class TrajectoryStore:
         DEC-⑦-⑥：新 session 行归属=调用方派生租户（克隆归克隆者，⑦-③ clone
         同款）；复制事件经 add_event 随新 session 行继承落键（父行继承单一写点）。
         """
-        source = await self.get_session(source_session_id)
+        # DEC-⑦-⑪ 源读归属闸：跨租户=源不可见走同一 ValueError 与 not-found
+        # 同契约（克隆零副作用），闸在克隆/复制之前=禁拿他人内容跑克隆
+        # （⑦-⑩ promote/auto-process 同型）；None=系统视图字节不变。
+        source = await self.get_session(source_session_id, tenant_id=tenant_id)
         if not source:
             raise ValueError(f"Source session {source_session_id} not found")
 
@@ -1038,7 +1079,7 @@ class TrajectoryStore:
         )
 
         # Copy events up to and including the fork point
-        events = await self.get_events(source_session_id)
+        events = await self.get_events(source_session_id, tenant_id=tenant_id)
         copying = True
         for ev in events:
             if not copying:

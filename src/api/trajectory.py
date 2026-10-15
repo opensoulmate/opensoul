@@ -164,10 +164,15 @@ async def list_sessions(
 
 
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str):
-    """Get a single trajectory session."""
+async def get_session(session_id: str, authorization: str | None = Header(None)):
+    """Get a single trajectory session.
+    DEC-⑦-⑪ by-ID 读面归属闸：tenant=bind_identity 派生禁自报（匿名
+    'default' 契约不变——单机存量行全 'default'）；跨租户=与 not-found 同
+    契约不差分泄露行存在性（⑦-⑩ 同款）。
+    """
+    identity = bind_identity(authorization)
     await _sweep_idle_sessions()
-    session = await trajectory_store.get_session(session_id)
+    session = await trajectory_store.get_session(session_id, tenant_id=identity.tenant_id)
     if not session:
         raise HTTPException(404, "Session not found")
     return session.to_dict()
@@ -261,12 +266,23 @@ async def record_events_batch(session_id: str, req: BatchEventRequest):
 
 
 @router.get("/sessions/{session_id}/events")
-async def get_events(session_id: str, limit: int = Query(default=500, ge=1, le=2000)):
-    """Get all events for a session (ordered by time)."""
-    session = await trajectory_store.get_session(session_id)
+async def get_events(
+    session_id: str,
+    limit: int = Query(default=500, ge=1, le=2000),
+    authorization: str | None = Header(None),
+):
+    """Get all events for a session (ordered by time).
+    DEC-⑦-⑪ by-ID 读面归属闸：tenant=bind_identity 派生禁自报（匿名
+    'default' 契约不变——单机存量行全 'default'）；跨租户=与 not-found 同
+    契约不差分泄露行存在性（⑦-⑩ 同款）。
+    """
+    identity = bind_identity(authorization)
+    session = await trajectory_store.get_session(session_id, tenant_id=identity.tenant_id)
     if not session:
         raise HTTPException(404, "Session not found")
-    events = await trajectory_store.get_events(session_id, limit=limit)
+    events = await trajectory_store.get_events(
+        session_id, limit=limit, tenant_id=identity.tenant_id
+    )
     return {
         "session_id": session_id,
         "events": [e.to_dict() for e in events],
@@ -275,9 +291,14 @@ async def get_events(session_id: str, limit: int = Query(default=500, ge=1, le=2
 
 
 @router.get("/events/{event_id}")
-async def get_event(event_id: str):
-    """Get a single event by ID."""
-    event = await trajectory_store.get_event(event_id)
+async def get_event(event_id: str, authorization: str | None = Header(None)):
+    """Get a single event by ID.
+    DEC-⑦-⑪ by-ID 读面归属闸：tenant=bind_identity 派生禁自报（匿名
+    'default' 契约不变——单机存量行全 'default'）；跨租户=与 not-found 同
+    契约不差分泄露行存在性（⑦-⑩ 同款）。
+    """
+    identity = bind_identity(authorization)
+    event = await trajectory_store.get_event(event_id, tenant_id=identity.tenant_id)
     if not event:
         raise HTTPException(404, "Event not found")
     return event.to_dict()
@@ -374,6 +395,8 @@ async def fork_session(session_id: str, req: ForkRequest, authorization: str | N
     with events copied up to the fork point for branching execution.
 
     DEC-⑦-⑥：新 session 行归属=调用方派生租户（克隆归克隆者，⑦-③ clone 同款）。
+    DEC-⑦-⑪ 源读归属闸：同一派生租户流入 store.fork_session 源读闸（跨租户=
+    源不可见与 not-found 同契约，克隆零副作用禁拿他人内容跑克隆）。
     """
     identity = bind_identity(authorization)
     try:
@@ -392,13 +415,22 @@ async def fork_session(session_id: str, req: ForkRequest, authorization: str | N
 
 
 @router.get("/sessions/{session_id}/replay")
-async def replay_session(session_id: str, from_event: str = Query(default="")):
+async def replay_session(
+    session_id: str,
+    from_event: str = Query(default=""),
+    authorization: str | None = Header(None),
+):
     """Get events for replay — optionally starting from a specific event.
-    Returns events in chronological order with step numbers."""
-    session = await trajectory_store.get_session(session_id)
+    Returns events in chronological order with step numbers.
+    DEC-⑦-⑪ by-ID 读面归属闸：tenant=bind_identity 派生禁自报（匿名
+    'default' 契约不变——单机存量行全 'default'）；跨租户=与 not-found 同
+    契约不差分泄露行存在性（⑦-⑩ 同款）。
+    """
+    identity = bind_identity(authorization)
+    session = await trajectory_store.get_session(session_id, tenant_id=identity.tenant_id)
     if not session:
         raise HTTPException(404, "Session not found")
-    events = await trajectory_store.get_events(session_id)
+    events = await trajectory_store.get_events(session_id, tenant_id=identity.tenant_id)
 
     if from_event:
         # Find the starting point
@@ -457,13 +489,24 @@ async def end_event(event_id: str, req: EventEndRequest | None = None):
 
 
 @router.get("/sessions/{session_id}/trace")
-async def get_trace_tree(session_id: str, limit: int = Query(default=500, ge=1, le=2000)):
+async def get_trace_tree(
+    session_id: str,
+    limit: int = Query(default=500, ge=1, le=2000),
+    authorization: str | None = Header(None),
+):
     """Get the nested observation tree (Trace→Observation model) with
-    per-subtree event/token/duration rollups."""
-    session = await trajectory_store.get_session(session_id)
+    per-subtree event/token/duration rollups.
+    DEC-⑦-⑪ by-ID 读面归属闸：tenant=bind_identity 派生禁自报（匿名
+    'default' 契约不变——单机存量行全 'default'）；跨租户=与 not-found 同
+    契约不差分泄露行存在性（⑦-⑩ 同款）。
+    """
+    identity = bind_identity(authorization)
+    session = await trajectory_store.get_session(session_id, tenant_id=identity.tenant_id)
     if not session:
         raise HTTPException(404, "Session not found")
-    return await trajectory_store.get_trace_tree(session_id, limit=limit)
+    return await trajectory_store.get_trace_tree(
+        session_id, limit=limit, tenant_id=identity.tenant_id
+    )
 
 
 # ── Scores (langfuse Score layer) ────────────────────────────

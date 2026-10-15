@@ -458,24 +458,42 @@ class TestApiAxis:
         assert row2[0] == "completed"
 
     def test_fork_attribution_to_cloner(self, env):
+        """契约随更新（DEC-⑦-⑪）：⑦-⑥ 时此例以「B fork A 的 session」证克隆归
+        克隆者；⑦-⑪ fork 源读归属闸后跨租户 fork=与缺源同契约（源读泄露收口，
+        ⑦-③ 诚实边界⑤「clone 源可跨租户读…另拍」同族=拿他人内容跑克隆），
+        归属语义改在同租户 fork 断言（新行=克隆者派生租户、复制事件随新行继承）
+        +跨租户拒收同契约断言。"""
         client = env["client"]
         ha, hb = _token(env["user_tenant_a"]), _token(env["user_tenant_b"])
         s = _create_session(client, ha, session_id="s-fork-src", task_description="alpha probe")
         ev = _record_event(client, ha, s["id"])
+        # 跨租户 fork=与缺源同契约（克隆零副作用，⑦-⑪ 源读归属闸）
+        r_cross = client.post(
+            f"/api/trajectory/sessions/{s['id']}/fork",
+            json={"fork_point_event_id": ev["id"], "new_agent_id": "cloner"},
+            headers=hb,
+        )
+        r_missing = client.post(
+            "/api/trajectory/sessions/no-such/fork",
+            json={"fork_point_event_id": "", "new_agent_id": "cloner"},
+            headers=hb,
+        )
+        assert r_cross.status_code == r_missing.status_code == 400
+        assert "not found" in r_cross.json()["detail"]
+        # 同租户 fork：新行归克隆者 → 复制事件随新 session 行继承落键
         r = client.post(
             f"/api/trajectory/sessions/{s['id']}/fork",
             json={"fork_point_event_id": ev["id"], "new_agent_id": "cloner"},
-            headers=hb,  # 克隆者=B → 新行归克隆者（⑦-③ clone 同款）
+            headers=ha,
         )
         assert r.status_code == 200
         new_id = r.json()["id"]
-        assert r.json()["tenant_id"] == "tenant-b"
-        # 复制事件随新 session 行继承落键
+        assert r.json()["tenant_id"] == "tenant-a"
         with sqlite3.connect(env["traj_db"]) as c:
             rows = c.execute(
                 "SELECT DISTINCT tenant_id FROM trajectory_events WHERE session_id=?", (new_id,)
             ).fetchall()
-        assert [x[0] for x in rows] == ["tenant-b"]
+        assert [x[0] for x in rows] == ["tenant-a"]
 
     def test_bad_token_401(self, env):
         client = env["client"]
