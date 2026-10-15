@@ -96,14 +96,21 @@ class BackupManager:
         archive_path = self.backup_dir / f"{backup_id}.tar.gz"
 
         file_count = 0
+        # Never pack our own output. Without this, a schedule whose source
+        # covers the backup dir (e.g. "~/.opensoul") recursively packs every
+        # previous backup tar into the next one — archive size doubles each run.
+        backup_root = self.backup_dir.resolve()
         with tarfile.open(archive_path, "w:gz") as tar:
             for src in source_dirs:
                 src_path = Path(src)
                 if src_path.exists():
                     for item in src_path.rglob("*"):
-                        if item.is_file():
-                            tar.add(item, arcname=str(item.relative_to(src_path.parent)))
-                            file_count += 1
+                        if not item.is_file():
+                            continue
+                        if item.resolve().is_relative_to(backup_root):
+                            continue  # inside backup output dir — skip
+                        tar.add(item, arcname=str(item.relative_to(src_path.parent)))
+                        file_count += 1
 
         size = archive_path.stat().st_size
         checksum = self._checksum(archive_path)
