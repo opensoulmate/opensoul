@@ -551,11 +551,21 @@ class MessageDispatcher:
                 for c in self._channels.values()
             ]
 
-    def stats(self) -> dict:
+    def stats(self, tenant_id: str | None = None) -> dict:
+        """聚合面加轴（DEC-⑦-⑭）：tenant_id=None=系统视图全量（既有调用面字节不变
+        ——/health 监控面与内部调用面），显式租户=消息聚合恒按行租户键过滤（判法=
+        message_row_tenant 单一源禁双源漂移，F4b-㉗ 纪律）——total/sent/failed 跨租户
+        计数泄露收口（DEC-⑦-⑬ 诚实边界①留档件）。channels_configured/channels_enabled
+        是全局系统配置计数非租户消息行，恒全局如实（非本轴数据面）。
+        """
         with self._lock:
-            total = len(self._history)
-            sent = sum(1 for m in self._history if m.status == "sent")
-            failed = sum(1 for m in self._history if m.status == "failed")
+            entries = list(self._history)
+            if tenant_id is not None:
+                key = message_row_tenant(tenant_id)
+                entries = [m for m in entries if message_row_tenant(m) == key]
+            total = len(entries)
+            sent = sum(1 for m in entries if m.status == "sent")
+            failed = sum(1 for m in entries if m.status == "failed")
             return {
                 "total_messages": total,
                 "sent": sent,

@@ -271,12 +271,24 @@ async def message_history(
 
 
 @router.get("/stats")
-async def echo_stats():
-    """Get OpenEcho statistics."""
+async def echo_stats(
+    authorization: str | None = Header(None),
+):
+    """Get OpenEcho statistics.
+
+    聚合面归属闸（DEC-⑦-⑭）：tenant 从认证身份派生（bind_identity）禁自报（/stats
+    无 tenant_id 自报参数），total/sent/failed 恒按行租户键聚合（匿名='default' 面=
+    DEC-⑦-⑬ 同款，key=message_row_tenant 单一源）；坏 token 401 先于读取（F3b-⑤
+    身份证明先于一切）。dispatcher.stats(tenant_id=None) 系统视图仍为 /health 监控面
+    与内部调用面保留（字节不变）。templates 聚合无行租户键（echo 模板存储层无轴）
+    保持全局如实（诚实边界）；tenant_id 加性键=聚合作用域可观测（⑦-③④⑤ 同款）。
+    """
+    identity = bind_identity(authorization)
     return {
         "status": "ok",
         "component": "OpenEcho",
-        **dispatcher.stats(),
+        "tenant_id": identity.tenant_id,
+        **dispatcher.stats(tenant_id=identity.tenant_id),
         "templates": template_engine.stats(),
     }
 
