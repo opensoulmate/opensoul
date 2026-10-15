@@ -65,21 +65,36 @@ async def list_templates(
 
 
 @router.get("/templates/search/{query}")
-async def search_templates(query: str):
-    """Search templates by name, description, or tags."""
-    return {"templates": engine.search(query), "query": query}
+async def search_templates(query: str, authorization: str | None = Header(None)):
+    """Search templates by name, description, or tags.（DEC-⑦-⑯：bulk 读恒按行
+    租户键过滤——tenant 由 bind_identity 派生禁自报，匿名='default' 面。）"""
+    identity = bind_identity(authorization, "", "")
+    return {
+        "templates": engine.search(query, tenant_id=identity.tenant_id),
+        "query": query,
+        # 加性契约：聚合作用域可观测（⑦-⑭ echo /stats 同款）
+        "tenant_id": identity.tenant_id,
+    }
 
 
 @router.get("/categories")
-async def list_categories():
-    """List all template categories with counts."""
-    return {"categories": engine.categories()}
+async def list_categories(authorization: str | None = Header(None)):
+    """List all template categories with counts.（DEC-⑦-⑯：聚合恒按行租户键过滤）"""
+    identity = bind_identity(authorization, "", "")
+    return {
+        "categories": engine.categories(tenant_id=identity.tenant_id),
+        "tenant_id": identity.tenant_id,
+    }
 
 
 @router.get("/tags")
-async def list_tags():
-    """List all template tags with usage counts."""
-    return {"tags": engine.tags()}
+async def list_tags(authorization: str | None = Header(None)):
+    """List all template tags with usage counts.（DEC-⑦-⑯：聚合恒按行租户键过滤）"""
+    identity = bind_identity(authorization, "", "")
+    return {
+        "tags": engine.tags(tenant_id=identity.tenant_id),
+        "tenant_id": identity.tenant_id,
+    }
 
 
 @router.get("/templates/{template_id}")
@@ -182,14 +197,20 @@ async def export_template(
 async def export_all_templates(
     category: str = Query(default=None),
     include_builtin: bool = Query(default=True),
+    authorization: str | None = Header(None),
 ):
-    """Export all templates as a JSON bundle."""
-    templates = engine.export_all(category=category, include_builtin=include_builtin)
+    """Export all templates as a JSON bundle.（DEC-⑦-⑯：bulk 读恒按行租户键过滤）"""
+    identity = bind_identity(authorization, "", "")
+    templates = engine.export_all(
+        category=category, include_builtin=include_builtin, tenant_id=identity.tenant_id
+    )
     return {
         "format": "opensoul-gene-bundle-v1",
         "exported_at": time.time(),
         "count": len(templates),
         "templates": templates,
+        # 加性契约：导出作用域可观测（⑦-⑭ 同款）
+        "tenant_id": identity.tenant_id,
     }
 
 
@@ -243,9 +264,12 @@ async def import_templates(req: ImportRequest, authorization: str | None = Heade
 
 
 @router.get("/stats")
-async def gene_stats():
-    """OpenGene detailed statistics."""
-    templates = engine.list_templates()
+async def gene_stats(authorization: str | None = Header(None)):
+    """OpenGene detailed statistics.（DEC-⑦-⑯：聚合恒按行租户键过滤——tenant 由
+    bind_identity 派生禁自报，逐键只算可见行禁泄露全局分布，⑦-⑭ echo /stats
+    同款；/health 监控面保持系统视图。）"""
+    identity = bind_identity(authorization, "", "")
+    templates = engine.list_templates(tenant_id=identity.tenant_id)
     by_author = {}
     total_usage = 0
     for t in templates:
@@ -256,10 +280,12 @@ async def gene_stats():
     return {
         "status": "ok",
         "component": "OpenGene",
-        **engine.stats(),
+        **engine.stats(tenant_id=identity.tenant_id),
         "total_usage_count": total_usage,
         "by_author": by_author,
         "most_used": sorted(templates, key=lambda x: x.get("usage_count", 0), reverse=True)[:5],
+        # 加性契约：聚合作用域可观测（⑦-⑭ 同款）
+        "tenant_id": identity.tenant_id,
     }
 
 

@@ -1111,34 +1111,56 @@ class TemplateEngine:
             return [TemplateEngine._substitute(item, variables) for item in obj]
         return obj
 
-    def categories(self) -> list[dict]:
-        """List all categories with template counts."""
+    def categories(self, tenant_id: str | None = None) -> list[dict]:
+        """List all categories with template counts.
+
+        tenant_id=显式租户=bulk 聚合恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        单一判法禁字面手抄 F4b-㉗ 纪律）；None=系统视图字节不变（/health 监控面）。
+        """
         with self._lock:
-            cats: dict[str, int] = {}
-            for t in self._templates.values():
-                cats[t.category] = cats.get(t.category, 0) + 1
+            templates = list(self._templates.values())
+        if tenant_id is not None:
+            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+        cats: dict[str, int] = {}
+        for t in templates:
+            cats[t.category] = cats.get(t.category, 0) + 1
         return [{"category": k, "count": v} for k, v in sorted(cats.items())]
 
-    def tags(self) -> list[dict]:
-        """List all tags with usage counts."""
+    def tags(self, tenant_id: str | None = None) -> list[dict]:
+        """List all tags with usage counts.
+
+        tenant_id=显式租户=bulk 聚合恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        单一判法）；None=系统视图字节不变。
+        """
         with self._lock:
-            tag_counts: dict[str, int] = {}
-            for t in self._templates.values():
-                for tag in t.tags:
-                    tag_counts[tag] = tag_counts.get(tag, 0) + 1
+            templates = list(self._templates.values())
+        if tenant_id is not None:
+            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+        tag_counts: dict[str, int] = {}
+        for t in templates:
+            for tag in t.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
         return [{"tag": k, "count": v} for k, v in sorted(tag_counts.items(), key=lambda x: -x[1])]
 
-    def search(self, query: str) -> list[dict]:
-        """Search templates by name, description, or tags."""
+    def search(self, query: str, tenant_id: str | None = None) -> list[dict]:
+        """Search templates by name, description, or tags.
+
+        tenant_id=显式租户=bulk 读恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        单一判法）；None=系统视图字节不变。行输出加性键 tenant_id=行归属可观测
+        （⑦-③ list_templates 同款加性契约，与之形状逐键对齐）。
+        """
         q = query.lower()
         with self._lock:
-            results = [
-                t
-                for t in self._templates.values()
-                if q in t.name.lower()
-                or q in t.description.lower()
-                or any(q in tag.lower() for tag in t.tags)
-            ]
+            templates = list(self._templates.values())
+        if tenant_id is not None:
+            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+        results = [
+            t
+            for t in templates
+            if q in t.name.lower()
+            or q in t.description.lower()
+            or any(q in tag.lower() for tag in t.tags)
+        ]
         return [
             {
                 "template_id": t.template_id,
@@ -1151,6 +1173,8 @@ class TemplateEngine:
                 "variables": t.variables,
                 "usage_count": t.usage_count,
                 "builtin": t.builtin,
+                # 加性契约：行归属可观测（归一值=template_row_tenant，⑦-③ 同款）
+                "tenant_id": template_row_tenant(t),
             }
             for t in sorted(results, key=lambda x: x.created_at, reverse=True)
         ]
@@ -1179,10 +1203,23 @@ class TemplateEngine:
             "builtin": t.builtin,
         }
 
-    def export_all(self, category: str | None = None, include_builtin: bool = True) -> list[dict]:
-        """Export all templates (optionally filtered)."""
+    def export_all(
+        self,
+        category: str | None = None,
+        include_builtin: bool = True,
+        tenant_id: str | None = None,
+    ) -> list[dict]:
+        """Export all templates (optionally filtered).
+
+        tenant_id=显式租户=bulk 读恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        单一判法）；None=系统视图字节不变。导出 dict=import 回灌 payload 形状
+        保持纯净不注入行键（bundle 顶层作用域键由 API 面给，⑦-⑫ export_template
+        单条导出同款形状）。
+        """
         with self._lock:
             templates = list(self._templates.values())
+        if tenant_id is not None:
+            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
         if category:
             templates = [t for t in templates if t.category == category]
         if not include_builtin:
@@ -1291,14 +1328,23 @@ class TemplateEngine:
 
         return self.import_template(data, overwrite=True, tenant_id=tenant_id)
 
-    def stats(self) -> dict:
+    def stats(self, tenant_id: str | None = None) -> dict:
+        """bulk 聚合统计。
+
+        tenant_id=显式租户=聚合恒按行租户键过滤（DEC-⑦-⑯，template_row_tenant
+        单一判法；逐键只算可见行禁泄露全局分布，⑦-⑭ echo /stats 同款）；
+        None=系统视图字节不变（/health 监控面）。
+        """
         with self._lock:
-            categories = {}
-            for t in self._templates.values():
-                categories[t.category] = categories.get(t.category, 0) + 1
-            return {
-                "total_templates": len(self._templates),
-                "builtin_count": sum(1 for t in self._templates.values() if t.builtin),
-                "user_count": sum(1 for t in self._templates.values() if not t.builtin),
-                "by_category": categories,
-            }
+            templates = list(self._templates.values())
+        if tenant_id is not None:
+            templates = [t for t in templates if template_row_tenant(t) == tenant_id]
+        categories = {}
+        for t in templates:
+            categories[t.category] = categories.get(t.category, 0) + 1
+        return {
+            "total_templates": len(templates),
+            "builtin_count": sum(1 for t in templates if t.builtin),
+            "user_count": sum(1 for t in templates if not t.builtin),
+            "by_category": categories,
+        }
