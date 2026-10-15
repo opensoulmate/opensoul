@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.mirror import isolation
-from src.mirror.sandbox import SandboxManager, SandboxNotActive
+from src.mirror.sandbox import SandboxManager, SandboxNotActive, sandbox_row_tenant
 from src.mirror.templates import SandboxTemplateEngine, is_builtin, template_row_tenant
 from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
@@ -74,6 +74,7 @@ async def create_sandbox(
         tags=req.tags,
         config=req.config,
         ttl_seconds=req.ttl_seconds,
+        tenant_id=identity.tenant_id,
     )
     push_event(
         {
@@ -95,15 +96,20 @@ async def create_sandbox(
 
 
 @router.get("/sandboxes")
-async def list_sandboxes(status: str = Query(default=None)):
-    """List all sandboxes."""
-    return {"sandboxes": manager.list_sandboxes(status=status)}
+async def list_sandboxes(
+    status: str = Query(default=None), authorization: str | None = Header(None)
+):
+    """List sandboxes.（读面恒按派生租户过滤——DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
+    return {"sandboxes": manager.list_sandboxes(status=status, tenant_id=identity.tenant_id)}
 
 
 @router.get("/sandboxes/{sandbox_id}")
-async def get_sandbox(sandbox_id: str):
-    """Get sandbox details."""
-    sandbox = manager.get(sandbox_id)
+async def get_sandbox(sandbox_id: str, authorization: str | None = Header(None)):
+    """Get sandbox details.（by-ID 归属闸 DEC-⑦-㉓：跨租户与 not-found 同契约
+    404 不差分泄露）"""
+    identity = bind_identity(authorization)
+    sandbox = manager.get(sandbox_id, tenant_id=identity.tenant_id)
     if not sandbox:
         raise HTTPException(404, "Sandbox not found")
     return {
@@ -117,29 +123,34 @@ async def get_sandbox(sandbox_id: str):
         "log_count": len(sandbox.log),
         "snapshot_count": sandbox.snapshot_count,
         "ttl_seconds": sandbox.ttl_seconds,
+        "tenant_id": sandbox_row_tenant(sandbox),
     }
 
 
 @router.delete("/sandboxes/{sandbox_id}")
-async def destroy_sandbox(sandbox_id: str):
-    """Destroy a sandbox and clean up resources."""
-    if not manager.destroy(sandbox_id):
+async def destroy_sandbox(sandbox_id: str, authorization: str | None = Header(None)):
+    """Destroy a sandbox and clean up resources.（删除归属闸 DEC-⑦-㉓：跨租户
+    =404 与 not-found 同契约、行零破坏）"""
+    identity = bind_identity(authorization)
+    if not manager.destroy(sandbox_id, tenant_id=identity.tenant_id):
         raise HTTPException(404, "Sandbox not found")
     return {"message": f"Sandbox '{sandbox_id}' destroyed"}
 
 
 @router.post("/sandboxes/{sandbox_id}/pause")
-async def pause_sandbox(sandbox_id: str):
-    """Pause a sandbox."""
-    if not manager.pause(sandbox_id):
+async def pause_sandbox(sandbox_id: str, authorization: str | None = Header(None)):
+    """Pause a sandbox.（by-ID 归属闸 DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
+    if not manager.pause(sandbox_id, tenant_id=identity.tenant_id):
         raise HTTPException(404, "Sandbox not found or not active")
     return {"message": "paused"}
 
 
 @router.post("/sandboxes/{sandbox_id}/resume")
-async def resume_sandbox(sandbox_id: str):
-    """Resume a paused sandbox."""
-    if not manager.resume(sandbox_id):
+async def resume_sandbox(sandbox_id: str, authorization: str | None = Header(None)):
+    """Resume a paused sandbox.（by-ID 归属闸 DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
+    if not manager.resume(sandbox_id, tenant_id=identity.tenant_id):
         raise HTTPException(400, "Sandbox not found or not paused")
     return {"message": "resumed"}
 
@@ -148,43 +159,58 @@ async def resume_sandbox(sandbox_id: str):
 
 
 @router.post("/sandboxes/{sandbox_id}/log")
-async def log_action(sandbox_id: str, req: LogActionRequest):
-    """Log an action in the sandbox."""
-    if not manager.log_action(sandbox_id, req.action, req.detail):
+async def log_action(
+    sandbox_id: str, req: LogActionRequest, authorization: str | None = Header(None)
+):
+    """Log an action in the sandbox.（by-ID 归属闸 DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
+    if not manager.log_action(sandbox_id, req.action, req.detail, tenant_id=identity.tenant_id):
         raise HTTPException(404, "Sandbox not found or not active")
     return {"message": "logged"}
 
 
 @router.get("/sandboxes/{sandbox_id}/logs")
-async def get_logs(sandbox_id: str, limit: int = Query(default=100)):
-    """Get sandbox action log."""
-    entries = manager.get_log(sandbox_id, limit)
-    if not entries and not manager.get(sandbox_id):
+async def get_logs(
+    sandbox_id: str,
+    limit: int = Query(default=100),
+    authorization: str | None = Header(None),
+):
+    """Get sandbox action log.（by-ID 归属闸 DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
+    entries = manager.get_log(sandbox_id, limit, tenant_id=identity.tenant_id)
+    if not entries and not manager.get(sandbox_id, tenant_id=identity.tenant_id):
         raise HTTPException(404, "Sandbox not found")
     return {"logs": entries}
 
 
 @router.post("/sandboxes/{sandbox_id}/variables")
-async def set_variable(sandbox_id: str, req: VariableRequest):
-    """Set a variable in the sandbox."""
-    if not manager.set_variable(sandbox_id, req.key, req.value):
+async def set_variable(
+    sandbox_id: str, req: VariableRequest, authorization: str | None = Header(None)
+):
+    """Set a variable in the sandbox.（by-ID 归属闸 DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
+    if not manager.set_variable(sandbox_id, req.key, req.value, tenant_id=identity.tenant_id):
         raise HTTPException(404, "Sandbox not found or not active")
     return {"message": "set", "key": req.key}
 
 
 @router.get("/sandboxes/{sandbox_id}/variables")
-async def get_variables(sandbox_id: str):
-    """Get all variables from the sandbox."""
-    sandbox = manager.get(sandbox_id)
+async def get_variables(sandbox_id: str, authorization: str | None = Header(None)):
+    """Get all variables from the sandbox.（by-ID 归属闸 DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
+    sandbox = manager.get(sandbox_id, tenant_id=identity.tenant_id)
     if not sandbox:
         raise HTTPException(404, "Sandbox not found")
     return {"variables": sandbox.variables}
 
 
 @router.post("/sandboxes/{sandbox_id}/snapshot")
-async def take_snapshot(sandbox_id: str, req: SnapshotRequest):
-    """Take a snapshot of sandbox state."""
-    result = manager.snapshot(sandbox_id, req.name)
+async def take_snapshot(
+    sandbox_id: str, req: SnapshotRequest, authorization: str | None = Header(None)
+):
+    """Take a snapshot of sandbox state.（by-ID 归属闸 DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
+    result = manager.snapshot(sandbox_id, req.name, tenant_id=identity.tenant_id)
     if not result:
         raise HTTPException(404, "Sandbox not found")
     return result
@@ -208,6 +234,7 @@ async def exec_in_sandbox(
             req.command,
             req.timeout_seconds,
             req.env,
+            tenant_id=identity.tenant_id,
         )
     except SandboxNotActive as exc:
         raise HTTPException(409, str(exc))
@@ -236,13 +263,19 @@ async def exec_in_sandbox(
 
 
 @router.post("/sandboxes/{sandbox_id}/network-policy")
-async def set_network_policy(sandbox_id: str, req: NetworkPolicyRequest):
-    """Hot-update sandbox network policy (takes effect on next exec, no recreate)."""
+async def set_network_policy(
+    sandbox_id: str,
+    req: NetworkPolicyRequest,
+    authorization: str | None = Header(None),
+):
+    """Hot-update sandbox network policy (takes effect on next exec, no recreate).
+    （by-ID 归属闸 DEC-⑦-㉓）"""
+    identity = bind_identity(authorization)
     try:
         isolation.validate_policy(req.policy)
     except isolation.SandboxExecError as exc:
         raise HTTPException(400, str(exc))
-    if not manager.set_network_policy(sandbox_id, req.policy):
+    if not manager.set_network_policy(sandbox_id, req.policy, tenant_id=identity.tenant_id):
         raise HTTPException(404, "Sandbox not found")
     return {"message": "network policy updated", "sandbox_id": sandbox_id, "policy": req.policy}
 
@@ -255,7 +288,9 @@ async def fork_from_snapshot(
 ):
     """E2B snapshot-fork: create a new sandbox from a snapshot."""
     identity = bind_identity(authorization)
-    child = manager.fork_from_snapshot(sandbox_id, req.snapshot_id, req.name)
+    child = manager.fork_from_snapshot(
+        sandbox_id, req.snapshot_id, req.name, tenant_id=identity.tenant_id
+    )
     if not child:
         raise HTTPException(404, "Sandbox or snapshot not found")
     push_event(
@@ -284,9 +319,11 @@ async def fork_from_snapshot(
 
 
 @router.post("/cleanup")
-async def cleanup_expired():
-    """Clean up expired sandboxes."""
-    count = manager.cleanup_expired()
+async def cleanup_expired(authorization: str | None = Header(None)):
+    """Clean up expired sandboxes.（清理范围恒限派生租户可见集——DEC-⑦-㉓ ③a
+    purge 同款，防"只给租户"变相清他租户行）"""
+    identity = bind_identity(authorization)
+    count = manager.cleanup_expired(tenant_id=identity.tenant_id)
     return {"cleaned": count}
 
 
@@ -295,13 +332,13 @@ async def cleanup_expired():
 
 @router.get("/stats")
 async def mirror_stats(authorization: str | None = Header(None)):
-    """Get OpenMirror statistics.（templates 聚合恒按派生租户可见集——
-    DEC-⑦-㉒b；沙箱管理面计数无行租户轴不在本拍。）"""
+    """Get OpenMirror statistics.（templates 与沙箱管理面聚合均恒按派生租户
+    可见集——DEC-⑦-㉒b/㉓；/health 保持系统视图全量。）"""
     identity = bind_identity(authorization)
     return {
         "status": "ok",
         "component": "OpenMirror",
-        **manager.stats(),
+        **manager.stats(tenant_id=identity.tenant_id),
         "templates": template_engine.stats(tenant_id=identity.tenant_id),
     }
 
@@ -438,13 +475,14 @@ async def create_sandbox_from_template(
     if req.name:
         instance["name"] = req.name
 
-    # Create the sandbox
+    # Create the sandbox（行归属=bind_identity 派生——DEC-⑦-㉓）
     sandbox = manager.create(
         name=instance["name"],
         description=instance["description"],
         tags=instance["tags"],
         config=instance["config"],
         ttl_seconds=instance["ttl_seconds"],
+        tenant_id=identity.tenant_id,
     )
 
     # Set template variables as sandbox variables
