@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sqlite3
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from src.nerve.event_bridge import push_event
 from src.nest.isolation import IsolationEngine, ResourceType
 from src.nest.tenant import tenant_namespace
 from src.services.tenant_binding import bind_identity
@@ -500,6 +502,44 @@ async def get_agent_status(authorization: str | None = Header(None)):
 # ── 5. WebSocket /ws/agent/{agent_id} ─────────────────────────────────
 
 
+def _ws_client_host(websocket: WebSocket) -> str:
+    """审计事件 client 来源（terminal_ws/ws_chat 同款判法）。"""
+    return websocket.client.host if websocket.client else ""
+
+
+def _audit(event_type: str, summary: str, detail: dict, tenant_id: str | None = None):
+    """DEC-⑱-④ WS 连接审计：collab agent WS 连接生命周期事件落 timeline/活动流
+    （organ=immune 🛡 安全归口，与 terminal_ws_* / ws_chat_* / link_* /
+    intrusion_detected / permission_denied 同流可见）。
+
+    闭 DEC-⑱-③ 留档件「collab 面 ⑱-④」——agent 协作通道谁被拒/谁连上/会话
+    何时以何因结束必须可审计回放（顶号拒绝、凭据撤销关闭此前只打 logger）。
+
+    **同步口（push_event：活动流缓冲+持久 timeline 双落，nerve 总线既有
+    fire-and-forget）而非 await 型 emit——取消免疫是硬要求**：会话收尾路径的宿主
+    任务可被取消（DEC-⑱ 教训：await 型收尾把审计连同收尾一起吞掉=静默丢审计），
+    审计真源不赌 await 活到落盘。
+
+    纪律：①detail/summary 绝不携带凭据材料（token 只字不进事件，has_token 只记
+    在场与否）②审计失败绝不影响连接主路径（旁路纪律，失败 logger.warning 可见
+    禁静默丢审计）。
+    """
+    try:
+        push_event(
+            {
+                "organ": "immune",
+                "emoji": "🛡",
+                "type": event_type,
+                "summary": summary,
+                "detail": detail,
+                "timestamp": time.time(),
+            },
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:
+        logger.warning("agent WS audit event dropped (%s): %s", event_type, exc)
+
+
 def _ws_presented_token(websocket: WebSocket) -> str:
     """WS 身份凭证取参双源（F3b-④）：`?token=` query（浏览器 WS 无法自设头，主口）优先，
     Authorization: Bearer 头（非浏览器客户端）兜底。"""
@@ -578,12 +618,27 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
     agent_id 保留既有语义。
     """
     conn = _get_db()
+    presented = _ws_presented_token(websocket)
     try:
-        verdict = _agent_token_verdict(conn, agent_id, _ws_presented_token(websocket))
+        verdict = _agent_token_verdict(conn, agent_id, presented)
     finally:
         conn.close()
     if verdict is False:
         logger.warning("Agent WS rejected: invalid/missing token for registered agent %s", agent_id)
+        # DEC-⑱-④ 连接审计：顶号/冒名拒绝是安全事件本体必留痕（cause 单列真因）。
+        # 同步口置于 close 之前=取消免疫；被拒无派生身份 tenant='default' 兜底
+        # （③b-2 旁路纪律），agent_id=被 claim 的目标身份（非凭据材料）。
+        _audit(
+            "collab_ws_rejected",
+            "🛡 Agent WS 握手拒绝（claim 注册身份凭证无效）",
+            {
+                "face": "collab_ws",
+                "agent_id": agent_id,
+                "client": _ws_client_host(websocket),
+                "has_token": bool(presented),
+                "cause": "missing_token" if not presented else "invalid_token",
+            },
+        )
         # 握手拒绝（accept 前 close）：顶号者拿不到通道，不改行、不进 _ws_connections
         await websocket.close(code=1008, reason="invalid agent token")
         return
@@ -598,7 +653,22 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
         "UPDATE agents SET status = 'online', last_seen = ? WHERE agent_id = ?", (now, agent_id)
     )
     conn.commit()
+    # DEC-⑱-④ 连接审计：connected=会话真建立（行已标 online）。租户键=agent 行
+    # 租户单一源（未注册 agent 行缺失→'default' 兜底，②d/③b-2 既有语义）；
+    # session_started 供 closed 事件算时长。
+    row_tenant = _agent_row_tenant(conn, agent_id) or DEFAULT_TENANT
     conn.close()
+    session_started = time.time()
+    _audit(
+        "collab_ws_connected",
+        f"🤝 Agent WS 连接建立: agent={agent_id}",
+        {
+            "face": "collab_ws",
+            "agent_id": agent_id,
+            "client": _ws_client_host(websocket),
+        },
+        tenant_id=row_tenant,
+    )
 
     # 连接期凭据周期重校验（F3b-④b）：所有连接起看门狗——claim 注册身份的
     # 凭据失效（轮换/重注册/连接后才注册）=close 1008；凭据有效/未注册继续服务。
@@ -606,6 +676,8 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
         _agent_ws_token_watchdog(websocket, agent_id, _ws_presented_token(websocket))
     )
 
+    # DEC-⑱-④ 会话结束归因缺省（正常收口=客户端断开；异常收口在 except 改写）。
+    end_reason = "client_disconnect"
     try:
         while True:
             data = await websocket.receive_json()
@@ -690,8 +762,29 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
     except WebSocketDisconnect:
         logger.info("Agent WS disconnected: %s", agent_id)
     except Exception as exc:
+        end_reason = "error"
         logger.warning("Agent WS error for %s: %s", agent_id, exc)
     finally:
+        # DEC-⑱-④ 会话结束归因（同步，先于 task.cancel()——cancel 后 done/cancelled
+        # 形态失真）：看门狗正常返回的唯一路径=凭据失效撤销（exception() 非空=看门狗
+        # 自身崩溃，如实不算撤销），其余按收口路径归因 error / client_disconnect。
+        revoked = watchdog.done() and not watchdog.cancelled() and watchdog.exception() is None
+        if revoked:
+            end_reason = "credential_revoked"
+        # DEC-⑱-④ 连接审计：closed=connected 的对偶（谁连过协作通道、连了多久、
+        # 以何因结束可完整回放）。同步口置于任何 await 之前=取消免疫（DEC-⑱ 教训）。
+        _audit(
+            "collab_ws_closed",
+            f"🤝 Agent WS 会话结束（{end_reason}）: agent={agent_id}",
+            {
+                "face": "collab_ws",
+                "agent_id": agent_id,
+                "client": _ws_client_host(websocket),
+                "reason": end_reason,
+                "duration_s": round(time.time() - session_started, 1),
+            },
+            tenant_id=row_tenant,
+        )
         watchdog.cancel()  # 连接结束收看门狗，禁悬挂任务（清理幂等兜底在下方 pop）
         # 清理只摘自己的注册（F3b-④b）：同名后连接已在 _ws_connections 时，
         # 先连接离场禁误删后连接的投递注册。
