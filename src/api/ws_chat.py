@@ -17,6 +17,9 @@ from src.api.user import decode_token
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# 连接期凭据周期重校验节拍（F3b-④b/1c-⑤/DEC-⑭-② 同族单一源）
+TOKEN_REVALIDATE_INTERVAL_S = 60.0
+
 
 @router.get("/health")
 async def ws_chat_health():
@@ -482,6 +485,49 @@ async def _get_episodic_advisory(text: str) -> tuple[str, bool]:
         return "", True
 
 
+def _user_for_token(token):
+    """凭据效力判定单一判定口（握手与连接期看门狗共用，禁第二套判法——
+    F3b-④b/DEC-⑭-② 同款）：decode_token 单一判定（DEC-⑭-① 诚实边界⑥「已有
+    decode_token 握手轴」语义字节延续，握手契约零变化）。
+
+    - 凭据缺失/无效（JWT 过期/签名失效/sub 缺失）→ None
+    - 判定口自身故障 → 异常原样上抛：故障≠失效凭据（DEC-⑭-②「禁误杀」同款），
+      握手面照旧拒、看门狗面记日志继续。
+    """
+    if not token:
+        return None
+    return decode_token(token)
+
+
+async def _ws_chat_token_watchdog(websocket: WebSocket, token: str):
+    """WS chat 连接期凭据周期重校验（F3b-④b/1c-⑤/DEC-⑭-② 同族；DEC-⑭-①
+    诚实边界⑥留档件「已有 decode_token 握手轴但无连接期重校验」收口）。
+
+    每 TOKEN_REVALIDATE_INTERVAL_S 秒重跑 _user_for_token（单一判定口，与握手
+    同源禁第二套判法）：
+    - 凭据失效（JWT 过期/签名失效）→ close 1008（与握手拒绝同语义）：失效凭据
+      不留对话通道，禁止持过期凭据继续对话。
+    - 判定口瞬断 → 记录可见后继续，故障≠失效凭据禁误杀（DEC-⑭-② 同款）。
+    诚实边界：失效与关闭之间 <= TOKEN_REVALIDATE_INTERVAL_S 秒有界滞后（周期
+    重校验语义固有）；连接期内凭据字符串不变（重校验的是同一凭据当前效力，非
+    轮换）；处理中的当条消息跑完但收发面随 close 断开（无增量凭据轴）。
+    """
+    while True:
+        await asyncio.sleep(TOKEN_REVALIDATE_INTERVAL_S)
+        try:
+            user = _user_for_token(token)
+        except Exception as exc:
+            logger.warning("ws chat token revalidation probe failed: %s", exc)
+            continue
+        if not user:
+            logger.warning("WS chat closed by revalidation: invalid/expired credentials")
+            try:
+                await websocket.close(code=1008, reason="invalid token")
+            except Exception:
+                pass
+            return
+
+
 @router.websocket("/chat")
 async def chat_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time chat.
@@ -505,13 +551,18 @@ async def chat_websocket(websocket: WebSocket):
         await websocket.close()
         return
 
-    user_id = decode_token(token)
-    if not user_id:
+    user = _user_for_token(token)
+    if not user:
         await websocket.send_json({"type": "error", "message": "Invalid token"})
         await websocket.close()
         return
 
-    await websocket.send_json({"type": "connected", "user_id": str(user_id)})
+    await websocket.send_json({"type": "connected", "user_id": str(user)})
+
+    # 连接期凭据周期重校验（DEC-⑭-① 诚实边界⑥留档件收口）：失效凭据 close 1008
+    # 不留对话通道；看门狗收尾在 finally（不挂 receive 抛错上，F3b-④b/DEC-⑭-②
+    # 同款根因纪律）。
+    watchdog = asyncio.create_task(_ws_chat_token_watchdog(websocket, token))
 
     try:
         while True:
@@ -641,3 +692,7 @@ async def chat_websocket(websocket: WebSocket):
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception as exc:
             logging.getLogger(__name__).debug("operation skipped: %s", exc)
+    finally:
+        # 看门狗收尾（不挂 receive 抛错上）：连接结束/撤销后不留后台任务。
+        watchdog.cancel()
+        await asyncio.gather(watchdog, return_exceptions=True)
