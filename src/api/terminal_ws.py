@@ -8,9 +8,11 @@ import os
 import signal
 import struct
 import termios
+import time
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
+from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
@@ -63,6 +65,42 @@ def _terminal_identity(websocket: WebSocket):
         return _identity_for_token(token)
     except Exception:
         return None
+
+
+def _ws_client_host(websocket: WebSocket) -> str:
+    """审计用客户端地址（enterprise/immune 审计面同款取法）。"""
+    return websocket.client.host if websocket.client else ""
+
+
+def _audit(event_type: str, summary: str, detail: dict, tenant_id: str | None = None):
+    """DEC-⑱ WS 连接审计：terminal WS 连接生命周期事件落 timeline/活动流
+    （organ=immune 🛡 安全归口，与 intrusion_detected/permission_denied 同流可见）。
+
+    闭 DEC-⑭-① 诚实边界⑤留档件「连接不落 timeline/审计事件（仅 logger 行）」
+    ——shell 是 RCE 面，谁被拒/谁开了 shell/会话何时以何因结束必须可审计回放。
+
+    **同步口（push_event：活动流缓冲+持久 timeline 双落，nerve 总线既有
+    fire-and-forget）而非 await 型 emit——取消免疫是硬要求**：会话收尾路径的宿主
+    任务可被取消（anyio 会话 teardown 即取消，实测 cancel 兑现于 await 点把
+    await 型审计连同收尾一起吞掉=静默丢审计），审计真源不赌 await 活到落盘。
+
+    纪律：①detail/summary 绝不携带凭据材料（token 只字不进事件）②审计失败
+    绝不影响连接主路径（旁路纪律，失败 logger.warning 可见禁静默丢审计）。
+    """
+    try:
+        push_event(
+            {
+                "organ": "immune",
+                "emoji": "🛡",
+                "type": event_type,
+                "summary": summary,
+                "detail": detail,
+                "timestamp": time.time(),
+            },
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:
+        logger.warning("terminal WS audit event dropped (%s): %s", event_type, exc)
 
 
 async def _terminal_token_watchdog(websocket: WebSocket, token: str):
@@ -118,6 +156,17 @@ async def terminal_ws(websocket: WebSocket):
     identity = _terminal_identity(websocket)
     if identity is None:
         logger.warning("Terminal WS rejected: missing/invalid/inactive credentials")
+        # DEC-⑱ 连接审计：握手拒绝落审计（被拒尝试是安全事件本体，RCE 面必留痕）。
+        # detail 不带凭据材料（has_token 只记在场与否，token 只字不进事件）。
+        _audit(
+            "terminal_ws_rejected",
+            "🛡 Terminal WS 握手拒绝（缺失/无效/停用凭据）",
+            {
+                "face": "terminal_ws",
+                "client": _ws_client_host(websocket),
+                "has_token": bool(_ws_presented_token(websocket)),
+            },
+        )
         # 握手拒绝（accept 前 close）：拿不到通道、不 spawn 任何进程
         await websocket.close(code=1008, reason="terminal token required")
         return
@@ -144,6 +193,21 @@ async def terminal_ws(websocket: WebSocket):
     # keystrokes and the terminal would deadlock. Non-blocking + short poll keeps
     # both pumps concurrent.
     os.set_blocking(fd, False)
+
+    # DEC-⑱ 连接审计：真 spawn shell 后落 connected 事件（connected=真会话建立
+    # ——forkpty 已拉起 bash，非仅握手通过；user/tenant=bind_identity 派生单一源，
+    # F3b-⑨b-② 调用点接派生租户键同款）。session_started 供 closed 事件算时长。
+    session_started = time.time()
+    _audit(
+        "terminal_ws_connected",
+        f"🖥 Terminal WS 连接建立: user={identity.user_id}",
+        {
+            "face": "terminal_ws",
+            "user_id": str(identity.user_id),
+            "client": _ws_client_host(websocket),
+        },
+        tenant_id=identity.tenant_id,
+    )
 
     async def read_pty():
         """Read from PTY master and send to WebSocket."""
@@ -202,9 +266,23 @@ async def terminal_ws(websocket: WebSocket):
         # 撤销即拆会话杀 shell——恶意客户端不回 close 帧也留不下 shell。
         await asyncio.wait({t_pty, t_ws, watchdog}, return_when=asyncio.FIRST_COMPLETED)
     finally:
+        # DEC-⑱ 会话结束归因（sync，先于 task.cancel()——cancel 后 done/cancelled
+        # 形态失真）：看门狗正常返回的唯一路径=凭据失效撤销（exception() 非空=看门狗
+        # 自身崩溃，如实不算撤销）；其余按先结束的泵归因 shell_exit / client_disconnect。
+        revoked = watchdog.done() and not watchdog.cancelled() and watchdog.exception() is None
+        if revoked:
+            end_reason = "credential_revoked"
+        elif t_pty.done() and not t_pty.cancelled():
+            end_reason = "shell_exit"
+        else:
+            end_reason = "client_disconnect"
         for task in (t_pty, t_ws, watchdog):
             task.cancel()
-        await asyncio.gather(t_pty, t_ws, watchdog, return_exceptions=True)
+        # 关键收尾全同步、置于任何 await 之前（根因修，测试逼出的真缺陷）：会话收尾
+        # 路径的宿主任务可被取消（anyio 会话 teardown 即取消），取消兑现于 await 点
+        # ——await 型收尾会把其后一切关键动作连根吞掉（实测：closed 审计被吞；
+        # 同型风险=SIGHUP 漏杀 shell 留 RCE 面）。close fd / SIGHUP+reap / 审计
+        # 全是同步动作=取消免疫。
         try:
             os.close(fd)
         except OSError:
@@ -218,6 +296,24 @@ async def terminal_ws(websocket: WebSocket):
             os.waitpid(child_pid, os.WNOHANG)
         except OSError:
             pass
+        # DEC-⑱ 连接审计：closed=connected 的对偶（谁开过 shell、开了多久、以何因
+        # 结束可完整回放）。
+        _audit(
+            "terminal_ws_closed",
+            f"🖥 Terminal WS 会话结束（{end_reason}）: user={identity.user_id}",
+            {
+                "face": "terminal_ws",
+                "user_id": str(identity.user_id),
+                "client": _ws_client_host(websocket),
+                "reason": end_reason,
+                "duration_s": round(time.time() - session_started, 1),
+            },
+            tenant_id=identity.tenant_id,
+        )
+        # 三泵退场收尾（唯一 await，置于全部关键动作之后=即便被宿主取消也不再吞
+        # 任何关键动作；三泵均已 cancel，取消态自会退场，连接结束不留后台任务
+        # DEC-⑭-③ 纪律延续）。
+        await asyncio.gather(t_pty, t_ws, watchdog, return_exceptions=True)
 
 
 # ── DEC-⑯ terminal 路径对齐别名 ────────────────────────────────────────────
