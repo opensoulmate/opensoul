@@ -186,6 +186,45 @@ def _gate_bulk(
     )
 
 
+# ── G1-⑤ MultiAgentCoordinator 注册接线 ─────────────────────────────────
+#
+# 修前（G0 审计⑤）：MultiAgentCoordinator（src/cortex/multi_agent_coord.py）
+# 协调面有 API 零注册方——agent_registry 恒空、/api/brain/agents 恒 []，
+# register_agent/heartbeat 两方法全仓零生产调用点（wired-but-not-functional）。
+# 本节把真实注册面接到协调面：agent 注册即落协调注册表、WS 连接/心跳事件/
+# 看门狗节拍维持活跃（连接=活跃代理）、断开标 offline。
+#
+# 纪律：①协调面是派生观测面（注册真源=collab agents 行，协调行只作协作视图/
+# 冲突检查），桥写失败绝不吃掉注册/连接主路径（旁路纪律）——logger.warning
+# 可见禁静默②键=行归属租户单一源（_agent_row_tenant/身份派生），禁自报③
+# heartbeat 是 UPDATE-only：未注册 agent_id 绝不 fabricate 协调行。
+
+
+def _coord(tenant_id: str):
+    """协调器构造（call-time import：测试 monkeypatch
+    src.database.postgres.db_pool 生效；生产=lifespan 已连接的 db_pool）。"""
+    from src.cortex.multi_agent_coord import MultiAgentCoordinator
+    from src.database.postgres import db_pool
+
+    return MultiAgentCoordinator(db_pool, tenant_id)
+
+
+async def _coord_register(tenant_id: str, agent_id: str, agent_type: str) -> None:
+    """注册桥（register_agent 方法首个生产消费点）：失败旁路不阻断注册。"""
+    try:
+        await _coord(tenant_id).register_agent(agent_id, agent_type)
+    except Exception as exc:
+        logger.warning("coord register bridge failed for %s: %s", agent_id, exc)
+
+
+async def _coord_heartbeat(tenant_id: str, agent_id: str, status: str = "active") -> None:
+    """心跳桥（heartbeat 方法首个生产消费点）：失败旁路不阻断连接主路径。"""
+    try:
+        await _coord(tenant_id).heartbeat(agent_id, status=status)
+    except Exception as exc:
+        logger.warning("coord heartbeat bridge failed for %s: %s", agent_id, exc)
+
+
 # ── Pydantic models ────────────────────────────────────────────────────
 
 
@@ -302,6 +341,13 @@ async def register_agent(req: AgentRegisterRequest, authorization: str | None = 
         conn.close()
 
     logger.info("Agent registered: %s (%s)", req.agent_id, req.name)
+    # G1-⑤ 注册桥：真实注册面→协调注册表（行归属租户单一源；agent_type=role
+    # 优先回落 model/openmate）。失败旁路不阻断注册（上方纪律①）。
+    await _coord_register(
+        row_tenant,
+        req.agent_id,
+        (req.role or "").strip() or (req.model or "").strip() or "openmate",
+    )
     return AgentRegisterResponse(
         agent_id=req.agent_id, token=token, status="online", tenant_id=row_tenant
     )
@@ -569,7 +615,12 @@ def _agent_token_verdict(conn: sqlite3.Connection, agent_id: str, provided: str)
     return bool(provided) and hmac.compare_digest(provided, expected)
 
 
-async def _agent_ws_token_watchdog(websocket: WebSocket, agent_id: str, token: str):
+async def _agent_ws_token_watchdog(
+    websocket: WebSocket,
+    agent_id: str,
+    token: str,
+    tenant_id: str = DEFAULT_TENANT,
+):
     """WS 连接期凭据周期重校验（F3b-④b；link_gateway 1c-⑤ 同族语义）。
 
     每 TOKEN_REVALIDATE_INTERVAL_S 秒重跑 _agent_token_verdict（单一判定口，
@@ -586,6 +637,9 @@ async def _agent_ws_token_watchdog(websocket: WebSocket, agent_id: str, token: s
     """
     while True:
         await asyncio.sleep(TOKEN_REVALIDATE_INTERVAL_S)
+        # G1-⑤ 协调心跳保活（连接=活跃代理）：节拍与凭据重校验同一循环，
+        # 失败旁路绝不阻断重校验主路径。
+        await _coord_heartbeat(tenant_id, agent_id, status="active")
         try:
             conn = _get_db()
             try:
@@ -669,11 +723,15 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
         },
         tenant_id=row_tenant,
     )
+    # G1-⑤ 连接=活跃代理：协调心跳落行（租户键=agent 行单一源；未注册 agent
+    # heartbeat UPDATE-only 绝不 fabricate 协调行）。
+    await _coord_heartbeat(row_tenant, agent_id, status="active")
 
     # 连接期凭据周期重校验（F3b-④b）：所有连接起看门狗——claim 注册身份的
     # 凭据失效（轮换/重注册/连接后才注册）=close 1008；凭据有效/未注册继续服务。
+    # G1-⑤：看门狗节拍兼协调心跳（连接=活跃代理，60s 节拍保活进 5min 活跃窗）。
     watchdog = asyncio.create_task(
-        _agent_ws_token_watchdog(websocket, agent_id, _ws_presented_token(websocket))
+        _agent_ws_token_watchdog(websocket, agent_id, _ws_presented_token(websocket), row_tenant)
     )
 
     # DEC-⑱-④ 会话结束归因缺省（正常收口=客户端断开；异常收口在 except 改写）。
@@ -749,11 +807,14 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
             elif event_type == "heartbeat":
                 hb_now = datetime.now(UTC).isoformat()
                 conn = _get_db()
+                hb_tenant = _agent_row_tenant(conn, agent_id) or DEFAULT_TENANT
                 conn.execute(
                     "UPDATE agents SET last_seen = ? WHERE agent_id = ?", (hb_now, agent_id)
                 )
                 conn.commit()
                 conn.close()
+                # G1-⑤ 协议心跳事件真消费：同步刷协调面活跃窗（行归属租户单一源）。
+                await _coord_heartbeat(hb_tenant, agent_id, status="active")
             else:
                 await websocket.send_json(
                     {"event": "error", "detail": f"Unknown event: {event_type}"}
@@ -798,3 +859,14 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
         )
         conn.commit()
         conn.close()
+        # G1-⑤ 断开标 offline（协调面如实反映"最近见过但已离线"）——**同步收尾**
+        # 置于任何 await 之前（DEC-⑱ 纪律「取消兑现于 finally 首个 await」：实测
+        # await 型 offline 写被 teardown 取消连同收尾一起吞掉），sqlite3 直写同一
+        # 行同一 SQL（multi_agent_coord._HEARTBEAT_SQL 单一源）。失败旁路只 log。
+        try:
+            from src.cortex.multi_agent_coord import db_url_for_pool, heartbeat_sync
+            from src.database.postgres import db_pool as _coord_pool
+
+            heartbeat_sync(db_url_for_pool(_coord_pool), row_tenant, agent_id, status="offline")
+        except Exception as exc:
+            logger.warning("coord offline bridge failed for %s: %s", agent_id, exc)

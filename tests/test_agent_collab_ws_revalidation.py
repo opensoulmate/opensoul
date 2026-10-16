@@ -276,9 +276,10 @@ class TestCleanupAndWiring:
 
         src = inspect.getsource(collab_env)
         assert "asyncio.create_task(" in src
-        assert (
-            "_agent_ws_token_watchdog(websocket, agent_id, _ws_presented_token(websocket))" in src
-        )
+        assert "_agent_ws_token_watchdog(" in src
+        # G1-⑤ 契约随更新：看门狗增 tenant_id 形参（节拍兼协调心跳保活），
+        # 调用点真传行归属租户+presented token（断言意图零丢失）
+        assert "_ws_presented_token(websocket), row_tenant" in src
         assert "watchdog.cancel()" in src
         wd_src = inspect.getsource(collab_env._agent_ws_token_watchdog)
         assert "_agent_token_verdict(conn, agent_id, token)" in wd_src  # 单一判定口禁第二套判法

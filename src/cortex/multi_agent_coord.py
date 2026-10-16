@@ -12,7 +12,55 @@ import logging
 import time
 from typing import Optional
 
+from src.config import settings
+
 logger = logging.getLogger(__name__)
+
+# 状态心跳 UPDATE SQL 单一源（async heartbeat 与同步 teardown 收尾共用禁手抄漂移，
+# F4b-㉗ 纪律）。
+_HEARTBEAT_SQL = """UPDATE agent_registry
+            SET status = ?, current_task = ?, current_files = ?, last_heartbeat = ?
+            WHERE tenant_id = ? AND agent_id = ?"""
+
+# agent_registry DDL 单一源（_ensure_table 与同步收尾共用——表不在场时同步写
+# 幂等补建，防 "no such table" 把收尾标 offline 变假成功）。
+_AGENT_REGISTRY_DDL = """
+                CREATE TABLE IF NOT EXISTS agent_registry (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id TEXT NOT NULL,
+                    agent_id TEXT NOT NULL,
+                    agent_type TEXT DEFAULT 'openmate',
+                    status TEXT DEFAULT 'idle',
+                    current_task TEXT,
+                    current_files TEXT DEFAULT '[]',
+                    last_heartbeat REAL,
+                    created_at REAL NOT NULL,
+                    UNIQUE(tenant_id, agent_id)
+                )
+            """
+
+
+def db_url_for_pool(pool) -> str:
+    """协调行真源文件路径单一解析（与 SQLitePool.connect 同一语义：显式 db_path
+    优先、缺省 settings.database_url；同步收尾走同一文件禁第二真源）。"""
+    raw = getattr(pool, "_db_path", None) or settings.database_url
+    return raw.replace("sqlite:///", "").replace("sqlite://", "")
+
+
+def heartbeat_sync(db_url: str, tenant_id: str, agent_id: str, status: str = "active") -> None:
+    """同步状态写（teardown 取消面专用，G1-⑤）：DEC-⑱ 纪律「取消兑现于 finally
+    首个 await」——连接收尾路径的 await 型写会被取消连同收尾一起吞掉（实测丢
+    offline 标记），故断开标 offline 走 sqlite3 直写同一行同一 SQL（_HEARTBEAT_SQL
+    单一源）。旁路纪律：故障 logger.warning 可见，绝不吃掉收尾主路径。"""
+    import sqlite3
+
+    conn = sqlite3.connect(db_url)
+    try:
+        conn.execute(_AGENT_REGISTRY_DDL)
+        conn.execute(_HEARTBEAT_SQL, (status, "", "[]", time.time(), tenant_id, agent_id))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 class MultiAgentCoordinator:
@@ -27,20 +75,7 @@ class MultiAgentCoordinator:
         if self._initialized:
             return
         if self.db:
-            await self.db.execute("""
-                CREATE TABLE IF NOT EXISTS agent_registry (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tenant_id TEXT NOT NULL,
-                    agent_id TEXT NOT NULL,
-                    agent_type TEXT DEFAULT 'openmate',
-                    status TEXT DEFAULT 'idle',
-                    current_task TEXT,
-                    current_files TEXT DEFAULT '[]',
-                    last_heartbeat REAL,
-                    created_at REAL NOT NULL,
-                    UNIQUE(tenant_id, agent_id)
-                )
-            """)
+            await self.db.execute(_AGENT_REGISTRY_DDL)
             # C1（2026-10-11）拆表：原表名agent_messages与消息树（acp-proxy/
             # ws_chat同库的session_id/role/content/timestamp形状）同名不同形，
             # 共享一张表必互相"no such column/NOT NULL冲突"。各归各表：协作
@@ -70,7 +105,7 @@ class MultiAgentCoordinator:
             INSERT INTO agent_registry (tenant_id, agent_id, agent_type, status, last_heartbeat, created_at)
             VALUES (?, ?, ?, 'idle', ?, ?)
             ON CONFLICT(tenant_id, agent_id)
-            DO UPDATE SET status = 'idle', last_heartbeat = ?
+            DO UPDATE SET agent_type = excluded.agent_type, status = 'idle', last_heartbeat = ?
         """,
             (self.tenant_id, agent_id, agent_type, time.time(), time.time(), time.time()),
         )
@@ -87,11 +122,7 @@ class MultiAgentCoordinator:
         if not self.db:
             return
         await self.db.execute(
-            """
-            UPDATE agent_registry
-            SET status = ?, current_task = ?, current_files = ?, last_heartbeat = ?
-            WHERE tenant_id = ? AND agent_id = ?
-        """,
+            _HEARTBEAT_SQL,
             (
                 status,
                 current_task,
