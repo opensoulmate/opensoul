@@ -174,3 +174,43 @@ def render_alternatives(items: list) -> str:
         else:
             lines.append(f"{i}. {approach}")
     return "\n".join(lines)
+
+
+def render_alternatives_for_prompt(items: list) -> str:
+    """备选方案 prompt 侧渲染（G1-③b-1 规划面软建议块）：空=空串零织入（无痕可撤）。
+
+    与 render_alternatives（人机裁决面文案）同族但载体不同——本块织进 LLM
+    prompt，自带「仅供参考、以目标要求为准、可全不采纳」免责（F2b-② format_
+    advisory_for_prompt 软建议纪律）。最多 3 条；approach/description 原样展示
+    （缺失段如实略，不硬造）。纯函数只改返回串。
+    """
+    if not items:
+        return ""
+    lines = ["可选思路（创造力回流参考；仅供参考，以目标要求为准，可全不采纳）："]
+    for i, it in enumerate(items[:3], 1):
+        approach = str((it or {}).get("approach") or "").strip()
+        desc = str((it or {}).get("description") or "").strip()
+        if desc:
+            lines.append(f"{i}. {approach}：{desc}")
+        else:
+            lines.append(f"{i}. {approach}")
+    return "\n".join(lines)
+
+
+async def creative_alternatives_for(
+    problem: str, constraints: list | None = None, count: int = 3
+) -> tuple[dict, str]:
+    """创造力回流取数口单一源（G1-③b-1）：generate_alternatives → (载荷, 裁决文案)。
+
+    任务执行门禁面（src/api/ai_groups.py::_creative_alternatives_for 委托本口）
+    与规划面（TaskPlanner/cortex /plan）共用同一取数路径，禁两套装配漂移。
+    返回 (载荷, 人机裁决面文案)：载荷=count/items/(error)（alternatives_payload
+    归一——方法层故障哨兵如实归 error 键禁当真方案），文案=render_alternatives
+    输出（空=零织入）。方法层既有契约：LLM 故障不抛异常（哨兵返回），取数口
+    随之永不因 LLM 故障抛出。
+    """
+    raw = await CreativityEngine().generate_alternatives(
+        problem, list(constraints) if constraints else None, count
+    )
+    payload = alternatives_payload(raw)
+    return payload, render_alternatives(payload.get("items") or [])

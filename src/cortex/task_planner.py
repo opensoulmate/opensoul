@@ -36,9 +36,20 @@ Rules:
         self.api_key = api_key or settings.llm_api_key
         self.model = model or settings.llm_model
 
-    async def plan(self, goal: str) -> list[Task]:
+    async def plan(self, goal: str, advisory: str = "") -> list[Task]:
+        """分解目标为有序子任务。
+
+        advisory 非空=备选思路软建议块织入 user prompt（G1-③b-1 创造力回流
+        规划面——CreativityEngine.generate_alternatives 产出真进规划决策）；
+        空=零织入，请求与接线前逐字节一致（零变化契约）。软建议不改规划规则
+        （SYSTEM_PROMPT 不动），以目标要求为准。
+        """
         if not self.api_key:
             raise ValueError("LLM API key not configured")
+
+        user_content = f"Goal: {goal}"
+        if advisory:
+            user_content = f"{user_content}\n\n{advisory}"
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(
@@ -48,7 +59,7 @@ Rules:
                     "model": self.model,
                     "messages": [
                         {"role": "system", "content": self.SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Goal: {goal}"},
+                        {"role": "user", "content": user_content},
                     ],
                     "temperature": 0.3,
                     "max_tokens": 2048,

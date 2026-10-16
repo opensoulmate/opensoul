@@ -1875,16 +1875,13 @@ async def _creative_alternatives_for(run_goal: str, constraints: list) -> tuple[
     面）。返回 (载荷, 织入文案)：载荷=count/items/(error)（alternatives_payload
     归一），文案=render_alternatives 输出（空=零织入）。_learned_advisory_for
     同款模块接缝（测试可桩，不打真 LLM）。
-    """
-    from src.cortex.creativity import (
-        CreativityEngine,
-        alternatives_payload,
-        render_alternatives,
-    )
 
-    raw = await CreativityEngine().generate_alternatives(run_goal, list(constraints) or None, 3)
-    payload = alternatives_payload(raw)
-    return payload, render_alternatives(payload.get("items") or [])
+    G1-③b-1 装配收编 src.cortex.creativity.creative_alternatives_for 单一源
+    （规划面共用同一取数路径，禁两套装配漂移）；本口保留为模块接缝。
+    """
+    from src.cortex.creativity import creative_alternatives_for
+
+    return await creative_alternatives_for(run_goal, list(constraints) or None, 3)
 
 
 async def _execute_task_impl(
