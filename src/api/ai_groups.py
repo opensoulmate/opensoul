@@ -1866,6 +1866,27 @@ async def _episodic_advisory_for(run_goal: str) -> tuple[str, int]:
     return await episodic_advisory_for(run_goal)
 
 
+async def _creative_alternatives_for(run_goal: str, constraints: list) -> tuple[dict, str]:
+    """G1-③a 创造力回流任务执行门禁面取数口：generate_alternatives 真消费缝。
+
+    G0 定性⑤「生成新方案」只出 API 不进任何决策面（speculative API-only）——
+    本口把 CreativityEngine.generate_alternatives 接进任务执行门禁面（deny/
+    confirm_required 阻塞时刻=「生成新方案」的真实需求时刻，创造力回流人机裁决
+    面）。返回 (载荷, 织入文案)：载荷=count/items/(error)（alternatives_payload
+    归一），文案=render_alternatives 输出（空=零织入）。_learned_advisory_for
+    同款模块接缝（测试可桩，不打真 LLM）。
+    """
+    from src.cortex.creativity import (
+        CreativityEngine,
+        alternatives_payload,
+        render_alternatives,
+    )
+
+    raw = await CreativityEngine().generate_alternatives(run_goal, list(constraints) or None, 3)
+    payload = alternatives_payload(raw)
+    return payload, render_alternatives(payload.get("items") or [])
+
+
 async def _execute_task_impl(
     group_id: str, task_id: str, req: "ExecuteTaskRequest", confirmed: bool = False
 ) -> dict:
@@ -1953,6 +1974,45 @@ async def _execute_task_impl(
             deny_reason = (
                 brain_decision.get("confirm_prompt") or "brain风险门禁拒绝（critical风险）"
             )
+            # G1-③a 创造力回流任务执行门禁面：deny=计划被拦下的时刻正是「生成新
+            # 方案」的需求时刻（G0 定性⑤ speculative API-only 收口）。备选方案织入
+            # 人机裁决文案（deny_reason→任务结果+failed 事件）；生成故障不阻断门禁
+            # 语义且无痕可撤（原 deny_reason 照旧）但 creative-alternatives-error
+            # 可见禁静默（F2b-②c-1 纪律）；门禁判定零依赖创造力层。
+            creative_payload: dict = {}
+            try:
+                creative_payload, alt_text = await _creative_alternatives_for(
+                    run_goal, [deny_reason]
+                )
+                if creative_payload.get("error"):
+                    _emit_exec_event(
+                        group_id,
+                        task_id,
+                        req.agent_id,
+                        "creative-alternatives-error",
+                        "创造力回流无产出(不阻断门禁): " + str(creative_payload["error"]),
+                    )
+                else:
+                    if alt_text:
+                        deny_reason = deny_reason + alt_text
+                    if creative_payload.get("count"):
+                        _emit_exec_event(
+                            group_id,
+                            task_id,
+                            req.agent_id,
+                            "creative-alternatives",
+                            "deny 门禁备选方案回流：{}条（creativity→人机裁决面）".format(
+                                creative_payload.get("count", 0)
+                            ),
+                        )
+            except Exception as e:
+                _emit_exec_event(
+                    group_id,
+                    task_id,
+                    req.agent_id,
+                    "creative-alternatives-error",
+                    f"创造力回流失败(不阻断门禁): {e}",
+                )
             conn.execute(
                 "UPDATE ai_group_tasks SET status='failed', result=?, updated_at=? WHERE id=?",
                 (deny_reason, datetime.now().isoformat(), task_id),
@@ -1968,6 +2028,7 @@ async def _execute_task_impl(
                 "success": False,
                 "deny_reason": deny_reason,
                 "brain_decision": brain_decision,
+                "alternatives": creative_payload,
             }
         if (
             brain_decision
@@ -1980,6 +2041,43 @@ async def _execute_task_impl(
             confirm_prompt = (
                 brain_decision.get("confirm_prompt") or "需要确认：风险较高，等待人工放行"
             )
+            # G1-③a 创造力回流任务执行门禁面：confirm_required 阻塞时刻生成备选方案
+            # 织入问句（confirm_prompt→任务结果+问句回群聊+看板「确认提示」块=人机
+            # 裁决面真消费）；语义同 deny 面（故障无痕可撤+可见、门禁零依赖创造力层）。
+            creative_payload: dict = {}
+            try:
+                creative_payload, alt_text = await _creative_alternatives_for(
+                    run_goal, [confirm_prompt]
+                )
+                if creative_payload.get("error"):
+                    _emit_exec_event(
+                        group_id,
+                        task_id,
+                        req.agent_id,
+                        "creative-alternatives-error",
+                        "创造力回流无产出(不阻断门禁): " + str(creative_payload["error"]),
+                    )
+                else:
+                    if alt_text:
+                        confirm_prompt = confirm_prompt + alt_text
+                    if creative_payload.get("count"):
+                        _emit_exec_event(
+                            group_id,
+                            task_id,
+                            req.agent_id,
+                            "creative-alternatives",
+                            "确认门禁备选方案回流：{}条（creativity→人机裁决面）".format(
+                                creative_payload.get("count", 0)
+                            ),
+                        )
+            except Exception as e:
+                _emit_exec_event(
+                    group_id,
+                    task_id,
+                    req.agent_id,
+                    "creative-alternatives-error",
+                    f"创造力回流失败(不阻断门禁): {e}",
+                )
             conn.execute(
                 "UPDATE ai_group_tasks SET status='awaiting_confirm', result=?, updated_at=? WHERE id=?",
                 (confirm_prompt, datetime.now().isoformat(), task_id),
@@ -2007,6 +2105,7 @@ async def _execute_task_impl(
                 "success": False,
                 "confirm_prompt": confirm_prompt,
                 "brain_decision": brain_decision,
+                "alternatives": creative_payload,
             }
 
         # ── F2b-② 推荐回流执行：learned_patterns → 执行prompt（行为优化真闭环） ──

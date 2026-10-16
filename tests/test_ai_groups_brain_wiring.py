@@ -37,6 +37,14 @@ def brain_wiring_env(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ai_groups, "run_agent_proxy", fake_run_agent_proxy)
 
+    # G1-③a 门禁面创造力取数口桩（不打真 LLM）：本 fixture 测 brain 接线/门禁
+    # 语义，创造力回流语义由 test_creativity_backflow_gate 覆盖；空产出=零织入
+    # 零事件（既有事件断言意图零丢失）。
+    async def _no_creativity(goal, constraints):
+        return {"count": 0, "items": []}, ""
+
+    monkeypatch.setattr(ai_groups, "_creative_alternatives_for", _no_creativity)
+
     def make_task(goal="修复src/api/echo.py里的超时bug"):
         conn = ai_groups.get_db()
         try:

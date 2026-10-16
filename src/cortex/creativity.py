@@ -122,3 +122,55 @@ class CreativityEngine:
         except Exception as e:
             logger.error("跨领域联想失败: %s", e)
             return {"ideas": [], "error": str(e)}
+
+
+# ── G1-③a 消费面载荷/渲染纯函数（任务执行门禁面消费 generate_alternatives 产出） ──
+
+SENTINEL_APPROACHES = frozenset({"错误", "无LLM配置"})
+
+
+def alternatives_payload(raw) -> dict:
+    """把 generate_alternatives 原始产出归一为消费面载荷。
+
+    方法故障契约返回哨兵项（approach 为"错误"/"无LLM配置"，description=真因）——
+    消费面把哨兵如实归入 error 键（为什么没有备选方案），禁当真方案织入文案
+    （fabricate）。非 dict 条目/缺 approach 条目如实跳过不硬造；真项原样保留
+    （approach/description/pros/cons/novelty/feasibility 上游没发不硬造）。
+    """
+    items: list[dict] = []
+    error = None
+    if isinstance(raw, list):
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            approach = str(entry.get("approach") or "").strip()
+            if approach in SENTINEL_APPROACHES:
+                error = str(entry.get("description") or approach)
+                continue
+            if not approach:
+                continue
+            items.append(dict(entry))
+    else:
+        error = "产出形态非法: " + type(raw).__name__
+    payload: dict = {"count": len(items), "items": items}
+    if error:
+        payload["error"] = error
+    return payload
+
+
+def render_alternatives(items: list) -> str:
+    """备选方案渲染（人机裁决面文案）：空=空串零织入（无痕可撤）；最多 3 条。
+
+    纯函数只改返回串；approach/description 原样展示（缺失段如实略，不硬造）。
+    """
+    if not items:
+        return ""
+    lines = ["", "", "💡 备选方案（创造力回流，供改写任务计划参考）："]
+    for i, it in enumerate(items[:3], 1):
+        approach = str((it or {}).get("approach") or "").strip()
+        desc = str((it or {}).get("description") or "").strip()
+        if desc:
+            lines.append(f"{i}. {approach}：{desc}")
+        else:
+            lines.append(f"{i}. {approach}")
+    return "\n".join(lines)
