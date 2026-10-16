@@ -797,7 +797,52 @@ def _http_presented_token(request: Request) -> str:
     return (request.headers.get("authorization") or "").strip()
 
 
-def _sse_event_lines(tenant_id: str, source: str, event_type: str, token=None):
+def _ws_client_host(ws) -> str:
+    """审计事件 client 来源（terminal_ws/ws_chat 同款判法）。"""
+    return ws.client.host if getattr(ws, "client", None) else ""
+
+
+def _audit(event_type: str, summary: str, detail: dict, tenant_id: str | None = None):
+    """DEC-⑱-③ WS/SSE 连接审计：link_gateway 长连接面（WS /ws + SSE /stream）
+    连接生命周期事件落 timeline/活动流（organ=immune 🛡 安全归口，与
+    terminal_ws_* / ws_chat_* / intrusion_detected / permission_denied 同流可见）。
+
+    闭 DEC-⑱-② 诚实边界②留档件「link_gateway/collab 长连接面审计留待拍（⑱-③/
+    ⑱-④）」——中继通道谁被拒/谁连上/连接何时以何因结束必须可审计回放。
+
+    **同步口（push_event：活动流缓冲+持久 timeline 双落，nerve 总线既有
+    fire-and-forget）而非 await 型 emit——取消免疫是硬要求**：连接收尾路径的宿主
+    任务可被取消（client 断连/流取消兑现于 await 点，await 型审计会被连同收尾
+    一起吞掉=静默丢审计），审计真源不赌 await 活到落盘（DEC-⑱ 教训）。
+
+    纪律：①detail/summary 绝不携带凭据材料（token 只字不进事件，has_token 只记
+    在场与否）②审计失败绝不影响连接主路径（旁路纪律，失败 logger.warning 可见
+    禁静默丢审计）。
+    """
+    try:
+        push_event(
+            {
+                "organ": "immune",
+                "emoji": "🛡",
+                "type": event_type,
+                "summary": summary,
+                "detail": detail,
+                "timestamp": time.time(),
+            },
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:
+        logger.warning("link audit event dropped (%s): %s", event_type, exc)
+
+
+def _sse_event_lines(
+    tenant_id: str,
+    source: str,
+    event_type: str,
+    token=None,
+    user_id: str = "",
+    authed: bool = False,
+):
     """SSE 帧生成器（F3b-⑨b-③-1c-③ 提取为模块级可测面）：只发行租户键==
     tenant_id 的事件（_scoped_events 单一判法，跨租户零帧）；source /
     event_type 过滤语义字节不变。
@@ -813,37 +858,74 @@ def _sse_event_lines(tenant_id: str, source: str, event_type: str, token=None):
         last_seen = 0
         scope = tenant_id
         next_check = time.time() + TOKEN_REVALIDATE_INTERVAL_S
-        while True:
-            if token and time.time() >= next_check:
-                try:
-                    fresh = bind_identity(token)
-                except HTTPException as exc:
-                    logger.warning("link SSE token revalidation failed: %s", exc.detail)
-                    return
-                scope = fresh.tenant_id
-                next_check = time.time() + TOKEN_REVALIDATE_INTERVAL_S
-            current = _scoped_events(scope)
-            for evt in current:
-                if evt.timestamp <= last_seen:
-                    continue
-                if source and evt.source != source:
-                    continue
-                if event_type and evt.event_type != event_type:
-                    continue
-                data = json.dumps(
-                    {
-                        "event_id": evt.event_id,
-                        "timestamp": evt.timestamp,
-                        "source": evt.source,
-                        "direction": evt.direction,
-                        "event_type": evt.event_type,
-                        "status": evt.status,
-                    },
-                    ensure_ascii=False,
-                )
-                yield f"data: {data}\n\n"
-                last_seen = max(last_seen, evt.timestamp)
-            await asyncio.sleep(1.0)
+        # DEC-⑱-③ 连接审计：connected=流真建立（首次迭代即开播）；closed=connected
+        # 的对偶（何时以何因收流可回放）。user/tenant=bind_identity 派生单一源。
+        started = time.time()
+        end_reason = "client_disconnect"
+        _audit(
+            "link_sse_connected",
+            f"🔗 Link SSE 订阅建立: user={user_id}",
+            {
+                "face": "link_sse",
+                "user_id": user_id,
+                "authed": authed,
+                "has_token": bool(token),
+            },
+            tenant_id=scope,
+        )
+        try:
+            while True:
+                if token and time.time() >= next_check:
+                    try:
+                        fresh = bind_identity(token)
+                    except HTTPException as exc:
+                        logger.warning("link SSE token revalidation failed: %s", exc.detail)
+                        end_reason = "credential_revoked"
+                        return
+                    scope = fresh.tenant_id
+                    next_check = time.time() + TOKEN_REVALIDATE_INTERVAL_S
+                current = _scoped_events(scope)
+                for evt in current:
+                    if evt.timestamp <= last_seen:
+                        continue
+                    if source and evt.source != source:
+                        continue
+                    if event_type and evt.event_type != event_type:
+                        continue
+                    data = json.dumps(
+                        {
+                            "event_id": evt.event_id,
+                            "timestamp": evt.timestamp,
+                            "source": evt.source,
+                            "direction": evt.direction,
+                            "event_type": evt.event_type,
+                            "status": evt.status,
+                        },
+                        ensure_ascii=False,
+                    )
+                    yield f"data: {data}\n\n"
+                    last_seen = max(last_seen, evt.timestamp)
+                await asyncio.sleep(1.0)
+        except Exception:
+            # 非断开型异常收口如实归因 error（client 断连/流取消=GeneratorExit/
+            # CancelledError 均 BaseException 不入此分支，按缺省 client_disconnect 如实）。
+            end_reason = "error"
+            raise
+        finally:
+            # DEC-⑱-③ 会话结束归因：同步口置于任何 await 之前=取消免疫（DEC-⑱ 教训）。
+            _audit(
+                "link_sse_closed",
+                f"🔗 Link SSE 订阅结束（{end_reason}）: user={user_id}",
+                {
+                    "face": "link_sse",
+                    "user_id": user_id,
+                    "authed": authed,
+                    "has_token": bool(token),
+                    "reason": end_reason,
+                    "duration_s": round(time.time() - started, 1),
+                },
+                tenant_id=scope,
+            )
 
     return event_generator()
 
@@ -863,13 +945,31 @@ async def sse_event_stream(
     过滤（跨租户零帧），未提供=匿名 'default' 契约不变。
     """
 
-    identity = bind_identity(_http_presented_token(request) or None)
+    presented = _http_presented_token(request)
+    try:
+        identity = bind_identity(presented or None)
+    except HTTPException:
+        # DEC-⑱-③ 连接审计：被拒尝试是安全事件本体必留痕（cause=invalid_token；
+        # 匿名缺凭据=契约放行非拒绝面）。零行为变化：审计后原样上抛→既有 401。
+        _audit(
+            "link_sse_rejected",
+            "🛡 Link SSE 订阅拒绝（无效凭据）",
+            {
+                "face": "link_sse",
+                "client": request.client.host if request.client else "",
+                "has_token": bool(presented),
+                "cause": "invalid_token",
+            },
+        )
+        raise
     return StreamingResponse(
         _sse_event_lines(
             identity.tenant_id,
             source,
             event_type,
-            token=_http_presented_token(request),
+            token=presented,
+            user_id=identity.user_id,
+            authed=identity.authed,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -940,6 +1040,19 @@ async def websocket_proxy(ws: WebSocket):
         identity = bind_identity(_ws_presented_token(ws) or None)
     except HTTPException as exc:
         logger.warning("link WS rejected: %s", exc.detail)
+        # DEC-⑱-③ 连接审计：被拒尝试是安全事件本体必留痕（cause=invalid_token；
+        # 匿名缺凭据=契约放行非拒绝面）。凭据材料只字不进事件（has_token 只记
+        # 在场与否）。被拒无派生身份→tenant='default' 兜底（③b-2 旁路纪律）。
+        _audit(
+            "link_ws_rejected",
+            "🛡 Link WS 握手拒绝（无效凭据）",
+            {
+                "face": "link_ws",
+                "client": _ws_client_host(ws),
+                "has_token": bool(_ws_presented_token(ws)),
+                "cause": "invalid_token",
+            },
+        )
         await ws.close(code=1008, reason="invalid token")
         return
     tenant = identity.tenant_id
@@ -948,6 +1061,21 @@ async def websocket_proxy(ws: WebSocket):
     me = WsSubscriber(ws=ws, tenant_id=tenant)
     _ws_clients.append(me)
     logger.info("WS client connected (%d active)", len(_ws_clients))
+
+    # DEC-⑱-③ 连接审计：connected=会话真建立（accept+订阅入表）；user/tenant=
+    # bind_identity 派生单一源；session_started 供 closed 事件算时长。
+    session_started = time.time()
+    _audit(
+        "link_ws_connected",
+        f"🔗 Link WS 连接建立: user={identity.user_id}",
+        {
+            "face": "link_ws",
+            "user_id": str(identity.user_id),
+            "authed": bool(identity.authed),
+            "client": _ws_client_host(ws),
+        },
+        tenant_id=identity.tenant_id,
+    )
 
     # 连接期凭据重校验（F3b-⑨b-③-1c-⑤）：持 token 的连接起看门狗周期重跑
     # bind_identity——凭据失效=close 1008（与握手拒绝同语义，禁凭失效凭据
@@ -965,6 +1093,8 @@ async def websocket_proxy(ws: WebSocket):
         tenant_id=tenant,
     )
 
+    # DEC-⑱-③ 会话结束归因缺省（正常收口=客户端断开；异常收口在 except 改写）。
+    end_reason = "client_disconnect"
     try:
         while True:
             data = await ws.receive_text()
@@ -1027,8 +1157,33 @@ async def websocket_proxy(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
+        end_reason = "error"
         logger.debug("WS error: %s", e)
     finally:
+        # DEC-⑱-③ 会话结束归因（同步口置于任何 await 之前=取消免疫，DEC-⑱ 教训）：
+        # 看门狗正常返回的唯一路径=凭据失效撤销（exception() 非空=看门狗自身崩溃，
+        # 如实不算撤销），其余按收口路径归因 error / client_disconnect。
+        revoked = (
+            watchdog is not None
+            and watchdog.done()
+            and not watchdog.cancelled()
+            and watchdog.exception() is None
+        )
+        if revoked:
+            end_reason = "credential_revoked"
+        _audit(
+            "link_ws_closed",
+            f"🔗 Link WS 会话结束（{end_reason}）: user={identity.user_id}",
+            {
+                "face": "link_ws",
+                "user_id": str(identity.user_id),
+                "authed": bool(identity.authed),
+                "client": _ws_client_host(ws),
+                "reason": end_reason,
+                "duration_s": round(time.time() - session_started, 1),
+            },
+            tenant_id=me.tenant_id,
+        )
         if watchdog is not None:
             watchdog.cancel()
         for sub in list(_ws_clients):

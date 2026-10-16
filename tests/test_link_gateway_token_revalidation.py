@@ -463,8 +463,11 @@ def test_static_wiring_census():
     assert "str *** None" not in src
     # 看门狗真启动（WS）+ 生成器真消费 token（SSE）+ /stream 真传 token
     assert src.count("asyncio.create_task(_ws_token_watchdog(") == 1
-    assert src.count("token=_http_presented_token(request)") == 1
+    # DEC-⑱-③ 契约随更新：SSE 端点拒绝审计缝把取参提为 presented 变量（语义不变）
+    assert src.count("token=presented") == 1
     assert src.count("if token and time.time() >= next_check:") == 1
-    # 既有身份派生点字节不动（1c-③④ 静态普查计数回归钉）
+    # 既有身份派生点字节不动（1c-③④ 静态普查计数回归钉；SSE 面字节形随 DEC-⑱-③
+    # 拒绝审计缝变，单一派生点语义不变）
     assert src.count("bind_identity(_ws_presented_token(ws)") == 1
-    assert src.count("bind_identity(_http_presented_token(request)") == 1
+    assert src.count("presented = _http_presented_token(request)") == 1
+    assert src.count("bind_identity(presented or None)") == 1

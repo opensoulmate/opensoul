@@ -375,7 +375,12 @@ def test_ws_bad_token_rejected_zero_side_effect(env):
     with pytest.raises(WebSocketDisconnect):
         with env["client"].websocket_connect("/api/link/ws?token=not-a-jwt"):
             pass
-    assert _rows(env["tl_db"]) == []
+    # DEC-⑱-③ 契约随更新：被拒尝试是安全事件本体必留痕（immune 审计行=设计内
+    # 新行为）；原意图「零业务副作用」保留——gateway/业务行零、不占通道。
+    rows = _rows(env["tl_db"])
+    biz = [r for r in rows if r["organ"] != "immune"]
+    assert biz == []  # 零业务副作用（ws_connected/ws_message 等 gateway 行零）
+    assert [r["event_type"] for r in rows] == ["link_ws_rejected"]  # 恰一条安全审计行
     assert env["lg"]._ws_clients == []  # 不占通道
 
 
@@ -447,16 +452,20 @@ def test_static_wiring_census():
     # + WS 1 + SSE 1（_http_presented_token 双源取参）
     assert src.count("identity = bind_identity(authorization)") == 7
     assert src.count("bind_identity(_ws_presented_token(ws)") == 1
-    assert src.count("bind_identity(_http_presented_token(request)") == 1
+    # DEC-⑱-③ 契约随更新：SSE 端点拒绝审计缝把取参提为 presented 变量（单一
+    # 派生点语义不变，字节形随审计收口变）
+    assert src.count("presented = _http_presented_token(request)") == 1
+    assert src.count("bind_identity(presented or None)") == 1
     # 注入点：identity 派生 7（4 handler 事件/出站 + broadcast 双点 + 注册行落键 2
-    # F3b-⑨b-③-1c-④）+ helper 形参 3 + WS 3
-    assert src.count("tenant_id=identity.tenant_id") == 7
-    assert src.count("tenant_id=tenant_id") == 3
+    # F3b-⑨b-③-1c-④）+ helper 形参 3 + WS 3 + _audit 透传 1
+    # （DEC-⑱-③：WS connected 审计行归属 +1、_audit push_event 透传 +1）
+    assert src.count("tenant_id=identity.tenant_id") == 8
+    assert src.count("tenant_id=tenant_id") == 4
     assert src.count("tenant_id=tenant,") == 3
     # 行归属落行 2（GatewayEvent 行键 + push_event 同键，F3b-⑨b-③-1c-③ 单一判法）
     assert src.count("tenant_id=row_tenant") == 2
-    # _record_event/_send_with_retry 形参收口
-    assert src.count("tenant_id: str " + pipe + " None = None") == 2
+    # _record_event/_send_with_retry 形参收口 + _audit（DEC-⑱-③）=3
+    assert src.count("tenant_id: str " + pipe + " None = None") == 3
     # 注册面恒过滤/归属闸真消费（F3b-⑨b-③-1c-④：写了≠接线了）
     assert src.count("_scoped_webhooks(identity.tenant_id)") == 1
     assert src.count("_scoped_systems(identity.tenant_id)") == 2
