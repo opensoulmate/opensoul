@@ -9,6 +9,7 @@ Agent能：
 
 import json
 import logging
+import re
 import time
 from typing import Optional
 
@@ -320,3 +321,106 @@ class Metacognition:
             (self.tenant_id, self.agent_id),
         )
         return {"decisions": count}
+
+
+# ── G1-④a 元认知纠错回流（blind_spots/calibration → 执行 prompt 纠偏块） ──
+# G0 定性③：reflect/blind_spots/calibration 仅观测口展示（/api/brain/metacognition）
+# 不驱动任何纠偏动作。本节把观测变成纠偏动作的第一条闭环：反复失败的决策领域
+# + 信心校准偏差 → 执行 prompt 纠偏提醒块（软建议，自带免责不覆盖任务本体），
+# 消费面=ai_groups 任务执行（G1-④a；chat/ws_chat 面留后续拍）。
+
+_METACOGNITIVE_AREA_MAX_CHARS = 200
+
+
+def _metacognitive_advisory_lines(blind_spots, calibration, top_k: int = 3) -> list[str]:
+    """纠偏条目纯函数（渲染/计数单一源，禁两套判法）。
+
+    字段缺失如实略禁硬造（G1-③b-2 alternatives_payload 同纪律）：blind spot 行
+    非 dict/缺 area/fail_count 不可渲染即跳过；calibration 仅 'miscalibrated' 出
+    校准行（good/no_data 如实无纠偏可言），缺 avg_confidence/actual_success_rate
+    或值非数值如实略（不猜数字）。top_k 只限盲区行（校准行是全局观测不占名额）。
+    """
+    lines = []
+    rendered = 0
+    for item in blind_spots if isinstance(blind_spots, list) else []:
+        if rendered >= top_k:
+            break
+        if not isinstance(item, dict):
+            continue
+        area = re.sub(r"\s+", " ", str(item.get("area") or "")).strip()
+        if not area:
+            continue
+        try:
+            fail_count = int(item.get("fail_count") or 0)
+        except (TypeError, ValueError):
+            continue
+        if fail_count <= 0:
+            continue
+        if len(area) > _METACOGNITIVE_AREA_MAX_CHARS:
+            area = area[:_METACOGNITIVE_AREA_MAX_CHARS] + "…"
+        lines.append(
+            f"决策领域「{area}」历史上反复失败 {fail_count} 次——"
+            "执行同类动作时换方法或加强前置检查与结果验证"
+        )
+        rendered += 1
+
+    calib = calibration if isinstance(calibration, dict) else {}
+    if calib.get("calibration") == "miscalibrated":
+        avg_conf = calib.get("avg_confidence")
+        actual = calib.get("actual_success_rate")
+
+        def _numeric(v):
+            return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+        if _numeric(avg_conf) and _numeric(actual):
+            if float(avg_conf) > float(actual):
+                direction, advice = "偏高", "执行时加强结果验证，勿轻信自我判断"
+            else:
+                direction, advice = "偏低", "按实际成功率大胆推进，避免过度保守"
+            lines.append(
+                f"自评信心{direction}（平均自评 {float(avg_conf):.2f} vs 实际成功率 "
+                f"{float(actual):.2f}）——{advice}"
+            )
+    return lines
+
+
+def format_metacognitive_advisory_for_prompt(blind_spots, calibration, top_k: int = 3) -> str:
+    """元认知观测 → 执行 prompt 纠偏块（纯函数；无可用观测返回空串=零注入）。
+
+    软建议块语义沿用 F2b-② format_advisory_for_prompt / DEC-③-① episodic 块：
+    免责块头（仅供参考、与任务要求冲突时以任务要求为准）+软上下文不覆盖任务本体。
+    """
+    lines = _metacognitive_advisory_lines(blind_spots, calibration, top_k=top_k)
+    if not lines:
+        return ""
+    numbered = "\n".join(f"{i}. {line}" for i, line in enumerate(lines, 1))
+    return (
+        "【元认知纠偏提醒】来自本 agent 历史执行的元认知观测（反复失败领域/信心校准），"
+        "仅供参考；与任务要求冲突时以任务要求为准：\n" + numbered
+    )
+
+
+async def metacognitive_advisory_for(
+    agent_id: str, db_pool=None, tenant_id: str = "default", top_k: int = 3
+) -> tuple[str, int]:
+    """G1-④a 元认知纠错回流通用取数口：blind_spots+calibration → 纠偏块。
+
+    与 learned_advisory_for（F2b-②b）/episodic_advisory_for（DEC-③-①）同款
+    纪律：异常如实抛禁静默吞（降级可见性归消费方）。读真源=本模块 Metacognition
+    账本（F4b-㉕/㉖/㉗ 同一真源：think log_decision/verify log_outcome 双写点），
+    口径=写点同键 (tenant_id, agent_id)——"学习产出在哪写就去哪读"（exec 路径
+    进程内直调 brain think/verify 不带 authorization=匿名 'default'，见
+    ai_groups._metacognitive_advisory_for 接缝注释）。返回 (纠偏块, 条数)，
+    无可用观测=("", 0)。
+    """
+    if db_pool is None:
+        from src.database.postgres import db_pool as _db_pool
+
+        db_pool = _db_pool
+    meta = Metacognition(db_pool, tenant_id, agent_id)
+    blind = await meta.get_blind_spots()
+    calibration = await meta.get_confidence_calibration()
+    lines = _metacognitive_advisory_lines(blind, calibration, top_k=top_k)
+    if not lines:
+        return "", 0
+    return format_metacognitive_advisory_for_prompt(blind, calibration, top_k=top_k), len(lines)

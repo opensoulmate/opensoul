@@ -1866,6 +1866,20 @@ async def _episodic_advisory_for(run_goal: str) -> tuple[str, int]:
     return await episodic_advisory_for(run_goal)
 
 
+async def _metacognitive_advisory_for(agent_id: str) -> tuple[str, int]:
+    """G1-④a 元认知纠错回流取数口（模块接缝，_learned_advisory_for 同款）。
+
+    读真源已收编 src.mirror.metacognition.metacognitive_advisory_for 单一源。
+    口径=exec 路径 think/verify 双写点同键 (tenant='default', agent_id)：
+    本执行面进程内直调 brain think/verify 不带 authorization=匿名语义
+    （F3b-②），账本落 ('default', req.agent_id)——回流读同键（学习产出在
+    哪写就去哪读）。返回 (纠偏块, 条数)，无可用观测=("", 0)。
+    """
+    from src.mirror.metacognition import metacognitive_advisory_for
+
+    return await metacognitive_advisory_for(agent_id, tenant_id="default")
+
+
 async def _creative_alternatives_for(run_goal: str, constraints: list) -> tuple[dict, str]:
     """G1-③a 创造力回流任务执行门禁面取数口：generate_alternatives 真消费缝。
 
@@ -2153,6 +2167,32 @@ async def _execute_task_impl(
                 req.agent_id,
                 "learned-context-error",
                 f"episodic回流失败(不阻断执行): {e}",
+            )
+
+        # ── G1-④a 元认知纠错回流：blind_spots/calibration → 执行prompt纠偏块 ──
+        # G0 定性③「reflect/blind_spots/calibration 仅观测口展示不驱动任何纠偏
+        # 动作」——第三条回流轴（与 F2b-② learned、DEC-③-① episodic 并列）：
+        # 元认知观测（本 agent 反复失败的决策领域/信心校准偏差）注入执行prompt
+        # （软建议块自带免责，不覆盖任务本体）；元认知层自身故障不阻断执行但必
+        # 须可见（learned-context-error 同族可见面，禁静默）。
+        try:
+            metacog, metacog_n = await _metacognitive_advisory_for(req.agent_id)
+            if metacog:
+                exec_goal = f"{exec_goal}\n\n{metacog}"
+                _emit_exec_event(
+                    group_id,
+                    task_id,
+                    req.agent_id,
+                    "metacognitive-context",
+                    f"元认知纠偏提醒注入执行prompt：{metacog_n}条（metacognition→执行）",
+                )
+        except Exception as e:
+            _emit_exec_event(
+                group_id,
+                task_id,
+                req.agent_id,
+                "metacognitive-context-error",
+                f"元认知纠偏回流失败(不阻断执行): {e}",
             )
 
         async def _on_exec_event(etype: str, line: str):
