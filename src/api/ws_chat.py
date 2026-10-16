@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from src.acp.proxy import get_acp_process
+from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
 
 logger = logging.getLogger(__name__)
@@ -485,6 +486,43 @@ async def _get_episodic_advisory(text: str) -> tuple[str, bool]:
         return "", True
 
 
+def _ws_client_host(websocket: WebSocket) -> str:
+    """审计事件 client 来源（terminal_ws 同款判法）。"""
+    return websocket.client.host if websocket.client else ""
+
+
+def _audit(event_type: str, summary: str, detail: dict, tenant_id: str | None = None):
+    """DEC-⑱-② WS 连接审计：ws_chat 连接生命周期事件落 timeline/活动流
+    （organ=immune 🛡 安全归口，与 terminal_ws_* / intrusion_detected /
+    permission_denied 同流可见）。
+
+    闭 DEC-⑱ 诚实边界②留档件「ws_chat/link/collab 长连接面审计留待拍（⑱-②）」
+    ——对话通道谁被拒/谁连上/会话何时以何因结束必须可审计回放。
+
+    **同步口（push_event：活动流缓冲+持久 timeline 双落，nerve 总线既有
+    fire-and-forget）而非 await 型 emit——取消免疫是硬要求**：会话收尾路径的宿主
+    任务可被取消（anyio 会话 teardown 即取消，实测 cancel 兑现于 await 点把
+    await 型审计连同收尾一起吞掉=静默丢审计），审计真源不赌 await 活到落盘。
+
+    纪律：①detail/summary 绝不携带凭据材料（token 只字不进事件）②审计失败
+    绝不影响连接主路径（旁路纪律，失败 logger.warning 可见禁静默丢审计）。
+    """
+    try:
+        push_event(
+            {
+                "organ": "immune",
+                "emoji": "🛡",
+                "type": event_type,
+                "summary": summary,
+                "detail": detail,
+                "timestamp": time.time(),
+            },
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:
+        logger.warning("ws chat audit event dropped (%s): %s", event_type, exc)
+
+
 def _identity_for_token(token):
     """凭据效力判定单一判定口（握手与连接期看门狗共用，禁第二套判法——
     F3b-④b/DEC-⑭-② 同款）：bind_identity 单一派生口 + authed 必真
@@ -574,6 +612,18 @@ async def chat_websocket(websocket: WebSocket):
     # Authenticate via first message or query param
     token = websocket.query_params.get("token", "")
     if not token:
+        # DEC-⑱-② 连接审计：被拒尝试是安全事件本体必留痕（cause 单列真因），
+        # detail 不带凭据材料（has_token 只记在场与否，token 只字不进事件）。
+        _audit(
+            "ws_chat_rejected",
+            "🛡 WS chat 握手拒绝（缺失凭据）",
+            {
+                "face": "ws_chat",
+                "client": _ws_client_host(websocket),
+                "has_token": False,
+                "cause": "missing_token",
+            },
+        )
         await websocket.send_json({"type": "error", "message": "Missing token"})
         await websocket.close()
         return
@@ -585,17 +635,44 @@ async def chat_websocket(websocket: WebSocket):
         # 「故障原样上抛」在握手面的处置=拒，与「Invalid token」同契约帧形）
         identity = None
     if identity is None:
+        _audit(
+            "ws_chat_rejected",
+            "🛡 WS chat 握手拒绝（无效/停用凭据）",
+            {
+                "face": "ws_chat",
+                "client": _ws_client_host(websocket),
+                "has_token": True,
+                "cause": "invalid_token",
+            },
+        )
         await websocket.send_json({"type": "error", "message": "Invalid token"})
         await websocket.close()
         return
 
     await websocket.send_json({"type": "connected", "user_id": _connected_user_id(identity)})
 
+    # DEC-⑱-② 连接审计：connected=会话真建立（connected 帧已送达）；user/tenant=
+    # bind_identity 派生单一源（user_id 载荷走 _connected_user_id 同一判法）。
+    # session_started 供 closed 事件算时长。
+    session_started = time.time()
+    _audit(
+        "ws_chat_connected",
+        f"💬 WS chat 连接建立: user={identity.user_id}",
+        {
+            "face": "ws_chat",
+            "user_id": _connected_user_id(identity),
+            "client": _ws_client_host(websocket),
+        },
+        tenant_id=identity.tenant_id,
+    )
+
     # 连接期凭据周期重校验（DEC-⑭-① 诚实边界⑥留档件收口）：失效凭据 close 1008
     # 不留对话通道；看门狗收尾在 finally（不挂 receive 抛错上，F3b-④b/DEC-⑭-②
     # 同款根因纪律）。
     watchdog = asyncio.create_task(_ws_chat_token_watchdog(websocket, token))
 
+    # DEC-⑱-② 会话结束归因缺省（正常收口=客户端断开；异常收口在 except 改写）。
+    end_reason = "client_disconnect"
     try:
         while True:
             data = await websocket.receive_json()
@@ -719,12 +796,33 @@ async def chat_websocket(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
     except Exception as e:
+        end_reason = "error"
         logger.error(f"WebSocket error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception as exc:
             logging.getLogger(__name__).debug("operation skipped: %s", exc)
     finally:
+        # DEC-⑱-② 会话结束归因（同步，先于 task.cancel()——cancel 后 done/cancelled
+        # 形态失真）：看门狗正常返回的唯一路径=凭据失效撤销（exception() 非空=看门狗
+        # 自身崩溃，如实不算撤销），其余按收口路径归因 error / client_disconnect。
+        revoked = watchdog.done() and not watchdog.cancelled() and watchdog.exception() is None
+        if revoked:
+            end_reason = "credential_revoked"
+        # DEC-⑱-② 连接审计：closed=connected 的对偶（谁连过对话通道、连了多久、
+        # 以何因结束可完整回放）。同步口置于任何 await 之前=取消免疫（DEC-⑱ 教训）。
+        _audit(
+            "ws_chat_closed",
+            f"💬 WS chat 会话结束（{end_reason}）: user={identity.user_id}",
+            {
+                "face": "ws_chat",
+                "user_id": _connected_user_id(identity),
+                "client": _ws_client_host(websocket),
+                "reason": end_reason,
+                "duration_s": round(time.time() - session_started, 1),
+            },
+            tenant_id=identity.tenant_id,
+        )
         # 看门狗收尾（不挂 receive 抛错上）：连接结束/撤销后不留后台任务。
         watchdog.cancel()
         await asyncio.gather(watchdog, return_exceptions=True)

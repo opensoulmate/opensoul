@@ -203,13 +203,13 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 ## ⑱ WS 连接审计面（terminal WS 面先拍）
 
-**状态：已按建议默认 B 先行执行（2026-10-16 DEC-⑱）**——依据：DEC-⑭-⑤ 周期日志候选首件「WS 连接审计面（需拍板）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑰ 自决先例。实现=**terminal WS 连接生命周期事件落 timeline/活动流（organ=immune 🛡 安全归口）**：`_audit` 同步口（push_event=活动流缓冲+持久 timeline 双落，nerve 总线既有 fire-and-forget）+ 三类事件（terminal_ws_rejected 握手拒绝/terminal_ws_connected 真 spawn 后/terminal_ws_closed 会话结束含 reason+duration_s）。**若拍板回一句即改道：「⑱改A」=revert 回仅 logger 行（撤审计面）、「⑱改C」=全 WS 面一次收（ws_chat/link/collab 继续补件）**。
+**状态：已按建议默认 B 先行执行（2026-10-16 DEC-⑱）**——依据：DEC-⑭-⑤ 周期日志候选首件「WS 连接审计面（需拍板）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑰ 自决先例。实现=**terminal WS 连接生命周期事件落 timeline/活动流（organ=immune 🛡 安全归口）**：`_audit` 同步口（push_event=活动流缓冲+持久 timeline 双落，nerve 总线既有 fire-and-forget）+ 三类事件（terminal_ws_rejected 握手拒绝/terminal_ws_connected 真 spawn 后/terminal_ws_closed 会话结束含 reason+duration_s）。**若拍板回一句即改道：「⑱改A」=revert 回仅 logger 行（撤审计面）、「⑱改C」=全 WS 面一次收（ws_chat/link/collab 继续补件）**。**【2026-10-16 ⑱-② 已落】ws_chat 面连接审计同款三事件（ws_chat_rejected（cause 单列真因 missing_token/invalid_token）/ws_chat_connected/ws_chat_closed（reason∈{client_disconnect,error,credential_revoked}+duration_s））已按 B 拆件纪律落地（commit 见周期日志 DEC-⑱-②）；link_gateway/collab 面拆 ⑱-③/⑱-④ 仍留待拍**。
 
 **现状（--pre 修前同探针实证非推断）**：terminal WS（RCE 面）连接生命周期零审计——握手拒绝/连接建立/凭据撤销/会话结束只打 logger 行，timeline/活动流零记录（scripts/e2e_terminal_ws_audit.py --pre 实证：三类审计行全缺 rows=[]）；DEC-⑭-① 诚实边界⑤「连接不落 timeline/审计事件（仅 logger 行，审计面另拍）」即此件。
 - 选项：**A** 不落审计（维持仅 logger）/ **B** terminal WS 面先拍（一拍一面先例，ws_chat 面拆 ⑱-②）/ **C** 全 WS 面一次收（terminal+ws_chat+link_gateway+collab）。
 - 权衡：A 持续=RCE 面谁开过 shell 不可回放（安全审计缺核心面）；C 违「一拍一面」拆件纪律（⑳/㉑/DEC-⑭-②③ 先例）且各面身份轴语义不同（ws_chat=用户对话、link=集成、collab=agent）；B 最小可执行件+活面最高险先行（DEC-⑭-②「shell RCE 面先拍」同序）；代价=其余长连接面仍无审计（⑱-② 候选）。
 - 建议：**B**（terminal 先拍）。
-- 诚实边界：①审计走 push_event 同步口，不进通知中心（emit 的 await 型面在可取消收尾路径下实测被取消吞掉=静默丢审计，同步口=取消免疫是硬要求；nerve 总线 fire-and-forget 照常）②ws_chat/link_gateway/collab 长连接面审计留待拍（⑱-②）③rejected 行 tenant 恒 'default'（被拒无派生身份，③b-2 兜底纪律）④事件按连接粒度（input/resize 按键不落审计——隐私+噪声，需要另拍）⑤organ 归口=immune（安全事件既有归口 intrusion_detected/permission_denied 同流），若主张独立 organ 可改道。
+- 诚实边界：①审计走 push_event 同步口，不进通知中心（emit 的 await 型面在可取消收尾路径下实测被取消吞掉=静默丢审计，同步口=取消免疫是硬要求；nerve 总线 fire-and-forget 照常）②ws_chat 面已落（⑱-②，2026-10-16 DEC-⑱-②）；link_gateway/collab 长连接面审计留待拍（⑱-③/⑱-④）③rejected 行 tenant 恒 'default'（被拒无派生身份，③b-2 兜底纪律）④事件按连接粒度（input/resize 按键不落审计——隐私+噪声，需要另拍）⑤organ 归口=immune（安全事件既有归口 intrusion_detected/permission_denied 同流），若主张独立 organ 可改道。
 
 ## 附：锚点核验
 
