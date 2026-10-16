@@ -20,6 +20,7 @@
 | ⑫ | /api/link/events·/stats·/health 路由遮蔽收口·归属 | 1c-③ 边界② | 取 B（归属拆分：OpenLink 留 canonical、gateway 三读面迁 /api/link/gateway/*）——**已按建议默认 B 先行执行 2026-10-16（F3b-⑨b-③-1c-⑥）** | ~~"⑫取B"~~ 已落，异议回「⑫改A」（回遮蔽死路由态）/「⑫改C」（三路径归 gateway）即改道 |
 | ⑬ | 外部回调入口鉴权化统一拍板（heartbeat+incoming） | 1c-④ 边界锁死自注留档 | 取 B（register 签发回调 token，回调必须持证）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑬）** | ~~"⑬取B"~~ 已落，异议回「⑬改A」（revert 回 id 即凭证）/「⑬改C」（改全局共享 secret）即改道 |
 | ⑭ | /ws/{user_id} 等其余长连接面身份轴（terminal WS 无鉴权=RCE 面） | 1c-⑤ 边界③留档+最新周期日志候选首件 | 取 B（握手凭据必持 fail-closed：有效活跃用户 JWT 才给 shell）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑭-①）** | ~~"⑭取B"~~ 已落，异议回「⑭改A」（revert 回无鉴权）/「⑭改C」（本地回环免鉴权）即改道 |
+| ⑮ | websocket/handler.py 幽灵模块处置（挂载 or 删除） | DEC-⑭-① 边界③留档+DEC-⑭-③ 候选首件 | 取 B（删除纯死资产模块：零 import 零挂载零消费方，C3-③ 死资产处置先例）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑮）** | ~~"⑮取B"~~ 已落，异议回「⑮改A」（备份/git 恢复模块）/「⑮改C」（挂载+身份轴做成真实通道，另拍实现）即改道 |
 
 ---
 
@@ -167,6 +168,16 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：A=RCE 面持续（8090 对局域网开放即任意代码执行）；C 需信任边界判定（反向代理/XFF 伪造面，loopback 判法=另发明第二套语义且与 F3b-② 派生哲学不一致）；B 与 ws_chat（用户 WS 面同款持 JWT）同轴，OpenMate 终端面板已带 token=真消费方零破坏（token 为 /api/user/login 签发的 opensoul JWT，bind_identity 直接可验）。
 - 建议：**B**。
 - 诚实边界：①连接期凭据不周期重校验（F3b-④b/1c-⑤ 型看门狗另拍——token 过期后已建立的 shell 会话延续至断开）②匿名本地访问从此须带 token=既有行为变更（单机用户经 OpenMate/带 token 连接不受影响；回「⑭改C」即改道）③websocket/handler.py `/ws/{user_id}` 幽灵模块处置（挂载 or 删除）留待拍——未挂载=无泄露面④OpenMate terminal-panel 期望路径 `ws://host:8090/ws/terminal`（非 /api/terminal/ws/terminal）live 实证 404/403=面板现状连不上终端（跨仓消费方期望与本仓路由不齐），路径对齐（本仓加挂 or openmate 改 URL）需拍板留档⑤连接不落 timeline/审计事件（仅 logger 行，审计面另拍）⑥ws_chat /chat 已有握手轴但无连接期重校验（同①留档）。
+
+## ⑮ websocket/handler.py 幽灵模块处置（挂载 or 删除）
+
+**状态：已按建议默认 B 先行执行（2026-10-16 DEC-⑮）**——依据：DEC-⑭-③ 周期日志候选首件「websocket/handler.py 幽灵面处置（需拍板）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑭ 自决先例。实现=**删除纯死资产模块**（C3-③ 遗留旧 SPA 死资产处置先例：备份+git rm）：`src/websocket/`（handler.py 58 行 + __init__.py）整目录删除，删前 tar 备份 `data/backups/websocket_ghost_pre_delete_20261016_101326.tar.gz`（sha256 e12fabea…，解包即整体回滚）+git 历史双保险。**若拍板回一句即改道：「⑮改A」=从备份/git 恢复模块（回幽灵态）、「⑮改C」=挂载+身份轴做成真实每用户通道（需另拍实现——现协议 user_id 自报无鉴权，直接挂载=重开 DEC-⑭ 刚收口的身份顶号面）**。
+
+**现状（处置依据，逐条实证）**：`src/websocket/handler.py` 是 init 脚手架（commit d14f1731「init: OpenSoul服务端代码结构」）遗留的 `/ws/{user_id}` 端点——①全仓零 import 零挂载（src/tests grep `src.websocket|ws_router|ConnectionManager` 仅命中自身定义；main.py 无 include_router）②live 路由表实证 4 个真 WS 面（/api/collab/ws/agent/{agent_id}、/api/link/ws、/api/terminal/ws/terminal、/api/ws/chat）中无 /ws/{user_id}（1073 路由 census，`data/dec15_ghost_evidence.json`）③零消费方（openmate 全部 WS 用法=/ws/group、/ws/acp、ws://:8090/ws/terminal，无一指向 /ws/{user_id}）④此后仅被 lint/format 提交触碰，从未接线=「写了≠接线了」典型。
+- 选项：**A** 维持现状（留幽灵模块）/ **B** 删除（死代码清除，git 可回滚）/ **C** 挂载+身份轴（做成真实每用户通知通道）。
+- 权衡：A 留死代码=后续周期反复误读（DEC-⑭-① 过程自纠已实证：测试作者把本模块 ping/pong 协议误当 terminal 协议）；C 需发明事件源（ConnectionManager.send_to_user/broadcast 零调用方）+身份轴改造（user_id 自报与 DEC-⑭ 家族哲学相悖），且通知需求已有 /api/events/sse 事件流底座覆盖=无消费方的 speculative feature（画蛇添足）；B 零行为变化（从未挂载=从未有此面）+消除误读源。
+- 建议：**B**。
+- 诚实边界：①删除的是从未挂载的死代码，零活契约变化（活面 4 个 WS 端点零触碰，回归锁死）②若未来真需要每用户通道，按「⑮改C」另拍实现（身份轴=DEC-⑭ 家族 bind_identity 派生）③备份 tar 与证据工件为 data/ gitignore 本地件（`data/backups/websocket_ghost_pre_delete_20261016_101326.tar.gz`、`data/dec15_ghost_evidence.json`），回滚=git revert 或 tar 解包④src/static 无对应前端（admin-ui 零消费）⑤「terminal 路径对齐」（OpenMate 期望 ws://host:8090/ws/terminal）是另一候选未动——本拍只处置幽灵模块，不越界改路径。
 
 ## 附：锚点核验
 
