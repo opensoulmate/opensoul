@@ -21,6 +21,7 @@
 | ⑬ | 外部回调入口鉴权化统一拍板（heartbeat+incoming） | 1c-④ 边界锁死自注留档 | 取 B（register 签发回调 token，回调必须持证）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑬）** | ~~"⑬取B"~~ 已落，异议回「⑬改A」（revert 回 id 即凭证）/「⑬改C」（改全局共享 secret）即改道 |
 | ⑭ | /ws/{user_id} 等其余长连接面身份轴（terminal WS 无鉴权=RCE 面） | 1c-⑤ 边界③留档+最新周期日志候选首件 | 取 B（握手凭据必持 fail-closed：有效活跃用户 JWT 才给 shell）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑭-①）** | ~~"⑭取B"~~ 已落，异议回「⑭改A」（revert 回无鉴权）/「⑭改C」（本地回环免鉴权）即改道 |
 | ⑮ | websocket/handler.py 幽灵模块处置（挂载 or 删除） | DEC-⑭-① 边界③留档+DEC-⑭-③ 候选首件 | 取 B（删除纯死资产模块：零 import 零挂载零消费方，C3-③ 死资产处置先例）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑮）** | ~~"⑮取B"~~ 已落，异议回「⑮改A」（备份/git 恢复模块）/「⑮改C」（挂载+身份轴做成真实通道，另拍实现）即改道 |
+| ⑯ | terminal 路径对齐（OpenMate 面板期望 ws://host:8090/ws/terminal vs 本仓 /api/terminal/ws/terminal） | DEC-⑭-① 边界④留档+DEC-⑮ 候选首件 | 取 B（本仓加挂顶层别名挂同一 handler）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑯）** | ~~"⑯取B"~~ 已落，异议回「⑯改A」（撤下别名回面板连不上态）/「⑯改C」（改 openmate URL，跨仓改动需用户授权）即改道 |
 
 ---
 
@@ -178,6 +179,16 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：A 留死代码=后续周期反复误读（DEC-⑭-① 过程自纠已实证：测试作者把本模块 ping/pong 协议误当 terminal 协议）；C 需发明事件源（ConnectionManager.send_to_user/broadcast 零调用方）+身份轴改造（user_id 自报与 DEC-⑭ 家族哲学相悖），且通知需求已有 /api/events/sse 事件流底座覆盖=无消费方的 speculative feature（画蛇添足）；B 零行为变化（从未挂载=从未有此面）+消除误读源。
 - 建议：**B**。
 - 诚实边界：①删除的是从未挂载的死代码，零活契约变化（活面 4 个 WS 端点零触碰，回归锁死）②若未来真需要每用户通道，按「⑮改C」另拍实现（身份轴=DEC-⑭ 家族 bind_identity 派生）③备份 tar 与证据工件为 data/ gitignore 本地件（`data/backups/websocket_ghost_pre_delete_20261016_101326.tar.gz`、`data/dec15_ghost_evidence.json`），回滚=git revert 或 tar 解包④src/static 无对应前端（admin-ui 零消费）⑤「terminal 路径对齐」（OpenMate 期望 ws://host:8090/ws/terminal）是另一候选未动——本拍只处置幽灵模块，不越界改路径。
+
+## ⑯ terminal 路径对齐（OpenMate 面板期望路径 vs 本仓路由）
+
+**状态：已按建议默认 B 先行执行（2026-10-16 DEC-⑯）**——依据：DEC-⑮ 周期日志候选首件「terminal 路径对齐（需拍板）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑮ 自决先例。实现=**本仓加挂顶层别名 `/ws/terminal`**（`alias_router` 挂**同一 handler 函数对象** `terminal_ws`——零第二实现=零鉴权/看门狗/PTY 漂移面，测试锁死 endpoint is 同一对象），canonical `/api/terminal/ws/terminal` 契约零变化；DEC-⑭-① fail-closed 握手+DEC-⑭-② 连接期重校验因同一 handler 自动对别名生效（鉴权零放宽）。**若拍板回一句即改道：「⑯改A」=撤下别名（回面板连不上态）、「⑯改C」=改 openmate/src/components/terminal-panel.tsx:49 URL 指向 /api/terminal/ws/terminal（跨仓改动，动 ~/openmate 需用户明示授权）**。
+
+**现状（live 修前同探针实证非推断）**：openmate/src/components/terminal-panel.tsx:49 连 `ws://${window.location.hostname}:8090/ws/terminal?token=...`（顶层路径），本仓只挂 /api/terminal/ws/terminal（main.py prefix="/api/terminal"）→ 面板连不上终端（DEC-⑭-① live 实证 404/403；本拍修前探针 P2 REJECTED(InvalidStatus) 复证，修后同探针 SHELL_OK）。
+- 选项：**A** 维持（面板连不上）/ **B** 本仓加挂顶层别名（挂同一 handler）/ **C** 改 openmate URL 指向 canonical。
+- 权衡：C 是正根修（消费方期望与 canonical 对齐）但触碰 ~/openmate（「改动只限 ~/opensoul」铁律禁止，需用户授权）；A 持续=终端面板功能死面（用户实测直接撞上）；B 零跨仓改动、同一 handler 零漂移、canonical 不动（C 的根修窗口保留），代价=双路径并存（路由 census 1073→1074 +1，(method,path) 零新重复——既有 2 重复键 GET /api/health、/api/gene/health 为 HEAD 既有非本拍引入）。
+- 建议：**B**（最小可执行件）。
+- 诚实边界：①别名与 canonical 双路径并存（两形并档；若未来拍 C 改 openmate 后别名可撤）②鉴权/看门狗与 canonical 同源自动一致（同一函数对象非复制实现）③live 探针 REJECTED(InvalidStatus) 形态不区分「鉴权拒绝 403」与「路径不存在 404」（websockets 异常名同形）——鉴权拒绝的精确判别在单测 close code 1008 vs 1000（TestClient 404 形态）+ forkpty 零 spawn 哨兵；P2（修前 REJECTED→修后 SHELL_OK）为双向硬证主轴④别名不挂 /health（顶层只加 WS 面，canonical health 契约零变化）。
 
 ## 附：锚点核验
 

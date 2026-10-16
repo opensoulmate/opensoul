@@ -81,6 +81,7 @@ from src.api.soma_connector import router as soma_connector_router
 from src.api.soma_discovery import router as soma_discovery_router
 from src.api.system_overview import router as system_overview_router
 from src.api.tag import router as tag_router
+from src.api.terminal_ws import alias_router as terminal_alias_router
 from src.api.terminal_ws import router as terminal_router
 from src.api.timeline import router as timeline_router
 from src.api.topology import router as topology_router
@@ -665,6 +666,9 @@ app.include_router(skills_router, prefix="/api/skills", tags=["skills"])
 app.include_router(marketplace_router, prefix="/api/marketplace", tags=["marketplace"])
 app.include_router(download_router, prefix="/api/download", tags=["download"])
 app.include_router(terminal_router, prefix="/api/terminal", tags=["terminal"])
+# DEC-⑯ 路径对齐：顶层别名 ws://host:8090/ws/terminal（OpenMate terminal-panel
+# 期望路径，terminal-panel.tsx:49）挂同一 handler，canonical 面零变化。
+app.include_router(terminal_alias_router, tags=["terminal"])
 app.include_router(ai_groups_router, tags=["ai-groups"])
 app.include_router(ai_engine_router, tags=["ai-engine"])
 app.include_router(agent_collab_router, prefix="/api/collab", tags=["agent-collaboration"])

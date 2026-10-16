@@ -218,3 +218,15 @@ async def terminal_ws(websocket: WebSocket):
             os.waitpid(child_pid, os.WNOHANG)
         except OSError:
             pass
+
+
+# ── DEC-⑯ terminal 路径对齐别名 ────────────────────────────────────────────
+# OpenMate terminal-panel 期望 ws://host:8090/ws/terminal（顶层，openmate/src/
+# components/terminal-panel.tsx:49 实证），而本仓 canonical 面挂载于
+# /api/terminal/ws/terminal（main.py prefix="/api/terminal"）——live 实证面板
+# 连不上终端（跨仓消费方期望与本仓路由不齐，DEC-⑭-① 诚实边界④留档件）。
+# 收口=本仓加挂顶层别名（改动只限 ~/opensoul 铁律；openmate 改 URL 不在本仓）：
+# 别名挂**同一 handler 函数对象**（零第二实现=零鉴权/看门狗/PTY 漂移面），
+# canonical 契约零变化。若拍板回「⑯改A」=撤下别名（回面板连不上态）。
+alias_router = APIRouter()
+alias_router.websocket("/ws/terminal")(terminal_ws)
