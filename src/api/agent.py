@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -12,7 +13,63 @@ from src.models.knowledge import KnowledgeCreate
 from src.services import knowledge as knowledge_service
 from src.services.rag import rag_query
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# ── G1-⑤c 管理面注册接线（MultiAgentCoordinator 协调面） ────────────────
+#
+# 修前（G1-⑤ 诚实边界④留档）：agent.py 管理面注册（admin agent 节点，
+# opensoul.db agents 表）与协调注册表零接线——admin 注册的节点不进
+# /api/brain/agents 协作视图、不参与冲突检查/协调收件箱（G1-⑤b 面）。
+# 本节把管理面生命周期接进协调面：注册→协调行（+active 同步两注册表状态）、
+# 心跳→活跃窗保活、删除→注销（派生协调行随真源删除）。
+#
+# 纪律（G1-⑤ 同族）：①旁路纪律——桥写失败 logger.warning 可见，绝不吃掉
+# 管理面主路径（注册/心跳/删除照常成功）②心跳 UPDATE-only：未注册 agent_id
+# 绝不 fabricate 协调行（heartbeat 方法既有语义）③协调键=_MGMT_COORD_TENANT
+# 单一源禁散落字面量。
+#
+# 诚实边界：管理面无租户轴（agents 表无 tenant 列、/nodes 全局列表、删除
+# 全局可见），协调行钉 'default' 与数据真态一致（F3 实测分布同款：无租户轴
+# 行归属 'default'）；管理面租户轴收口（agents.tenant_id+身份派生）是另一拍
+# （F3b-② 同型），届时协调键随行归属迁移。
+
+_MGMT_COORD_TENANT = "default"
+
+
+def _coord():
+    """协调器构造（call-time 读模块级 db_pool：与管理面同一数据面，
+    测试 monkeypatch src.api.agent.db_pool 同时覆盖主路径与桥）。"""
+    from src.cortex.multi_agent_coord import MultiAgentCoordinator
+
+    return MultiAgentCoordinator(db_pool, _MGMT_COORD_TENANT)
+
+
+async def _coord_register(agent_id: str, agent_type: str) -> None:
+    """注册桥（register_agent 方法生产消费点）：失败旁路不阻断注册。"""
+    try:
+        await _coord().register_agent(agent_id, agent_type)
+    except Exception as exc:
+        logger.warning("coord register bridge failed for %s: %s", agent_id, exc)
+
+
+async def _coord_heartbeat(agent_id: str, status: str = "active") -> None:
+    """心跳桥（heartbeat 方法生产消费点）：失败旁路不阻断心跳主路径。
+    current_task/current_files 缺省 None=保留现值（heartbeat COALESCE 语义）。"""
+    try:
+        await _coord().heartbeat(agent_id, status=status)
+    except Exception as exc:
+        logger.warning("coord heartbeat bridge failed for %s: %s", agent_id, exc)
+
+
+async def _coord_unregister(agent_id: str) -> None:
+    """注销桥（unregister_agent 方法首个生产消费点）：真源行已删，派生
+    协调行随删防幽灵行；失败旁路不阻断删除主路径。"""
+    try:
+        await _coord().unregister_agent(agent_id)
+    except Exception as exc:
+        logger.warning("coord unregister bridge failed for %s: %s", agent_id, exc)
 
 
 @router.get("/health")
@@ -95,6 +152,10 @@ async def register_agent(
     )
     if not row:
         raise HTTPException(status_code=500, detail="Failed to register agent")
+    # G1-⑤c 注册桥：管理面节点进协调注册表（+active 同步——管理面注册即
+    # 'active'，两注册表状态一致禁两套脸；桥失败旁路不吃主路径）。
+    await _coord_register(str(agent_id), req.agent_type)
+    await _coord_heartbeat(str(agent_id), status="active")
     return dict(row)
 
 
@@ -111,6 +172,9 @@ async def agent_heartbeat(
     )
     if "UPDATE 0" in result:
         raise HTTPException(status_code=404, detail="Agent not found")
+    # G1-⑤c 心跳桥：管理面心跳保活协调活跃窗（UPDATE-only——协调行由注册桥
+    # 建，此处绝不 fabricate；桥失败旁路不吃主路径）。
+    await _coord_heartbeat(str(req.agent_id), status=req.status)
     return {
         "agent_id": req.agent_id,
         "status": req.status,
@@ -185,6 +249,9 @@ async def delete_agent_node(
     result = await db_pool.execute("DELETE FROM agents WHERE id = $1", node_id)
     if "DELETE 0" in result:
         raise HTTPException(status_code=404, detail="Agent not found")
+    # G1-⑤c 注销桥：真源行删除→派生协调行随删（禁幽灵行留在活跃窗）；
+    # 桥失败旁路不吃主路径（warn 可见，行删不回滚）。
+    await _coord_unregister(str(node_id))
     return {"status": "deleted", "agent_id": str(node_id)}
 
 

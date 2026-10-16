@@ -141,6 +141,24 @@ class MultiAgentCoordinator:
             ),
         )
 
+    async def unregister_agent(self, agent_id: str):
+        """注销Agent（G1-⑤c）：真源行删除→派生协调行随之删除。
+
+        管理面删除端点（api/agent.py DELETE /nodes/{id}）是首个生产消费点：
+        派生观测面跟随真源——真源行没了，协调行留着就是幽灵行（5min 活跃窗内
+        继续出现在协作视图/冲突检查里）。与 heartbeat 的 UPDATE-only 纪律互补：
+        注销是显式删除动作（真源行确实被删了才走到这里），不是伪造。
+
+        协调面只删自己命名空间的行（tenant 键过滤），他租户同名 agent_id
+        的行一律不动（F3b-③b-3「禁跨租户破坏」纪律）。"""
+        await self._ensure_table()
+        if not self.db:
+            return
+        await self.db.execute(
+            "DELETE FROM agent_registry WHERE tenant_id = ? AND agent_id = ?",
+            (self.tenant_id, agent_id),
+        )
+
     async def get_active_agents(self) -> list[dict]:
         """获取活跃Agent列表"""
         await self._ensure_table()
