@@ -22,11 +22,41 @@ SUCCESS_OUTCOME = "success"
 FAILURE_OUTCOME = "failure"
 
 
-def derive_agent_confidence(stats: dict, prior: float = 0.8, prior_strength: float = 2.0) -> float:
-    """agent_confidence 生产源派生（F4b-㉕）：从元认知账本真源派生未声明信心。
+def calibration_prior_correction(calibration: dict | None) -> float:
+    """G1-④c 校准→先验纠偏量：预测偏差的实际方向量（actual_success_rate − avg_confidence）。
+
+    只认 compute_confidence_calibration 真源形状（声明从实现派生，F4b-㉗ 同纪律）：
+    - calibration == 'miscalibrated' 且 avg_confidence/actual_success_rate 双数值
+      在场 → 返回有符号纠偏量（负=预测偏高应向下纠、正=预测偏低应向上纠）
+    - 'good'/'no_data' → 0.0（无失准无纠偏可言）、缺键/值非数值（含 bool）→ 0.0
+      如实不猜数字（G1-④a 字段缺失如实略纪律）。
+    纠偏量锚定实际成功率（outcome 轴）——是"预测误差校正"非"自评生自评"自我循环
+    （F4b-㉕ 纪律保留：自评轴仍不直接进派生，只以"预测−实际"的误差形式进）。
+    返回值 ∈ [−1, 1]（两输入皆 ∈ [0, 1]）。
+    """
+    if not isinstance(calibration, dict) or calibration.get("calibration") != "miscalibrated":
+        return 0.0
+    avg = calibration.get("avg_confidence")
+    actual = calibration.get("actual_success_rate")
+    # bool 拒收（True/False 是 int 子类会静默当 1/0，G1-④a _numeric 同语义）；
+    # isinstance 窄化后数值运算（Pyright 类型面收口）。
+    if isinstance(avg, bool) or isinstance(actual, bool):
+        return 0.0
+    if not isinstance(avg, (int, float)) or not isinstance(actual, (int, float)):
+        return 0.0
+    return round(float(actual) - float(avg), 3)
+
+
+def derive_agent_confidence(
+    stats: dict,
+    prior: float = 0.8,
+    prior_strength: float = 2.0,
+    calibration: dict | None = None,
+) -> float:
+    """agent_confidence 生产源派生（F4b-㉕ + G1-④c 校准纠偏）：从元认知账本真源派生未声明信心。
 
     真源=本 agent 的成败观测（verify 落账的 outcome 行），非字面推断非语义理解：
-    - 无成败观测 → prior 0.8"信心充足"（F4b-㉒ 缺省行为契约零变化）
+    - 无成败观测 → prior "信心充足"（F4b-㉒ 缺省行为契约零变化）
     - 有观测 → Laplace 经验收缩 (successes + prior_strength*prior) / (outcomes +
       prior_strength)——样本越多越信观测成功率（如实标注：经验收缩非统计推断，
       prior/prior_strength 是人为选定的先验与强度）；连续失败把信心压到 0.5 以下
@@ -34,12 +64,25 @@ def derive_agent_confidence(stats: dict, prior: float = 0.8, prior_strength: flo
     自评信心（decision 行）刻意不进派生：信心派生自评=自我循环（信心生信心）；
     自评只进校准对比（get_confidence_calibration 预测信心 vs 实际成功率）。
     min/max 是 0~1 契约归一（stats 来自 SQL 聚合 successes<=outcomes 结构上成立）。
+
+    G1-④c 校准纠偏（calibration 参数）：get_confidence_calibration 的失准观测
+    （'miscalibrated'）按预测误差方向修正 prior——修前派生的 prior 固定 0.8
+    "信心充足"对本 agent 可能系统性偏高/偏低（校准真源实测预测 vs 实际的偏差），
+    失准即先验错，纠先验=根因修。选 prior 修而非输出修的理由（如实记）：
+    ①高样本区 outcome 项主导、派生收敛到实际成功率（构造上已校准），失准来源
+    就是固定 prior——只纠 prior 不碰 outcome 项=不与已锚定实际结果的轴重复计数
+    ②纠偏量经 k/(n+k) 衰减，高样本区自然淡出防过校正③纠偏量锚定实际成功率
+    （outcome 轴）非自评均值本身，是误差校正不是自评生自评。
+    calibration 缺省/None/'good'/'no_data' → 纠偏量 0.0，输出与 F4b-㉕ 字节一致
+    （既有契约零变化，回归测试锁死）。
     """
+    correction = calibration_prior_correction(calibration)
+    effective_prior = min(max(prior + correction, 0.0), 1.0)
     outcomes = int(stats.get("outcomes") or 0)
     successes = int(stats.get("successes") or 0)
     if outcomes <= 0:
-        return prior
-    derived = (successes + prior_strength * prior) / (outcomes + prior_strength)
+        return effective_prior
+    derived = (successes + prior_strength * effective_prior) / (outcomes + prior_strength)
     return round(min(max(derived, 0.0), 1.0), 3)
 
 

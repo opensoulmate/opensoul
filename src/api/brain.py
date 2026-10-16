@@ -177,19 +177,30 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     else:
         execute_mode, confirm_prompt = "auto", None
 
-    # 5a'. F4b-㉕ agent_confidence 生产源派生：声明优先；未声明从元认知账本真源
-    # 派生（成败观测经验收缩，无观测回落 0.8 缺省=行为契约零变化）。账本不可读
-    # 不阻断思考，回落缺省并留痕可见。（db_pool 已在本函数顶部导入，F4b-㉚）
-    from src.mirror.metacognition import Metacognition, derive_agent_confidence
+    # 5a'. F4b-㉕ agent_confidence 生产源派生 + G1-④c 校准纠偏：声明优先（声明值
+    # 是用户显式值非派生产物，不被纠偏顶替）；未声明从元认知账本真源派生（成败观测
+    # 经验收缩，无观测回落 0.8 缺省=行为契约零变化），且失准观测（get_confidence_calibration
+    # 'miscalibrated'）按预测误差方向（实际成功率−预测均值）纠 prior=派生自我纠错。
+    # 账本不可读不阻断思考，回落缺省并留痕可见。（db_pool 已在本函数顶部导入，F4b-㉚）
+    from src.mirror.metacognition import (
+        Metacognition,
+        calibration_prior_correction,
+        derive_agent_confidence,
+    )
 
     meta = Metacognition(db_pool, identity.tenant_id, req.agent_id)
     effective_confidence = req.agent_confidence
+    confidence_correction = 0.0
     if effective_confidence is None:
         try:
-            effective_confidence = derive_agent_confidence(await meta.confidence_stats())
+            stats = await meta.confidence_stats()
+            calibration = await meta.get_confidence_calibration()
+            confidence_correction = calibration_prior_correction(calibration)
+            effective_confidence = derive_agent_confidence(stats, calibration=calibration)
         except Exception as e:
             logger.warning("agent_confidence 派生失败（不阻断思考），回落缺省 0.8: %s", e)
             effective_confidence = 0.8
+            confidence_correction = 0.0
 
     # 5b. 情感驱动决策（mind模块，F4b-㉒ 接线——修前 adjust_decision 全仓零调用点）：
     # 情绪/信心影响决策权重：负面情绪+低信心收紧门禁（auto→confirm_required）、
@@ -302,6 +313,10 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
         },
         # F4b-㉕ 生效信心（加性契约键）：声明值或账本派生值，可观测低信心收紧真因
         "agent_confidence": effective_confidence,
+        # G1-④c 校准纠偏量（加性契约键）：生效派生先验上的预测误差校正量
+        # （实际成功率−预测均值，负=历史上预测偏高本次向下纠）；声明路径恒 0.0
+        # （声明值不被纠偏顶替）——纠偏可观测非静默
+        "confidence_correction": confidence_correction,
         # F4b-㉜ 相关经验观测键（加性契约键）：top-3 相关历史经验 + 相关总数
         # （count=相关命中总数、items=前 3 条），故障如实带 error 键（禁静默空表）
         "experience": {
