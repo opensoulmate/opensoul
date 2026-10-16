@@ -617,83 +617,11 @@ async def evolve(
     （LobeChat范式：声明≠执行，reviewer审批人≠发起人）。
     """
     tenant_id = bind_identity(authorization, tenant_id).tenant_id
-    from src.database.postgres import db_pool
-    from src.heredity.self_evolution import SelfEvolution
-    from src.learn.experience_collector import ExperienceCollector
+    from src.heredity.self_evolution import run_evolution_cycle
 
-    KIND_MAP = {
-        "failure_avoidance": "failure_avoidance",
-        "strategy_adjustment": "policy_adjustment",
-        "style_adjustment": "prompt_strategy",
-    }
-
-    # P0-7数据层（TradingAgents outcome回填）：先采集真实执行产物
-    # （agent_messages/jobs/eval实验）→ experiences，再分析——进化永远基于
-    # 最新真实数据。采集异常不阻断分析（表可能已有历史数据可分析），
-    # 错误显式进experience_collection.error（mem0 §1.1失败必须可见）。
-    # 采集源三级解析（experience_collector._resolve_source_path）：本端点无HTTP
-    # 传参入口，job_queue.db/eval_loop.db经settings.experience_*_db_path注入换源
-    # （heredity_client隔离面第四层），生产默认路径零配置不变。
-    collection: dict = {}
-    try:
-        collection = ExperienceCollector(tenant_id=tenant_id, agent_id=agent_id).collect()
-    except Exception as e:  # 采集失败可见但不阻断进化分析
-        collection = {"status": "failed", "error": str(e), "written": 0}
-
-    evolutions = []
-    analysis_error = ""
-    try:
-        evolution = SelfEvolution(db_pool, tenant_id, agent_id)
-        evolutions = await evolution.analyze_and_evolve()
-    except Exception as e:  # 分析失败不阻断管线观测
-        analysis_error = str(e)
-
-    # 单例接线（2026-10-06 heredity测试隔离轮）：此前每次调用都 EvolutionEngine()
-    # 新建引擎——生产里与 /api/heredity/evolution/* 双引擎并存（同一DB文件但状态视图
-    # 分裂），测试里换不掉数据面（heredity_api.evolution_engine换tmp对本端点无效
-    # →TestEvolutionAPI经本端点把提案写穿生产evolution.db）。改为共享heredity单例：
-    # 单一管线（will/job_handlers.py:34同款late import），测试可换数据面。
-    from src.api.heredity import evolution_engine as engine
-
-    declared = []
-    for evo in evolutions:
-        kind = KIND_MAP.get(evo.get("type", ""), "policy_adjustment")
-        # 去重键=_digest(kind, title)（evolution_loop.declare_intent:490）。
-        # failure模式的action文本同类相同（"自动规避: …"；F2b-②c-1 后随学习
-        # 建议取值可变）——只用
-        # action做title会让不同失败模式（不同reason）互相误判duplicate，
-        # 4条不同发现在live实证中被折叠成1条（证据丢失）。title携带reason后
-        # digest按发现内容去重：同一发现重复declare→duplicate，不同发现各建单。
-        _action = str(evo.get("action") or "").strip()
-        _reason = str(evo.get("reason") or "").strip()
-        _title = (
-            f"{_action}: {_reason}"
-            if _action and _reason
-            else (_action or _reason or "auto evolution")
-        )
-        result = engine.declare_intent(
-            kind=kind,
-            title=_title[:200],
-            rationale=str(evo.get("reason", "")),
-            confidence=0.4,
-            evidence_refs=[f"evolution_log:{evo.get('type', 'unknown')}"],
-            proposer=f"self_evolution:{agent_id}",
-        )
-        declared.append(
-            {
-                "proposal_id": result.get("proposal_id"),
-                "status": result.get("status"),
-                "reject_reason": result.get("reject_reason", ""),
-                "duplicate": result.get("duplicate", False),
-            }
-        )
-    return {
-        "evolutions": evolutions,
-        "analysis_error": analysis_error,
-        "experience_collection": collection,
-        "declared_proposals": declared,
-        "pipeline": engine.get_stats(),
-    }
+    # G1-② 单一代码路径：端点与 proactive self_evolve 行为共用
+    # run_evolution_cycle（编排逻辑只此一份，禁两套漂移）。
+    return await run_evolution_cycle(tenant_id=tenant_id, agent_id=agent_id)
 
 
 @router.get("/metacognition")

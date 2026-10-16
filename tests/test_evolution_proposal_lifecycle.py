@@ -381,8 +381,12 @@ class TestWiring:
         assert "await self.compact_duplicate_logs()" in text
 
     def test_brain_evolve_consumes_analyze(self):
-        text = Path("src/api/brain.py").read_text()
-        assert "await evolution.analyze_and_evolve()" in text
+        """单一代码路径契约（G1-②）：/api/brain/evolve 委托 run_evolution_cycle，
+        其编排体真消费 analyze_and_evolve（禁第二套编排漂移）。"""
+        brain = Path("src/api/brain.py").read_text()
+        assert "run_evolution_cycle" in brain
+        se = Path("src/heredity/self_evolution.py").read_text()
+        assert "await SelfEvolution(db_pool, tenant_id, agent_id).analyze_and_evolve()" in se
 
     def test_log_evolution_writes_meta(self):
         text = Path("src/heredity/self_evolution.py").read_text()

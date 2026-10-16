@@ -310,7 +310,7 @@ class TestWiring:
         names = pb_mod.register_default_watchers(_Engine())
         assert "advisory_review" in names
         assert registered["advisory_review"][1] == pb_mod.DEFAULT_INTERVALS["advisory_review"]
-        assert len(names) == 5  # 五默认行为全在
+        assert len(names) == 6  # 六默认行为全在（G1-② self_evolve 加入）
 
     def test_run_watcher_consumes_advisory(self, grp_db, tmp_path):
         """调度面真消费：run_watcher 跑 advisory_review 真上板（写了≠接线了）。"""

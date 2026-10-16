@@ -444,3 +444,93 @@ class SelfEvolution:
             (self.tenant_id, self.agent_id),
         )
         return {"evolutions": count}
+
+
+# ── 进化周期编排（G1-② 自我进化自动调度：单一代码路径）────────────────
+# POST /api/brain/evolve 与 proactive self_evolve 行为共用 run_evolution_cycle
+# ——采集→分析→提案声明（审批管线）一条龙，禁两套编排逻辑漂移（F2b-①
+# pattern_extract 共用代码路径同纪律：周期化=同一代码路径的定期调用）。
+
+EVOLUTION_KIND_MAP = {
+    "failure_avoidance": "failure_avoidance",
+    "strategy_adjustment": "policy_adjustment",
+    "style_adjustment": "prompt_strategy",
+}
+
+
+async def run_evolution_cycle(tenant_id="default", agent_id="default", db_pool=None) -> dict:
+    """自我进化周期：采集真实执行产物 → 分析 → 声明式提案进入审批管线。
+
+    语义原样收编自 POST /api/brain/evolve 端点本体（2026-10-06 P0-7 接线）：
+    - 先采集（ExperienceCollector：agent_messages/jobs/eval → experiences）再
+      分析——进化永远基于最新真实数据；采集异常不阻断分析（表可能已有历史
+      数据可分析），错误显式进 experience_collection.error（mem0 1.1 失败必须
+      可见）。
+    - SelfEvolution.analyze_and_evolve() 的每条发现作为声明式提案进入
+      /api/heredity/evolution/* 审批管线（LobeChat 范式：声明不等于执行，
+      reviewer 审批人不等于发起人）。
+    - 分析失败不阻断管线观测（analysis_error 如实带真因）。
+
+    db_pool 缺省取全局池（端点语义不变）；proactive 行为注入 env/tmp 池
+    （PROACT-③ 数据面隔离）。
+    """
+    if db_pool is None:
+        from src.database.postgres import db_pool as _global_pool
+
+        db_pool = _global_pool
+    from src.learn.experience_collector import ExperienceCollector
+
+    collection = {}
+    try:
+        collection = ExperienceCollector(tenant_id=tenant_id, agent_id=agent_id).collect()
+    except Exception as e:  # 采集失败可见但不阻断进化分析
+        collection = {"status": "failed", "error": str(e), "written": 0}
+
+    evolutions = []
+    analysis_error = ""
+    try:
+        evolutions = await SelfEvolution(db_pool, tenant_id, agent_id).analyze_and_evolve()
+    except Exception as e:  # 分析失败不阻断管线观测
+        analysis_error = str(e)
+
+    # 单例接线（2026-10-06 heredity 测试隔离轮）：共享 heredity 单例=单一管线
+    # （测试可换数据面），禁每次新建引擎与 /api/heredity/evolution/* 双引擎并存。
+    from src.api.heredity import evolution_engine as engine
+
+    declared = []
+    for evo in evolutions:
+        kind = EVOLUTION_KIND_MAP.get(evo.get("type", ""), "policy_adjustment")
+        # 去重键=_digest(kind, title)（evolution_loop.declare_intent）。title 携带
+        # reason 后 digest 按发现内容去重：同一发现重复 declare 即 duplicate，
+        # 不同发现各建单（只用 action 做 title 会把不同失败模式互相误判
+        # duplicate，4 条不同发现被折叠成 1 条=证据丢失）。
+        _action = str(evo.get("action") or "").strip()
+        _reason = str(evo.get("reason") or "").strip()
+        _title = (
+            f"{_action}: {_reason}"
+            if _action and _reason
+            else (_action or _reason or "auto evolution")
+        )
+        result = engine.declare_intent(
+            kind=kind,
+            title=_title[:200],
+            rationale=str(evo.get("reason", "")),
+            confidence=0.4,
+            evidence_refs=[f"evolution_log:{evo.get('type', 'unknown')}"],
+            proposer=f"self_evolution:{agent_id}",
+        )
+        declared.append(
+            {
+                "proposal_id": result.get("proposal_id"),
+                "status": result.get("status"),
+                "reject_reason": result.get("reject_reason", ""),
+                "duplicate": result.get("duplicate", False),
+            }
+        )
+    return {
+        "evolutions": evolutions,
+        "analysis_error": analysis_error,
+        "experience_collection": collection,
+        "declared_proposals": declared,
+        "pipeline": engine.get_stats(),
+    }

@@ -412,7 +412,7 @@ async def lifespan(app: FastAPI):
     retention_task = asyncio.create_task(_evolution_retention_loop())
 
     # 主动行为引擎（A3）：心跳驱动的定期任务，不只被动响应——
-    # 四个默认行为（memory_decay/experience_collect/heredity_triggers/pattern_extract）
+    # 六个默认行为（memory_decay/experience_collect/heredity_triggers/pattern_extract/advisory_review/self_evolve）
     # 按各自interval到期执行，每次执行留痕data/proactive.db，见src/will/proactive.py
     from src.will.proactive import proactive_engine
     from src.will.proactive_behaviors import register_default_watchers

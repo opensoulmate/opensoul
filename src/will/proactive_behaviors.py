@@ -6,6 +6,7 @@
 - heredity_triggers → heredity EvolutionEngine.evaluate_triggers（进化触发器+错误风暴熔断巡检）
 - pattern_extract   → learn LongTermLearning.extract_patterns（experiences→learned_patterns 模式提取，F2b-①）
 - advisory_review   → learn LongTermLearning.get_recommendations + ai_groups.submit_advisory_task（推荐回流消费面：改进任务上板+回群聊，DEC-④ 建议默认 B）
+- self_evolve         → heredity run_evolution_cycle（自我进化周期：采集→分析→提案声明进审批管线，G1-②）
 
 依赖全部可注入（store/engine/db_path），测试走 tmp 数据面，生产默认零配置。
 """
@@ -169,6 +170,25 @@ async def advisory_review(top_k: int = 3, db_pool: Any = None) -> dict:
     return result
 
 
+async def self_evolve(
+    tenant_id: str = "default", agent_id: str = "default", db_pool: Any = None
+) -> dict:
+    """G1-② 自我进化自动调度：run_evolution_cycle 周期化。
+
+    G0 审计定性半断点：analyze_and_evolve→进化审批管线真链只经
+    POST /api/brain/evolve 手动触发（触发面全手动）。本行为把整条
+    进化周期（采集→分析→提案声明）挂进心跳调度——与 /api/brain/evolve
+    共用 run_evolution_cycle 同一代码路径（F2b-① 纪律，不产生第二套
+    编排逻辑）；提案仍是声明式进审批管线（审批后才落盘），
+    自动调度不等于自动执行。
+    """
+    if db_pool is None:
+        db_pool = await _default_learn_db_pool()
+    from src.heredity.self_evolution import run_evolution_cycle
+
+    return await run_evolution_cycle(tenant_id=tenant_id, agent_id=agent_id, db_pool=db_pool)
+
+
 # 行为 → 执行间隔（秒）：维护类低频、采集类中频、巡检类高频
 DEFAULT_INTERVALS: dict[str, float] = {
     "memory_decay": 6 * 3600,
@@ -177,11 +197,14 @@ DEFAULT_INTERVALS: dict[str, float] = {
     "pattern_extract": 2 * 3600,  # 滞后采集一拍（采集1h/提取2h）：积累≥2轮经验再提
     "advisory_review": 4
     * 3600,  # 再滞后提取一拍（提取2h/回流4h）：有模式再消费，at-most-once 不刷屏
+    # G1-② 全链最低频（采集1h/提取2h/回流4h/进化8h）：基于积累数据进化，
+    # 提案签名去重+审批管线（声明不等于执行）不刷屏
+    "self_evolve": 8 * 3600,
 }
 
 
 def register_default_watchers(engine: Any) -> list[str]:
-    """把五个默认主动行为注册进 ProactiveEngine（幂等：同名覆盖同一行为）。"""
+    """把六个默认主动行为注册进 ProactiveEngine（幂等：同名覆盖同一行为）。"""
     specs = {
         "memory_decay": (partial(memory_decay), DEFAULT_INTERVALS["memory_decay"]),
         "experience_collect": (
@@ -191,6 +214,7 @@ def register_default_watchers(engine: Any) -> list[str]:
         "heredity_triggers": (partial(heredity_triggers), DEFAULT_INTERVALS["heredity_triggers"]),
         "pattern_extract": (partial(pattern_extract), DEFAULT_INTERVALS["pattern_extract"]),
         "advisory_review": (partial(advisory_review), DEFAULT_INTERVALS["advisory_review"]),
+        "self_evolve": (partial(self_evolve), DEFAULT_INTERVALS["self_evolve"]),
     }
     for name, (fn, interval) in specs.items():
         engine.register_watcher(name, fn, interval_seconds=interval)

@@ -700,7 +700,11 @@ class TestWiring:
         assert "learn.collect_experiences" in HANDLER_SPECS
 
     def test_brain_evolve_calls_collector(self):
-        text = Path("src/api/brain.py").read_text()
+        """/api/brain/evolve 委托 run_evolution_cycle（G1-② 单一代码路径），
+        采集调用真源=src/heredity/self_evolution.py 编排体。"""
+        brain = Path("src/api/brain.py").read_text()
+        assert "run_evolution_cycle" in brain
+        text = Path("src/heredity/self_evolution.py").read_text()
         assert "from src.learn.experience_collector import ExperienceCollector" in text
         assert "ExperienceCollector(tenant_id=tenant_id, agent_id=agent_id).collect()" in text
         assert '"experience_collection": collection' in text
@@ -712,8 +716,9 @@ class TestWiring:
 
     def test_brain_title_carries_reason_for_distinct_digest(self):
         """去重键=_digest(kind,title)：title必须携带reason，否则不同失败模式
-        （相同action文本）互相误判duplicate（live实证4条发现被折叠成1条）。"""
-        text = Path("src/api/brain.py").read_text()
+        （相同action文本）互相误判duplicate（live实证4条发现被折叠成1条）。
+        声明编排真源=src/heredity/self_evolution.py run_evolution_cycle（G1-②）。"""
+        text = Path("src/heredity/self_evolution.py").read_text()
         assert 'f"{_action}: {_reason}"' in text
         assert "title=_title[:200]" in text
 
