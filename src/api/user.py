@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -5,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 from src.models.user import Token, UserCreate, UserResponse
 from src.services.auth import (
+    TokenLookupFault,
     authenticate_user,
     create_access_token,
     decode_token,
@@ -12,6 +14,8 @@ from src.services.auth import (
     register_user,
 )
 from src.services.permission import add_role
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -26,7 +30,13 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/user/login")
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UUID:
-    token_data = decode_token(token)
+    try:
+        token_data = decode_token(token)
+    except TokenLookupFault as exc:
+        # 故障≠失效凭据（DEC-⑭-⑤）：身份库故障如实 503，禁 401 谎报凭据无效；
+        # fail-closed 不放行，但失败原因必须可见。
+        logger.warning("token identity lookup unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="authentication backend unavailable") from exc
     if not token_data:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return token_data["user_id"]

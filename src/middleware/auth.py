@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.database.postgres import db_pool
-from src.services.auth import decode_token, role_at_least
+from src.services.auth import TokenLookupFault, decode_token, role_at_least
+
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
@@ -13,7 +17,13 @@ async def get_current_user(
     """Extract and validate JWT from Authorization header, return user dict."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = decode_token(credentials.credentials)
+    try:
+        payload = decode_token(credentials.credentials)
+    except TokenLookupFault as exc:
+        # 故障≠失效凭据（DEC-⑭-⑤）：身份库故障如实 503，禁 401 谎报凭据无效；
+        # fail-closed 不放行，但失败原因必须可见。
+        logger.warning("token identity lookup unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="authentication backend unavailable") from exc
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     user = await db_pool.fetchrow(
