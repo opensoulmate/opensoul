@@ -79,8 +79,10 @@ export default function LinkPage() {
   const [sendPayload, setSendPayload] = useState('{\n  "message": "hello"\n}');
   const [showSendDialog, setShowSendDialog] = useState<string | null>(null);
   // DEC-⑲：callback_token 明文只回注册响应一次——创建成功后一次性展示，关闭后不再可见
-  const [createdToken, setCreatedToken] = useState<{ name: string; token: string } | null>(null);
+  const [createdToken, setCreatedToken] = useState<{ name: string; token: string; mode: string } | null>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
+  // DEC-⑲-③：轮换/撤销进行中标记（''=空闲），按钮禁用防连点
+  const [tokenBusy, setTokenBusy] = useState<string>('');
 
   // Create form state
   const [form, setForm] = useState({
@@ -140,7 +142,7 @@ export default function LinkPage() {
       // register 签发回调凭据明文只回此注册响应一次（DEC-⑲）——一次性展示，关闭后不再可见
       if (data?.callback_token) {
         setTokenCopied(false);
-        setCreatedToken({ name: data.name || createdName, token: data.callback_token });
+        setCreatedToken({ name: data.name || createdName, token: data.callback_token, mode: 'create' });
       }
       await fetchConnectors();
     } catch (e: any) { setError(e.message); }
@@ -171,6 +173,36 @@ export default function LinkPage() {
       await apiFetch(`/api/link/connectors/${id}`, { method: 'DELETE' });
       await fetchConnectors();
     } catch (e: any) { setError(e.message); }
+  };
+
+  // DEC-⑲-③：callback_token 轮换/撤销（消费 DEC-⑲-② 端点）——轮换=签发新证并即刻
+  // 作废旧证（明文只回响应一次，复用一次性展示弹窗）；撤销=X-Callback-Token 面
+  // fail-closed，可再轮换重新签发（签发态与撤销态同走 rotate 口）
+  const handleRotateToken = async (c: Connector) => {
+    const verb = c.has_callback_token ? '轮换' : '重新签发';
+    if (!confirm(c.has_callback_token
+      ? `确定${verb}「${c.name}」的回调凭据？旧凭据将即刻作废（发方需更新 X-Callback-Token 配置）。`
+      : `确定${verb}「${c.name}」的回调凭据？将生成新凭据供发方配置。`)) return;
+    try {
+      setTokenBusy(c.connector_id);
+      const data = await apiFetch(`/api/link/connectors/${c.connector_id}/callback-token/rotate`, { method: 'POST' });
+      setTokenCopied(false);
+      setCreatedToken({ name: c.name, token: data.callback_token, mode: c.has_callback_token ? 'rotate' : 'issue' });
+      await fetchConnectors();
+      setDetailConnector((d) => (d && d.connector_id === c.connector_id ? { ...d, has_callback_token: true } : d));
+    } catch (e: any) { setError(e.message); }
+    finally { setTokenBusy(''); }
+  };
+
+  const handleRevokeToken = async (c: Connector) => {
+    if (!confirm(`确定撤销「${c.name}」的回调凭据？X-Callback-Token 证明将 fail-closed 拒收（X-Signature HMAC 等效证明不受影响），可再「签发」重新生成。`)) return;
+    try {
+      setTokenBusy(c.connector_id);
+      await apiFetch(`/api/link/connectors/${c.connector_id}/callback-token`, { method: 'DELETE' });
+      await fetchConnectors();
+      setDetailConnector((d) => (d && d.connector_id === c.connector_id ? { ...d, has_callback_token: false } : d));
+    } catch (e: any) { setError(e.message); }
+    finally { setTokenBusy(''); }
   };
 
   const handleTest = async (id: string) => {
@@ -531,7 +563,22 @@ export default function LinkPage() {
                 {detailConnector.endpoint && <div className="col-span-2"><span className="text-muted-foreground">端点:</span> <span className="font-mono break-all">{detailConnector.endpoint}</span></div>}
                 {detailConnector.description && <div className="col-span-2"><span className="text-muted-foreground">描述:</span> {detailConnector.description}</div>}
                 <div><span className="text-muted-foreground">有密钥:</span> {detailConnector.has_secret ? '是' : '否'}</div>
-                <div><span className="text-muted-foreground">回调凭据:</span> {detailConnector.has_callback_token ? '已签发' : '未签发'}</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-muted-foreground">回调凭据:</span> {detailConnector.has_callback_token ? '已签发' : '未签发'}
+                  <Button variant="chip-xs" disabled={tokenBusy === detailConnector.connector_id}
+                    onClick={() => handleRotateToken(detailConnector)}
+                    className="flex items-center gap-1 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50">
+                    <RefreshCw className={`w-3 h-3 ${tokenBusy === detailConnector.connector_id ? 'animate-spin' : ''}`} />
+                    {detailConnector.has_callback_token ? '轮换' : '签发'}
+                  </Button>
+                  {detailConnector.has_callback_token ? (
+                    <Button variant="chip-xs" disabled={tokenBusy === detailConnector.connector_id}
+                      onClick={() => handleRevokeToken(detailConnector)}
+                      className="flex items-center gap-1 bg-red-500/10 text-red-500 hover:bg-red-500/20 disabled:opacity-50">
+                      <XCircle className="w-3 h-3" />撤销
+                    </Button>
+                  ) : null}
+                </div>
                 <div><span className="text-muted-foreground">触发次数:</span> {detailConnector.trigger_count ?? 0}</div>
                 <div><span className="text-muted-foreground">错误次数:</span> <span className={detailConnector.error_count ? 'text-red-500' : ''}>{detailConnector.error_count ?? 0}</span></div>
                 {detailConnector.last_triggered && <div><span className="text-muted-foreground">最后触发:</span> {new Date(detailConnector.last_triggered).toLocaleString('zh-CN')}</div>}
@@ -575,7 +622,7 @@ export default function LinkPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setCreatedToken(null)}>
           <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h2 className="text-sm font-semibold">回调凭据已签发</h2>
+              <h2 className="text-sm font-semibold">{createdToken.mode === 'rotate' ? '回调凭据已轮换' : '回调凭据已签发'}</h2>
               <Button onClick={() => setCreatedToken(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-4 space-y-3 text-xs">
@@ -583,6 +630,12 @@ export default function LinkPage() {
                 <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <span>明文仅此一次展示，关闭后不再可见（接口只回签发状态）。请立即复制并配置到发方。</span>
               </div>
+              {createdToken.mode === 'rotate' && (
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-red-500/10 text-red-500">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>旧凭据已即刻作废，发方须用新凭据更新 X-Callback-Token 配置后才能继续投递。</span>
+                </div>
+              )}
               <div><span className="text-muted-foreground">连接器:</span> {createdToken.name}</div>
               <div>
                 <span className="text-muted-foreground mb-1 block">X-Callback-Token</span>
