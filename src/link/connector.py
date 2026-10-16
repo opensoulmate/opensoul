@@ -37,6 +37,11 @@ class Connector:
     type: ConnectorType
     endpoint: str = ""
     secret: str = ""
+    # register 签发回调凭据（DEC-⑲，F3b-④/⑤ 同族"claim 注册身份必须持
+    # register 签发 token"）：create_connector 恒签发 uuid4().hex，明文只回
+    # 注册响应一次；receive_webhook 凭据证明消费（X-Callback-Token 或
+    # X-Signature HMAC 等效证明）。
+    callback_token: str = ""
     status: ConnectorStatus = ConnectorStatus.ACTIVE
     headers: dict = field(default_factory=dict)
     config: dict = field(default_factory=dict)
@@ -87,6 +92,9 @@ class IntegrationManager:
             type=ConnectorType(type),
             endpoint=endpoint,
             secret=secret,
+            # register 签发回调凭据（DEC-⑲）：恒签发=生产不可达"无证"行
+            # （fail-closed 判定口的缺省态永不裸奔），明文只回注册响应一次。
+            callback_token=uuid.uuid4().hex,
             headers=headers or {},
             config=config or {},
             description=description,
@@ -115,6 +123,7 @@ class IntegrationManager:
                 "status": c.status.value,
                 "endpoint": c.endpoint,
                 "has_secret": bool(c.secret),
+                "has_callback_token": bool(c.callback_token),
                 "description": c.description,
                 "tags": c.tags,
                 "trigger_count": c.trigger_count,

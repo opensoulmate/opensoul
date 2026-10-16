@@ -29,6 +29,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.nerve.event_bridge import push_event
+from src.services.callback_token import callback_token_ok
 from src.services.tenant_binding import bind_identity
 
 logger = logging.getLogger(__name__)
@@ -283,13 +284,13 @@ def _gate_webhook(webhook_id: str, tenant_id: str) -> WebhookEndpoint:
 def _callback_token_ok(row_token: str, presented: str) -> bool:
     """外部回调凭据单一判定口（DEC-⑬ heartbeat/incoming 共用，禁两套判法漂移）。
 
-    claim 回调身份必须持 register 签发 callback_token（F3b-④/⑤ 同族
+    判定语义单一源=src/services/callback_token.callback_token_ok（DEC-⑲
+    link.py receive_webhook 同轴共用，禁两套判法漂移）：claim 回调身份必须持
+    register 签发 callback_token（F3b-④/⑤ 同族
     "claim 注册身份必须持 register 签发 token"），hmac 恒时比较；
     缺失/空白/不匹配一律 False（fail-closed：无证可验=拒）。
     """
-    if not row_token or not presented:
-        return False
-    return hmac.compare_digest(str(row_token), str(presented))
+    return callback_token_ok(row_token, presented)
 
 
 async def _send_with_retry(

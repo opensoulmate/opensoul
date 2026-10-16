@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from src.link.connector import IntegrationManager
 from src.nerve.event_bridge import push_event
+from src.services.callback_token import callback_token_ok
 from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
@@ -80,6 +81,9 @@ async def create_connector(
         "name": connector.name,
         "type": connector.type.value,
         "status": connector.status.value,
+        # register 签发回调凭据明文只回此注册响应一次（DEC-⑲，DEC-⑬ 同款）：
+        # get/list 面不回吐（只回 has_callback_token 布尔）。
+        "callback_token": connector.callback_token,
     }
 
 
@@ -105,6 +109,7 @@ async def get_connector(connector_id: str):
         "status": c.status.value,
         "endpoint": c.endpoint,
         "has_secret": bool(c.secret),
+        "has_callback_token": bool(c.callback_token),
         "headers": c.headers,
         "config": c.config,
         "description": c.description,
@@ -157,19 +162,36 @@ async def receive_webhook(connector_id: str, request: Request):
     if connector.status.value != "active":
         raise HTTPException(503, f"Connector is {connector.status.value}")
 
-    # Verify signature if secret exists
+    body = await request.body()
+
+    # 凭据证明先于一切副作用（DEC-⑲ link.py receive_webhook token 化取 B，
+    # DEC-⑬ heartbeat/incoming 同轴同哲学）：claim 回调身份必须持 register
+    # 签发凭据——X-Callback-Token=注册签发 callback_token（F3b-④/⑤ 同族），
+    # 或既有 X-Signature HMAC 签名=connector.secret 等效证明（发方持 secret
+    # 即持证，签名面契约零变化）；两证全无/全错=401 零副作用（record_event
+    # 不落、trigger_count 不动、零事件/零通知）。fail-closed：无证可验=拒
+    # （create_connector 恒签发 token=生产不可达"无证"行）。
+    # 注意与 DEC-① 1a 契约的分界：Authorization 头仍绝不触发 401、也绝不
+    # 改变事件归属（用户 JWT 非本入口身份轴），本门只认 connector 自有凭据。
+    sig_ok = False
     if connector.secret:
         signature = request.headers.get("X-Signature", "")
-        body = await request.body()
         expected = f"sha256={__import__('hmac').new(connector.secret.encode(), body, __import__('hashlib').sha256).hexdigest()}"
-        if not __import__("hmac").compare_digest(signature, expected):
-            raise HTTPException(401, "Invalid signature")
+        sig_ok = __import__("hmac").compare_digest(signature, expected)
+    presented = (request.headers.get("X-Callback-Token") or "").strip()
+    if not (sig_ok or callback_token_ok(connector.callback_token, presented)):
+        if not presented and not request.headers.get("X-Signature"):
+            raise HTTPException(
+                401,
+                "callback credential missing: present X-Callback-Token "
+                "(or X-Signature when secret is configured)",
+            )
+        raise HTTPException(401, "invalid callback credential")
 
     try:
-        payload = await request.json()
+        payload = __import__("json").loads(body)
     except Exception:
-        payload = await request.body()
-        payload = payload.decode("utf-8", errors="replace")
+        payload = body.decode("utf-8", errors="replace")
 
     source_ip = request.client.host if request.client else ""
     event = manager.record_event(
@@ -184,6 +206,9 @@ async def receive_webhook(connector_id: str, request: Request):
     # 非用户身份轴，事件刻意不带 tenant_id（record() 落 'default'）＝「connector
     # 系统事件」语义如实；任何 Authorization 头都不改变归属，也绝不接 401
     # （第三方调用方无用户 JWT，接身份轴＝打断外部 webhook 真回归）。
+    # 凭据轴与归属轴分开（DEC-⑲）：本入口 2026-10-16 起必持 connector 自有
+    # 回调凭据（X-Callback-Token/X-Signature），那是"发方持有注册签发凭据"的
+    # 通道证明而非用户身份——持证匿名发方事件照旧落 'default'。
     push_event(
         {
             "organ": "link",

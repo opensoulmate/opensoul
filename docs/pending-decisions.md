@@ -23,6 +23,8 @@
 | ⑮ | websocket/handler.py 幽灵模块处置（挂载 or 删除） | DEC-⑭-① 边界③留档+DEC-⑭-③ 候选首件 | 取 B（删除纯死资产模块：零 import 零挂载零消费方，C3-③ 死资产处置先例）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑮）** | ~~"⑮取B"~~ 已落，异议回「⑮改A」（备份/git 恢复模块）/「⑮改C」（挂载+身份轴做成真实通道，另拍实现）即改道 |
 | ⑯ | terminal 路径对齐（OpenMate 面板期望 ws://host:8090/ws/terminal vs 本仓 /api/terminal/ws/terminal） | DEC-⑭-① 边界④留档+DEC-⑮ 候选首件 | 取 B（本仓加挂顶层别名挂同一 handler）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑯）** | ~~"⑯取B"~~ 已落，异议回「⑯改A」（撤下别名回面板连不上态）/「⑯改C」（改 openmate URL，跨仓改动需用户授权）即改道 |
 | ⑰ | ws_chat connected 帧 user_id 载荷收口（dict repr 怪形→纯用户 id） | DEC-⑭-③ 边界④留档+DEC-⑯ 候选首件 | 取 B（载荷=纯用户 id，向生态参照形 acp-proxy ws_chat.py 对齐）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑰）** | ~~"⑰取B"~~ 已落，异议回「⑰改A」（回 dict repr 怪形）/「⑰改C」（整键移除 connected 帧 user_id）即改道 |
+| ⑱ | WS 连接审计面（terminal 先拍，拆件 ⑱-②/③/④） | DEC-⑭-① 边界⑤留档 | 取 B（terminal WS 面先拍）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑱+⑱-②/⑱-③/⑱-④ 四面全落）** | ~~"⑱取B"~~ 四面全落，异议回「⑱改A」（revert 撤审计面）/「⑱改C」（organ 归口改独立安全 organ）即改道 |
+| ⑲ | link.py receive_webhook token 化（OpenLink connector webhook 入口凭据门） | DEC-① 1a 契约锁死后另拍（DEC-⑬ 边界④留档） | 取 B（register 签发回调 token，X-Callback-Token 或 X-Signature HMAC 等效证明，缺/错 401 零副作用）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑲）** | ~~"⑲取B"~~ 已落，异议回「⑲改A」（revert 回 id 即凭证）/「⑲改C」（改全局共享 secret）即改道 |
 
 ---
 
@@ -33,6 +35,7 @@
 **现状**（F3b-⑨ census：46 调用点中 37 个 HTTP 点已由 ②b-1~②b-8 接 bind_identity 派生；余 9 点全归本项）：9 个调用点的事件 dict 无 tenant_id 键 → record() 落 `'default'`（timeline/store.py 兜底）。生产单租户下零行为影响；多租户下这些事件会落错租户（自我不可见）。
 
 ### 1a link receive_webhook 1 点（外部 webhook 入口）
+- **状态补充（2026-10-16 DEC-⑲）**：凭据轴已 token 化（见 ⑲ 详档）——归属轴 A 语义逐字保留（事件 'default' 兜底+Authorization 绝不 401 绝不改归属），但「匿名无证 200」面由 ⑲ 刻意变更为缺证 401 零副作用（connector 自有凭据与用户 JWT 轴分开，契约测试已随更新）。
 - 证据：src/api/link.py:152 `receive_webhook`（:183 push_event，不带租户键）。
 - 选项：**A** 维持 `'default'` 兜底并文档化=外部系统事件 / **B** 按 connector owner 归属（connector 行有归属即继承）/ **C** 接 bind_identity（401 拒垃圾 Authorization）。
 - 权衡：C 已被 ②b-8 边界实证=**会打断外部 webhook**（第三方调用方无用户 JWT，按用户端点语义接 401 是真回归）；B 需 connector 归属模型先行。
@@ -159,7 +162,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 选项：**A** 维持（id 即凭证）/ **B** register 签发回调 token（回调必须持证）/ **C** 全局共享 secret（env 配置，所有回调共用一把）。
 - 权衡：A=伪造面持续（心跳/webhook 均可被任意人伪造，1c-④ 已实证跨租户借用面）；C 共享秘密一漏全漏、且与 register 签发语义不同族（F3b-④/⑤ 哲学=每注册身份各持各证）；B 与 agent 注册 token 同族，每注册行独立凭据、泄漏半径单行、发方凭据=注册时交付（与 webhook secret/agent token 交付方式同款）。
 - 建议：**B**。
-- 诚实边界：①凭据是 bearer 型共享秘密非请求签名（incoming 的 HMAC 签名面保留为等效证明，未强制签名）②token 无轮换/撤销端点（重注册=新行新 token；_webhooks/_systems 内存注册表重启即清=行本身无持久撤销面）③admin-ui 不展示 callback_token（API 注册响应可见，UI 面另拍）④link.py receive_webhook（OpenLink connector webhook 入口）不在本拍——① 1a 已拍 A（外部 webhook 绝不因 Authorization 401，契约锁死），如需同款 token 化另拍⑤soma_connector 心跳（X-Component-Token）/agent 心跳（X-Agent-Token）各有自有凭据轴不在本拍⑥404/503 契约先于凭据检查=入口存在性可被探知（既有契约不变优先，如需凭据前置另拍）。
+- 诚实边界：①凭据是 bearer 型共享秘密非请求签名（incoming 的 HMAC 签名面保留为等效证明，未强制签名）②token 无轮换/撤销端点（重注册=新行新 token；_webhooks/_systems 内存注册表重启即清=行本身无持久撤销面）③admin-ui 不展示 callback_token（API 注册响应可见，UI 面另拍）④link.py receive_webhook（OpenLink connector webhook 入口）不在本拍——① 1a 已拍 A（外部 webhook 绝不因 Authorization 401，契约锁死），如需同款 token 化另拍（已落 DEC-⑲ 2026-10-16，见 ⑲）⑤soma_connector 心跳（X-Component-Token）/agent 心跳（X-Agent-Token）各有自有凭据轴不在本拍⑥404/503 契约先于凭据检查=入口存在性可被探知（既有契约不变优先，如需凭据前置另拍）。
 
 ## ⑭ /ws/{user_id} 等其余长连接面身份轴（terminal WS 无鉴权=RCE 面）
 
@@ -210,6 +213,18 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：A 持续=RCE 面谁开过 shell 不可回放（安全审计缺核心面）；C 违「一拍一面」拆件纪律（⑳/㉑/DEC-⑭-②③ 先例）且各面身份轴语义不同（ws_chat=用户对话、link=集成、collab=agent）；B 最小可执行件+活面最高险先行（DEC-⑭-②「shell RCE 面先拍」同序）；代价=其余长连接面仍无审计（⑱-② 候选）。
 - 建议：**B**（terminal 先拍）。
 - 诚实边界：①审计走 push_event 同步口，不进通知中心（emit 的 await 型面在可取消收尾路径下实测被取消吞掉=静默丢审计，同步口=取消免疫是硬要求；nerve 总线 fire-and-forget 照常）②ws_chat 面已落（⑱-②，2026-10-16 DEC-⑱-②）；link_gateway/collab 长连接面审计留待拍（⑱-③/⑱-④）③rejected 行 tenant 恒 'default'（被拒无派生身份，③b-2 兜底纪律）④事件按连接粒度（input/resize 按键不落审计——隐私+噪声，需要另拍）⑤organ 归口=immune（安全事件既有归口 intrusion_detected/permission_denied 同流），若主张独立 organ 可改道。
+
+## ⑲ link.py receive_webhook token 化（OpenLink connector webhook 入口凭据门）
+
+**状态：已按建议默认 B 先行执行（2026-10-16 DEC-⑲）**——依据：DEC-⑱-④ 周期日志候选首件「link.py receive_webhook token 化（① 1a 契约锁死后另拍）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑱ 自决先例。实现=**register 签发回调 token**（DEC-⑬ heartbeat/incoming 同轴同哲学，F3b-④/⑤ 同族「claim 注册身份必须持 register 签发 token」）：create_connector 恒签发 callback_token（uuid4().hex，明文只回注册响应一次、get/list 只回 has_callback_token）+ receive_webhook 必持证——**X-Callback-Token**（注册签发凭据）或既有 **X-Signature** HMAC（connector.secret 等效证明，发方持 secret 即持证，签名面契约零变化）双证取或；两证全无/全错=401 零副作用（record_event 不落、trigger_count 不动、零通知）；fail-closed 空行 token 拒。判定语义单一源=src/services/callback_token.callback_token_ok（DEC-⑬ link_gateway._callback_token_ok 改委托同口，禁两套判法漂移）。**若拍板回一句即改道：「⑲改A」=revert 回 id 即凭证（伪造面回归）、「⑲改C」=改全局共享 secret（env 一把，泄漏半径全局）**。
+
+**现状（live --pre 同探针 6/6 实证非推断）**：`POST /api/link/webhook/{connector_id}` 零凭据门——connector_id 即凭证、secret HMAC 可选（不配即全开）：任意人可伪造 webhook 注入 timeline 事件/改 trigger_count/发通知（DEC-⑬ heartbeat/incoming 同型伪造面）。DEC-① 1a 曾拍 A（维持 'default' 兜底+「外部 webhook 绝不因 Authorization 401」契约锁死）；DEC-⑬ 边界④明示「如需同款 token 化另拍」即本件。
+- 选项：**A** 维持（id 即凭证）/ **B** register 签发回调 token（X-Callback-Token 或 X-Signature 等效证明，缺/错 401）/ **C** 全局共享 secret（env 配置）。
+- 权衡：A=伪造面持续；C 共享秘密一漏全漏且与 register 签发语义不同族（F3b-④/⑤ 哲学=每注册身份各持各证）；B 与 DEC-⑬ heartbeat/incoming 完全同轴，每 connector 独立凭据、泄漏半径单行、发方凭据=注册时交付。与 DEC-① 1a 契约的分界（刻意保留）：凭据轴≠用户身份轴——Authorization 头仍绝不触发 401、绝不改事件归属（持证匿名发方事件照旧 'default'），401 只可能来自 connector 凭据门；1a 的「真回归」顾虑（第三方无用户 JWT）由「凭据=注册时交付的 connector 自有凭据」化解（不需要用户 JWT）。
+- 建议：**B**。
+- 诚实边界：①DEC-① 1a 的「匿名无证 200」面是刻意行为变更（缺证 401），test_system_event_attribution 1a 三例+test_remaining_emit_tenant third_party_boundary 契约随更新（归属轴断言逐字保留、持证跑）②凭据是 bearer 型共享秘密非请求签名（X-Signature HMAC 保留为等效证明，未强制签名）③token 无轮换/撤销 API 端点（重注册=新 connector 新 token；manager.update_connector 程序内可换=既有通用更新语义；connector 注册表进程内存重启即清）④admin-ui 不展示 callback_token（API 注册响应可见，UI 面另拍）⑤404/503 契约先于凭据检查=入口存在性可被探知（DEC-⑬ 边界⑥ 同序，既有契约不变优先）⑥connector.secret 由调用方自配（弱 secret 的 HMAC 等效证明强度=secret 强度，如实）。
+
+
 
 ## 附：锚点核验
 

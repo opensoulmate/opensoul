@@ -11,6 +11,12 @@ JWT 也落 'default'（外部 webhook 调用方 / 组件 / 安全拦截史均非
   需先定 components 归属模型，1d 若按请求身份派生=攻击者拦截记录挂受害者名下）
 - 通道方向：外部 webhook 绝不因 Authorization 被 401 打断（防"补鉴权"回归）。
 
+凭据轴契约随更新（DEC-⑲ 2026-10-16，link.py receive_webhook token 化取 B，
+pending-decisions.md ⑲ 留档）：本入口 2026-10-16 起必持 connector 自有回调
+凭据（X-Callback-Token 或 X-Signature HMAC 等效证明），缺证 401 零副作用
+——凭据轴与归属轴刻意分开：401 只可能来自 connector 凭据门（与 Authorization
+无关，本文件 1a 三例均持证跑），持证匿名发方事件照旧落 'default'。
+
 数据面全 tmp（TIMELINE_DB autouse + push_event._timeline 注入 + 身份库 tmp），
 绝不写生产 timeline.db / 生产身份库。
 """
@@ -178,20 +184,28 @@ def _mk_user(env, username, tenant):
 def _create_connector(env, name="wh1"):
     r = env["client"].post("/api/link/connectors", json={"name": name, "type": "webhook_in"})
     assert r.status_code == 200
-    return env["link_api"].manager.list_connectors()[0]["connector_id"]
+    data = r.json()
+    cid = data["connector_id"]
+    assert cid == env["link_api"].manager.list_connectors()[0]["connector_id"]
+    return cid, data["callback_token"]
 
 
 # ── 1a link receive_webhook（DEC-① 1a：外部 webhook＝系统事件） ─────────
+# 契约随更新（DEC-⑲ 2026-10-16）：本入口凭据轴=connector 自有回调凭据
+# （X-Callback-Token/X-Signature），缺证 401 零副作用（缺/错证面归
+# tests/test_link_webhook_callback_auth.py）；归属轴契约逐字保留——用户
+# JWT 不改归属、Authorization 绝不触发 401、事件恒落 'default'。
 
 
 def test_webhook_tenant_user_token_event_default(env):
-    """真实租户用户 JWT 在场，webhook_received 仍落 'default'（归属方向锁死）。"""
+    """真实租户用户 JWT 在场（持证放行），webhook_received 仍落 'default'
+    （归属方向锁死：用户 JWT 非本入口身份轴）。"""
     uid = _mk_user(env, "u-a", "tenant-a")
-    cid = _create_connector(env)
+    cid, tok = _create_connector(env)
     r = env["client"].post(
         f"/api/link/webhook/{cid}",
         json={"hello": "world"},
-        headers=_auth(_ent_token(uid, "u-a")),
+        headers={**_auth(_ent_token(uid, "u-a")), "X-Callback-Token": tok},
     )
     assert r.status_code == 200
     rows = _rows(env["tl_db"], "webhook_received")
@@ -200,9 +214,15 @@ def test_webhook_tenant_user_token_event_default(env):
 
 
 def test_webhook_no_token_event_default(env):
-    """匿名第三方 webhook 照旧 200 + 'default'（回归面零变化）。"""
-    cid = _create_connector(env)
-    r = env["client"].post(f"/api/link/webhook/{cid}", json={"hello": "world"})
+    """持证匿名第三方 webhook 照旧 200 + 'default'（归属面回归零变化；
+    DEC-⑲ 前=裸匿名 200，现=持 connector 凭据的匿名发方；缺证 401 面归
+    test_link_webhook_callback_auth.py）。"""
+    cid, tok = _create_connector(env)
+    r = env["client"].post(
+        f"/api/link/webhook/{cid}",
+        json={"hello": "world"},
+        headers={"X-Callback-Token": tok},
+    )
     assert r.status_code == 200
     rows = _rows(env["tl_db"], "webhook_received")
     assert len(rows) == 1
@@ -210,12 +230,13 @@ def test_webhook_no_token_event_default(env):
 
 
 def test_webhook_garbage_auth_not_401_default(env):
-    """通道方向锁死：垃圾 Authorization 绝不 401（接身份轴=打断外部 webhook）。"""
-    cid = _create_connector(env)
+    """通道方向锁死：垃圾 Authorization 绝不 401（接身份轴=打断外部 webhook；
+    DEC-⑲ 后 401 只可能来自 connector 凭据门，与 Authorization 无关）。"""
+    cid, tok = _create_connector(env)
     r = env["client"].post(
         f"/api/link/webhook/{cid}",
         json={"hello": "world"},
-        headers={"Authorization": "Bearer some-third-party-secret"},
+        headers={"Authorization": "Bearer some-third-party-secret", "X-Callback-Token": tok},
     )
     assert r.status_code == 200
     rows = _rows(env["tl_db"], "webhook_received")

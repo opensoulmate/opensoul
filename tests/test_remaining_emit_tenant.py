@@ -229,13 +229,19 @@ def test_link_create_connector_dual_tenant(env):
 def test_link_receive_webhook_third_party_boundary(env):
     """③ 边界锁死：receive_webhook 是外部 webhook 入口，归属语义待拍——
     本拍零改动。垃圾 Authorization 不得被 bind_identity 语义 401 打断
-    （外部 webhook 真回归面），事件照旧落 'default' 兜底。"""
-    assert _create_connector(env, name="wh1").status_code == 200
+    （外部 webhook 真回归面），事件照旧落 'default' 兜底。
+    契约随更新（DEC-⑲ 2026-10-16）：入口必持 connector 回调凭据（X-Callback-Token），
+    本例持证跑——Authorization 仍不是 401 来源（凭据轴与用户 JWT 轴分开）。"""
+    r0 = _create_connector(env, name="wh1")
+    assert r0.status_code == 200
     cid = env["link_api"].manager.list_connectors()[0]["connector_id"]
     r = env["client"].post(
         f"/api/link/webhook/{cid}",
         json={"hello": "world"},
-        headers={"Authorization": "Bearer some-third-party-secret"},
+        headers={
+            "Authorization": "Bearer some-third-party-secret",
+            "X-Callback-Token": r0.json()["callback_token"],
+        },
     )
     assert r.status_code == 200
     rows = _rows(env["tl_db"], "webhook_received")
