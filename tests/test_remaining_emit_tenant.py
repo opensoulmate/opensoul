@@ -323,7 +323,8 @@ def test_build_graph_dual_tenant(env):
 
 
 def test_static_census():
-    """接线普查：3 文件各恰 1 identity 派生+1 tenant 注入；
+    """接线普查：identity 派生点与 tenant 注入点逐点配对（link.py 自
+    DEC-⑲-② 起 3/3=register+token 轮换/撤销两写面，其余 2 文件各 1/1）；
     ③ 待拍文件（soma_connector/中间件）零改动锁死（link_gateway 已由
     F3b-⑨b-③-1c 收口，其接线普查见 test_link_gateway_emit_tenant）。"""
 
@@ -332,7 +333,7 @@ def test_static_census():
 
     pipe_sig = "authorization: str " + chr(124) + " None = Header(None)"
     expect = {
-        "src/api/link.py": (1, 1),
+        "src/api/link.py": (3, 3),
         "src/api/system_overview.py": (1, 1),
         "src/api/cortex_enhanced.py": (1, 1),
     }

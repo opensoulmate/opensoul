@@ -153,6 +153,34 @@ class IntegrationManager:
         with self._lock:
             return self._connectors.pop(connector_id, None) is not None
 
+    def rotate_callback_token(self, connector_id: str) -> str | None:
+        """签发新回调凭据并即刻作废旧凭据（DEC-⑲-②）。
+
+        行 token 被替换=旧明文立即失效（receive_webhook 判定口 fail-closed），
+        新明文只返回给调用方一次（register 同语义，get/list 面不回吐）。
+        撤销后经本口可重新签发（凭据丢失恢复路径，免重注册 connector）。
+        """
+        with self._lock:
+            connector = self._connectors.get(connector_id)
+            if not connector:
+                return None
+            token = uuid.uuid4().hex
+            connector.callback_token = token
+            return token
+
+    def revoke_callback_token(self, connector_id: str) -> bool:
+        """撤销回调凭据（DEC-⑲-②）：置空行 token=凭据证明 fail-closed 拒。
+
+        只清 X-Callback-Token 证明面；X-Signature HMAC=secret 等效证明是
+        独立轴不动（secret 同时用于出站签名，撤销/更换属 PATCH secret 既有面）。
+        """
+        with self._lock:
+            connector = self._connectors.get(connector_id)
+            if not connector:
+                return False
+            connector.callback_token = ""
+            return True
+
     def record_event(
         self,
         connector_id: str,

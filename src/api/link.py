@@ -150,6 +150,59 @@ async def test_connector(connector_id: str, req: WebhookSendRequest | None = Non
     return result
 
 
+# ── Callback Token Lifecycle (DEC-⑲-② 轮换·撤销) ──────────
+
+
+@router.post("/connectors/{connector_id}/callback-token/rotate")
+async def rotate_callback_token(connector_id: str, authorization: str | None = Header(None)):
+    """Rotate (re-issue) the callback credential.
+
+    DEC-⑲-②：轮换=签发新凭据并即刻作废旧凭据（行 token 被替换，旧明文立即
+    401）；新明文只回本响应一次（register 同语义，get/list 面不回吐）。撤销后
+    经本口可重新签发（⑲-① 留档「凭据丢失=重注册新 connector 或 ⑲-② 轮换端点」
+    的恢复路径）。写面 bind_identity（坏 token 401 先于读写零副作用，F3b 家族）。
+    """
+    identity = bind_identity(authorization)
+    token = manager.rotate_callback_token(connector_id)
+    if token is None:
+        raise HTTPException(404, "Connector not found")
+    push_event(
+        {
+            "organ": "link",
+            "emoji": "🔗",
+            "type": "connector_token_rotated",
+            "summary": f"🔄 Callback token rotated: {connector_id}",
+            "detail": {"connector_id": connector_id},
+        },
+        tenant_id=identity.tenant_id,
+    )
+    return {"connector_id": connector_id, "callback_token": token, "rotated": True}
+
+
+@router.delete("/connectors/{connector_id}/callback-token")
+async def revoke_callback_token(connector_id: str, authorization: str | None = Header(None)):
+    """Revoke the callback credential.
+
+    DEC-⑲-②：撤销=置空行 token，X-Callback-Token 证明 fail-closed 拒；只清
+    token 证明面，X-Signature HMAC=secret 等效证明独立轴不动（secret 兼出站
+    签名，更换属 PATCH secret 既有面）。撤销后 rotate 可重新签发。
+    """
+    identity = bind_identity(authorization)
+    if not manager.revoke_callback_token(connector_id):
+        raise HTTPException(404, "Connector not found")
+    push_event(
+        {
+            "organ": "link",
+            "emoji": "🔗",
+            "type": "connector_token_revoked",
+            "summary": f"🚫 Callback token revoked: {connector_id}",
+            "detail": {"connector_id": connector_id},
+        },
+        tenant_id=identity.tenant_id,
+    )
+    return {"connector_id": connector_id, "revoked": True, "has_callback_token": False}
+
+
 # ── Webhook Ingress ────────────────────────────────────────
 
 
