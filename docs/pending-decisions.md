@@ -19,6 +19,7 @@
 | ⑪ | 执行结果回传幂等键语义（DEC-⑤-① 重复回传不幂等） | DEC-⑤-① 诚实边界 | 取 B（显式 result_id 优先+证据指纹派生兜底）——**已按建议默认 B 先行执行 2026-10-15（DEC-⑤-①b）** | ~~"⑪取B"~~ 已落，异议回「⑪改C」（只认显式 key）/「⑪改A」（revert）即改道 |
 | ⑫ | /api/link/events·/stats·/health 路由遮蔽收口·归属 | 1c-③ 边界② | 取 B（归属拆分：OpenLink 留 canonical、gateway 三读面迁 /api/link/gateway/*）——**已按建议默认 B 先行执行 2026-10-16（F3b-⑨b-③-1c-⑥）** | ~~"⑫取B"~~ 已落，异议回「⑫改A」（回遮蔽死路由态）/「⑫改C」（三路径归 gateway）即改道 |
 | ⑬ | 外部回调入口鉴权化统一拍板（heartbeat+incoming） | 1c-④ 边界锁死自注留档 | 取 B（register 签发回调 token，回调必须持证）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑬）** | ~~"⑬取B"~~ 已落，异议回「⑬改A」（revert 回 id 即凭证）/「⑬改C」（改全局共享 secret）即改道 |
+| ⑭ | /ws/{user_id} 等其余长连接面身份轴（terminal WS 无鉴权=RCE 面） | 1c-⑤ 边界③留档+最新周期日志候选首件 | 取 B（握手凭据必持 fail-closed：有效活跃用户 JWT 才给 shell）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑭-①）** | ~~"⑭取B"~~ 已落，异议回「⑭改A」（revert 回无鉴权）/「⑭改C」（本地回环免鉴权）即改道 |
 
 ---
 
@@ -156,6 +157,16 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：A=伪造面持续（心跳/webhook 均可被任意人伪造，1c-④ 已实证跨租户借用面）；C 共享秘密一漏全漏、且与 register 签发语义不同族（F3b-④/⑤ 哲学=每注册身份各持各证）；B 与 agent 注册 token 同族，每注册行独立凭据、泄漏半径单行、发方凭据=注册时交付（与 webhook secret/agent token 交付方式同款）。
 - 建议：**B**。
 - 诚实边界：①凭据是 bearer 型共享秘密非请求签名（incoming 的 HMAC 签名面保留为等效证明，未强制签名）②token 无轮换/撤销端点（重注册=新行新 token；_webhooks/_systems 内存注册表重启即清=行本身无持久撤销面）③admin-ui 不展示 callback_token（API 注册响应可见，UI 面另拍）④link.py receive_webhook（OpenLink connector webhook 入口）不在本拍——① 1a 已拍 A（外部 webhook 绝不因 Authorization 401，契约锁死），如需同款 token 化另拍⑤soma_connector 心跳（X-Component-Token）/agent 心跳（X-Agent-Token）各有自有凭据轴不在本拍⑥404/503 契约先于凭据检查=入口存在性可被探知（既有契约不变优先，如需凭据前置另拍）。
+
+## ⑭ /ws/{user_id} 等其余长连接面身份轴（terminal WS 无鉴权=RCE 面）
+
+**状态：已按建议默认 B 先行执行（2026-10-16 DEC-⑭-①）**——依据：最新周期日志候选首件「/ws/{user_id} 等其余长连接面身份轴（需拍板）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑬ 自决先例（异议回「⑭改A」即 revert）。「一拍一面」先例拆件：本拍=terminal WS（活面最高险），ws_chat 连接期重校验、websocket/handler.py 幽灵面处置留待拍。实现=**握手凭据必持（fail-closed，DEC-⑬ 同款「无证可验=拒」）**：`_ws_presented_token` 双源取参（?token= query 主口——浏览器 WS 设不了头，OpenMate 终端面板现状即带 token；Authorization: Bearer 头兜底）→ `_terminal_identity`（bind_identity 单一派生口，F3b-② 家族禁第二套判法）——缺 token / 坏 token / 未知用户 / 停用身份 = 握手拒绝（accept 前 close 1008，F3b-④ 同语义），无证不给 shell 不 spawn 进程；有效活跃用户 JWT 放行，真 spawn bash 语义零变化（D1 契约）。
+
+**现状**（live 修前探针 8 项 3 FAIL 硬证，scripts/e2e_terminal_ws_auth.py 修前/修后同探针）：`/api/terminal/ws/terminal` 零鉴权——任意网络可达方连接即真 spawn bash（无 token SHELL_OK=远程代码执行面）、坏 token/停用用户 token 同给 shell。长连接面盘点：agent WS（F3b-④/④b 已收）、link_gateway WS/SSE（1c/1c-⑤ 已收）、ws_chat /chat（已有 decode_token 握手轴）、terminal WS（本拍）、websocket/handler.py `/ws/{user_id}`（**幽灵模块：全仓零 import 零挂载，/ws/terminal 与 /ws/{user_id} 均不在活路由表**）。
+- 选项：**A** 维持无鉴权（本地单机信任）/ **B** 握手凭据必持（有效活跃用户 JWT，fail-closed）/ **C** 本地回环免鉴权（仅非 loopback 要凭据）。
+- 权衡：A=RCE 面持续（8090 对局域网开放即任意代码执行）；C 需信任边界判定（反向代理/XFF 伪造面，loopback 判法=另发明第二套语义且与 F3b-② 派生哲学不一致）；B 与 ws_chat（用户 WS 面同款持 JWT）同轴，OpenMate 终端面板已带 token=真消费方零破坏（token 为 /api/user/login 签发的 opensoul JWT，bind_identity 直接可验）。
+- 建议：**B**。
+- 诚实边界：①连接期凭据不周期重校验（F3b-④b/1c-⑤ 型看门狗另拍——token 过期后已建立的 shell 会话延续至断开）②匿名本地访问从此须带 token=既有行为变更（单机用户经 OpenMate/带 token 连接不受影响；回「⑭改C」即改道）③websocket/handler.py `/ws/{user_id}` 幽灵模块处置（挂载 or 删除）留待拍——未挂载=无泄露面④OpenMate terminal-panel 期望路径 `ws://host:8090/ws/terminal`（非 /api/terminal/ws/terminal）live 实证 404/403=面板现状连不上终端（跨仓消费方期望与本仓路由不齐），路径对齐（本仓加挂 or openmate 改 URL）需拍板留档⑤连接不落 timeline/审计事件（仅 logger 行，审计面另拍）⑥ws_chat /chat 已有握手轴但无连接期重校验（同①留档）。
 
 ## 附：锚点核验
 

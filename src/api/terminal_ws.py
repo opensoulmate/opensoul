@@ -9,9 +9,42 @@ import signal
 import struct
 import termios
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _ws_presented_token(websocket: WebSocket):
+    """凭据取参双源（F3b-④ / 1c-⑤ 同款）：?token= query 主口（浏览器 WS 设不了
+    头，OpenMate 终端面板现状即带 token）+ Authorization: Bearer 头兜底
+    （非浏览器客户端）。"""
+    token = (websocket.query_params.get("token") or "").strip()
+    if token:
+        return token
+    auth = websocket.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip() or None
+    return None
+
+
+def _terminal_identity(websocket: WebSocket):
+    """DEC-⑭-① 握手凭据必持（fail-closed，DEC-⑬ 同款「无证可验=拒」）：
+
+    token 必持且须为有效活跃用户凭据（bind_identity 单一派生口，F3b-② 家族
+    禁第二套判法）——PTY shell 是执行面，无证/坏证/停用身份一律不给 shell。
+    返回 BoundIdentity 或 None（None=拒绝）。
+    """
+    token = _ws_presented_token(websocket)
+    if not token:
+        return None
+    try:
+        identity = bind_identity(f"Bearer {token}")
+    except HTTPException:
+        return None
+    return identity if identity.authed else None
 
 
 @router.get("/health")
@@ -22,7 +55,21 @@ async def terminal_ws_health():
 
 @router.websocket("/ws/terminal")
 async def terminal_ws(websocket: WebSocket):
-    """WebSocket terminal - spawns a PTY shell."""
+    """WebSocket terminal - spawns a PTY shell.
+
+    DEC-⑭-① 身份轴收口（候选「/ws/{user_id} 等其余长连接面身份轴」拆件首件）：
+    握手凭据必持（fail-closed）——修前零鉴权，任意网络可达方真 spawn bash
+    （live 修前探针无 token SHELL_OK=RCE 面硬证）。凭据=有效活跃用户 JWT
+    （_ws_presented_token 双源 → bind_identity 单一派生口），无证/坏证/停用
+    身份=握手拒绝（accept 前 close 1008，F3b-④ 同语义），无证不给 shell。
+    """
+    identity = _terminal_identity(websocket)
+    if identity is None:
+        logger.warning("Terminal WS rejected: missing/invalid/inactive credentials")
+        # 握手拒绝（accept 前 close）：拿不到通道、不 spawn 任何进程
+        await websocket.close(code=1008, reason="terminal token required")
+        return
+    logger.info("Terminal WS connected: user=%s", identity.user_id)
     await websocket.accept()
 
     # Fork a child attached to a fresh PTY and exec a login bash shell.

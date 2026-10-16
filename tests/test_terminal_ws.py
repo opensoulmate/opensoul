@@ -1,12 +1,15 @@
 """Integration tests for Terminal WebSocket API."""
 
 import json
+import sqlite3
 import threading
+import uuid
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.terminal_ws as terminal_ws_api
+from src.services.auth import create_access_token
 
 
 class TestTerminalHealth:
@@ -32,9 +35,11 @@ def _ws_client():
     return TestClient(app)
 
 
-def _run_roundtrip(client, collected, error):
+def _run_roundtrip(client, collected, error, token):
     try:
-        with client.websocket_connect("/api/terminal/ws/terminal") as ws:
+        # DEC-⑭-① 契约随更新：/ws/terminal 握手凭据必持——真 token 放行（放行
+        # 语义与修前一致=真 spawn bash 算术展开，闸面由 test_terminal_ws_auth 覆盖）
+        with client.websocket_connect(f"/api/terminal/ws/terminal?token={token}") as ws:
             # 让 bash 做算术展开：只有真 shell 才会把 $((6*7)) 求值成 42。回显的输入行是
             # `echo term-ok-$((6*7))`（含 $((6*7))，绝不含 42），故标记只可能来自 bash 输出。
             ws.send_text(json.dumps({"type": "input", "data": "echo term-ok-$((6*7))\n"}))
@@ -48,10 +53,30 @@ def _run_roundtrip(client, collected, error):
         error.append(repr(exc))
 
 
-def test_terminal_spawns_real_bash_and_executes():
+def test_terminal_spawns_real_bash_and_executes(tmp_path, monkeypatch):
+    # DEC-⑭-① 契约随更新：握手凭据必持——真 token（tmp 身份库种子用户，绝不写生产库）
+    users_db = tmp_path / "users.db"
+    monkeypatch.setenv("USERS_DB", str(users_db))
+    monkeypatch.setenv("ENTERPRISE_DB", str(tmp_path / "enterprise.db"))
+    with sqlite3.connect(users_db) as c:
+        c.execute(
+            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, "
+            "password_hash TEXT, is_active INTEGER NOT NULL DEFAULT 1, "
+            "tenant_id TEXT NOT NULL DEFAULT 'default')"
+        )
+        uid = str(uuid.uuid4())
+        c.execute(
+            "INSERT INTO users (id, username, password_hash, is_active, tenant_id) "
+            "VALUES (?, ?, 'x', 1, 'default')",
+            (uid, f"u-{uid[:8]}"),
+        )
+        c.commit()
+
+    token = create_access_token(user_id=uuid.UUID(uid), role="user")
+
     client = _ws_client()
     collected, error = [], []
-    t = threading.Thread(target=_run_roundtrip, args=(client, collected, error), daemon=True)
+    t = threading.Thread(target=_run_roundtrip, args=(client, collected, error, token), daemon=True)
     t.start()
     t.join(timeout=20)
     # 挂死（读泵死锁 / 未拉起 shell）会在此干净失败，而非卡住整个测试会话。
