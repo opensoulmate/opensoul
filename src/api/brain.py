@@ -740,6 +740,32 @@ async def creativity(problem: str = "", constraints: str = "", count: int = 3):
     return {"alternatives": alternatives}
 
 
+@router.post("/creativity/cross-domain")
+async def creativity_cross_domain(domain: str, problem: str):
+    """跨领域联想（G1-① 死方法收口）——cross_domain_idea 唯一真消费面。
+
+    修前 cross_domain_idea 全仓零调用零端点（wired-but-not-functional 死方法，
+    G0 审计⑤）；本口为声明面：方法真被调用才可达。失败不谎报 ok（C2）：方法层
+    如实带回 error 时端点 status=error（HTTP 200 in-body 报错沿用 diagnostics
+    惯例），禁把故障伪装成空结果。domain/problem 必填（缺失=422 如实拒）。
+    """
+    from src.cortex.creativity import CreativityEngine
+
+    engine = CreativityEngine()
+    result = await engine.cross_domain_idea(domain, problem)
+    if "error" in result:
+        return {
+            "status": "error",
+            "error": str(result["error"]),
+            "ideas": result.get("ideas", []),
+        }
+    return {
+        "status": "ok",
+        "ideas": result.get("ideas", []),
+        "best_idea": result.get("best_idea"),
+    }
+
+
 @router.get("/health")
 async def health():
     return {"status": "healthy", "module": "brain"}
