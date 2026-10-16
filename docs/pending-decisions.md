@@ -22,6 +22,7 @@
 | ⑭ | /ws/{user_id} 等其余长连接面身份轴（terminal WS 无鉴权=RCE 面） | 1c-⑤ 边界③留档+最新周期日志候选首件 | 取 B（握手凭据必持 fail-closed：有效活跃用户 JWT 才给 shell）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑭-①）** | ~~"⑭取B"~~ 已落，异议回「⑭改A」（revert 回无鉴权）/「⑭改C」（本地回环免鉴权）即改道 |
 | ⑮ | websocket/handler.py 幽灵模块处置（挂载 or 删除） | DEC-⑭-① 边界③留档+DEC-⑭-③ 候选首件 | 取 B（删除纯死资产模块：零 import 零挂载零消费方，C3-③ 死资产处置先例）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑮）** | ~~"⑮取B"~~ 已落，异议回「⑮改A」（备份/git 恢复模块）/「⑮改C」（挂载+身份轴做成真实通道，另拍实现）即改道 |
 | ⑯ | terminal 路径对齐（OpenMate 面板期望 ws://host:8090/ws/terminal vs 本仓 /api/terminal/ws/terminal） | DEC-⑭-① 边界④留档+DEC-⑮ 候选首件 | 取 B（本仓加挂顶层别名挂同一 handler）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑯）** | ~~"⑯取B"~~ 已落，异议回「⑯改A」（撤下别名回面板连不上态）/「⑯改C」（改 openmate URL，跨仓改动需用户授权）即改道 |
+| ⑰ | ws_chat connected 帧 user_id 载荷收口（dict repr 怪形→纯用户 id） | DEC-⑭-③ 边界④留档+DEC-⑯ 候选首件 | 取 B（载荷=纯用户 id，向生态参照形 acp-proxy ws_chat.py 对齐）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑰）** | ~~"⑰取B"~~ 已落，异议回「⑰改A」（回 dict repr 怪形）/「⑰改C」（整键移除 connected 帧 user_id）即改道 |
 
 ---
 
@@ -189,6 +190,16 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：C 是正根修（消费方期望与 canonical 对齐）但触碰 ~/openmate（「改动只限 ~/opensoul」铁律禁止，需用户授权）；A 持续=终端面板功能死面（用户实测直接撞上）；B 零跨仓改动、同一 handler 零漂移、canonical 不动（C 的根修窗口保留），代价=双路径并存（路由 census 1073→1074 +1，(method,path) 零新重复——既有 2 重复键 GET /api/health、/api/gene/health 为 HEAD 既有非本拍引入）。
 - 建议：**B**（最小可执行件）。
 - 诚实边界：①别名与 canonical 双路径并存（两形并档；若未来拍 C 改 openmate 后别名可撤）②鉴权/看门狗与 canonical 同源自动一致（同一函数对象非复制实现）③live 探针 REJECTED(InvalidStatus) 形态不区分「鉴权拒绝 403」与「路径不存在 404」（websockets 异常名同形）——鉴权拒绝的精确判别在单测 close code 1008 vs 1000（TestClient 404 形态）+ forkpty 零 spawn 哨兵；P2（修前 REJECTED→修后 SHELL_OK）为双向硬证主轴④别名不挂 /health（顶层只加 WS 面，canonical health 契约零变化）。
+
+## ⑰ ws_chat connected 帧 user_id 载荷收口（dict repr 怪形）
+
+**状态：已按建议默认 B 先行执行（2026-10-16 DEC-⑰）**——依据：DEC-⑯ 周期日志候选首件「connected 帧 user_id 载荷收口（需拍板）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑯ 自决先例。实现=**载荷=纯用户 id**：`_connected_user_id` 单一判法（判定口回包 user_id 键→str() 纯 id；缺失/None→"" 空串如实禁 fabricate dict repr）+ connected 发送点真消费（ws_chat.py:560 修前 `str(user)` 直接序列化判定口回包 dict）。**若拍板回一句即改道：「⑰改A」=回 dict repr 怪形（revert 本拍）、「⑰改C」=整键移除 connected 帧 user_id（或改名，需同步消费方）**。
+
+**现状（live 修前同探针实证非推断）**：`/api/ws/chat` 握手成功后 `{"type":"connected","user_id":"{'user_id': UUID('36c7c3a0-…'), 'role': 'user'}"}`——user_id 载荷是 Python dict repr（含 UUID() repr），非纯用户 id，客户端不可直接当 id 用（scripts/e2e_ws_chat_connected_frame.py --pre 实证）；且与生态参照形漂移：acp-proxy/ws_chat.py:661 同名 connected 帧 user_id=纯 UUID 字符串。
+- 选项：**A** 维持怪形 / **B** 载荷=纯用户 id（向生态参照形对齐）/ **C** 整键移除或改名。
+- 权衡：A 持续=载荷不可用+与参照形漂移（DEC-⑭-③ 边界④明示留档另拍）；C 破坏帧形状且无收益（消费方需要身份宣告）；B 与 acp-proxy 参照形同款、消费方拿得到真 id；代价=既有契约变更（test_ws_chat_token_revalidation 契约随更新，dict repr 硬反证锁死禁回退）。消费面核实：~/openmate 全仓无 /api/ws/chat connected 帧 user_id 消费方（grep 实证零命中）=变更零已知破坏面。
+- 建议：**B**（纯 id）。
+- 诚实边界：①载荷只含纯 id 不带 role 等附加键（宁窄勿滥，需要另拍加性键）②键缺失/None→"" 空串如实（键派生故障不捏造身份；decode_token 契约恒带 user_id 键=生产不可达）③帧键集恰 {type,user_id} 不变④a2a/agent_proxy 等其余帧面零触碰。
 
 ## 附：锚点核验
 

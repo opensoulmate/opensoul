@@ -499,6 +499,23 @@ def _user_for_token(token):
     return decode_token(token)
 
 
+def _connected_user_id(user) -> str:
+    """connected 帧 user_id 载荷单一判法（DEC-⑰ 收口：dict repr 怪形→纯用户 id）。
+
+    修前：str(user) 直接序列化判定口回包 dict——载荷是
+    "{'user_id': UUID('...'), 'role': 'user'}" 的 Python dict repr（非纯 id，
+    live 修前实证同形），客户端拿到的是怪形字符串不可直接当用户 id 用。
+
+    判法（单一源，禁调用点手抄）：
+    - 判定口回包 user_id 键 → str() 纯用户 id（生态参照形：acp-proxy ws_chat.py
+      connected 帧 user_id=纯 UUID 字符串，本仓向参照形对齐）
+    - 键缺失/值 None → "" 空串如实，禁 fabricate dict repr 怪形（键派生故障
+      绝不捏造身份，F3b-⑨b 系旁路纪律同款：如实空值不掉落语义）
+    """
+    uid = user.get("user_id") if isinstance(user, dict) else None
+    return str(uid) if uid is not None else ""
+
+
 async def _ws_chat_token_watchdog(websocket: WebSocket, token: str):
     """WS chat 连接期凭据周期重校验（F3b-④b/1c-⑤/DEC-⑭-② 同族；DEC-⑭-①
     诚实边界⑥留档件「已有 decode_token 握手轴但无连接期重校验」收口）。
@@ -534,6 +551,7 @@ async def chat_websocket(websocket: WebSocket):
 
     Protocol:
     - Client sends: {"type": "message", "text": "...", "mode": "hermes|acp|a2a|agent_proxy", "session_id": "...", "agent_id": "..."}
+    - Server sends: {"type": "connected", "user_id": "<uuid>"} (握手成功；user_id=纯用户 id，DEC-⑰ 收口——修前为 dict repr 怪形)
     - Server sends: {"type": "thinking"} (when processing starts)
     - Server sends: {"type": "chunk", "text": "..."} (streaming chunks)
     - Server sends: {"type": "agent_event", "event": "output|stderr|tool_call|heartbeat", "text": "..."}
@@ -557,7 +575,7 @@ async def chat_websocket(websocket: WebSocket):
         await websocket.close()
         return
 
-    await websocket.send_json({"type": "connected", "user_id": str(user)})
+    await websocket.send_json({"type": "connected", "user_id": _connected_user_id(user)})
 
     # 连接期凭据周期重校验（DEC-⑭-① 诚实边界⑥留档件收口）：失效凭据 close 1008
     # 不留对话通道；看门狗收尾在 finally（不挂 receive 抛错上，F3b-④b/DEC-⑭-②

@@ -211,14 +211,21 @@ class TestHandshakeContractUnchanged:
         finally:
             ctx.__exit__(None, None, None)
 
-    def test_connected_frame_shape_unchanged(self, ws_env):
-        """connected 帧 user_id 载荷=既有契约 str(decode_token(token)) 字节不变
-        （既有怪形：dict repr 非纯 id——本拍契约零变化，留档另拍）。"""
+    def test_connected_frame_shape_pure_user_id(self, ws_env):
+        """connected 帧 user_id 载荷=纯用户 id（DEC-⑰ 契约随更新：修前为
+        str(decode_token(token)) dict repr 怪形，本拍收口为纯 id——生态参照形
+        acp-proxy ws_chat.py 同款；dict repr 硬反证锁死禁回退）。"""
         tok = _token()
-        expected = str(auth_mod.decode_token(tok))
+        payload = auth_mod.decode_token(tok)
+        assert payload is not None
+        expected = str(payload["user_id"])
         a = _open(ws_env, tok)
         try:
-            assert a.frame() == {"type": "connected", "user_id": expected}
+            frame = a.frame()
+            assert frame == {"type": "connected", "user_id": expected}
+            # 硬反证：载荷禁 dict repr 怪形（修前 str(dict) 含 "user_id"/"UUID(" 字样）
+            assert "user_id" not in frame["user_id"]
+            assert "UUID(" not in frame["user_id"]
             a.ping_ok()
         finally:
             a.close()
