@@ -222,7 +222,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 选项：**A** 维持（id 即凭证）/ **B** register 签发回调 token（X-Callback-Token 或 X-Signature 等效证明，缺/错 401）/ **C** 全局共享 secret（env 配置）。
 - 权衡：A=伪造面持续；C 共享秘密一漏全漏且与 register 签发语义不同族（F3b-④/⑤ 哲学=每注册身份各持各证）；B 与 DEC-⑬ heartbeat/incoming 完全同轴，每 connector 独立凭据、泄漏半径单行、发方凭据=注册时交付。与 DEC-① 1a 契约的分界（刻意保留）：凭据轴≠用户身份轴——Authorization 头仍绝不触发 401、绝不改事件归属（持证匿名发方事件照旧 'default'），401 只可能来自 connector 凭据门；1a 的「真回归」顾虑（第三方无用户 JWT）由「凭据=注册时交付的 connector 自有凭据」化解（不需要用户 JWT）。
 - 建议：**B**。
-- 诚实边界：①DEC-① 1a 的「匿名无证 200」面是刻意行为变更（缺证 401），test_system_event_attribution 1a 三例+test_remaining_emit_tenant third_party_boundary 契约随更新（归属轴断言逐字保留、持证跑）②凭据是 bearer 型共享秘密非请求签名（X-Signature HMAC 保留为等效证明，未强制签名）③token 无轮换/撤销 API 端点（重注册=新 connector 新 token；manager.update_connector 程序内可换=既有通用更新语义；connector 注册表进程内存重启即清）④admin-ui 不展示 callback_token（API 注册响应可见，UI 面另拍）⑤404/503 契约先于凭据检查=入口存在性可被探知（DEC-⑬ 边界⑥ 同序，既有契约不变优先）⑥connector.secret 由调用方自配（弱 secret 的 HMAC 等效证明强度=secret 强度，如实）。
+- 诚实边界：①DEC-① 1a 的「匿名无证 200」面是刻意行为变更（缺证 401），test_system_event_attribution 1a 三例+test_remaining_emit_tenant third_party_boundary 契约随更新（归属轴断言逐字保留、持证跑）②凭据是 bearer 型共享秘密非请求签名（X-Signature HMAC 保留为等效证明，未强制签名）③token 无轮换/撤销 API 端点（重注册=新 connector 新 token；manager.update_connector 程序内可换=既有通用更新语义；connector 注册表进程内存重启即清）④admin-ui callback_token 已展示（**2026-10-16 DEC-⑲-① 已落**：link 页创建后一次性凭据弹窗+详情签发状态行，明文仅创建时刻一次可见、关闭后不再可见）⑤404/503 契约先于凭据检查=入口存在性可被探知（DEC-⑬ 边界⑥ 同序，既有契约不变优先）⑥connector.secret 由调用方自配（弱 secret 的 HMAC 等效证明强度=secret 强度，如实）。
 
 
 

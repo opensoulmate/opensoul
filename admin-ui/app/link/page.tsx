@@ -17,6 +17,7 @@ interface Connector {
   status: string;
   endpoint?: string;
   has_secret?: boolean;
+  has_callback_token?: boolean;
   headers?: Record<string, string>;
   config?: Record<string, any>;
   description?: string;
@@ -77,6 +78,9 @@ export default function LinkPage() {
   const [sending, setSending] = useState<string | null>(null);
   const [sendPayload, setSendPayload] = useState('{\n  "message": "hello"\n}');
   const [showSendDialog, setShowSendDialog] = useState<string | null>(null);
+  // DEC-⑲：callback_token 明文只回注册响应一次——创建成功后一次性展示，关闭后不再可见
+  const [createdToken, setCreatedToken] = useState<{ name: string; token: string } | null>(null);
+  const [tokenCopied, setTokenCopied] = useState(false);
 
   // Create form state
   const [form, setForm] = useState({
@@ -120,7 +124,8 @@ export default function LinkPage() {
       let headers = {}, config = {};
       try { headers = JSON.parse(form.headers); } catch {}
       try { config = JSON.parse(form.config); } catch {}
-      await apiFetch('/api/link/connectors', {
+      const createdName = form.name;
+      const data = await apiFetch('/api/link/connectors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -132,6 +137,11 @@ export default function LinkPage() {
       });
       setShowCreate(false);
       resetForm();
+      // register 签发回调凭据明文只回此注册响应一次（DEC-⑲）——一次性展示，关闭后不再可见
+      if (data?.callback_token) {
+        setTokenCopied(false);
+        setCreatedToken({ name: data.name || createdName, token: data.callback_token });
+      }
       await fetchConnectors();
     } catch (e: any) { setError(e.message); }
   };
@@ -521,6 +531,7 @@ export default function LinkPage() {
                 {detailConnector.endpoint && <div className="col-span-2"><span className="text-muted-foreground">端点:</span> <span className="font-mono break-all">{detailConnector.endpoint}</span></div>}
                 {detailConnector.description && <div className="col-span-2"><span className="text-muted-foreground">描述:</span> {detailConnector.description}</div>}
                 <div><span className="text-muted-foreground">有密钥:</span> {detailConnector.has_secret ? '是' : '否'}</div>
+                <div><span className="text-muted-foreground">回调凭据:</span> {detailConnector.has_callback_token ? '已签发' : '未签发'}</div>
                 <div><span className="text-muted-foreground">触发次数:</span> {detailConnector.trigger_count ?? 0}</div>
                 <div><span className="text-muted-foreground">错误次数:</span> <span className={detailConnector.error_count ? 'text-red-500' : ''}>{detailConnector.error_count ?? 0}</span></div>
                 {detailConnector.last_triggered && <div><span className="text-muted-foreground">最后触发:</span> {new Date(detailConnector.last_triggered).toLocaleString('zh-CN')}</div>}
@@ -558,6 +569,44 @@ export default function LinkPage() {
         </div>
       )}
 
+
+      {/* DEC-⑲ 回调凭据一次性展示：明文只回注册响应一次，关闭后不再可见 */}
+      {createdToken && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setCreatedToken(null)}>
+          <div className="bg-card rounded-xl border border-border shadow-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="text-sm font-semibold">回调凭据已签发</h2>
+              <Button onClick={() => setCreatedToken(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
+            </div>
+            <div className="p-4 space-y-3 text-xs">
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 text-amber-600">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>明文仅此一次展示，关闭后不再可见（接口只回签发状态）。请立即复制并配置到发方。</span>
+              </div>
+              <div><span className="text-muted-foreground">连接器:</span> {createdToken.name}</div>
+              <div>
+                <span className="text-muted-foreground mb-1 block">X-Callback-Token</span>
+                <div className="flex items-start gap-1.5">
+                  <pre className="flex-1 bg-muted rounded p-2 font-mono break-all select-all">{createdToken.token}</pre>
+                  <Button variant="chip-xs" className="flex items-center gap-1 bg-primary/10 text-primary hover:bg-primary/20"
+                    onClick={() => {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) navigator.clipboard.writeText(createdToken.token);
+                      setTokenCopied(true);
+                    }}>
+                    <Copy className="w-3 h-3" />{tokenCopied ? '已复制' : '复制'}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                发方调用 POST /api/link/webhook/{'{connector_id}'} 时须带 X-Callback-Token 头（或 X-Signature HMAC 等效证明），缺证 401。
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
+              <Button onClick={() => setCreatedToken(null)} variant="primary">我已保存</Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Test Result Toast */}
       {testResult && (
         <div className="fixed bottom-4 right-4 z-50 max-w-sm">
