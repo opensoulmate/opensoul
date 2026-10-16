@@ -341,6 +341,9 @@ class TestStaticWiring:
         assert "async def register_agent(" in coord_src
         assert "async def heartbeat(" in coord_src
         assert "register_agent(agent_id, agent_type)" in src  # 真方法调用非旁路写库
-        assert "heartbeat(agent_id, status=status)" in src
+        # G1-⑤b 契约随更新：heartbeat 桥透传 current_task/current_files（修前
+        # 字面 heartbeat(agent_id, status=status)——声明面接线后调用形状随更新）
+        assert "await _coord(tenant_id).heartbeat(" in src
+        assert "current_files=current_files," in src
         # SQL 单一源（async 与同步收尾共用禁手抄漂移）
         assert coord_src.count("UPDATE agent_registry") == 1

@@ -18,8 +18,12 @@ logger = logging.getLogger(__name__)
 
 # 状态心跳 UPDATE SQL 单一源（async heartbeat 与同步 teardown 收尾共用禁手抄漂移，
 # F4b-㉗ 纪律）。
+# G1-⑤b 声明保留语义：current_task/current_files 用 COALESCE(?, 列)——绑定
+# NULL=保留现值（看门狗/连接 keep-alive 节拍不再把已声明工作集洗成空，修前
+# 每次心跳恒写 ''/'[]'），显式绑定值（含 ''/'[]'）=更新/清空声明（offline
+# 收尾绑 ''/'[]' 清工作集）。async 心跳与同步收尾同一 SQL 照旧单一源。
 _HEARTBEAT_SQL = """UPDATE agent_registry
-            SET status = ?, current_task = ?, current_files = ?, last_heartbeat = ?
+            SET status = ?, current_task = COALESCE(?, current_task), current_files = COALESCE(?, current_files), last_heartbeat = ?
             WHERE tenant_id = ? AND agent_id = ?"""
 
 # agent_registry DDL 单一源（_ensure_table 与同步收尾共用——表不在场时同步写
@@ -114,10 +118,14 @@ class MultiAgentCoordinator:
         self,
         agent_id: str,
         status: str = "active",
-        current_task: str = "",
-        current_files: list[str] = None,
+        current_task: str | None = None,
+        current_files: list[str] | None = None,
     ):
-        """心跳更新"""
+        """心跳更新。
+
+        G1-⑤b 声明语义收口：current_task/current_files 缺省 None=保留现值
+        （_HEARTBEAT_SQL COALESCE——keep-alive 节拍不再洗掉已声明工作集），
+        显式传值（含空列表）=更新声明。"""
         await self._ensure_table()
         if not self.db:
             return
@@ -126,7 +134,7 @@ class MultiAgentCoordinator:
             (
                 status,
                 current_task,
-                json.dumps(current_files or []),
+                json.dumps(current_files) if current_files is not None else None,
                 time.time(),
                 self.tenant_id,
                 agent_id,
@@ -170,7 +178,8 @@ class MultiAgentCoordinator:
                     {
                         "agent_id": a["agent_id"],
                         "conflicting_files": list(overlap),
-                        "their_task": a.get("current_task", ""),
+                        # NULL/缺失统一 ""（register 未声明时列为 NULL，禁 None 混形）
+                        "their_task": a.get("current_task") or "",
                     }
                 )
         return conflicts
@@ -196,6 +205,17 @@ class MultiAgentCoordinator:
             (self.tenant_id, agent_id),
         )
         return [dict(row) for row in rows]
+
+    async def mark_messages_read(self, agent_id: str) -> None:
+        """G1-⑤b：协调收件箱送达标记（inbox 拉取/连接接取后清 unread——
+        get_messages 的 unread_only 语义由此闭环，修前 read 列恒 0 零消费）。"""
+        await self._ensure_table()
+        if not self.db:
+            return
+        await self.db.execute(
+            "UPDATE agent_coord_messages SET read = 1 WHERE tenant_id = ? AND to_agent = ? AND read = 0",
+            (self.tenant_id, agent_id),
+        )
 
     async def get_stats(self) -> dict:
         await self._ensure_table()

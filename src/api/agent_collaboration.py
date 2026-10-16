@@ -217,12 +217,110 @@ async def _coord_register(tenant_id: str, agent_id: str, agent_type: str) -> Non
         logger.warning("coord register bridge failed for %s: %s", agent_id, exc)
 
 
-async def _coord_heartbeat(tenant_id: str, agent_id: str, status: str = "active") -> None:
-    """心跳桥（heartbeat 方法首个生产消费点）：失败旁路不阻断连接主路径。"""
+async def _coord_heartbeat(
+    tenant_id: str,
+    agent_id: str,
+    status: str = "active",
+    current_task=None,
+    current_files=None,
+) -> None:
+    """心跳桥（heartbeat 方法首个生产消费点）：失败旁路不阻断连接主路径。
+
+    G1-⑤b：current_task/current_files 透传（缺省 None=保留现值——看门狗/连接
+    keep-alive 节拍不再洗掉已声明工作集，heartbeat 方法 COALESCE 语义）。"""
     try:
-        await _coord(tenant_id).heartbeat(agent_id, status=status)
+        await _coord(tenant_id).heartbeat(
+            agent_id,
+            status=status,
+            current_task=current_task,
+            current_files=current_files,
+        )
     except Exception as exc:
         logger.warning("coord heartbeat bridge failed for %s: %s", agent_id, exc)
+
+
+# ── G1-⑤b check_file_conflict·send_message·get_messages 消费面 ─────────
+#
+# 修前（G1-⑤ 诚实边界留档）：check_file_conflict/send_message/get_messages 三
+# 方法全仓零生产调用（wired-but-not-functional）。本节把三方法接进 collab WS
+# 协议真实流程：heartbeat 事件声明工作集（数据真源）→ check_conflicts 冲突
+# 检查（check_file_conflict 真消费）→ 冲突通知落协调收件箱（send_message 真
+# 消费）→ inbox 拉取/连接接取消息（get_messages 真消费，拉取即送达标 read）。
+#
+# 纪律：①旁路纪律（桥失败 logger.warning 可见，绝不吃掉 WS 主循环）②冲突
+# 视图=同租户活跃代理（check_file_conflict 自带租户过滤），零跨租户泄露③
+# 检查/拉取故障如实 error 帧禁谎报 ok（C2）④投递=接取/拉取面（inbox 轮询/
+# 重连接收），无实时推送（诚实边界，见 roadmap 记档）。
+
+
+async def _coord_check_conflicts(tenant_id, agent_id, target_files):
+    """check_file_conflict 方法首个生产消费点：返回 (conflicts, error)，
+    故障如实带 error 禁当空冲突谎报 ok。"""
+    try:
+        conflicts = await _coord(tenant_id).check_file_conflict(agent_id, target_files)
+        return conflicts, None
+    except Exception as exc:
+        logger.warning("coord conflict check failed for %s: %s", agent_id, exc)
+        return [], str(exc)
+
+
+async def _coord_notify_conflict(tenant_id, from_agent, conflict):
+    """send_message 方法首个生产消费点：冲突通知落协调收件箱（收方经 inbox
+    拉取/连接接取消费）。失败旁路可见，绝不吃掉冲突检查主路径。"""
+    try:
+        await _coord(tenant_id).send_message(
+            from_agent,
+            conflict.get("agent_id", ""),
+            "conflict",
+            json.dumps(
+                {
+                    "files": conflict.get("conflicting_files", []),
+                    "their_task": conflict.get("their_task", ""),
+                },
+                ensure_ascii=False,
+            ),
+        )
+    except Exception as exc:
+        logger.warning("coord conflict notice failed for %s: %s", from_agent, exc)
+
+
+async def _coord_fetch_inbox(tenant_id, agent_id, unread_only):
+    """get_messages 方法首个生产消费点：返回 (messages, error)。"""
+    try:
+        messages = await _coord(tenant_id).get_messages(agent_id, unread_only=unread_only)
+        return messages, None
+    except Exception as exc:
+        logger.warning("coord inbox fetch failed for %s: %s", agent_id, exc)
+        return [], str(exc)
+
+
+async def _coord_mark_read(tenant_id, agent_id):
+    """收件箱送达标记（拉取即送达）。失败旁路可见禁静默。"""
+    try:
+        await _coord(tenant_id).mark_messages_read(agent_id)
+    except Exception as exc:
+        logger.warning("coord inbox mark-read failed for %s: %s", agent_id, exc)
+
+
+async def _coord_flush_inbox(tenant_id, agent_id, websocket):
+    """连接接取：离线期积压协调消息逐条 coord_message 帧投递+标 read（送达）。
+    旁路纪律：失败 logger.warning 可见，绝不吃掉连接主路径。"""
+    try:
+        messages = await _coord(tenant_id).get_messages(agent_id, unread_only=True)
+        for m in messages:
+            await websocket.send_json(
+                {
+                    "event": "coord_message",
+                    "from_agent": m.get("from_agent", ""),
+                    "message_type": m.get("message_type", ""),
+                    "content": m.get("content", ""),
+                    "created_at": m.get("created_at", ""),
+                }
+            )
+        if messages:
+            await _coord(tenant_id).mark_messages_read(agent_id)
+    except Exception as exc:
+        logger.warning("coord inbox flush failed for %s: %s", agent_id, exc)
 
 
 # ── Pydantic models ────────────────────────────────────────────────────
@@ -670,6 +768,12 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
     F3b-④：agent 身份轴收口——claim 注册身份必须持 register 签发 token
     （_ws_presented_token 双源取参 → _agent_token_verdict 单一判定），未注册
     agent_id 保留既有语义。
+
+    G1-⑤b 协议事件登记（协调面）：heartbeat 可携 current_task/current_files
+    （声明工作集，缺省保留现值）、check_conflicts {files} → conflict_check 帧
+    （check_file_conflict 真消费+冲突通知落协调收件箱）、inbox {unread_only}
+    → inbox 帧（get_messages 真消费，拉取即送达）；新帧类型 coord_message
+    （连接接取积压协调消息），既有客户端按未知 type 忽略即兼容。
     """
     conn = _get_db()
     presented = _ws_presented_token(websocket)
@@ -726,6 +830,9 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
     # G1-⑤ 连接=活跃代理：协调心跳落行（租户键=agent 行单一源；未注册 agent
     # heartbeat UPDATE-only 绝不 fabricate 协调行）。
     await _coord_heartbeat(row_tenant, agent_id, status="active")
+    # G1-⑤b 收件箱接取：连接即投递离线期积压的协调消息（get_messages 真消费），
+    # 逐条 coord_message 帧+标 read（送达语义）；失败旁路绝不吃掉连接主路径。
+    await _coord_flush_inbox(row_tenant, agent_id, websocket)
 
     # 连接期凭据周期重校验（F3b-④b）：所有连接起看门狗——claim 注册身份的
     # 凭据失效（轮换/重注册/连接后才注册）=close 1008；凭据有效/未注册继续服务。
@@ -806,6 +913,31 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
                                 logging.getLogger(__name__).debug("probe skipped: %s", exc)
             elif event_type == "heartbeat":
                 hb_now = datetime.now(UTC).isoformat()
+                # G1-⑤b 声明面：heartbeat 事件可携 current_task/current_files
+                # （agent 声明当前工作集=check_file_conflict 数据真源）。缺省=
+                # 不改声明（保留现值）；显式值非法如实 error 帧禁静默吞声明，
+                # liveness 照常（心跳语义与声明语义分开）。
+                declared_task = None
+                declared_files = None
+                invalid = None
+                payload_task = data.get("current_task")
+                payload_files = data.get("current_files")
+                if payload_task is not None:
+                    if isinstance(payload_task, str):
+                        declared_task = payload_task
+                    else:
+                        invalid = "current_task must be a string"
+                if invalid is None and payload_files is not None:
+                    if isinstance(payload_files, list) and all(
+                        isinstance(f, str) for f in payload_files
+                    ):
+                        declared_files = list(payload_files)
+                    else:
+                        invalid = "current_files must be a list of strings"
+                if invalid is not None:
+                    await websocket.send_json(
+                        {"event": "error", "detail": "invalid heartbeat payload: " + invalid}
+                    )
                 conn = _get_db()
                 hb_tenant = _agent_row_tenant(conn, agent_id) or DEFAULT_TENANT
                 conn.execute(
@@ -814,7 +946,61 @@ async def agent_ws(websocket: WebSocket, agent_id: str):
                 conn.commit()
                 conn.close()
                 # G1-⑤ 协议心跳事件真消费：同步刷协调面活跃窗（行归属租户单一源）。
-                await _coord_heartbeat(hb_tenant, agent_id, status="active")
+                await _coord_heartbeat(
+                    hb_tenant,
+                    agent_id,
+                    status="active",
+                    current_task=declared_task,
+                    current_files=declared_files,
+                )
+            elif event_type == "check_conflicts":
+                # G1-⑤b check_file_conflict 真消费：agent 触碰文件前主动查询同
+                # 租户活跃代理的工作集重叠（冲突视图自带租户过滤零跨租户泄露）。
+                files = data.get("files")
+                if (
+                    not isinstance(files, list)
+                    or not files
+                    or not all(isinstance(f, str) for f in files)
+                ):
+                    await websocket.send_json(
+                        {
+                            "event": "error",
+                            "detail": "check_conflicts requires files: non-empty list of strings",
+                        }
+                    )
+                    continue
+                conflicts, check_error = await _coord_check_conflicts(row_tenant, agent_id, files)
+                if check_error is not None:
+                    # C2 禁谎报 ok：检查故障如实 error 帧，绝不当空冲突
+                    await websocket.send_json(
+                        {"event": "error", "detail": "coord conflict check failed: " + check_error}
+                    )
+                    continue
+                # send_message 真消费：冲突通知落对方协调收件箱（inbox 面接取）。
+                # 通知先于 ack 落库：客户端收 ack 即断开的取消面绝不吃掉通知
+                # （DEC-⑱「取消兑现于 await」家族，实测 ack 后立刻断开=通知被吞）。
+                for conflict in conflicts:
+                    await _coord_notify_conflict(row_tenant, agent_id, conflict)
+                await websocket.send_json(
+                    {"event": "conflict_check", "files": files, "conflicts": conflicts}
+                )
+            elif event_type == "inbox":
+                # G1-⑤b get_messages 真消费：协调收件箱拉取（unread_only 缺省
+                # True；显式 False=含已读历史）。拉取即送达（mark read）。
+                unread_only = data.get("unread_only", True)
+                if not isinstance(unread_only, bool):
+                    await websocket.send_json(
+                        {"event": "error", "detail": "inbox unread_only must be a boolean"}
+                    )
+                    continue
+                messages, inbox_error = await _coord_fetch_inbox(row_tenant, agent_id, unread_only)
+                if inbox_error is not None:
+                    await websocket.send_json(
+                        {"event": "error", "detail": "coord inbox fetch failed: " + inbox_error}
+                    )
+                    continue
+                await websocket.send_json({"event": "inbox", "messages": messages})
+                await _coord_mark_read(row_tenant, agent_id)
             else:
                 await websocket.send_json(
                     {"event": "error", "detail": f"Unknown event: {event_type}"}
