@@ -2,6 +2,7 @@ import logging
 from difflib import SequenceMatcher
 
 from src.database.postgres import db_pool
+from src.services.knowledge import delete_knowledge
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +61,23 @@ async def deduplicate_knowledge(user_id: str | None = None) -> dict:
                         }
                     )
 
-    # 删除重复条目
+    # 删除重复条目（H1-① 收口）：复用主删除面 delete_knowledge 唯一删除路径——
+    # 修前此处自开第二套删除路径只删 knowledge/knowledge_tags/knowledge_chunks
+    # 三表行，不清 meili 全文索引与 qdrant 向量点，而 fulltext_search/semantic_search
+    # 直接回索引命中不回查 DB → 去重删掉的条目仍可被搜索命中（幽灵搜索结果）。
+    # 第二套删除路径=漂移根因，收口为与主删除面同一路径（两面都清+三表级联）。
+    # 语义收口（如实记）：检索面清理失败=该条不删（与主删除面同语义），宁留重复行
+    # 禁造幽灵命中；行缺失/归属闸 False 不计 removed（计数如实）。
     removed_ids = []
+    owner_of = {item["id"]: item["user_id"] for item in items}
     for dup in duplicates:
         try:
-            await db_pool.execute("DELETE FROM knowledge_chunks WHERE knowledge_id = ?", dup["id"])
-            await db_pool.execute("DELETE FROM knowledge_tags WHERE knowledge_id = ?", dup["id"])
-            await db_pool.execute("DELETE FROM knowledge WHERE id = ?", dup["id"])
-            removed_ids.append(dup["id"])
+            if await delete_knowledge(dup["id"], owner_of[dup["id"]]):
+                removed_ids.append(dup["id"])
+            else:
+                logger.warning(
+                    f"Duplicate {dup['id']} not removed (row vanished or ownership gate)"
+                )
         except Exception as e:
             logger.warning(f"Failed to remove duplicate {dup['id']}: {e}")
 

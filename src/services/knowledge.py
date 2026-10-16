@@ -290,7 +290,11 @@ async def update_knowledge(knowledge_id: UUID, data: KnowledgeUpdate, user_id: U
     return await get_knowledge(knowledge_id, user_id)
 
 
-async def delete_knowledge(knowledge_id: UUID, user_id: UUID) -> bool:
+async def delete_knowledge(knowledge_id: UUID | str, user_id: UUID | str) -> bool:
+    """主删除面唯一删除路径（H1-①）：检索面（qdrant 向量点+meili 全文 doc）+
+    knowledge/knowledge_tags/knowledge_chunks 三表级联。去重删除（services/
+    deduplication）复用本路径，禁第二套删除路径漂移。id/user_id 兼容行原值
+    （str，SQLite UUID 参数 str() 铁律）与路径参数 UUID。"""
     # 归属闸前置：行属他人=零副作用（修前 qdrant/meili 在归属检查前先删=他人
     # 向量/索引可被毁，SQL 行留着但检索面已残）
     owned = await db_pool.fetchval(
