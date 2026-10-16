@@ -131,11 +131,25 @@ async def _coord_register(agent_id: str, agent_type: str, tenant_id: str) -> Non
         logger.warning("coord register bridge failed for %s: %s", agent_id, exc)
 
 
-async def _coord_heartbeat(agent_id: str, tenant_id: str, status: str = "active") -> None:
+async def _coord_heartbeat(
+    agent_id: str,
+    tenant_id: str,
+    status: str = "active",
+    current_task: str | None = None,
+    current_files: list[str] | None = None,
+) -> None:
     """心跳桥（heartbeat 方法生产消费点）：失败旁路不阻断心跳主路径。
-    current_task/current_files 缺省 None=保留现值（heartbeat COALESCE 语义）。"""
+
+    G1-⑤c-④ 工作集声明透传（G1-⑤b 声明语义同款单一语义）：current_task/
+    current_files 缺省 None=保留现值（heartbeat COALESCE——keep-alive 节拍不再
+    洗掉已声明工作集），显式传值（含 ''/[]）=更新/清空声明。"""
     try:
-        await _coord(tenant_id).heartbeat(agent_id, status=status)
+        await _coord(tenant_id).heartbeat(
+            agent_id,
+            status=status,
+            current_task=current_task,
+            current_files=current_files,
+        )
     except Exception as exc:
         logger.warning("coord heartbeat bridge failed for %s: %s", agent_id, exc)
 
@@ -208,6 +222,11 @@ class AgentRegisterResponse(BaseModel):
 class AgentHeartbeatRequest(BaseModel):
     agent_id: UUID
     status: str = "active"
+    # G1-⑤c-④ 工作集声明（G1-⑤b 声明语义同款）：缺省 None=保留现值（COALESCE，
+    # keep-alive 不洗声明）、显式值=更新（含空串/空列表=清空）。非法载荷
+    # （非字符串/非字符串列表）由 pydantic 422 先拒零副作用，禁静默吞声明。
+    current_task: str | None = None
+    current_files: list[str] | None = None
 
 
 class AgentReportRequest(BaseModel):
@@ -278,7 +297,22 @@ async def agent_heartbeat(
         raise HTTPException(status_code=404, detail="Agent not found")
     # G1-⑤c 心跳桥：管理面心跳保活协调活跃窗（UPDATE-only——协调行由注册桥
     # 建，此处绝不 fabricate；桥失败旁路不吃主路径）。
-    await _coord_heartbeat(str(req.agent_id), row_tenant, status=req.status)
+    # G1-⑤c-④ 工作集声明（G1-⑤b 同款单一语义）：显式声明=更新（含空=清空），
+    # 缺省=None 保留现值；status='offline' 且未显式声明=清空工作集（WS 断开
+    # 收尾 heartbeat_sync 绑 ''/'[]' 同语义——节点下线不留陈旧声明在冲突视图
+    # 里造幽灵冲突）。显式声明恒优先（禁静默吞声明）。
+    declared_task = req.current_task
+    declared_files = req.current_files
+    if declared_task is None and declared_files is None and req.status == "offline":
+        declared_task = ""
+        declared_files = []
+    await _coord_heartbeat(
+        str(req.agent_id),
+        row_tenant,
+        status=req.status,
+        current_task=declared_task,
+        current_files=declared_files,
+    )
     return {
         "agent_id": req.agent_id,
         "status": req.status,

@@ -293,7 +293,11 @@ class TestStaticWiring:
         # G1-⑤c-② 协调键随行归属（注册桥=identity.tenant_id、心跳/注销桥=row_tenant）
         assert "_coord_register(str(agent_id), req.agent_type, identity.tenant_id)" in agent_src
         assert '_coord_heartbeat(str(agent_id), identity.tenant_id, status="active")' in agent_src
-        assert "_coord_heartbeat(str(req.agent_id), row_tenant, status=req.status)" in agent_src
+        # G1-⑤c-④ 心跳桥带工作集声明（调用点换多行形，普查意图零丢失）：
+        # heartbeat 端点真调用且声明两列真透传到桥
+        assert "_coord_heartbeat(" in agent_src
+        assert "current_task=declared_task" in agent_src
+        assert "current_files=declared_files" in agent_src
         # 注销桥（delete 端点）
         assert "_coord_unregister(str(node_id), row_tenant)" in agent_src
         # unregister_agent 方法真定义（注销桥消费面）
