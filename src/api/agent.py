@@ -294,12 +294,18 @@ async def agent_report(
     """Agent reports Soma-collected data — stored and queued for processing."""
     # claim 持证（G1-⑤c-②）：上报行归属=token 行 agent（禁冒写他 agent 报告）。
     _require_agent_claim(agent, req.agent_id)
+    # G1-⑤c-③ 行租户键：行归属=agents 行归属租户单一权威（_node_row_tenant，
+    # 心跳/注销桥键同源禁手抄）；键派生故障绝不吃掉落库（③b-2 纪律：缺失/空白
+    # →'default' 兜底）。
+    row_tenant = _row_tenant(await _node_row_tenant(req.agent_id))
     await db_pool.execute(
         # C2：dict必须json.dumps、UUID手动str()（SQLite绑定层不支持list/dict，铁律）
-        "INSERT INTO agent_reports (agent_id, report_type, data) VALUES ($1, $2, $3)",
+        "INSERT INTO agent_reports (agent_id, report_type, data, tenant_id) "
+        "VALUES ($1, $2, $3, $4)",
         str(req.agent_id),
         req.report_type,
         json.dumps(req.data, ensure_ascii=False),
+        row_tenant,
     )
     return {"status": "received", "agent_id": str(req.agent_id)}
 

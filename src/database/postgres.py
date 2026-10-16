@@ -261,6 +261,15 @@ class SQLitePool:
                 "data",
                 "ALTER TABLE agent_reports ADD COLUMN data TEXT DEFAULT '{}'",
             ),
+            # G1-⑤c-③（2026-10-17）：agent_reports 行租户键（G1-⑤c-② 诚实边界
+            # 「agent_reports 无租户列（另拍）」执行件）——/report 行归属=agents
+            # 行归属租户单一权威（_node_row_tenant），存量行回填 'default' 与
+            # F3 实测分布一致。
+            (
+                "agent_reports",
+                "tenant_id",
+                "ALTER TABLE agent_reports ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'",
+            ),
             # C3-⑪（2026-10-11）：tags 生产表是 knowledge/feedback/vein/capture
             # 建的标签形状（id/user_id/name/created_at），而 api/tag.py 增改读全用
             # color 列（INSERT name/color/user_id、TagUpdate color、TagResponse.color）
@@ -291,11 +300,18 @@ class SQLitePool:
                 logger.info("schema drift healed: %s.%s added", table, column)
         # G1-⑤c-②：agents 租户索引必须在补列之后建（③c-2① 坑记档延续：老库形态
         # 先建索引=no such column）。表不在场（新库未建）跳过不空建。
-        async with conn.execute("PRAGMA table_info(agents)") as cursor:
-            agent_cols = [row[1] for row in await cursor.fetchall()]
-        if "tenant_id" in agent_cols:
-            await conn.execute("CREATE INDEX IF NOT EXISTS idx_agents_tenant ON agents(tenant_id)")
-            await conn.commit()
+        # G1-⑤c-③：agent_reports 租户索引同纪律（补列之后建）。
+        for _idx_table, _idx_col, _idx_name in (
+            ("agents", "tenant_id", "idx_agents_tenant"),
+            ("agent_reports", "tenant_id", "idx_agent_reports_tenant"),
+        ):
+            async with conn.execute(f"PRAGMA table_info({_idx_table})") as cursor:
+                _idx_cols = [row[1] for row in await cursor.fetchall()]
+            if _idx_col in _idx_cols:
+                await conn.execute(
+                    f"CREATE INDEX IF NOT EXISTS {_idx_name} ON {_idx_table}({_idx_col})"
+                )
+                await conn.commit()
 
     async def disconnect(self):
         if self._conn:

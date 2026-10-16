@@ -324,4 +324,7 @@ class TestStaticWiring:
         assert "_MGMT_COORD_TENANT =" not in src
         # 迁移自愈登记
         assert "ALTER TABLE agents ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'" in pg
-        assert "idx_agents_tenant ON agents(tenant_id)" in pg
+        # 租户索引真建（G1-⑤c-③ 起索引收口为 (表,列,索引名) 单一源循环——契约
+        # 随更新，断言意图零丢失：agents/agent_reports 两表索引名逐字在场）
+        assert '("agents", "tenant_id", "idx_agents_tenant")' in pg
+        assert '("agent_reports", "tenant_id", "idx_agent_reports_tenant")' in pg
