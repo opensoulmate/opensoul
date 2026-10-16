@@ -115,6 +115,27 @@ async def _get_episodic_advisory(query: str) -> tuple[str, bool]:
         return "", True
 
 
+async def _get_metacognitive_advisory() -> tuple[str, bool]:
+    """G1-④b 元认知纠错回流对话面：blind_spots/calibration → prompt 纠偏块。
+
+    取数口=src.mirror.metacognition.metacognitive_advisory_for 单一源（与任务
+    执行面 G1-④a 同口径）。chat 面无 agent 身份轴，口径钉 ('default','default')
+    ——agent 专属观测（soulmate/echo 等）不进本面（每 agent 独立禁跨 agent
+    冒用聚合）。返回 (纠偏块, 取数是否失败)。元认知层故障不阻断 chat 但必须
+    可见（F2b-②"禁静默"纪律：metacognitive-context-error 日志 + 调用方可见面）；
+    空观测=("", False) 零注入（宁缺勿滥）。块非 query 相关（agent 级观测，
+    与 learned/episodic 的 query 相关度门刻意不同源）。
+    """
+    try:
+        from src.mirror.metacognition import metacognitive_advisory_for
+
+        block, _n = await metacognitive_advisory_for("default", tenant_id="default")
+        return block, False
+    except Exception as exc:
+        logger.warning("metacognitive-context-error: %s", exc)
+        return "", True
+
+
 def _redact_outbound(text: str) -> str:
     """P0-4: 出站脱敏，防止API key/token泄漏到LLM provider。失败时原样返回。"""
     try:
@@ -313,11 +334,12 @@ def _attribute_chat_context(
     actual_prompt_tokens: int | None = None,
     advisory: str = "",
     episodic: str = "",
+    metacog: str = "",
 ) -> dict | None:
     """P1: 上下文逐项token归因（claude-code SDKContextUsage移植）。
 
     每次LLM请求把上下文构成逐项记账：hippo记忆逐条 / RAG chunk逐块 / 用户问题
-    （F2b-②b 起含学习建议块逐行、DEC-③-① 起含失败教训块逐行），并按模型窗口计算percentage与over_limit（hard_limit vs compaction_window）。
+    （F2b-②b 起含学习建议块逐行、DEC-③-① 起含失败教训块逐行、G1-④b 起含元认知纠偏块逐行），并按模型窗口计算percentage与over_limit（hard_limit vs compaction_window）。
     观测性旁路：任何失败只debug日志，不阻断chat主路径（fail-safe）。
     """
     try:
@@ -352,6 +374,17 @@ def _attribute_chat_context(
                         kind=KIND_IMPROVEMENT,
                         name=f"episodic_advisory[{i}]",
                         source="learn.experience",
+                        tokens=estimate_tokens(ln),
+                    )
+                )
+        if metacog:
+            meta_lines = [ln for ln in metacog.splitlines() if ln.strip()]
+            for i, ln in enumerate(meta_lines):
+                items.append(
+                    ContextItem(
+                        kind=KIND_IMPROVEMENT,
+                        name=f"metacognitive_advisory[{i}]",
+                        source="mirror.metacognition",
                         tokens=estimate_tokens(ln),
                     )
                 )
@@ -437,7 +470,14 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
         episodic, epi_failed = await _get_episodic_advisory(question)
         if epi_failed:
             yield f"data: {json.dumps({'type': 'info', 'content': '历史失败教训获取失败（不影响回答）。'})}\n\n"
-        advisory_all = "\n\n".join(x for x in (advisory, episodic) if x)
+        # G1-④b 元认知纠错回流对话面：blind_spots/calibration → prompt 纠偏块
+        # （第三条回流轴，learned→episodic→metacognitive 序稳定；agent 级观测非
+        # query 相关=与前两轴相关度门刻意不同源；空观测=零注入。
+        # 取数故障可见不阻断：info 帧 + metacognitive-context-error 日志）
+        metacog, meta_failed = await _get_metacognitive_advisory()
+        if meta_failed:
+            yield f"data: {json.dumps({'type': 'info', 'content': '元认知纠偏提醒获取失败（不影响回答）。'})}\n\n"
+        advisory_all = "\n\n".join(x for x in (advisory, episodic, metacog) if x)
         # 降级：不返回error，继续走LLM路径（模型路由接线：按mode选target+备target重试）
         prompt = f"{question}\n\n{advisory_all}" if advisory_all else question
         attempts, _meta = _route_llm_targets(question)
@@ -453,6 +493,7 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
             session_key=str(user_id),
             advisory=advisory,
             episodic=episodic,
+            metacog=metacog,
         )
         attempt_log: list = []
         last_exc: Exception | None = None
@@ -536,7 +577,13 @@ async def rag_stream(question: str, user_id: UUID, top_k: int):
     episodic, epi_failed = await _get_episodic_advisory(question)
     if epi_failed:
         yield f"data: {json.dumps({'type': 'info', 'content': '历史失败教训获取失败（不影响回答）。'})}\n\n"
-    advisory_all = "\n\n".join(x for x in (advisory, episodic) if x)
+    # G1-④b 元认知纠错回流对话面：第三条回流轴（learned→episodic→metacognitive
+    # 序稳定；agent 级观测非 query 相关；空观测=零注入。取数故障可见不阻断：
+    # info 帧 + metacognitive-context-error 日志）
+    metacog, meta_failed = await _get_metacognitive_advisory()
+    if meta_failed:
+        yield f"data: {json.dumps({'type': 'info', 'content': '元认知纠偏提醒获取失败（不影响回答）。'})}\n\n"
+    advisory_all = "\n\n".join(x for x in (advisory, episodic, metacog) if x)
 
     # Send sources first
     yield f"data: {json.dumps({'type': 'sources', 'content': sources})}\n\n"
@@ -568,6 +615,7 @@ Answer:"""
         session_key=str(user_id),
         advisory=advisory,
         episodic=episodic,
+        metacog=metacog,
     )
     attempt_log = []
     last_exc: Exception | None = None
@@ -674,7 +722,11 @@ async def chat(req: ChatRequest, user_id: UUID):
     # DEC-③-① episodic 回流对话面：与 learned 块并列的第二条回流轴（无关=零注入；
     # 取数失败=episodic-context-error 日志可见，非流式无 SSE 面故只有日志可见面）
     episodic, _epi_failed = await _get_episodic_advisory(req.question)
-    advisory_all = "\n\n".join(x for x in (advisory, episodic) if x)
+    # G1-④b 元认知纠错回流对话面：第三条回流轴（learned→episodic→metacognitive
+    # 序稳定；取数失败=metacognitive-context-error 日志可见，非流式无 SSE 面故
+    # 只有日志可见面）
+    metacog, _meta_failed = await _get_metacognitive_advisory()
+    advisory_all = "\n\n".join(x for x in (advisory, episodic, metacog) if x)
 
     prompt = f"""Based on the following context, answer the question. If the context doesn't contain enough information, say so.
 {memory_ctx}
@@ -739,6 +791,7 @@ Answer:"""
         actual_prompt_tokens=nonstream_usage,
         advisory=advisory,
         episodic=episodic,
+        metacog=metacog,
     )
     if answer is None:
         return {

@@ -486,6 +486,27 @@ async def _get_episodic_advisory(text: str) -> tuple[str, bool]:
         return "", True
 
 
+async def _get_metacognitive_advisory(agent_id) -> tuple[str, bool]:
+    """G1-④b 元认知纠错回流对话面：blind_spots/calibration → 发给 agent 的纠偏块。
+
+    取数口=src.mirror.metacognition.metacognitive_advisory_for 单一源（与任务
+    执行面 G1-④a 同口径）。ws 面口径=对话对象 agent（消息 agent_id，缺失/空白
+    →'default' 兜底不掉落，③b-2 旁路纪律）——每 agent 独立禁跨 agent 冒用聚合。
+    返回 (纠偏块, 取数是否失败)。元认知层故障不阻断对话但必须可见
+    （F2b-②"禁静默"纪律：metacognitive-context-error 日志 + info 帧）；
+    空观测=("", False) 零注入（宁缺勿滥）。块非 query 相关（agent 级观测）。
+    """
+    try:
+        from src.mirror.metacognition import metacognitive_advisory_for
+
+        scope = str(agent_id or "").strip() or "default"
+        block, _n = await metacognitive_advisory_for(scope, tenant_id="default")
+        return block, False
+    except Exception as exc:
+        logger.warning("metacognitive-context-error: %s", exc)
+        return "", True
+
+
 def _ws_client_host(websocket: WebSocket) -> str:
     """审计事件 client 来源（terminal_ws 同款判法）。"""
     return websocket.client.host if websocket.client else ""
@@ -715,10 +736,21 @@ async def chat_websocket(websocket: WebSocket):
                     await websocket.send_json(
                         {"type": "info", "message": "历史失败教训获取失败（不影响对话）。"}
                     )
+                # G1-④b 元认知纠错回流对话面：blind_spots/calibration → 纠偏块
+                # （第三条回流轴，learned→episodic→metacognitive 序稳定；agent 级
+                # 观测非 query 相关；空观测=零注入。取数故障可见不阻断：info 帧
+                # + metacognitive-context-error 日志）
+                metacog, meta_failed = await _get_metacognitive_advisory(agent_id)
+                if meta_failed:
+                    await websocket.send_json(
+                        {"type": "info", "message": "元认知纠偏提醒获取失败（不影响对话）。"}
+                    )
                 if advisory:
                     text = f"{text}\n\n{advisory}"
                 if episodic:
                     text = f"{text}\n\n{episodic}"
+                if metacog:
+                    text = f"{text}\n\n{metacog}"
 
                 # Signal thinking
                 await websocket.send_json({"type": "thinking"})
