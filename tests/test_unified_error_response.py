@@ -139,6 +139,10 @@ def api_client(tmp_path, monkeypatch):
 
     db = tmp_path / "opensoul.db"
     _build_db(db)
+    # G1-⑤c-②：bind_identity 身份源=USERS_DB（生产与 agents 同库），fixture 数据面
+    # 同库对齐（_seed_user 落的就是本 db）。
+    monkeypatch.setenv("USERS_DB", str(db))
+    monkeypatch.setenv("ENTERPRISE_DB", str(tmp_path / "enterprise.db"))
     monkeypatch.setattr(settings, "database_url", f"sqlite:///{db}")
     pool = SQLitePool()
 

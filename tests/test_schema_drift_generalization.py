@@ -240,7 +240,14 @@ def test_agents_heal_idempotent_reconnect(tmp_path, monkeypatch):
     asyncio.run(run())
     after = _columns(db, "agents")
     assert after == mid  # 二次connect幂等：不重复补列不报错
-    assert after - before == {"agent_type", "metadata", "token", "last_heartbeat"}
+    # G1-⑤c-② 增补 tenant_id（agents.tenant_id 行租户键，管理面租户轴收口）
+    assert after - before == {
+        "agent_type",
+        "metadata",
+        "token",
+        "last_heartbeat",
+        "tenant_id",
+    }
 
 
 def test_knowledge_chunks_token_count_regression(tmp_path, monkeypatch):

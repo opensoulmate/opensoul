@@ -135,7 +135,9 @@ class TestRegisterBridge:
         agent_id = data["agent_id"]
         rows = _coord_rows(db, agent_id)
         assert len(rows) == 1
-        assert rows[0]["tenant_id"] == "default"  # 管理面无租户轴→'default'（记档边界）
+        assert (
+            rows[0]["tenant_id"] == "default"
+        )  # G1-⑤c-② 键=身份派生租户（本用例 admin 租户 'default'）
         assert rows[0]["agent_type"] == "collector"  # agent_type 直通
         assert rows[0]["status"] == "active"  # +active 同步两注册表状态一致
         # /api/brain/agents 真消费闭环（管理面节点进协作视图）
@@ -148,8 +150,14 @@ class TestRegisterBridge:
     def test_register_contract_keys_unchanged(self, mgmt_env):
         client = mgmt_env["client"]
         data = _register(client, mgmt_env["uid"], name="contract-node")
-        # 响应契约逐键不变（无加性键）
-        assert set(data.keys()) == {"agent_id", "name", "token", "registered_at"}
+        # 响应契约键+加性 tenant_id 键（G1-⑤c-② 行归属可观测，既有键零变化）
+        assert set(data.keys()) == {
+            "agent_id",
+            "name",
+            "token",
+            "registered_at",
+            "tenant_id",
+        }
         # /nodes 不变面：列表行含 online 判定键
         r = client.get("/api/agent/nodes", headers=_admin_headers(mgmt_env["uid"]))
         assert r.status_code == 200
@@ -197,14 +205,19 @@ class TestHeartbeatBridge:
     def test_heartbeat_update_only_no_fabrication(self, mgmt_env):
         client, db = mgmt_env["client"], mgmt_env["db"]
         data = _register(client, mgmt_env["uid"], name="hb-a")
-        ghost_id = str(uuid4())
+        agent_id = data["agent_id"]
+        # 协调行不在场（心跳桥 UPDATE-only 语义本体：未注册 agent_id 绝不 fabricate）
+        conn = sqlite3.connect(str(db))
+        conn.execute("DELETE FROM agent_registry WHERE agent_id = ?", (agent_id,))
+        conn.commit()
+        conn.close()
         r = client.post(
             "/api/agent/heartbeat",
-            json={"agent_id": ghost_id, "status": "active"},
-            headers={"X-Agent-Token": data["token"]},  # A 的 token 打 B 的 id
+            json={"agent_id": agent_id, "status": "active"},
+            headers={"X-Agent-Token": data["token"]},
         )
-        assert r.status_code == 404  # 不变面：UPDATE 0 → 404
-        assert _coord_rows(db, ghost_id) == []  # 绝不 fabricate 协调行
+        assert r.status_code == 200, r.text  # 主路径照常
+        assert _coord_rows(db, agent_id) == []  # 绝不 fabricate 协调行
 
     def test_heartbeat_bridge_failure_bypass(self, mgmt_env, monkeypatch):
         client, db = mgmt_env["client"], mgmt_env["db"]
@@ -276,11 +289,12 @@ class TestStaticWiring:
         coord_src = (
             Path(__file__).parent.parent / "src" / "cortex" / "multi_agent_coord.py"
         ).read_text()
-        # 注册桥（register 端点）+ 心跳桥（register/heartbeat 双调用点）
-        assert "_coord_register(str(agent_id), req.agent_type)" in agent_src
-        assert '_coord_heartbeat(str(agent_id), status="active")' in agent_src
-        assert "_coord_heartbeat(str(req.agent_id), status=req.status)" in agent_src
+        # 注册桥（register 端点）+ 心跳桥（register/heartbeat 双调用点）——
+        # G1-⑤c-② 协调键随行归属（注册桥=identity.tenant_id、心跳/注销桥=row_tenant）
+        assert "_coord_register(str(agent_id), req.agent_type, identity.tenant_id)" in agent_src
+        assert '_coord_heartbeat(str(agent_id), identity.tenant_id, status="active")' in agent_src
+        assert "_coord_heartbeat(str(req.agent_id), row_tenant, status=req.status)" in agent_src
         # 注销桥（delete 端点）
-        assert "_coord_unregister(str(node_id))" in agent_src
+        assert "_coord_unregister(str(node_id), row_tenant)" in agent_src
         # unregister_agent 方法真定义（注销桥消费面）
         assert "async def unregister_agent(self, agent_id: str)" in coord_src

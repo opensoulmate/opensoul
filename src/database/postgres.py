@@ -244,6 +244,14 @@ class SQLitePool:
                 "last_heartbeat",
                 "ALTER TABLE agents ADD COLUMN last_heartbeat TEXT DEFAULT NULL",
             ),
+            # G1-⑤c-②（2026-10-17）：管理面租户轴收口——agents.tenant_id 行租户键
+            # （register 身份派生落行、/nodes /stats 恒按行键过滤、删除双键+闸门、
+            # G1-⑤c 协调键随行归属迁移），存量行回填 'default' 与 F3 实测分布一致。
+            (
+                "agents",
+                "tenant_id",
+                "ALTER TABLE agents ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'",
+            ),
             # C2（2026-10-11）：agent_reports 生产表只有 content 列（logo_url形状遗留），
             # 而 api/agent.py /report 与 migrations/001,002 都写 data 列——
             # "no column named data" 写路径必炸。按 C1 纪律登记缺列自愈，
@@ -281,6 +289,13 @@ class SQLitePool:
                 await conn.commit()
                 # 不可逆结构操作留痕（captures迁移同款纪律：失败/变更必须可见）
                 logger.info("schema drift healed: %s.%s added", table, column)
+        # G1-⑤c-②：agents 租户索引必须在补列之后建（③c-2① 坑记档延续：老库形态
+        # 先建索引=no such column）。表不在场（新库未建）跳过不空建。
+        async with conn.execute("PRAGMA table_info(agents)") as cursor:
+            agent_cols = [row[1] for row in await cursor.fetchall()]
+        if "tenant_id" in agent_cols:
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_agents_tenant ON agents(tenant_id)")
+            await conn.commit()
 
     async def disconnect(self):
         if self._conn:
