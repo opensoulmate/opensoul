@@ -659,13 +659,19 @@ async def agents(tenant_id: str = "default", authorization: str | None = Header(
 
 @router.post("/creativity")
 async def creativity(problem: str = "", constraints: str = "", count: int = 3):
-    """创造力引擎"""
-    from src.cortex.creativity import CreativityEngine
+    """创造力引擎。
+
+    G1-③b-2 备选方案 UI 数据面：返回载荷加性键 payload（alternatives_payload
+    归一——哨兵「错误」/「无LLM配置」如实归 error 键禁当真方案 fabricate），
+    admin-ui 备选方案展示层消费归一载荷（前端零哨兵分类禁第二套判法）；
+    alternatives 原始键契约字节不变（既有消费面零破坏）。
+    """
+    from src.cortex.creativity import CreativityEngine, alternatives_payload
 
     engine = CreativityEngine()
     constraint_list = constraints.split(",") if constraints else None
     alternatives = await engine.generate_alternatives(problem, constraint_list, count)
-    return {"alternatives": alternatives}
+    return {"alternatives": alternatives, "payload": alternatives_payload(alternatives)}
 
 
 @router.post("/creativity/cross-domain")

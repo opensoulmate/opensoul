@@ -5,9 +5,11 @@ import { apiFetch } from '@/lib/api';
 import {
   RefreshCw, X, Brain, Cpu, Zap, Activity, Send, Loader2,
   AlertCircle, CheckCircle, Target, Users, MessageSquare,
-  BarChart3, Clock, ChevronDown, ChevronRight,
+  BarChart3, Clock, ChevronDown, ChevronRight, Lightbulb,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CreativeAlternatives } from '@/components/creative-alternatives';
+import type { CreativeAlternativesPayload } from '@/components/creative-alternatives';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -33,6 +35,7 @@ interface PlanResult {
     dependencies: number[];
     priority: number;
   }[];
+  alternatives?: CreativeAlternativesPayload;
 }
 
 interface AgentResult {
@@ -74,6 +77,12 @@ export default function CortexPage() {
   const [planResult, setPlanResult] = useState<PlanResult | null>(null);
   const [planning, setPlanning] = useState(false);
 
+  // Creativity（G1-③b-2 备选方案 on-demand 生成面）
+  const [altProblem, setAltProblem] = useState('');
+  const [altConstraints, setAltConstraints] = useState('');
+  const [altResult, setAltResult] = useState<CreativeAlternativesPayload>();
+  const [altGenerating, setAltGenerating] = useState(false);
+
   // Agent
   const [agentTopic, setAgentTopic] = useState('');
   const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
@@ -85,7 +94,7 @@ export default function CortexPage() {
   const [thinkResult, setThinkResult] = useState<ThinkResult | null>(null);
   const [thinking, setThinking] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'plan' | 'agent' | 'think'>('plan');
+  const [activeTab, setActiveTab] = useState<'plan' | 'agent' | 'think' | 'creativity'>('plan');
 
   const fetchStats = useCallback(async () => {
     try {
@@ -116,6 +125,22 @@ export default function CortexPage() {
       fetchStats();
     } catch (e: any) { setError(e.message); }
     finally { setPlanning(false); }
+  };
+
+  // G1-③b-2 备选方案 on-demand 生成/重生成：每次真调用创造力引擎（无缓存）。
+  // 载荷走后端 alternatives_payload 归一（payload 加性键），前端零哨兵分类。
+  const handleGenerateAlternatives = async () => {
+    if (!altProblem.trim()) return;
+    try {
+      setAltGenerating(true);
+      setAltResult(undefined);
+      setError('');
+      const params = new URLSearchParams({ problem: altProblem.trim(), count: '3' });
+      if (altConstraints.trim()) params.set('constraints', altConstraints.trim());
+      const data = await apiFetch(`/api/brain/creativity?${params.toString()}`, { method: 'POST' });
+      setAltResult(data.payload);
+    } catch (e: any) { setError(e.message); }
+    finally { setAltGenerating(false); }
   };
 
   const handleAgent = async () => {
@@ -236,6 +261,7 @@ export default function CortexPage() {
             { key: 'plan' as const, label: '任务规划', icon: Target, color: 'text-blue-500' },
             { key: 'agent' as const, label: '多Agent', icon: Users, color: 'text-purple-500' },
             { key: 'think' as const, label: '链式推理', icon: Brain, color: 'text-amber-500' },
+            { key: 'creativity' as const, label: '备选方案', icon: Lightbulb, color: 'text-violet-500' },
           ].map(tab => (
             <Button variant="bare"
               key={tab.key}
@@ -291,6 +317,7 @@ export default function CortexPage() {
                       </div>
                     ))}
                   </div>
+                  <CreativeAlternatives payload={planResult.alternatives} />
                 </div>
               )}
             </div>
@@ -389,12 +416,41 @@ export default function CortexPage() {
               )}
             </div>
           )}
+
+          {/* ── Creativity Tab（G1-③b-2 备选方案 on-demand 生成/重生成） ── */}
+          {activeTab === 'creativity' && (
+            <div className="space-y-3">
+              <div className="text-[10px] text-muted-foreground mb-2">
+                创造力引擎：针对问题按需生成多条备选方案（每次都是真调用，可反复重新生成）
+              </div>
+              <textarea
+                className="w-full px-3 py-2 text-xs bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50 h-16 resize-none"
+                placeholder="描述要解决的问题... (如: 设计一个高可用的文件同步方案)"
+                value={altProblem}
+                onChange={(e) => setAltProblem(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 px-3 py-2 text-xs bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  placeholder="约束条件，逗号分隔（可选）... (如: 预算有限, 必须离线可用)"
+                  value={altConstraints}
+                  onChange={(e) => setAltConstraints(e.target.value)}
+                />
+                <Button onClick={handleGenerateAlternatives}
+                  disabled={!altProblem.trim() || altGenerating} variant="primary" className="gap-1.5">
+                  {altGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lightbulb className="w-3.5 h-3.5" />}
+                  {altGenerating ? '生成中...' : altResult ? '重新生成' : '生成'}
+                </Button>
+              </div>
+              <CreativeAlternatives payload={altResult} />
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Footer ── */}
       <div className="text-[10px] text-muted-foreground text-center">
-        OpenCortex · 大脑皮层 · 任务规划 / 多Agent协作 / 链式推理
+        OpenCortex · 大脑皮层 · 任务规划 / 多Agent协作 / 链式推理 / 备选方案
       </div>
     </div>
   );
