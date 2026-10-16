@@ -7,16 +7,37 @@ stderr/tool_call/heartbeat 过程事件走 agent_event（不混入响应文本�
 """
 
 import json
+import sqlite3
 import threading
 import time
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.ws_chat as ws_chat_api
 from src.services.auth import create_access_token
+from src.services.tenant_binding import users_db_path
+
+USERS_DDL = (
+    "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, "
+    "is_active INTEGER NOT NULL DEFAULT 1, "
+    "tenant_id TEXT NOT NULL DEFAULT 'default')"
+)
+
+
+@pytest.fixture(autouse=True)
+def _identity_env(monkeypatch, tmp_path):
+    """DEC-⑭-④ 判口换 bind_identity 后握手要求真实活跃身份行：身份真源归 tmp
+    （USERS_DB/ENTERPRISE_DB），绝不写生产库。"""
+    users_db = tmp_path / "users.db"
+    monkeypatch.setenv("USERS_DB", str(users_db))
+    monkeypatch.setenv("ENTERPRISE_DB", str(tmp_path / "enterprise.db"))
+    with sqlite3.connect(users_db) as c:
+        c.execute(USERS_DDL)
+        c.commit()
 
 
 def _ws_client() -> TestClient:
@@ -26,7 +47,15 @@ def _ws_client() -> TestClient:
 
 
 def _token() -> str:
-    return create_access_token(uuid4())
+    uid = uuid4()
+    with sqlite3.connect(users_db_path()) as c:
+        c.execute(
+            "INSERT OR REPLACE INTO users (id, username, is_active, tenant_id) "
+            "VALUES (?, ?, 1, 'default')",
+            (str(uid), f"user-{uid}"),
+        )
+        c.commit()
+    return create_access_token(uid)
 
 
 # 脚本 1：双向门闩真流式证明——发第一行后必须等门闩文件出现才发第二行

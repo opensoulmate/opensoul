@@ -38,6 +38,7 @@ import src.database.postgres as pg
 from src.learn.experience import ExperienceMemory
 from src.learn.long_term import LongTermLearning
 from src.services.auth import create_access_token
+from src.services.tenant_binding import users_db_path
 
 
 class _AsyncDB:
@@ -355,6 +356,34 @@ class TestChatNonStreamInjection:
 # ── 2. ws_chat 对话面（真子进程 argv 回读=注入送达证据）────────────────
 
 
+@pytest.fixture(autouse=True)
+def _ws_identity_env(monkeypatch, tmp_path):
+    """DEC-⑭-④ 判口换 bind_identity 后 ws 握手要求真实活跃身份行：身份真源归
+    tmp（USERS_DB/ENTERPRISE_DB），绝不写生产库。"""
+    users_db = tmp_path / "users.db"
+    monkeypatch.setenv("USERS_DB", str(users_db))
+    monkeypatch.setenv("ENTERPRISE_DB", str(tmp_path / "enterprise.db"))
+    with sqlite3.connect(users_db) as c:
+        c.execute(
+            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, "
+            "is_active INTEGER NOT NULL DEFAULT 1, "
+            "tenant_id TEXT NOT NULL DEFAULT 'default')"
+        )
+        c.commit()
+
+
+def _ws_token() -> str:
+    uid = uuid4()
+    with sqlite3.connect(users_db_path()) as c:
+        c.execute(
+            "INSERT OR REPLACE INTO users (id, username, is_active, tenant_id) "
+            "VALUES (?, ?, 1, 'default')",
+            (str(uid), f"user-{uid}"),
+        )
+        c.commit()
+    return create_access_token(uid)
+
+
 def _ws_client() -> TestClient:
     app = FastAPI()
     app.include_router(ws_chat_api.router, prefix="/api/ws")
@@ -371,7 +400,7 @@ print(sys.argv[1], flush=True)
 def _ws_roundtrip(text: str) -> list[dict]:
     frames: list[dict] = []
     client = _ws_client()
-    with client.websocket_connect(f"/api/ws/chat?token={create_access_token(uuid4())}") as ws:
+    with client.websocket_connect(f"/api/ws/chat?token={_ws_token()}") as ws:
         ws.send_text(
             json.dumps(
                 {"type": "message", "text": text, "mode": "agent_proxy", "agent_id": "python3"}

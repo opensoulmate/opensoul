@@ -26,13 +26,46 @@ from jose import jwt as jose_jwt
 from starlette.websockets import WebSocketDisconnect
 
 import src.api.ws_chat as ws_chat_api
+import src.services.tenant_binding as tenant_binding_mod
 from src.services import auth as auth_mod
 from src.services.auth import create_access_token
 
+USERS_DDL = (
+    "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, "
+    "is_active INTEGER NOT NULL DEFAULT 1, "
+    "tenant_id TEXT NOT NULL DEFAULT 'default')"
+)
+
+
+def _seed_user(uid):
+    """token 真源行播种（DEC-⑭-④ 判口换 bind_identity 后握手要求真实活跃身份行；
+    USERS_DB 归 tmp 由 ws_env fixture 保证，绝不写生产库）。"""
+    import sqlite3
+
+    from src.services.tenant_binding import users_db_path
+
+    with sqlite3.connect(users_db_path()) as c:
+        c.execute(
+            "INSERT OR REPLACE INTO users (id, username, is_active, tenant_id) "
+            "VALUES (?, ?, 1, 'default')",
+            (str(uid), f"user-{uid}"),
+        )
+        c.commit()
+    return str(uid)
+
 
 @pytest.fixture()
-def ws_env(monkeypatch):
-    """ws_chat 隔离面 + 短重校验节拍（agent/terminal revalidation fixture 同款）。"""
+def ws_env(monkeypatch, tmp_path):
+    """ws_chat 隔离面 + 短重校验节拍（agent/terminal revalidation fixture 同款；
+    DEC-⑭-④ 起身份真源 USERS_DB/ENTERPRISE_DB 归 tmp）。"""
+    import sqlite3
+
+    users_db = tmp_path / "users.db"
+    monkeypatch.setenv("USERS_DB", str(users_db))
+    monkeypatch.setenv("ENTERPRISE_DB", str(tmp_path / "enterprise.db"))
+    with sqlite3.connect(users_db) as c:
+        c.execute(USERS_DDL)
+        c.commit()
     # raising=False：旧代码（控制组）无此常量时容缺，让控制组失败落在行为断言
     monkeypatch.setattr(ws_chat_api, "TOKEN_REVALIDATE_INTERVAL_S", 0.2, raising=False)
     app = FastAPI()
@@ -42,11 +75,14 @@ def ws_env(monkeypatch):
 
 
 def _token(exp_seconds=None):
-    """真 JWT：缺省=有效长 token；exp_seconds=短时效 token（真过期语义）。"""
+    """真 JWT：缺省=有效长 token；exp_seconds=短时效 token（真过期语义）。
+    DEC-⑭-④ 起播种 token 真源行（判口要求真实活跃身份行）。"""
+    uid = uuid4()
+    _seed_user(uid)
     if exp_seconds is None:
-        return create_access_token(uuid4())
+        return create_access_token(uid)
     payload = {
-        "sub": str(uuid4()),
+        "sub": str(uid),
         "role": "user",
         "exp": datetime.now(UTC) + timedelta(seconds=exp_seconds),
         "iat": datetime.now(UTC),
@@ -127,7 +163,9 @@ class TestRevalidationClose:
             a.close()
 
     def test_signature_rotation_connection_closes(self, ws_env, monkeypatch):
-        """签名失效（jwt_secret 轮换=旧凭据全失效）→ close 1008 带 reason。"""
+        """签名失效（jwt_secret 轮换=旧凭据全失效）→ close 1008 带 reason。
+        DEC-⑭-④ 判口换 bind_identity 后解码真源=tenant_binding.settings——
+        轮换模拟同时改两处消费引用（同一 settings 概念的两个 import 引用）。"""
         tok = _token()
         a = _open(ws_env, tok)
         try:
@@ -139,6 +177,7 @@ class TestRevalidationClose:
                 jwt_algorithm = auth_mod.settings.jwt_algorithm
 
             monkeypatch.setattr(auth_mod, "settings", _Rotated)
+            monkeypatch.setattr(tenant_binding_mod, "settings", _Rotated)
             verdict = a.expect_close(timeout=8.0)
             assert verdict.code == 1008
             assert verdict.reason == "invalid token"
@@ -151,14 +190,14 @@ class TestNoFalseKill:
 
     def test_valid_credential_survives_and_watchdog_runs(self, ws_env, monkeypatch):
         """有效凭据 >4 拍存活 + 看门狗真在跑（判口 spy 计数硬证）。"""
-        orig = ws_chat_api._user_for_token
+        orig = ws_chat_api._identity_for_token
         calls = {"n": 0}
 
         def spy(token):
             calls["n"] += 1
             return orig(token)
 
-        monkeypatch.setattr(ws_chat_api, "_user_for_token", spy)
+        monkeypatch.setattr(ws_chat_api, "_identity_for_token", spy)
         tok = _token()
         a = _open(ws_env, tok)
         try:
@@ -172,7 +211,7 @@ class TestNoFalseKill:
 
     def test_probe_failure_does_not_kill_connection(self, ws_env, monkeypatch):
         """判定口瞬断（故障）≠失效凭据：记录可见后继续，禁误杀。"""
-        orig = ws_chat_api._user_for_token
+        orig = ws_chat_api._identity_for_token
         calls = {"n": 0}
 
         def flaky(token):
@@ -181,7 +220,7 @@ class TestNoFalseKill:
                 raise RuntimeError("transient probe failure")
             return orig(token)
 
-        monkeypatch.setattr(ws_chat_api, "_user_for_token", flaky)
+        monkeypatch.setattr(ws_chat_api, "_identity_for_token", flaky)
         tok = _token()
         a = _open(ws_env, tok)
         try:
@@ -232,13 +271,16 @@ class TestHandshakeContractUnchanged:
 
 
 class TestSingleVerdict:
-    """单一判定口静态普查：握手与看门狗共用 _user_for_token，禁第二套判法。"""
+    """单一判定口静态普查：握手与看门狗共用 _identity_for_token，禁第二套判法。"""
 
     def test_single_verdict_census(self):
         import inspect
 
         src = inspect.getsource(ws_chat_api)
-        # decode_token 唯一消费点=判口内（握手不再直调=无第二套判法）
-        assert src.count("decode_token(") == 1
-        # _user_for_token：1 定义 + 2 消费点（握手 + 看门狗）
-        assert src.count("_user_for_token(") == 3
+        # decode_token 零调用（DEC-⑭-④ 判口换 bind_identity，禁第二套判法回退）
+        assert src.count("decode_token(") == 0
+        # bind_identity 唯一消费点=判口内
+        assert src.count("bind_identity(") == 1
+        # _identity_for_token：1 定义 + 2 消费点（握手 + 看门狗）
+        assert src.count("def _identity_for_token") == 1
+        assert src.count("_identity_for_token(") == 3

@@ -39,14 +39,28 @@ def _tokens():
     import sys as _sys
 
     _sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
+    import sqlite3
+    from pathlib import Path as _P
+
     from jose import jwt as jose_jwt
 
     from src.config import settings
     from src.services.auth import create_access_token
 
-    valid = create_access_token(uuid4())
+    # DEC-⑭-④ 判口换 bind_identity 后握手要求真实活跃身份行：探针自播种+清痕
+    uid_valid, uid_exp = uuid4(), uuid4()
+    with sqlite3.connect(_P("data/opensoul.db")) as conn:
+        for uid in (uid_valid, uid_exp):
+            conn.execute(
+                "INSERT INTO users (id, username, password_hash, is_active, tenant_id)"
+                " VALUES (?, ?, 'x', 1, 'default')",
+                (str(uid), f"e2e-wschat-{uuid4().hex[:6]}"),
+            )
+        conn.commit()
+
+    valid = create_access_token(uid_valid)
     payload = {
-        "sub": str(uuid4()),
+        "sub": str(uid_exp),
         "role": "user",
         "exp": datetime.now(UTC) + timedelta(seconds=2),
         "iat": datetime.now(UTC),
@@ -123,6 +137,13 @@ async def main():
             pass
 
     passed = sum(1 for e in EVID if e["ok"])
+    # 清痕：探针身份行（DEC-⑭-④ 播种）
+    import sqlite3
+    from pathlib import Path as _P
+
+    with sqlite3.connect(_P("data/opensoul.db")) as conn:
+        conn.execute("DELETE FROM users WHERE username LIKE 'e2e-wschat-%'")
+        conn.commit()
     print(f"\nRESULT {passed}/{len(EVID)}")
     for e in EVID:
         print(f"  {'PASS' if e['ok'] else 'FAIL'} {e['check']}: {e['detail']}")

@@ -41,9 +41,19 @@ def ev(name: str, ok, detail: object = ""):
 
 def _token_and_pure_id():
     sys.path.insert(0, str(Path(__file__).parent.parent))
+    import sqlite3
+
     from src.services.auth import create_access_token, decode_token
 
     uid = uuid4()
+    # DEC-⑭-④ 判口换 bind_identity 后握手要求真实活跃身份行：探针自播种+清痕
+    with sqlite3.connect(Path("data/opensoul.db")) as conn:
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, is_active, tenant_id)"
+            " VALUES (?, ?, 'x', 1, 'default')",
+            (str(uid), f"e2e-wschat-{uuid4().hex[:6]}"),
+        )
+        conn.commit()
     tok = create_access_token(uid)
     payload = decode_token(tok)
     assert payload is not None
@@ -93,6 +103,13 @@ async def main():
             pass
 
     print("\n== SUMMARY ==")
+    # 清痕：探针身份行（DEC-⑭-④ 播种）
+    import sqlite3
+    from pathlib import Path as _P
+
+    with sqlite3.connect(_P("data/opensoul.db")) as conn:
+        conn.execute("DELETE FROM users WHERE username LIKE 'e2e-wschat-%'")
+        conn.commit()
     ok_n = sum(1 for e in EVID if e["ok"])
     print(f"{ok_n}/{len(EVID)} passed")
     return 0 if ok_n == len(EVID) else 1

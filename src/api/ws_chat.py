@@ -9,10 +9,10 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from src.acp.proxy import get_acp_process
-from src.api.user import decode_token
+from src.services.tenant_binding import bind_identity
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -485,34 +485,43 @@ async def _get_episodic_advisory(text: str) -> tuple[str, bool]:
         return "", True
 
 
-def _user_for_token(token):
+def _identity_for_token(token):
     """凭据效力判定单一判定口（握手与连接期看门狗共用，禁第二套判法——
-    F3b-④b/DEC-⑭-② 同款）：decode_token 单一判定（DEC-⑭-① 诚实边界⑥「已有
-    decode_token 握手轴」语义字节延续，握手契约零变化）。
+    F3b-④b/DEC-⑭-② 同款）：bind_identity 单一派生口 + authed 必真
+    （F3b-② 家族，DEC-⑭-③ 边界③留档件收口——修前 decode_token 单一判定：
+    UUID 标准 token 不查 users 行=用户停用/删除不触发关闭；企业 token 分支
+    DB 瞬断被吞成 None=故障被当失效凭据误杀，与「故障≠失效凭据」声明相悖）。
 
-    - 凭据缺失/无效（JWT 过期/签名失效/sub 缺失）→ None
-    - 判定口自身故障 → 异常原样上抛：故障≠失效凭据（DEC-⑭-②「禁误杀」同款），
-      握手面照旧拒、看门狗面记日志继续。
+    - 凭据缺失/无效（JWT 过期/签名失效/用户停用或消失）→ None
+    - 判定口自身故障（DB 瞬断等非 HTTPException）→ 异常原样上抛：故障≠失效
+      凭据（DEC-⑭-②「禁误杀」同款），握手面 fail-closed 拒、看门狗面记日志
+      继续，由调用方按各自语义处置。
     """
     if not token:
         return None
-    return decode_token(token)
+    try:
+        identity = bind_identity(f"Bearer {token}")
+    except HTTPException:
+        return None
+    return identity if identity.authed else None
 
 
-def _connected_user_id(user) -> str:
-    """connected 帧 user_id 载荷单一判法（DEC-⑰ 收口：dict repr 怪形→纯用户 id）。
+def _connected_user_id(identity) -> str:
+    """connected 帧 user_id 载荷单一判法（DEC-⑰ 收口：dict repr 怪形→纯用户 id；
+    DEC-⑭-④ 判口换 bind_identity 后输入形=BoundIdentity——载荷=单一派生口
+    user_id 纯字符串，F3b-② 语义：标准用户=UUID、enterprise=数字 id 字符串）。
 
-    修前：str(user) 直接序列化判定口回包 dict——载荷是
+    修前（DEC-⑰）：str(user) 直接序列化判定口回包 dict——载荷是
     "{'user_id': UUID('...'), 'role': 'user'}" 的 Python dict repr（非纯 id，
     live 修前实证同形），客户端拿到的是怪形字符串不可直接当用户 id 用。
 
     判法（单一源，禁调用点手抄）：
-    - 判定口回包 user_id 键 → str() 纯用户 id（生态参照形：acp-proxy ws_chat.py
+    - 判定口派生 user_id → str() 纯用户 id（生态参照形：acp-proxy ws_chat.py
       connected 帧 user_id=纯 UUID 字符串，本仓向参照形对齐）
-    - 键缺失/值 None → "" 空串如实，禁 fabricate dict repr 怪形（键派生故障
+    - 缺失/None → "" 空串如实，禁 fabricate dict repr 怪形（键派生故障
       绝不捏造身份，F3b-⑨b 系旁路纪律同款：如实空值不掉落语义）
     """
-    uid = user.get("user_id") if isinstance(user, dict) else None
+    uid = getattr(identity, "user_id", None)
     return str(uid) if uid is not None else ""
 
 
@@ -520,10 +529,10 @@ async def _ws_chat_token_watchdog(websocket: WebSocket, token: str):
     """WS chat 连接期凭据周期重校验（F3b-④b/1c-⑤/DEC-⑭-② 同族；DEC-⑭-①
     诚实边界⑥留档件「已有 decode_token 握手轴但无连接期重校验」收口）。
 
-    每 TOKEN_REVALIDATE_INTERVAL_S 秒重跑 _user_for_token（单一判定口，与握手
-    同源禁第二套判法）：
-    - 凭据失效（JWT 过期/签名失效）→ close 1008（与握手拒绝同语义）：失效凭据
-      不留对话通道，禁止持过期凭据继续对话。
+    每 TOKEN_REVALIDATE_INTERVAL_S 秒重跑 _identity_for_token（单一判定口，与
+    握手同源禁第二套判法）：
+    - 凭据失效（JWT 过期/签名失效/用户停用或消失）→ close 1008（与握手拒绝
+      同语义）：失效凭据不留对话通道，禁止持过期/失效凭据继续对话。
     - 判定口瞬断 → 记录可见后继续，故障≠失效凭据禁误杀（DEC-⑭-② 同款）。
     诚实边界：失效与关闭之间 <= TOKEN_REVALIDATE_INTERVAL_S 秒有界滞后（周期
     重校验语义固有）；连接期内凭据字符串不变（重校验的是同一凭据当前效力，非
@@ -532,12 +541,12 @@ async def _ws_chat_token_watchdog(websocket: WebSocket, token: str):
     while True:
         await asyncio.sleep(TOKEN_REVALIDATE_INTERVAL_S)
         try:
-            user = _user_for_token(token)
+            identity = _identity_for_token(token)
         except Exception as exc:
             logger.warning("ws chat token revalidation probe failed: %s", exc)
             continue
-        if not user:
-            logger.warning("WS chat closed by revalidation: invalid/expired credentials")
+        if identity is None:
+            logger.warning("WS chat closed by revalidation: invalid/expired/inactive credentials")
             try:
                 await websocket.close(code=1008, reason="invalid token")
             except Exception:
@@ -569,13 +578,18 @@ async def chat_websocket(websocket: WebSocket):
         await websocket.close()
         return
 
-    user = _user_for_token(token)
-    if not user:
+    try:
+        identity = _identity_for_token(token)
+    except Exception:
+        # 判定口故障=无证可验=拒（fail-closed，握手面照旧拒——DEC-⑭-② 判定口
+        # 「故障原样上抛」在握手面的处置=拒，与「Invalid token」同契约帧形）
+        identity = None
+    if identity is None:
         await websocket.send_json({"type": "error", "message": "Invalid token"})
         await websocket.close()
         return
 
-    await websocket.send_json({"type": "connected", "user_id": _connected_user_id(user)})
+    await websocket.send_json({"type": "connected", "user_id": _connected_user_id(identity)})
 
     # 连接期凭据周期重校验（DEC-⑭-① 诚实边界⑥留档件收口）：失效凭据 close 1008
     # 不留对话通道；看门狗收尾在 finally（不挂 receive 抛错上，F3b-④b/DEC-⑭-②
