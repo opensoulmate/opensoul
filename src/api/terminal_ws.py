@@ -16,6 +16,8 @@ from src.services.tenant_binding import bind_identity
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+TOKEN_REVALIDATE_INTERVAL_S = 60.0
+
 
 def _ws_presented_token(websocket: WebSocket):
     """凭据取参双源（F3b-④ / 1c-⑤ 同款）：?token= query 主口（浏览器 WS 设不了
@@ -30,14 +32,15 @@ def _ws_presented_token(websocket: WebSocket):
     return None
 
 
-def _terminal_identity(websocket: WebSocket):
-    """DEC-⑭-① 握手凭据必持（fail-closed，DEC-⑬ 同款「无证可验=拒」）：
+def _identity_for_token(token):
+    """凭据效力判定单一判定口（握手 _terminal_identity 与连接期看门狗共用，
+    禁第二套判法——F3b-④b 同款）：bind_identity 单一派生口 + authed 必真。
 
-    token 必持且须为有效活跃用户凭据（bind_identity 单一派生口，F3b-② 家族
-    禁第二套判法）——PTY shell 是执行面，无证/坏证/停用身份一律不给 shell。
-    返回 BoundIdentity 或 None（None=拒绝）。
+    - 凭据缺失/无效（JWT 过期/签名失效/用户停用或消失）→ None
+    - 判定口自身故障（DB 瞬断等非 HTTPException）→ 异常原样上抛：故障≠失效
+      凭据（F3b-④b「禁误杀」同款），握手面 fail-closed 拒、看门狗面记日志
+      继续，由调用方按各自语义处置。
     """
-    token = _ws_presented_token(websocket)
     if not token:
         return None
     try:
@@ -45,6 +48,55 @@ def _terminal_identity(websocket: WebSocket):
     except HTTPException:
         return None
     return identity if identity.authed else None
+
+
+def _terminal_identity(websocket: WebSocket):
+    """DEC-⑭-① 握手凭据必持（fail-closed，DEC-⑬ 同款「无证可验=拒」）：
+
+    token 必持且须为有效活跃用户凭据（_identity_for_token 单一判定口 →
+    bind_identity 单一派生口，F3b-② 家族禁第二套判法）——PTY shell 是执行面，
+    无证/坏证/停用身份一律不给 shell。判定口故障同样 fail-closed（无证可验=拒）。
+    返回 BoundIdentity 或 None（None=拒绝）。
+    """
+    token = _ws_presented_token(websocket)
+    try:
+        return _identity_for_token(token)
+    except Exception:
+        return None
+
+
+async def _terminal_token_watchdog(websocket: WebSocket, token: str):
+    """Terminal WS 连接期凭据周期重校验（F3b-④b/1c-⑤ 同族；DEC-⑭-① 诚实边界①
+    留档件「token 过期后已建立的 shell 会话延续至断开」收口）。
+
+    每 TOKEN_REVALIDATE_INTERVAL_S 秒重跑 _identity_for_token（单一判定口，
+    与握手同源禁第二套判法）：
+    - 凭据失效（JWT 过期/签名失效/用户停用或消失）→ close 1008（与握手拒绝
+      同语义）且看门狗自身返回=wait 集触发会话拆收尾 SIGHUP+reap 杀 shell
+      （收尾不挂 receive 抛错上，F3b-④b「禁泄漏」同款根因纪律——恶意客户端
+      不回 close 帧也留不下 shell）——失效凭据不留 shell（RCE 面连接期收口）。
+    - 判定口瞬断（DB 故障）→ 记录可见后继续，故障≠失效凭据禁误杀
+      （F3b-④b 同款）。
+    诚实边界：失效与关闭之间 <= TOKEN_REVALIDATE_INTERVAL_S 秒有界滞后（周期
+    重校验语义固有）；连接期内凭据字符串不变（重校验的是同一凭据当前效力，
+    非轮换）；无 re-key 语义（terminal 无租户路由轴，派生租户仅握手记录）。
+    """
+    while True:
+        await asyncio.sleep(TOKEN_REVALIDATE_INTERVAL_S)
+        try:
+            identity = _identity_for_token(token)
+        except Exception as exc:
+            logger.warning("terminal WS token revalidation probe failed: %s", exc)
+            continue
+        if identity is None:
+            logger.warning(
+                "Terminal WS closed by revalidation: invalid/expired/inactive credentials"
+            )
+            try:
+                await websocket.close(code=1008, reason="invalid token")
+            except Exception:
+                pass
+            return
 
 
 @router.get("/health")
@@ -133,16 +185,26 @@ async def terminal_ws(websocket: WebSocket):
         except (WebSocketDisconnect, Exception):
             pass
 
+    # 连接期凭据周期重校验（F3b-④b/1c-⑤ 同族，DEC-⑭-① 诚实边界①留档件收口）：
+    # 失效凭据 close 1008 → read_ws 结束 → 本 handler finally 收尾 SIGHUP+reap
+    # 杀 shell——失效凭据不留 shell（RCE 面连接期收口）。
+    watchdog = asyncio.create_task(
+        _terminal_token_watchdog(websocket, _ws_presented_token(websocket) or "")
+    )
+
     t_pty = asyncio.create_task(read_pty())
     t_ws = asyncio.create_task(read_ws())
     try:
-        # When either pump ends (shell exit or client disconnect), cancel the other
-        # so the handler doesn't leak a spinning reader on a dead session.
-        await asyncio.wait({t_pty, t_ws}, return_when=asyncio.FIRST_COMPLETED)
+        # When either pump ends (shell exit or client disconnect) or the watchdog
+        # revokes the session (credential invalid), tear the session down so the
+        # handler doesn't leak a spinning reader on a dead session. 收尾不挂
+        # receive 抛错上（F3b-④b「禁泄漏」同款根因纪律）：看门狗进 wait 集，
+        # 撤销即拆会话杀 shell——恶意客户端不回 close 帧也留不下 shell。
+        await asyncio.wait({t_pty, t_ws, watchdog}, return_when=asyncio.FIRST_COMPLETED)
     finally:
-        for task in (t_pty, t_ws):
+        for task in (t_pty, t_ws, watchdog):
             task.cancel()
-        await asyncio.gather(t_pty, t_ws, return_exceptions=True)
+        await asyncio.gather(t_pty, t_ws, watchdog, return_exceptions=True)
         try:
             os.close(fd)
         except OSError:
