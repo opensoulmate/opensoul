@@ -306,7 +306,15 @@ async def get_version_history(
     versions = store.get_version_history(file_id, limit, tenant_id=identity.tenant_id)
     return {
         "file_id": file_id,
-        "current_version": len(versions),
+        # T3-⑥：current_version 走 count 语义（get_version_count，与 update 响应
+        # version_count 同一读真源），修前 len(versions) 被 limit 截断——超 limit
+        # 文件当前版本数虚低（T3-⑤ 同族截断件）。
+        # 键名复核（复核即切片本体）：version_number=MAX+1 连续分配、行只增不单删
+        # （delete_history 整删），COUNT(*)==MAX(version_number) 恒等=「版本行数」
+        # 与「当前版本号」两读同值，键名 current_version 保留（既有契约零破坏）；
+        # 若未来引入行裁剪/部分删除（行号出现空洞）须改读
+        # (get_version_history(file_id, 1) or [None])[0].version_number。
+        "current_version": store.get_version_count(file_id, tenant_id=identity.tenant_id),
         "versions": [
             {
                 "version_number": v.version_number,

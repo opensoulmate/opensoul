@@ -104,7 +104,8 @@ class VersionManager:
         """Get total number of versions for a file.
 
         T3-⑤ 已接线（不再是留口死面）：file_store.get_version_count→api/vein.py
-        update 响应 version_count 首个真消费点（count 不被 limit 截断）。
+        update 响应 version_count 首个真消费点（count 不被 limit 截断）；
+        T3-⑥ 第二消费点：GET /versions 响应 current_version（同族截断件收口）。
         """
         row = self._db.execute(
             "SELECT COUNT(*) FROM file_versions WHERE file_id = ?",
