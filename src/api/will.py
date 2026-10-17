@@ -1,7 +1,7 @@
 """OpenWill API — 意志系统：工作流编排、条件触发、多分支流程。"""
 
 import hmac
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from src.config import settings
 from src.services.tenant_binding import bind_identity
 from src.will.checkpoint import CheckpointAccessDenied
-from src.will.dag_planner import DAGPlanAccessDenied, DAGPlanner
+from src.will.dag_planner import DAGPlanAccessDenied, DAGPlanner, StepStatus
 from src.will.engine import WorkflowAccessDenied, WorkflowEngine
 from src.will.models import (
     NodeType,
@@ -545,6 +545,14 @@ class DAGPlanRequest(BaseModel):
     llm_response: str
 
 
+class DAGStepUpdate(BaseModel):
+    """步状态推进载荷（H1-②b-⑧）。status 非法值 422 如实拒禁静默当缺省。"""
+
+    status: StepStatus
+    result: Any = None
+    error: str = ""
+
+
 @router.post("/dag/plan")
 async def create_dag_plan(req: DAGPlanRequest, authorization: str | None = Header(None)):
     """Create execution plan from LLM response.
@@ -600,6 +608,90 @@ async def dag_status(plan_id: str, authorization: str | None = Header(None)):
             }
             for s in plan.steps
         ],
+    }
+
+
+@router.get("/dag/{plan_id}/ready")
+async def dag_ready_steps(plan_id: str, authorization: str | None = Header(None)):
+    """Get steps whose dependencies are all satisfied（步进轴就绪查询，H1-②b-⑧）。
+
+    get_ready_steps 首个真消费（修前全仓零消费=计划建完永不推进的读面缺口）。
+    F3b-⑧b 语义沿用：by-ID 读走 IsolationEngine 闸门（跨租户→403 带真因，禁静默
+    not_found）。就绪判法=引擎 get_ready_steps 原样出口（PENDING 且 depends_on 全
+    COMPLETED；READY/RUNNING 态不进就绪集）。
+    """
+    identity = bind_identity(authorization)
+    try:
+        plan = dag_planner.get_plan(plan_id, tenant_id=identity.tenant_id)
+    except DAGPlanAccessDenied as e:
+        raise HTTPException(403, f"dag plan access denied: {e.reason}")
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+    ready = plan.get_ready_steps()
+    return {
+        "plan_id": plan.plan_id,
+        "count": len(ready),
+        "ready_steps": [
+            {
+                "step_id": s.step_id,
+                "description": s.description,
+                "tool_name": s.tool_name,
+                "arguments": s.arguments,
+                "status": s.status.value if hasattr(s.status, "value") else str(s.status),
+                "depends_on": s.depends_on,
+                "estimated_duration": s.estimated_duration,
+            }
+            for s in ready
+        ],
+        "tenant_id": plan.tenant_id or "default",
+    }
+
+
+@router.post("/dag/{plan_id}/steps/{step_id}")
+async def dag_update_step(
+    plan_id: str,
+    step_id: str,
+    req: DAGStepUpdate,
+    authorization: str | None = Header(None),
+):
+    """Advance a step's status（步进轴状态推进，H1-②b-⑧）。
+
+    update_step 首个真消费（修前全仓零消费=计划建完永不推进的写面缺口）。
+    F3b-⑧b 语义沿用：by-ID 写走 IsolationEngine 闸门（跨租户→403 行零改写）。
+    缺计划/缺步如实 404 禁静默假成功（引擎 update_step 对缺步静默 no-op 是系统
+    路径语义，API 面必须如实报缺）；非法 status 422。
+    """
+    identity = bind_identity(authorization)
+    try:
+        plan = dag_planner.get_plan(plan_id, tenant_id=identity.tenant_id)
+    except DAGPlanAccessDenied as e:
+        raise HTTPException(403, f"dag plan access denied: {e.reason}")
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+    step = next((s for s in plan.steps if s.step_id == step_id), None)
+    if step is None:
+        raise HTTPException(404, f"Step not found: {step_id}")
+    try:
+        dag_planner.update_step(
+            plan_id,
+            step_id,
+            req.status,
+            result=req.result,
+            error=req.error,
+            tenant_id=identity.tenant_id,
+        )
+    except DAGPlanAccessDenied as e:
+        raise HTTPException(403, f"dag plan access denied: {e.reason}")
+    return {
+        "plan_id": plan.plan_id,
+        "step_id": step.step_id,
+        "status": step.status.value if hasattr(step.status, "value") else str(step.status),
+        "result": step.result,
+        "error": step.error,
+        "progress": plan.progress,
+        "is_complete": plan.is_complete,
+        "plan_status": plan.status,
+        "tenant_id": plan.tenant_id or "default",
     }
 
 

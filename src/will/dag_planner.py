@@ -259,7 +259,11 @@ class DAGPlanner:
                 step.error = error
                 break
 
-        if plan.is_complete:
+        # 终态只定一次（H1-②b-⑧ 接线前定形——修前 update_step 零消费方=无行为影响面）：
+        # 修前每次 update 到全终态都重复置终态/刷 completed_at/累加计数器——步进面
+        # 接线后同一终态步的幂等重放（网络重试/步进循环重复推进）会虚增
+        # completed_plans/failed_plans，与 total_plans 对不上账。
+        if plan.is_complete and plan.status not in ("completed", "failed"):
             plan.completed_at = time.time()
             failed = sum(1 for s in plan.steps if s.status == StepStatus.FAILED)
             if failed == 0:
