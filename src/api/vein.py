@@ -265,12 +265,22 @@ async def update_file_content(
     # Update cache（㉕b：行归属=文件行租户键）
     cache.put(f"file:{meta.file_id}", data, tenant_id=file_row_tenant(meta))
 
+    # T3-⑦：摘要版本号单次读取——修前同一行双调 store.get_version_history
+    # (file_id, limit=1)（条件表达式里重复整段调用=两次 SQL 读同一行，T3-④
+    # 留档件「api/vein.py:273 双调 cleanup」）；读面带行租户键（identity.tenant_id，
+    # DEC-⑦-⑩ by-ID 读面归属闸同款，修前系统视图零键=与同 handler 其余带键
+    # 读面不对称）。无版本行（首传 0 行/同内容不记行）='?' 文案契约零变化。
+    latest_version = (
+        store.get_version_history(file_id, limit=1, tenant_id=identity.tenant_id) or [None]
+    )[0]
+    version_label = f"v{latest_version.version_number}" if latest_version else "v?"
+
     push_event(
         {
             "organ": "vein",
             "emoji": "🩸",
             "type": "file_updated",
-            "summary": f"📝 File updated: {meta.name} (v{store.get_version_history(file_id, limit=1)[0].version_number if store.get_version_history(file_id, limit=1) else '?'})",
+            "summary": f"📝 File updated: {meta.name} ({version_label})",
             "detail": {"file_id": file_id, "name": meta.name, "size": meta.size},
         },
         tenant_id=identity.tenant_id,

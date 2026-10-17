@@ -365,7 +365,10 @@ class TestVeinEmitTenantInvariants:
         current_version 计数走 get_version_count 读面带行租户键（+1，修前
         len(versions) 系统视图零键）——push_event emit 面零变化，总数 23
         handler / 43 键。
+        契约随更新（T3-⑦ update 摘要版本号双调收口）：push_event 摘要版本号
+        读取收口单次读+读面带行租户键（+1，修前双调 get_version_history 系统
+        视图零键）——push_event emit 面零变化，总数 23 handler / 44 键。
         """
         src = (Path(__file__).parent.parent / "src" / "api" / "vein.py").read_text(encoding="utf-8")
         assert src.count("identity = bind_identity(authorization)") == 23
-        assert src.count("tenant_id=identity.tenant_id") == 43
+        assert src.count("tenant_id=identity.tenant_id") == 44
