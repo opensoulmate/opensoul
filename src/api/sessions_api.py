@@ -396,19 +396,42 @@ async def get_session(
     session_id: str,
     user_id: UUID = Depends(get_current_user),
 ):
-    """Get session details — checks both Hermes and agent sessions."""
-    # Try Hermes first
-    db = _get_db()
+    """Get session details — checks both Hermes and agent sessions.
+
+    降级回落（SESS-④ 同族收口）：hermes 库不可读只跳过 hermes 面继续查 agent
+    面——修前 SELECT 抛 sqlite3.DatabaseError 经 finally 直通 500，agent 回落
+    整条路被堵死（「works for both」契约破，㉔ state.db 损坏即此形态）。
+    """
+    # Try Hermes first（SESS-④ 同款：只认 sqlite3.DatabaseError 家族不宽泛吞，
+    # 自身 bug 不静默；读失败降级回落+日志带真因）。
+    hermes_unreadable = False
+    db = None
+    try:
+        db = _get_db()
+    except sqlite3.DatabaseError as exc:
+        hermes_unreadable = True
+        logger.warning(
+            "get_session: hermes store unreachable (%s); falling back to agent sessions",
+            exc,
+        )
     if db:
         try:
-            row = db.execute(
-                """
-                SELECT id, title, started_at, last_activity_at, source,
-                       message_count, input_tokens, output_tokens, estimated_cost_usd
-                FROM sessions WHERE id = ? AND archived = 0
-            """,
-                (session_id,),
-            ).fetchone()
+            try:
+                row = db.execute(
+                    """
+                    SELECT id, title, started_at, last_activity_at, source,
+                           message_count, input_tokens, output_tokens, estimated_cost_usd
+                    FROM sessions WHERE id = ? AND archived = 0
+                """,
+                    (session_id,),
+                ).fetchone()
+            except sqlite3.DatabaseError as exc:
+                hermes_unreadable = True
+                row = None
+                logger.warning(
+                    "get_session: hermes store unreadable (%s); falling back to agent sessions",
+                    exc,
+                )
             if row:
                 return {
                     "id": row["id"],
@@ -450,7 +473,14 @@ async def get_session(
         finally:
             adb.close()
 
-    raise HTTPException(status_code=404, detail="Session not found")
+    raise HTTPException(
+        status_code=404,
+        detail=(
+            "Session not found in agent sessions (hermes session store unreadable)"
+            if hermes_unreadable
+            else "Session not found"
+        ),
+    )
 
 
 @router.patch("/{session_id}")
@@ -536,12 +566,34 @@ async def delete_session(
     session_id: str,
     user_id: UUID = Depends(get_current_user),
 ):
-    """Delete a session and all its messages — works for both Hermes and agent sessions."""
-    # Try Hermes first
-    db = _get_db()
+    """Delete a session and all its messages — works for both Hermes and agent sessions.
+
+    降级回落（SESS-④ 同族收口）：hermes 库不可读只跳过 hermes 面继续查 agent
+    面——修前 SELECT 抛 sqlite3.DatabaseError 直通 500，agent 回落整条路被堵死。
+    """
+    # Try Hermes first（SESS-④ 同款：读失败降级回落+日志带真因；行命中后的写
+    # 失败不回落——hermes 行可读=归属 hermes，回落删 agent 影子行会两库分叉）。
+    hermes_unreadable = False
+    db = None
+    try:
+        db = _get_db()
+    except sqlite3.DatabaseError as exc:
+        hermes_unreadable = True
+        logger.warning(
+            "delete_session: hermes store unreachable (%s); falling back to agent sessions",
+            exc,
+        )
     if db:
         try:
-            row = db.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            try:
+                row = db.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            except sqlite3.DatabaseError as exc:
+                hermes_unreadable = True
+                row = None
+                logger.warning(
+                    "delete_session: hermes store unreadable (%s); falling back to agent sessions",
+                    exc,
+                )
             if row:
                 db.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
                 db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
@@ -576,7 +628,14 @@ async def delete_session(
         finally:
             adb.close()
 
-    return {"success": False, "error": "Session not found"}
+    return {
+        "success": False,
+        "error": (
+            "Session not found in agent sessions (hermes session store unreadable)"
+            if hermes_unreadable
+            else "Session not found"
+        ),
+    }
 
 
 def _decode_memory_marker(raw) -> dict | None:
@@ -620,20 +679,43 @@ async def get_session_messages(
     session_id: str,
     user_id: UUID = Depends(get_current_user),
 ):
-    """Get messages for a session — works for both Hermes and agent sessions."""
-    # Try Hermes first
-    db = _get_db()
+    """Get messages for a session — works for both Hermes and agent sessions.
+
+    降级回落（SESS-④ 同族收口）：hermes 库不可读只跳过 hermes 面继续查 agent
+    面——修前 SELECT 抛 sqlite3.DatabaseError 直通 500，agent 回落整条路被堵死；
+    降级下响应带加性键 hermes_unreadable=True（hermes 面未被咨询，客户端可辨
+    "空/缺"非"真无消息"——不谎报）。
+    """
+    # Try Hermes first（SESS-④ 同款：只认 sqlite3.DatabaseError 家族不宽泛吞）。
+    hermes_unreadable = False
+    db = None
+    try:
+        db = _get_db()
+    except sqlite3.DatabaseError as exc:
+        hermes_unreadable = True
+        logger.warning(
+            "get_session_messages: hermes store unreachable (%s); falling back to agent sessions",
+            exc,
+        )
     if db:
         try:
-            rows = db.execute(
-                """
-                SELECT id, role, content, tool_calls, tool_name, timestamp
-                FROM messages
-                WHERE session_id = ? AND active = 1 AND compacted = 0
-                ORDER BY id
-            """,
-                (session_id,),
-            ).fetchall()
+            try:
+                rows = db.execute(
+                    """
+                    SELECT id, role, content, tool_calls, tool_name, timestamp
+                    FROM messages
+                    WHERE session_id = ? AND active = 1 AND compacted = 0
+                    ORDER BY id
+                """,
+                    (session_id,),
+                ).fetchall()
+            except sqlite3.DatabaseError as exc:
+                hermes_unreadable = True
+                rows = None
+                logger.warning(
+                    "get_session_messages: hermes store unreadable (%s); falling back to agent sessions",
+                    exc,
+                )
             if rows:
                 messages = []
                 for r in rows:
@@ -733,15 +815,21 @@ async def get_session_messages(
 
             ensure_branch_summary_table(adb)
             summaries = get_branch_summaries(adb, session_id)
-            return {
+            out = {
                 "messages": messages,
                 "total": len(messages),
                 "branch_summaries": summaries,
             }
+            if hermes_unreadable:
+                out["hermes_unreadable"] = True
+            return out
         finally:
             adb.close()
 
-    return {"messages": [], "total": 0}
+    out = {"messages": [], "total": 0}
+    if hermes_unreadable:
+        out["hermes_unreadable"] = True
+    return out
 
 
 # ── 消息树 Fork API（P0-10：open-webui build_fork_history + pi parentId追加树）──
