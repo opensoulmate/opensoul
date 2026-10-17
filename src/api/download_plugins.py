@@ -205,6 +205,18 @@ class DownloadPlugin(ABC):
             return True
         return paused is not None or handle is not None
 
+    # ── 任务控制面 introspection（/tasks 路由单一判法，禁各端点手抄注册表） ──
+    def task_states(self) -> dict[str, str]:
+        """在途任务面：task_id -> 'downloading' | 'paused'（注册表原样，不 fabricate）。"""
+        states: dict[str, str] = {tid: "downloading" for tid in self._running}
+        for tid in self._paused:
+            states[tid] = "paused"
+        return states
+
+    def task_status(self, task_id: str) -> str | None:
+        """单任务状态；不在册如实 None（禁拿未知任务硬报状态）。"""
+        return self.task_states().get(task_id)
+
     @abstractmethod
     def is_available(self) -> bool:
         """Check if the binary is installed"""
@@ -730,7 +742,13 @@ class DownloadManager:
     def get_best_plugin(
         self, require_resume: bool = False, require_p2p: bool = False
     ) -> DownloadPlugin | None:
-        """Get the best available plugin matching requirements"""
+        """Get the best available plugin matching requirements.
+
+        择优只在**可用**插件里选（函数名/文档即契约）：修前无可用候选时
+        fallback 返回一个不可用插件（"download() will fail and we'll fallback"
+        ——但全仓无该 fallback 链消费方）=「最优可用」名不符实，调用方拿去
+        硬跑必炸。现无可用候选如实返回 None，回落决策权在调用方。
+        """
         candidates = []
         for plugin in self._plugins.values():
             info = plugin.get_info()
@@ -742,19 +760,42 @@ class DownloadManager:
                 continue
             candidates.append((info.priority, plugin))
 
-        if not candidates:
-            # Fallback: try to install the best plugin
-            for plugin in sorted(self._plugins.values(), key=lambda p: p.get_info().priority):
-                info = plugin.get_info()
-                if require_resume and not info.supports_resume:
-                    continue
-                if require_p2p and not info.supports_p2p:
-                    continue
-                # Try to install
-                return plugin  # return it, download() will fail and we'll fallback
-
         candidates.sort(key=lambda x: x[0])
         return candidates[0][1] if candidates else None
+
+    def find_task(self, task_id: str) -> tuple["DownloadPlugin", str] | None:
+        """跨插件查在途任务（task 控制面路由单一判法）：(plugin, 状态) 或 None。"""
+        for plugin in self._plugins.values():
+            state = plugin.task_status(task_id)
+            if state is not None:
+                return plugin, state
+        return None
+
+    def plugin_tasks(self) -> list[dict]:
+        """全部插件在途任务（/tasks 列表面 additive 键的数据源）。"""
+        rows: list[dict] = []
+        for plugin in sorted(self._plugins.values(), key=lambda p: p.get_info().priority):
+            info = plugin.get_info()
+            for task_id, state in sorted(plugin.task_states().items()):
+                running = plugin._running.get(task_id)
+                if running is not None:
+                    url, dest = running.url, running.dest
+                else:
+                    paused_ctx = plugin._paused.get(task_id)
+                    url, dest = (
+                        (paused_ctx[0], paused_ctx[1]) if paused_ctx is not None else ("", task_id)
+                    )
+                rows.append(
+                    {
+                        "task_id": task_id,
+                        "url": url,
+                        "dest": dest,
+                        "status": state,
+                        "plugin": info.id,
+                        "supports_resume": info.supports_resume,
+                    }
+                )
+        return rows
 
     def list_plugins(self) -> list[PluginInfo]:
         """List all registered plugins with status"""
