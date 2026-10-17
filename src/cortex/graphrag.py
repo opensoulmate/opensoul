@@ -331,9 +331,10 @@ class GraphRAGEngine:
             if not source_id or not target_id:
                 continue
 
-            # Check duplicate
+            # Check duplicate（DB 真源列名=type——relations 表 SQLite DDL；修前按
+            # API 契约键 relation_type 查列必炸 "no such column"，⑦a 同族列漂移）。
             existing = await db_pool.fetchrow(
-                "SELECT id FROM relations WHERE source_id = $1 AND target_id = $2 AND relation_type = $3",
+                "SELECT id FROM relations WHERE source_id = $1 AND target_id = $2 AND type = $3",
                 source_id,
                 target_id,
                 rel["type"],
@@ -341,14 +342,17 @@ class GraphRAGEngine:
             if not existing:
                 rid = str(_uuid.uuid4())
                 await db_pool.execute(
-                    "INSERT INTO relations (id, source_id, target_id, relation_type, properties, user_id) "
-                    "VALUES ($1, $2, $3, $4, $5, $6)",
+                    # 五列=真源列集（⑦a create_relation 同款）：relations 表无
+                    # user_id 列，修前 relation_type+user_id 两个非列 INSERT 必炸
+                    # "no column named"。用户边界=两端实体均出自该用户 entity_id_map
+                    # （本函数只扫该用户 knowledge，与 create_relation 同约定）。
+                    "INSERT INTO relations (id, source_id, target_id, type, properties) "
+                    "VALUES ($1, $2, $3, $4, $5)",
                     rid,
                     source_id,
                     target_id,
                     rel["type"],
                     json.dumps(rel.get("properties", {})),
-                    user_id,
                 )
                 new_relation_count += 1
 
@@ -385,6 +389,9 @@ class GraphRAGEngine:
             return {"error": f"Entity '{entity_name}' not found"}
 
         visited: set[str] = set()
+        # 关系行去重（⑦a get_graph visited_relations 同款）：同一行从两端各展开
+        # 一次会双计（total_relations 谎报 2 倍）——该面修前从未跑通，接线前定形。
+        visited_relations: set[str] = set()
         result_entities: list[dict] = []
         result_relations: list[dict] = []
         queue: list[tuple[str, int]] = [(str(entity["id"]), 0)]
@@ -417,55 +424,58 @@ class GraphRAGEngine:
                     }
                 )
 
-            # Outgoing relations
+            # Outgoing relations（DB 真源列名=type——r.relation_type 修前必炸
+            # "no such column"，⑦a 同族列漂移读侧；输出契约键 "type" 不变）。
             out_rels = await db_pool.fetch(
-                "SELECT r.id, r.relation_type, r.properties, te.name AS target_name, te.type AS target_type "
-                "FROM relations r JOIN entities te ON r.target_id = te.id "
+                "SELECT r.id, r.type AS relation_type, r.properties, "
+                "te.id AS target_id, te.name AS target_name, te.type AS target_type "
+                "FROM relations r JOIN entities te ON r.target_id = te.id AND te.user_id = $2 "
                 "WHERE r.source_id = $1",
                 current_id,
+                user_id,
             )
             for rel in out_rels:
-                result_relations.append(
-                    {
-                        "id": str(rel["id"]),
-                        "source": ent["name"] if ent else "?",
-                        "target": rel["target_name"],
-                        "type": rel["relation_type"],
-                        "direction": "out",
-                    }
-                )
-                target_row = await db_pool.fetchrow(
-                    "SELECT id FROM entities WHERE name = $1 AND user_id = $2",
-                    rel["target_name"],
-                    user_id,
-                )
-                if target_row:
-                    queue.append((str(target_row["id"]), current_depth + 1))
+                # 用户边界（⑦a get_entity_neighbors「跨用户邻居不暴露」同款接线前
+                # 定形：JOIN 已按查询者过滤，返回面只含自己的实体对）；推进按
+                # te.id（修前按 name 二次查回——同名实体错配风险+多一次查询）。
+                rel_key = str(rel["id"])
+                if rel_key not in visited_relations:
+                    visited_relations.add(rel_key)
+                    result_relations.append(
+                        {
+                            "id": rel_key,
+                            "source": ent["name"] if ent else "?",
+                            "target": rel["target_name"],
+                            "type": rel["relation_type"],
+                            "direction": "out",
+                        }
+                    )
+                # 推进不受去重影响（BFS 经由已列关系仍须展开对端）。
+                queue.append((str(rel["target_id"]), current_depth + 1))
 
-            # Incoming relations
+            # Incoming relations（同出边：type 真源列+用户边界 JOIN 过滤+按 se.id 推进）。
             in_rels = await db_pool.fetch(
-                "SELECT r.id, r.relation_type, r.properties, se.name AS source_name, se.type AS source_type "
-                "FROM relations r JOIN entities se ON r.source_id = se.id "
+                "SELECT r.id, r.type AS relation_type, r.properties, "
+                "se.id AS source_id, se.name AS source_name, se.type AS source_type "
+                "FROM relations r JOIN entities se ON r.source_id = se.id AND se.user_id = $2 "
                 "WHERE r.target_id = $1",
                 current_id,
+                user_id,
             )
             for rel in in_rels:
-                result_relations.append(
-                    {
-                        "id": str(rel["id"]),
-                        "source": rel["source_name"],
-                        "target": ent["name"] if ent else "?",
-                        "type": rel["relation_type"],
-                        "direction": "in",
-                    }
-                )
-                source_row = await db_pool.fetchrow(
-                    "SELECT id FROM entities WHERE name = $1 AND user_id = $2",
-                    rel["source_name"],
-                    user_id,
-                )
-                if source_row:
-                    queue.append((str(source_row["id"]), current_depth + 1))
+                rel_key = str(rel["id"])
+                if rel_key not in visited_relations:
+                    visited_relations.add(rel_key)
+                    result_relations.append(
+                        {
+                            "id": rel_key,
+                            "source": rel["source_name"],
+                            "target": ent["name"] if ent else "?",
+                            "type": rel["relation_type"],
+                            "direction": "in",
+                        }
+                    )
+                queue.append((str(rel["source_id"]), current_depth + 1))
 
         return {
             "center": entity_name,

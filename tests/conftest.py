@@ -860,7 +860,9 @@ def immune_client(tmp_path, monkeypatch):
 
 # cortex 知识图谱面 tmp 库预建 schema（_PIPELINE_KNOWLEDGE_DDL 核心业务表 +
 # GraphRAG/推荐/质量三面真实触达的 entities/relations/knowledge_entity_link——
-# 生产表历史建表，tmp 库开局补齐）
+# 生产表历史建表，tmp 库开局补齐。relations 真源列=type 无 user_id（main.py
+# DDL 同形）——曾按 API 契约键 relation_type+user_id 手抄漂移，把 graphrag 列
+# 漂移 bug 锁死在测试 schema（H1-②b-⑦c 随真源收口，禁再手抄契约键当列名）。
 _CORTEX_DDL = (
     _PIPELINE_KNOWLEDGE_DDL
     + """CREATE TABLE IF NOT EXISTS entities (
@@ -868,9 +870,9 @@ _CORTEX_DDL = (
     description TEXT DEFAULT '', properties TEXT DEFAULT '{}',
     user_id TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS relations (
-    id TEXT PRIMARY KEY, source_id TEXT NOT NULL, target_id TEXT NOT NULL,
-    relation_type TEXT NOT NULL, properties TEXT DEFAULT '{}',
-    user_id TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));
+    id TEXT PRIMARY KEY, source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL, type TEXT NOT NULL,
+    properties TEXT DEFAULT '{}', created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS knowledge_entity_link (
     id TEXT PRIMARY KEY, knowledge_id TEXT NOT NULL, entity_id TEXT NOT NULL);"""
 )
