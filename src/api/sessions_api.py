@@ -464,16 +464,40 @@ async def rename_session(
     身份轴（SESS-① 留档缺口收口）：与同文件 delete/get/search 等鉴权家族同款
     get_current_user 门——修前本端点是家族唯一无鉴权写口，未认证调用方可改任意
     会话标题。user_id 仅作鉴权轴（会话行无归属列，行级过滤不存在=同 delete 语义）。
+
+    降级回落（SESS-④）：hermes 库不可读（损坏/无法打开）只跳过 hermes 面继续查
+    agent 面——修前 SELECT 抛 sqlite3.DatabaseError 经 finally 直通 500，agent
+    回落整条路被堵死（「works for both」契约破；㉔ state.db 损坏即此形态）。
     """
     new_title = body.get("title", "").strip()
     if not new_title:
         raise HTTPException(status_code=400, detail="Title is required")
 
-    # Try Hermes first
-    db = _get_db()
+    # Try Hermes first（降级回落与 list_sessions 既有语义同款：hermes 面故障不吃掉
+    # agent 面；差异=本面只认 sqlite3.DatabaseError 家族不宽泛吞，自身 bug 不静默）。
+    # 读失败=降级回落+日志带真因；行命中后的写失败不回落（hermes 行可读=归属 hermes，
+    # 回落改 agent 影子行会两库分叉，宁如实失败）。
+    hermes_unreadable = False
+    db = None
+    try:
+        db = _get_db()
+    except sqlite3.DatabaseError as exc:
+        hermes_unreadable = True
+        logger.warning(
+            "rename_session: hermes store unreachable (%s); falling back to agent sessions",
+            exc,
+        )
     if db:
         try:
             row = db.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        except sqlite3.DatabaseError as exc:
+            hermes_unreadable = True
+            row = None
+            logger.warning(
+                "rename_session: hermes store unreadable (%s); falling back to agent sessions",
+                exc,
+            )
+        try:
             if row:
                 db.execute("UPDATE sessions SET title = ? WHERE id = ?", (new_title, session_id))
                 db.commit()
@@ -497,7 +521,14 @@ async def rename_session(
         finally:
             adb.close()
 
-    raise HTTPException(status_code=404, detail="Session not found")
+    raise HTTPException(
+        status_code=404,
+        detail=(
+            "Session not found in agent sessions (hermes session store unreadable)"
+            if hermes_unreadable
+            else "Session not found"
+        ),
+    )
 
 
 @router.delete("/{session_id}")
