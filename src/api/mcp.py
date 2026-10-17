@@ -231,6 +231,20 @@ async def revoke_grant(session_id: str, server_id: str, tool_name: str = Query(d
     }
 
 
+@router.delete("/sessions/{session_id}/grants")
+async def clear_session_grants(session_id: str):
+    """整批清理会话授权（H1-②b-⑤ clear_session 出口面）。
+
+    会话结束/删除 = 该会话全部授权行随之清除（fail-closed：会话没了授权
+    不得残留）。修前 clear_session 全仓零消费 = 授权行永不清，撤一个会话
+    的授权只能逐 (server, tool) revoke 循环。
+
+    幂等清理：无授权行 = cleared 0 如实计数（批量清理无单资源身份，非 404）。
+    """
+    cleared = gate.clear_session(session_id)
+    return {"session_id": session_id, "cleared": cleared}
+
+
 @router.get("/sessions/{session_id}/tools")
 async def session_tools(session_id: str, x_mcp_token: str | None = Header(default=None)):
     """会话级工具隔离endpoint：只返回该session被授权的工具（fail-closed零grant=零可见）。

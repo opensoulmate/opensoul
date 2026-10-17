@@ -1,5 +1,6 @@
 """OpenHippo API — 海马体：记忆生命周期管理、会话管理、衰减遗忘。"""
 
+import logging
 import time
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -9,7 +10,10 @@ from src.hippo import memory_model as _memory_model
 from src.hippo.decay import DecayStrategy
 from src.hippo.memory_store import MemoryStore
 from src.hippo.session import SessionManager, SessionStatus
+from src.mcp.session_grants import default_gate
 from src.services.tenant_binding import bind_identity
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -355,11 +359,28 @@ async def archive_session(session_id: str):
     return {"archived": True}
 
 
+def _clear_mcp_grants(session_id: str) -> None:
+    """会话删除 = 会话级工具授权随之清理（H1-②b-⑤ clear_session 接线）。
+
+    MCP 会话级工具隔离按 session_id 键授权（fail-closed 零信任）；会话删除后
+    授权行不得残留——修前 clear_session 全仓零消费 = 授权行永不清。
+    旁路纪律（G1-⑤ 同族）：清理故障 logger.warning 可见，绝不吃掉删除主路径。
+    """
+    try:
+        cleared = default_gate().clear_session(session_id)
+    except Exception as exc:
+        logger.warning("mcp grant cleanup failed for session %s: %s", session_id, exc)
+        return
+    if cleared:
+        logger.info("session %s deleted: cleared %d mcp tool grants", session_id, cleared)
+
+
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     """Delete a session."""
     if not sessions.delete(session_id):
         raise HTTPException(404, "Session not found")
+    _clear_mcp_grants(session_id)
     return {"deleted": True}
 
 
