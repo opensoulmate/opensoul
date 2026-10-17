@@ -27,7 +27,8 @@
 | ⑲ | link.py receive_webhook token 化（OpenLink connector webhook 入口凭据门） | DEC-① 1a 契约锁死后另拍（DEC-⑬ 边界④留档） | 取 B（register 签发回调 token，X-Callback-Token 或 X-Signature HMAC 等效证明，缺/错 401 零副作用）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑲）** | ~~"⑲取B"~~ 已落，异议回「⑲改A」（revert 回 id 即凭证）/「⑲改C」（改全局共享 secret）即改道 |
 | ㉑ | remove_provider 清钥语义（孤钥清理） | H1-②b-④ 语义分界留档+最新周期日志候选「remove_provider 清钥语义（孤钥清理语义需拍板）」 | 取 B（整 provider 移除级联清钥：注册与其凭据同生共死）——**已按建议默认 B 先行执行 2026-10-18（GLAND-①）** | ~~"㉑取B"~~ 已落，异议回「㉑改A」（revert 回不触钥）/「㉑改C」（不触钥+孤钥可见性/单独批量清理口）即改道 |
 | ㉒ | add_provider 同名覆盖注册面清钥语义（同名再注册复用旧钥残留面） | ㉑ 诚实边界③留档件 | 取 A（同名 409 拒零副作用，替换=DELETE+POST）——**已按建议默认 A 先行执行 2026-10-18（GLAND-②）** | ~~"㉒取A"~~ 已落，异议回「㉒改B」（同名覆盖先清钥）/「㉒改C」（revert 静默覆盖）即改道 |
-| ㉓ | gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许） | GLAND-② 诚实边界③「PATCH 就地改（不触钥）另拍」 | 取 A（持钥改道 409 原子拒；无钥/同值照常；不触钥）——**已按建议默认 A 先行执行 2026-10-18（GLAND-③）** | ~~"㉓取A"~~ 已落，异议回「㉓改B」（持钥也允许显式改道）/「㉓改C」（revert 撤 PATCH 面）即改道 |
+| ㉓ | gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许） | GLAND-② 诚实边界③「PATCH 就地改（不触钥）另拍」 | 取 A（持钥改道 409 原子拒；无钥/同值照常；不触钥）——**已按建议默认 A 先行执行 2026-10-18（GLAND-③）** | ~~"㉓取A"~~ 已落，异议回「㉓改B」（持钥也允许显式改道）/「㉓改C」（revert 撤 PATCH 面） |
+| ㉔ | sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db） | GLAND-④ 留档候选首件 | 取 D→B（先 `hermes doctor`/`hermes update` 防复发，再归档+sqlite3 .recover 抽取+对账+原子替换；对账不过落 C）——**本拍=决策材料件先落（SESS-①，零处置），处置涉 ~/opensoul 外数据需拍板** | "㉔取D→B" / "㉔取C" / "㉔维持" |
 
 ---
 
@@ -272,6 +273,28 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：C 持续=改配置必丢钥（GLAND-② 有意移除能力后无恢复面，运维只能重录凭据）；B 方便「服务搬家同钥」场景且 PATCH 是显式可审计动作（区别于 ㉒ 的静默覆盖），但与 DEC-㉒ 刚收口的「旧钥不应打向新 base_url」原则正面相抵（旧钥打向新端点=潜在凭据误用，无论显式与否）；A 忠实 ㉒ 原则（凭据随端点绑定）+恢复非凭据字段的就地改能力（priority/models/enabled 改动不再丢钥），换端点流程显式两步（移钥→改道 或 DELETE+POST）。
 - 建议：**A**（宁窄勿滥+㉒ 原则延续）。
 - 诚实边界：①「保钥换端点」能力仍移除（如需取 B 一句话改道）②models 整表替换非合并（PATCH {"models":{"chat":"m2"}} 整表替换原表；要局部改须给全表，语义显式无静默合并）③enabled 是活字段（router.py 路由跳过 disabled provider+list_providers 暴露），PATCH enabled=不丢钥摘牌/复牌面④rename 不支持（name=身份，extra=forbid 如实 422；rename=DELETE+POST）⑤keys_untouched 响应键=当前钥数如实计数（不触钥可观测）⑥引擎层 ModelRouter.update_provider 原子（先全量校验后一次性落写，任一字段非法/被拒=零写入）。
+
+## ㉔ sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db）
+
+**状态：待拍板（本拍=决策材料件先落 SESS-①，零处置零代码行为改动）**——依据：GLAND-④ 留档候选首件「sessions db 损坏缺陷（PATCH /api/sessions 恒 500=~/.hermes/state.db 3.87GB 无 SQLite 魔数损坏，涉 ~/opensoul 外数据处置需拍板）」+ TL-③/TL-⑭/TL-⑯/PROACT-②「清点=决策材料件先落、删除待拍板」先例。**不适用 DEC 自决先例**：①~㉓ 自决件均为仓内可 revert 的代码改动，本件处置动作全部落在 ~/.hermes（~/opensoul 之外=「改动只限 ~/opensoul」铁律边界）且含数据替换/运行时升级，非轻量可逆件——拍板后执行（可回「㉔由cron代跑」即下拍代跑已列命令）。
+
+**现状（2026-10-18 只读取证，工件 `data/sessions_db_forensics.json`，工具 `scripts/inspect_hermes_state_db.py`）**：
+- **文件本体**：`~/.hermes/state.db` 3,873,501,184 B，mtime 2026-10-15T06:02:59+08:00，头 32 字节 `0d00000001016100…`——**无 `SQLite format 3\0` 魔数**，sqlite3 打开即 `DatabaseError: file is not a database`；`state.db-wal` 0 B（mtime 05:51）。
+- **根因线索（Hermes 日志时间线实证，非推断）**：①2026-10-15 05:03:07 起 `hermes_state` 连续告警「linked SQLite 3.50.4 is vulnerable to the WAL-reset corruption bug (sqlite.org/wal.html#walresetbug) … no live downgrade under concurrent openers」（agent.log.2:6453-6459 等 23 处；cron 多进程共开同一 state.db=告警所指 concurrent openers 场景）②05:48:56 首次 `gateway.session: state.db routing save failed: file is not a database`（损坏已发生）③06:02:59 state.db 末次 mtime ④06:04:19 `gateway.run: Broadcasting state.db failure warning to home channels`（Hermes 当时已向用户频道广播过故障）⑤此后至今每分钟 `SQLite session store not available: file is not a database`（errors.log 2026-10-18 05:17 仍在刷）=**Hermes 平台会话存储 fail-closed 停摆 3 天**。
+- **可救性证据（只读页界探针+内容抽样）**：按 4096 对齐 945,678 页界中 **74.85%** 首字节∈{0x02,0x05,0x0a,0x0d}（SQLite b-tree 页型；8192 对齐同率 0.7486=真页界在 4096）+ 文件内含 `CREATE TABLE` 串（offset 49,334）+ 抽样内容=真实会话 id/tool-call JSON 消息文本 → **内页大概率完好、头部被砸**，`sqlite3 .recover`/页级抽取成功率高（**判定=高概率可救，非保证**——实跑抽取属处置动作留拍板）。
+- **恢复源盘点**：**无现成备份**——marrow 每日备份只覆盖 `~/.opensoul`（schedules.json source_dirs 实证），`~/.hermes` 无 state.db 副本（checkpoints/.curator_backups 均非 DB 备份）；旁路正文源在场：`~/.hermes/sessions/` 782 文件（.json 752 + .jsonl 30，224,493,801 B，最新 2026-10-18T03:00:37）+ `~/.hermes/profiles/pi-agent/state.db`（另一 profile 独立库，健康未查不在本件范围）。
+- **blast radius（live 实证）**：①**Hermes 平台**——`session_search` 工具真失败（live 同探针：`Session database not available: DatabaseError: file is not a database`；errors.log 05:15:38 同款）、gateway 路由保存失败、跨会话 FTS 检索整体停摆②**OpenSoul /api/sessions**——`PATCH /{session_id}` 恒 500（live 同探针实证；traceback `sessions_api.py:470 rename_session` 未捕获 DatabaseError→`finally: db.close()` 直通 500，**连 agent_sessions 回落路径都不可达**=「works for both Hermes and agent sessions」契约破，agent 会话重命名同死）；`GET ""`（list）降级（日志 `list_sessions error: file is not a database`——Hermes 侧会话静默不可见只剩 agent_sessions，回 200 部分数据）；`GET /{id}`、`/messages`、`/search`、`/tags`、`DELETE`、`/import`、`/fork` 同 `_get_db()` 同模式同病（带鉴权 401 面未带 token 未逐一探，如实记）③`src/api/hermes_bridge.py:141/:184/:238` 3 处同病。
+
+**选项**：
+- **A 维持现状**：Hermes 会话存储持续 fail-closed（session_search 死+分钟级告警刷屏）+ /api/sessions 半瘫（PATCH 恒 500）。零风险但故障不消。
+- **B 归档+抽取（保历史）**：`cp --reflink=auto ~/.hermes/state.db ~/.hermes/state.db.corrupt-20261015`（原件只读归档）→ `sqlite3 ~/.hermes/state.db.corrupt-20261015 .recover > /tmp/state.recovered.sql` → 载入新库回读计数对账（sessions/messages 行数 vs 内容抽样）→ 认可后原子 `mv` 替换 + 重启 hermes gateway。可逆=原件归档在场整档回滚。
+- **C 归档+重建空库（兜底）**：归档原件后换空库，Hermes 启动自建 schema（hermes_state_schema 幂等 DDL）；历史索引丢失（sessions/ 782 文件正文仍在），100% 消故障。
+- **D 防复发先行**：`hermes doctor`（只读诊断）→ 按告警自带处方 `hermes update` 把嵌入运行时 SQLite 修到 3.51.3+/3.50.7/3.44.6（**WAL-reset bug 是根因线索**），再做 B/C（防修复过程同 bug 复发二次损坏）。
+- **权衡**：B 是唯一保留历史路径且页界证据支持高成功率，但抽取 GB 级中间件+需人工对账；C 简单确定但丢历史索引；D 不动已损数据只防复发；A=三方面故障持续。
+- **建议：D→B**（先升级 SQLite 运行时防复发，再归档+抽取+对账+原子替换；B 对账不过自动落 C 兜底）。
+- **拍板方式**：回「**㉔取D→B**」/「㉔取C」/「㉔维持」；执行可指定 cron 代跑（命令已列，每步留痕可回滚）或用户亲自跑。
+
+**诚实边界**：①可救性=页界探针+内容抽样推断，非 `sqlite3 .recover` 实跑（实跑产出 GB 级中间件=处置预备动作，留拍板后）②根因归因=WAL-reset bug 时间线强相关（告警→45 分钟后损坏，告警所指 concurrent openers 场景=cron 多进程共开）**非逐字节法证定论**③`hermes doctor`/`hermes update` 触碰 Hermes 平台运行时（本拍未执行）④sessions/ 782 文件与 state.db 行级对账未做（等处置拍）⑤顺带发现（不属本件另列候选）：`PATCH /api/sessions/{session_id}` 无 `get_current_user` 依赖（同文件其余写端点均有）=身份轴缺口，另拍可复核⑥HERMES_HOME 换路径后 `_DB_PATH` 硬编码 `~/.hermes/state.db`（profile 隔离场景指向主库）——既有语义非本拍引入，留档。
 
 ## 附：锚点核验
 
