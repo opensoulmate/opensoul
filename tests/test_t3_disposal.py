@@ -8,9 +8,12 @@
 1) 静态锁死——已删符号在目标模块永久缺席（禁复活），覆盖活面符号恒在场
 2) 语义回归——被覆盖语义经活面仍然可达（删包装没删能力）
 
-增删沿革：DEC-⑳-①（T3-②）增 config_manager.get_config；DEC-⑳-②（本拍）增
+增删沿革：DEC-⑳-①（T3-②）增 config_manager.get_config；DEC-⑳-②（T3-③）增
 gland/key_manager.get_keys（明文批量回吐便利包装，同判据：被活面 KeySlot.key
-100% 覆盖 + 全仓零生产消费，H1-②「回吐面不应存在」贯彻到方法本体）。
+100% 覆盖 + 全仓零生产消费，H1-②「回吐面不应存在」贯彻到方法本体）；
+DEC-⑳-③（T3-④ 留口 13 项复审）增 vein/versioning.get_latest_version（留口判据
+「独特语义」被复审推翻：SQL 与活面 get_history(file_id, 1) 逐字同构 100% 覆盖）。
+复审维持留口 12 项（配置 API 2 / 独特语义 7 / 测试支撑 3）判据逐一复核仍成立。
 """
 
 import ast
@@ -36,6 +39,7 @@ DELETED_WITH_COVER = [
     ("config_manager.py", "save_config", "update"),
     ("config_manager.py", "get_config", "get"),
     ("gland/key_manager.py", "get_keys", "key"),
+    ("vein/versioning.py", "get_latest_version", "get_history"),
 ]
 
 
@@ -132,6 +136,31 @@ class TestDisposedSymbolsStayDead:
                     if ".get_keys(" in line or "def get_keys" in line:
                         hits.append(f"{p.relative_to(root)}:{i}:{line.strip()}")
         assert hits == [], f"get_keys 仍有消费残留：{hits}"
+
+    def test_versioning_get_latest_version_stays_dead_and_get_history_alive(self):
+        # DEC-⑳-③ 专查：get_latest_version 禁复活 + 覆盖活面 get_history 恒在场；
+        # get_version_count 留口维持（count 语义不被 limit 截断的 get_history 覆盖，
+        # 独特语义判据仍成立——禁误删锁死）。
+        names = _defs_and_assigns(SRC / "vein" / "versioning.py")
+        assert "get_latest_version" not in names, (
+            "versioning.get_latest_version 复活了（DEC-⑳-③ 已删，禁复活）"
+        )
+        assert "get_history" in names, "覆盖活面 get_history 缺席（删件不得带走活面）"
+        assert "get_version_count" in names, "get_version_count 留口件被误删（复审维持留口）"
+
+    def test_versioning_get_latest_version_not_reconsumed(self):
+        # get_latest_version 专查：属性调用/再定义残留零容忍（按 .get_latest_version(
+        # / def get_latest_version 精确判）。
+        root = Path(__file__).resolve().parent.parent
+        hits = []
+        for base in ("src", "tests", "scripts"):
+            for p in (root / base).rglob("*.py"):
+                if p.name == "test_t3_disposal.py":
+                    continue
+                for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+                    if ".get_latest_version(" in line or "def get_latest_version" in line:
+                        hits.append(f"{p.relative_to(root)}:{i}:{line.strip()}")
+        assert hits == [], f"get_latest_version 仍有消费残留：{hits}"
 
 
 class TestCoveringFacesCarrySemantics:
@@ -234,3 +263,32 @@ class TestCoveringFacesCarrySemantics:
         s2 = km.add_key("prov-x", "kx-22222222")
         assert [s.key for s in (s1, s2)] == ["kx-11111111", "kx-22222222"]
         assert km.next_key("prov-x") in ("kx-11111111", "kx-22222222")
+
+    def test_latest_version_semantics_via_get_history(self, tmp_path):
+        # DEC-⑳-③ 覆盖语义回归：被删 get_latest_version 的语义=最新版 FileVersion
+        # 或 None，经活面 get_history(file_id, 1) 仍可达（删包装没删能力）。
+        import sqlite3
+
+        from src.vein.versioning import VersionManager
+
+        db = sqlite3.connect(str(tmp_path / "ver.db"))
+        db.row_factory = sqlite3.Row
+        mgr = VersionManager(db)
+
+        def latest(file_id):
+            rows = mgr.get_history(file_id, 1)
+            return rows[0] if rows else None
+
+        # 空文件：None 语义（被删方法同款）
+        assert latest("f-none") is None
+        # 多版本：恒取最新版（与被删方法同一 SQL：ORDER BY version_number DESC LIMIT 1）
+        mgr.record_version("f1", "hash-1", 10)
+        mgr.record_version("f1", "hash-2", 20)
+        v3 = mgr.record_version("f1", "hash-3", 30)
+        row = latest("f1")
+        assert row is not None and row.version_number == 3 and row.content_hash == "hash-3"
+        assert row.version_number == v3.version_number
+        # 逐版本推进恒同步最新（读面不止 snapshot 一格）
+        v4 = mgr.record_version("f1", "hash-4", 40)
+        row2 = latest("f1")
+        assert row2 is not None and row2.version_number == v4.version_number == 4

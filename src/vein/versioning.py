@@ -95,15 +95,10 @@ class VersionManager:
             return None
         return FileVersion(**dict(row))
 
-    def get_latest_version(self, file_id: str) -> FileVersion | None:
-        """Get the latest version of a file."""
-        row = self._db.execute(
-            "SELECT * FROM file_versions WHERE file_id = ? ORDER BY version_number DESC LIMIT 1",
-            (file_id,),
-        ).fetchone()
-        if not row:
-            return None
-        return FileVersion(**dict(row))
+    # T3-④（DEC-⑳-③ 留口复审）：get_latest_version 已删——其 SQL 与活面
+    # get_history(file_id, 1) 逐字同构（ORDER BY version_number DESC LIMIT 1），
+    # 语义被 get_history 100% 覆盖非独特（留口判据不成立）；全仓零生产消费零测试消费。
+    # 替代读法：(self.get_history(file_id, 1) or [None])[0]（同 None/最新版语义）。
 
     def get_version_count(self, file_id: str) -> int:
         """Get total number of versions for a file."""
