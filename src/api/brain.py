@@ -86,6 +86,25 @@ class FeedbackRequest(BaseModel):
     rating: int | None = None
 
 
+# H1-②b-⑥ 用户风险偏好声明面：UserMemory.get_preferences 的 5 键单一源
+# （值域校验只收已知语义，未知键/越界值如实 422 拒禁静默吞声明）。
+# notification_level 无既有值域定义，如实收非空串不 fabricate 枚举。
+_PREF_ALLOWED_KEYS = {
+    "risk_tolerance": ("low", "medium", "high"),
+    "edit_mode_preference": ("patch", "full"),
+    "notification_level": (),
+    "auto_confirm_low_risk": (),
+    "always_backup_before_edit": (),
+}
+_PREF_BOOL_KEYS = ("auto_confirm_low_risk", "always_backup_before_edit")
+
+
+class PreferenceUpdateRequest(BaseModel):
+    tenant_id: str = "default"
+    user_id: str = "default"
+    preferences: dict = {}
+
+
 # ── 模块级单例（和hippo/api.py一样的模式）──────────────
 
 from src.hippo.memory_store import MemoryStore
@@ -177,6 +196,33 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     else:
         execute_mode, confirm_prompt = "auto", None
 
+    # 5a''. H1-②b-⑥ 用户风险偏好接线（UserMemory.should_auto_execute 修前全仓
+    # 零消费=F2「策略写了不被读」同型）：偏好真进策略决策。语义（接线前定形，
+    # 修前零消费方=无行为影响面）：
+    # - deny 风险底线不动（与 should_auto_execute(high/critical)=False 自洽）；
+    # - 收紧：偏好不容许自动时 auto→confirm_required，且 5b 之后再兜一道底线
+    #   （用户要求的确认是底线，情绪/信心不得放宽——F4b-㉒「deny 不得放宽」同哲学）；
+    # - 放宽：偏好容许自动时只作用于风险映射给出的 confirm_required（medium+
+    #   risk_tolerance=high 用户显式选择），不作用于 5b 低信心/情绪收紧（那是
+    #   独立信号——agent 没把握时仍要问人）；
+    # - 读取故障→偏好不参与（回落接线前行为）+日志可见禁静默（F2b-②c-1 纪律）。
+    from src.mind.user_memory import UserMemory
+
+    pref_allows_auto = None
+    try:
+        pref_allows_auto = await UserMemory(
+            db_pool, identity.tenant_id, identity.user_id
+        ).should_auto_execute(risk.overall_level)
+    except Exception as e:
+        logger.warning("用户风险偏好读取失败（不阻断思考，偏好不参与）: %s", e)
+    if pref_allows_auto is False and execute_mode == "auto":
+        execute_mode = "confirm_required"
+        confirm_prompt = (
+            f"用户偏好收紧：不自动执行 {risk.overall_level} 风险操作，请确认：{risk.recommendation}"
+        )
+    elif pref_allows_auto is True and execute_mode == "confirm_required":
+        execute_mode, confirm_prompt = "auto", None
+
     # 5a'. F4b-㉕ agent_confidence 生产源派生 + G1-④c 校准纠偏：声明优先（声明值
     # 是用户显式值非派生产物，不被纠偏顶替）；未声明从元认知账本真源派生（成败观测
     # 经验收缩，无观测回落 0.8 缺省=行为契约零变化），且失准观测（get_confidence_calibration
@@ -217,6 +263,15 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
         agent_confidence=effective_confidence,
     )
     execute_mode, confirm_prompt = decision.execute_mode, decision.confirm_prompt
+
+    # H1-②b-⑥ 用户偏好底线：偏好收紧不被 5b 情绪/信心放宽——adjust_decision 的
+    # 「高信心+正面情绪+低风险→auto」放宽规则不得撤销用户显式要求的确认
+    # （用户偏好是底线，与 F4b-㉒「deny 不得放宽」同哲学）。
+    if pref_allows_auto is False and execute_mode == "auto":
+        execute_mode = "confirm_required"
+        confirm_prompt = (
+            f"用户偏好收紧：不自动执行 {risk.overall_level} 风险操作，请确认：{risk.recommendation}"
+        )
 
     # 5c. F4b-㉕ 决策落元认知账本（log_decision 修前全仓零调用点=wired-but-not-
     # functional，与 emotion_decision 同型）：决策+自评信心入账=校准对比的决策轴；
@@ -317,6 +372,10 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
         # （实际成功率−预测均值，负=历史上预测偏高本次向下纠）；声明路径恒 0.0
         # （声明值不被纠偏顶替）——纠偏可观测非静默
         "confidence_correction": confidence_correction,
+        # H1-②b-⑥ 偏好生效值（加性契约键）：should_auto_execute 对本次风险等级
+        # 的判定（True 容许自动/False 不容许/None=读取故障偏好不参与）——偏好
+        # 影响了什么可观测非静默
+        "preference_allows_auto": pref_allows_auto,
         # F4b-㉜ 相关经验观测键（加性契约键）：top-3 相关历史经验 + 相关总数
         # （count=相关命中总数、items=前 3 条），故障如实带 error 键（禁静默空表）
         "experience": {
@@ -517,6 +576,73 @@ async def refresh(repo_root: str = ""):
     pm = ProjectMemory(repo_root)
     stats = pm.get_stats()
     return {"status": "refreshed", **stats}
+
+
+@router.get("/preferences")
+async def get_user_preferences(
+    tenant_id: str = "default",
+    user_id: str = "default",
+    authorization: str | None = Header(None),
+):
+    """用户显式偏好读面（UserMemory.get_preferences 5 键单一源）。
+
+    H1-②b-⑥ 声明面：修前 UserMemory.set 全仓零调用=偏好连写入面都没有（用户
+    无法表达偏好，should_auto_execute 接线无从谈起）。身份派生 F3b-② 同款：
+    tenant/user 从 token 身份派生，自报只可确认绑定不得矛盾。
+    """
+    identity = bind_identity(authorization, tenant_id, user_id)
+    from src.database.postgres import db_pool
+    from src.mind.user_memory import UserMemory
+
+    um = UserMemory(db_pool, identity.tenant_id, identity.user_id)
+    await um._ensure_table()  # 读路径自愈建表（老部署首读不炸）
+    return {
+        "preferences": await um.get_preferences(),
+        "tenant_id": identity.tenant_id,
+        "user_id": identity.user_id,
+    }
+
+
+@router.put("/preferences")
+async def put_user_preferences(
+    req: PreferenceUpdateRequest, authorization: str | None = Header(None)
+):
+    """用户显式偏好写面（部分更新：只写给出的键，其余保持）。
+
+    值域校验只收已知语义（_PREF_ALLOWED_KEYS 单一源），未知键/越界值/类型错
+    如实 422 拒禁静默吞声明（G1-⑤c-④ 纪律）。
+    """
+    identity = bind_identity(authorization, req.tenant_id, req.user_id)
+    prefs = req.preferences
+    if not isinstance(prefs, dict) or not prefs:
+        raise HTTPException(status_code=422, detail="preferences must be a non-empty object")
+    for key, value in prefs.items():
+        if key not in _PREF_ALLOWED_KEYS:
+            raise HTTPException(status_code=422, detail=f"unknown preference key: {key}")
+        if key in _PREF_BOOL_KEYS:
+            if not isinstance(value, bool):
+                raise HTTPException(status_code=422, detail=f"{key} must be a boolean")
+        elif key == "notification_level":
+            if not isinstance(value, str) or not value.strip():
+                raise HTTPException(
+                    status_code=422, detail="notification_level must be a non-empty string"
+                )
+        else:
+            allowed = _PREF_ALLOWED_KEYS[key]
+            if not isinstance(value, str) or value not in allowed:
+                raise HTTPException(status_code=422, detail=f"{key} must be one of {list(allowed)}")
+    from src.database.postgres import db_pool
+    from src.mind.user_memory import UserMemory
+
+    um = UserMemory(db_pool, identity.tenant_id, identity.user_id)
+    for key, value in prefs.items():
+        await um.set(key, value)
+    return {
+        "status": "updated",
+        "preferences": await um.get_preferences(),
+        "tenant_id": identity.tenant_id,
+        "user_id": identity.user_id,
+    }
 
 
 @router.post("/feedback")
