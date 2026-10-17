@@ -395,6 +395,67 @@ class ModelRouter:
             return None
         return self.key_manager.remove_provider_keys(name)
 
+    def update_provider(self, name: str, changes: dict) -> ProviderConfig | None:
+        """In-place provider config update, keys untouched（就地改面，GLAND-③）。
+
+        只改给出的字段（整值替换非合并）：base_url（rstrip "/" 归一同 add_provider）/
+        models（整表替换，{}=清空）/priority/enabled；**keys 一律不动**（不触钥——凭据
+        增删只属 POST /keys、DELETE /keys/{provider}/{index} 与 DELETE provider
+        （GLAND-① 级联）三条显式动作）。未注册 = None 零副作用。
+
+        凭据端点绑定（DEC-㉒「旧钥不应打向新 base_url」原则）：base_url 实际变更且该
+        provider 持钥 ≥1 → ProviderRetargetError 原子拒（先全量校验后一次性落写，
+        任一字段非法/被拒 = 零写入）——旧钥不得被静默改道打向新端点；换端点流程 =
+        先移除钥（或 DELETE+POST 整体换）再改。base_url 给出但归一后与现值相同
+        = 非改道，照常放行（不误伤）。
+        """
+        cfg = self.providers.get(name)
+        if cfg is None:
+            return None
+        allowed = {"base_url", "models", "priority", "enabled"}
+        unknown = set(changes) - allowed
+        if unknown:
+            raise ValueError(f"Unknown provider field(s): {sorted(unknown)}")
+        # 先全量校验（原子：任一字段非法 = 零写入），后一次性落写
+        normalized: dict[str, object] = {}
+        for key, value in changes.items():
+            if key == "base_url":
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError("base_url must be a non-empty string")
+                normalized[key] = value.rstrip("/")
+            elif key == "models":
+                if not isinstance(value, dict) or not all(
+                    isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+                ):
+                    raise ValueError("models must be a dict[str, str]")
+                normalized[key] = dict(value)
+            elif key == "priority":
+                if isinstance(value, bool) or not isinstance(value, int):
+                    raise ValueError("priority must be an int")
+                normalized[key] = value
+            elif key == "enabled":
+                if not isinstance(value, bool):
+                    raise ValueError("enabled must be a bool")
+                normalized[key] = value
+        new_base = normalized.get("base_url")
+        if new_base is not None and new_base != cfg.base_url:
+            held = len(self.key_manager.status().get(name, []))
+            if held > 0:
+                raise ProviderRetargetError(
+                    f"Provider '{name}' has {held} key(s) bound to the current "
+                    "endpoint; old keys must not hit a new base_url — remove the "
+                    "keys first (or DELETE+re-register the provider) to retarget"
+                )
+        for key, value in normalized.items():
+            setattr(cfg, key, value)
+        logger.info(
+            "Updated provider=%s fields=%s keys_untouched=%d",
+            name,
+            sorted(normalized),
+            len(self.key_manager.status().get(name, [])),
+        )
+        return cfg
+
     def list_providers(self) -> list[dict]:
         out = []
         for p in self.providers.values():
@@ -965,3 +1026,11 @@ class AllProvidersFailedError(Exception):
     def __init__(self, message: str, tried: list[dict] | None = None) -> None:
         super().__init__(message)
         self.tried: list[dict] = tried or []
+
+
+class ProviderRetargetError(ValueError):
+    """base_url 就地改道被凭据端点绑定原则拒绝（GLAND-③，DEC-㉓）。
+
+    持钥 provider 的 base_url 变更 = 旧钥打向新端点，原子拒零写入；
+    继承 ValueError（调用方可按既有宽泛契约捕获，A2AError 先例）。
+    """

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.config import settings
 from src.gland.harness_profiles import (
@@ -11,6 +11,7 @@ from src.gland.router import (
     AllProvidersFailedError,
     ModelRouter,
     NoProviderError,
+    ProviderRetargetError,
     TaskType,
 )
 
@@ -108,6 +109,21 @@ class ProviderCreate(BaseModel):
     models: dict[str, str] | None = None
     api_key: str | None = None
     priority: int = 0
+
+
+class ProviderUpdate(BaseModel):
+    """PATCH 就地改载荷（GLAND-③）：只收可改字段，整值替换非合并。
+
+    extra="forbid"：name（身份不可改，rename=DELETE+POST）等未知字段如实 422，
+    禁静默忽略请求字段（F4b-②「字段被 pydantic 静默忽略=静默降级」同纪律）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_url: str | None = None
+    models: dict[str, str] | None = None
+    priority: int | None = None
+    enabled: bool | None = None
 
 
 class KeyAdd(BaseModel):
@@ -305,6 +321,39 @@ async def remove_provider(name: str):
     if keys_removed is None:
         raise HTTPException(status_code=404, detail=f"Provider '{name}' not found")
     return {"status": "ok", "provider": name, "keys_removed": keys_removed}
+
+
+@router.patch("/providers/{name}")
+async def update_provider(name: str, body: ProviderUpdate):
+    """就地改 provider 配置（不触钥，GLAND-③ / DEC-㉓）。
+
+    只改给出的字段（整值替换非合并）：base_url/models/priority/enabled；keys 一律
+    不动（凭据增删只属 POST /keys、DELETE /keys/{provider}/{index}、DELETE provider
+    级联三条显式动作）。就地改面恢复（GLAND-② 诚实边界③ 留档件「PATCH 就地改
+    （不触钥）另拍」）：修前改 priority/models 只能 DELETE（GLAND-① 级联清钥）+
+    POST（重录钥）=改配置必丢钥。语义（DEC-㉓）：①持钥 provider 改 base_url =
+    旧钥打向新端点 → 409 原子拒零写入（凭据端点绑定原则，换端点=先移钥或
+    DELETE+POST）；无钥照常改（无钥可误道）②base_url 归一后与现值相同=非改道
+    放行③未注册 404 零副作用④空载荷 400（无可改字段，禁空转假成功）。
+    """
+    _ensure_bootstrapped()
+    provided = {k: getattr(body, k) for k in body.model_fields_set}
+    if not provided:
+        raise HTTPException(status_code=400, detail="No updatable fields provided")
+    try:
+        cfg = gateway.update_provider(name, provided)
+    except ProviderRetargetError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if cfg is None:
+        raise HTTPException(status_code=404, detail=f"Provider '{name}' not found")
+    return {
+        "status": "ok",
+        "provider": name,
+        "updated": [f for f in ("base_url", "models", "priority", "enabled") if f in provided],
+        "keys_untouched": len(gateway.key_manager.status().get(name, [])),
+    }
 
 
 @router.post("/keys")

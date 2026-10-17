@@ -26,6 +26,8 @@
 | ⑱ | WS 连接审计面（terminal 先拍，拆件 ⑱-②/③/④） | DEC-⑭-① 边界⑤留档 | 取 B（terminal WS 面先拍）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑱+⑱-②/⑱-③/⑱-④ 四面全落）** | ~~"⑱取B"~~ 四面全落，异议回「⑱改A」（revert 撤审计面）/「⑱改C」（organ 归口改独立安全 organ）即改道 |
 | ⑲ | link.py receive_webhook token 化（OpenLink connector webhook 入口凭据门） | DEC-① 1a 契约锁死后另拍（DEC-⑬ 边界④留档） | 取 B（register 签发回调 token，X-Callback-Token 或 X-Signature HMAC 等效证明，缺/错 401 零副作用）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑲）** | ~~"⑲取B"~~ 已落，异议回「⑲改A」（revert 回 id 即凭证）/「⑲改C」（改全局共享 secret）即改道 |
 | ㉑ | remove_provider 清钥语义（孤钥清理） | H1-②b-④ 语义分界留档+最新周期日志候选「remove_provider 清钥语义（孤钥清理语义需拍板）」 | 取 B（整 provider 移除级联清钥：注册与其凭据同生共死）——**已按建议默认 B 先行执行 2026-10-18（GLAND-①）** | ~~"㉑取B"~~ 已落，异议回「㉑改A」（revert 回不触钥）/「㉑改C」（不触钥+孤钥可见性/单独批量清理口）即改道 |
+| ㉒ | add_provider 同名覆盖注册面清钥语义（同名再注册复用旧钥残留面） | ㉑ 诚实边界③留档件 | 取 A（同名 409 拒零副作用，替换=DELETE+POST）——**已按建议默认 A 先行执行 2026-10-18（GLAND-②）** | ~~"㉒取A"~~ 已落，异议回「㉒改B」（同名覆盖先清钥）/「㉒改C」（revert 静默覆盖）即改道 |
+| ㉓ | gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许） | GLAND-② 诚实边界③「PATCH 就地改（不触钥）另拍」 | 取 A（持钥改道 409 原子拒；无钥/同值照常；不触钥）——**已按建议默认 A 先行执行 2026-10-18（GLAND-③）** | ~~"㉓取A"~~ 已落，异议回「㉓改B」（持钥也允许显式改道）/「㉓改C」（revert 撤 PATCH 面）即改道 |
 
 ---
 
@@ -260,6 +262,16 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：C 持续=凭据滞留+create 面谎报（㉑③ 已点名）；B 消滞留但引入静默破坏面——意外撞名（手误/同名不同端点）时 POST 一把清掉既有 provider 全部钥并覆盖其配置（与「禁静默破坏」F3b-③b-3 纪律相悖，且 ㉑②「钥处置宁窄勿滥」同向）；A 非破坏零静默（冲突=如实 409 零副作用），凭据滞留构造上不可达（同名身份必须先经 DELETE=旧凭据随旧注册撤销），与全仓「如实拒禁静默假成功/宁窄勿滥」纪律一致，替换流程显式可审计。
 - 建议：**A**。
 - 诚实边界：①引擎层 ModelRouter.add_provider 保持 upsert（内部真依赖：register_variant_backup 注册块无条件重注册、register_local_backup 幂等短路在调用方；两语义刻意分面——HTTP 注册面=create、引擎面=upsert，tests/test_provider_reregister_face.py TestEngineUpsertBoundary 锁死禁静默统一）②409 契约变更如实记：修前同名 POST 200 静默覆盖现 409——admin-ui llm/gland 两消费面均为「新增」表单非编辑流（grep 实证零破坏面，撞名时从静默覆盖变可见报错=诚实面扩大）③就地改 provider 配置（base_url/priority）不再能经 POST——路径=DELETE（级联清钥）+POST（带新钥）；「保钥就地改配置」能力有意移除（凭据随端点绑定：旧钥不应打向新 base_url），如需 PATCH 就地改（不触钥）另拍④has_provider 判定→add_provider 落写微窗口（单进程内存管理面低频）如实记⑤POST /keys 对任意 provider 名加钥的显式面不动（㉑② 语义：钥可合法存在于未注册 provider，显式动作非滞留）。
+
+## ㉓ gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许）
+
+**状态：已按建议默认 A 先行执行（2026-10-18 GLAND-③）**——依据：GLAND-② 周期日志候选「gland PATCH 就地改面（如需）」+㉒ 诚实边界③「如需 PATCH 就地改（不触钥）另拍」+用户「权限/审批阻塞时别停工等批」铁律+①~㉒ 自决先例。实现=**PATCH /api/gland/providers/{name} 就地改（不触钥）**：只改给出的字段（整值替换非合并）base_url/models/priority/enabled，keys 一律不动（凭据增删只属 POST /keys、DELETE /keys/{provider}/{index}、DELETE provider 级联三条显式动作）；就地改面恢复（修前改 priority/models 只能 DELETE（GLAND-① 级联清钥）+POST（重录钥）=改配置必丢钥）。语义（取 A）：①持钥 provider 改 base_url=409 原子拒零写入（凭据端点绑定原则 DEC-㉒「旧钥不应打向新 base_url」，换端点=先移钥或 DELETE+POST）②无钥照常改（无钥可误道）③base_url 归一（rstrip "/"）后与现值相同=非改道放行不误伤④未注册 404 零副作用⑤空载荷 400（禁空转假成功）⑥未知字段（name 等）422（extra="forbid" 禁静默忽略请求字段）⑦显式 null≠未提供→400 禁静默当缺省。**若拍板回一句即改道：「㉓改B」=持钥也允许显式改道（PATCH base_url 照常 200、旧钥随新端点=显式审计动作非静默）、（「㉓改C」=revert 撤 PATCH 面（回改配置必丢钥态）**。
+
+**现状（GLAND-② 诚实边界③留档+控制组/live --pre 双实证 2026-10-18）**：GLAND-② 注册面 create 语义收口后 provider 配置零就地改通道（PATCH /providers/{name} 修前 405 Method Not Allowed=DELETE 路由占位无 PATCH handler）——改 priority/models 只能 DELETE（级联清钥）+POST（重录钥）=改配置必丢钥，「保钥就地改配置」面整体缺席。
+- 选项：**A** 持钥改 base_url 拒（409 原子拒；无钥/同值放行；不触钥）/ **B** 持钥也允许显式改道（PATCH 照常 200，旧钥随新端点）/ **C** 不做 PATCH 面（维持改配置必丢钥）。
+- 权衡：C 持续=改配置必丢钥（GLAND-② 有意移除能力后无恢复面，运维只能重录凭据）；B 方便「服务搬家同钥」场景且 PATCH 是显式可审计动作（区别于 ㉒ 的静默覆盖），但与 DEC-㉒ 刚收口的「旧钥不应打向新 base_url」原则正面相抵（旧钥打向新端点=潜在凭据误用，无论显式与否）；A 忠实 ㉒ 原则（凭据随端点绑定）+恢复非凭据字段的就地改能力（priority/models/enabled 改动不再丢钥），换端点流程显式两步（移钥→改道 或 DELETE+POST）。
+- 建议：**A**（宁窄勿滥+㉒ 原则延续）。
+- 诚实边界：①「保钥换端点」能力仍移除（如需取 B 一句话改道）②models 整表替换非合并（PATCH {"models":{"chat":"m2"}} 整表替换原表；要局部改须给全表，语义显式无静默合并）③enabled 是活字段（router.py 路由跳过 disabled provider+list_providers 暴露），PATCH enabled=不丢钥摘牌/复牌面④rename 不支持（name=身份，extra=forbid 如实 422；rename=DELETE+POST）⑤keys_untouched 响应键=当前钥数如实计数（不触钥可观测）⑥引擎层 ModelRouter.update_provider 原子（先全量校验后一次性落写，任一字段非法/被拒=零写入）。
 
 ## 附：锚点核验
 
