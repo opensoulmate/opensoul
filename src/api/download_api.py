@@ -8,13 +8,15 @@ import asyncio
 import base64
 import json
 import logging
+import time
+from collections import deque
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from src.api.download_plugins import DownloadPlugin, get_download_manager
+from src.api.download_plugins import DownloadPlugin, DownloadProgress, get_download_manager
 from src.api.native_downloader import get_downloader
 
 router = APIRouter()
@@ -212,20 +214,127 @@ def _resolve_engine(req: DownloadRequest) -> tuple[str, "DownloadPlugin | None"]
     return plugin.get_info().id, plugin
 
 
-async def _run_auto_chain(url: str, dest: str, resume: bool) -> None:
+# ─── 异步终态结果记录（H1-②b-⑮ 异步链终态查询面）────────────────────
+# 修前（⑭ 留档边界）：异步 ack 后后台跑结果只有日志可查——插件任务收尾即从
+# /tasks 在途面消失（完成即消失=既有 async 语义），链真赢家/失败真因无处查。
+# 此处落进程内结果记录：ack 时建在途行、后台收尾 upsert 终态行，
+# GET /download/results 查询。进程内（非持久化）是结构诚实而非偷懒：
+# asyncio.create_task 的后台跑本体就活在进程内，重启=下载本身也没了，
+# 记录若活过重启会对着已消失的下载谎报 "downloading"。
+_ASYNC_RESULT_CAP = 200  # 结果行上限（按 ack 序淘汰最旧，测试可 monkeypatch）
+_async_results: dict[str, dict] = {}
+_async_result_order: deque[str] = deque()
+
+
+def _record_async_result(
+    task_id: str,
+    url: str,
+    dest: str,
+    *,
+    status: str,
+    plugin: str | None,
+    finished: bool,
+    fallback_chain: list[str] | None = None,
+    progress: DownloadProgress | None = None,
+    error: str | None = None,
+) -> dict:
+    """结果行单一写口（ack 在途行与终态行同一键 upsert，禁两套记录）。
+
+    字段全取自真实数据：plugin=真跑插件注册 id（链真赢家；链全败=None 禁
+    fabricate）、status/error/字节数=DownloadProgress 原样、finished_at=None
+    表示后台仍在跑（行形状 13 键恒定）。
+    """
+    now = time.time()
+    row = _async_results.get(task_id)
+    if row is None:
+        row = {
+            "task_id": task_id,
+            "registry_key": dest,  # 插件层身份键（与 /tasks plugin_tasks 同源）
+            "url": url,
+            "dest": dest,
+            "status": status,
+            "plugin": plugin,
+            "error": error,
+            "fallback_chain": fallback_chain,
+            "total_bytes": 0,
+            "downloaded_bytes": 0,
+            "progress_pct": 0,
+            "started_at": now,
+            "finished_at": None,
+        }
+        _async_results[task_id] = row
+        _async_result_order.append(task_id)
+        while len(_async_result_order) > _ASYNC_RESULT_CAP:
+            _async_results.pop(_async_result_order.popleft(), None)
+    row["status"] = status
+    row["plugin"] = plugin
+    row["error"] = error
+    if finished:
+        row["finished_at"] = now
+    if progress is not None:
+        row["total_bytes"] = progress.total_bytes
+        row["downloaded_bytes"] = progress.downloaded_bytes
+        row["progress_pct"] = progress.progress_pct
+    return row
+
+
+async def _run_auto_chain(url: str, dest: str, resume: bool, task_id: str) -> None:
     """auto 后台 fallback 链（与 /download/sync 同一 dm.download 单一源禁两套链）。
 
-    异步 ack 即刻返回无结果可报，链结果可见性=日志（成功 info 带真赢家注册 id、
-    失败 warning 带真因）+ /tasks 在途面——禁静默吞链结果（F2b-② 纪律）。
+    异步 ack 即刻返回无结果可报，链结果可见性=终态结果行（GET /download/results
+    真赢家/失败真因可查）+日志（成功 info 带真赢家注册 id、失败 warning 带真因）
+    + /tasks 在途面——禁静默吞链结果（F2b-② 纪律）。
     """
     dm = get_download_manager()
-    progress = await dm.download(url, dest, resume=resume)
+    try:
+        progress = await dm.download(url, dest, resume=resume)
+    except Exception as e:
+        # 后台链故障也必须留痕（禁静默：既无响应体也无 /tasks 行可看）
+        logger.warning(f"Async fallback chain crashed for {url}: {e}")
+        _record_async_result(
+            task_id, url, dest, status="error", plugin=None, finished=True, error=str(e)
+        )
+        return
+    _record_async_result(
+        task_id,
+        url,
+        dest,
+        status=progress.status,
+        plugin=progress.plugin or None,
+        finished=True,
+        progress=progress,
+        error=progress.error,
+    )
     if progress.status == "error":
         logger.warning(f"Async fallback chain failed for {url}: {progress.error}")
     else:
         logger.info(
             f"Async fallback chain finished ({progress.status}, plugin={progress.plugin}): {url}"
         )
+
+
+async def _run_plugin_download(
+    plugin: DownloadPlugin, url: str, dest: str, resume: bool, task_id: str, engine: str
+) -> None:
+    """显式插件后台跑收尾记录（与 auto 链同一结果面，⑭ 对称语义）。"""
+    try:
+        progress = await plugin.download(url, dest, resume=resume)
+    except Exception as e:
+        logger.warning(f"Async plugin download crashed ({engine}) for {url}: {e}")
+        _record_async_result(
+            task_id, url, dest, status="error", plugin=engine, finished=True, error=str(e)
+        )
+        return
+    _record_async_result(
+        task_id,
+        url,
+        dest,
+        status=progress.status,
+        plugin=progress.plugin or engine,
+        finished=True,
+        progress=progress,
+        error=progress.error,
+    )
 
 
 @router.post("/download")
@@ -251,21 +360,34 @@ async def start_download(req: DownloadRequest):
             "status": task.status.value,
             "plugin": NATIVE_ENGINE,
         }
+    task_id = _task_token(dest)
     if req.plugin_id is None:
         dm = get_download_manager()
         chain = dm.chain_order(require_resume=req.resume)
-        asyncio.create_task(_run_auto_chain(req.url, dest, req.resume))
+        _record_async_result(
+            task_id,
+            req.url,
+            dest,
+            status="downloading",
+            plugin=AUTO_CHAIN,
+            finished=False,
+            fallback_chain=chain,
+        )
+        asyncio.create_task(_run_auto_chain(req.url, dest, req.resume, task_id))
         return {
-            "task_id": _task_token(dest),
+            "task_id": task_id,
             "dest": dest,
             "url": req.url,
             "status": "downloading",
             "plugin": AUTO_CHAIN,
             "fallback_chain": chain,
         }
-    asyncio.create_task(plugin.download(req.url, dest, resume=req.resume))
+    _record_async_result(
+        task_id, req.url, dest, status="downloading", plugin=engine, finished=False
+    )
+    asyncio.create_task(_run_plugin_download(plugin, req.url, dest, req.resume, task_id, engine))
     return {
-        "task_id": _task_token(dest),
+        "task_id": task_id,
         "dest": dest,
         "url": req.url,
         "status": "downloading",
@@ -341,6 +463,51 @@ async def download_progress_stream():
                 yield f"data: {json.dumps({'tasks': [], 'status': 'idle'})}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+# ─── 异步终态结果面（H1-②b-⑮）─────────────────────────────────────
+
+
+def _resolve_result(task_id: str) -> dict | None:
+    """token/注册表键双认寻址（_plugin_task 同款）：精确键直查 → raw 注册表键
+    （dest）再令牌化 → base64url 令牌解码回键再令牌化。未记录如实 None（禁
+    fabricate）。"""
+    hit = _async_results.get(task_id)
+    if hit is not None:
+        return hit
+    candidates = [_task_token(task_id)]
+    pad = "=" * (-len(task_id) % 4)
+    try:
+        key = base64.urlsafe_b64decode(task_id + pad).decode()
+        candidates.append(_task_token(key))
+    except Exception:
+        pass
+    for cand in candidates:
+        hit = _async_results.get(cand)
+        if hit is not None:
+            return hit
+    return None
+
+
+@router.get("/results")
+async def list_download_results():
+    """异步下载结果列表（ack 序最新在前）——POST /download 后台跑的终态查询面。
+
+    在途行 finished_at=null（后台仍在跑）；终态行带真赢家 plugin（链全败=null
+    禁 fabricate）/失败真因 error。native 引擎任务不在此面（其注册表保留 done
+    行，/tasks 持久可见，不重复记录）。
+    """
+    rows = [_async_results[tid] for tid in reversed(_async_result_order) if tid in _async_results]
+    return {"results": rows, "total": len(rows)}
+
+
+@router.get("/results/{task_id}")
+async def get_download_result(task_id: str):
+    """单任务结果（token 或注册表键双认寻址）；未记录 404 如实拒。"""
+    row = _resolve_result(task_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no async result record: {task_id}")
+    return row
 
 
 # ─── Cache Management ────────────────────────────────────────────
