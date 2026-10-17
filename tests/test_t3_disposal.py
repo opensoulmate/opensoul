@@ -29,7 +29,8 @@ DELETED_WITH_COVER = [
     ("api/enterprise.py", "audit_write", "_record_audit"),
     ("api/model_router.py", "load_config", "get_router_config"),
     ("api/model_router.py", "save_config", "set_router_mode"),
-    ("config_manager.py", "save_config", "get_config"),
+    ("config_manager.py", "save_config", "update"),
+    ("config_manager.py", "get_config", "get"),
 ]
 
 
@@ -86,6 +87,20 @@ class TestDisposedSymbolsStayDead:
             if ln.strip() and "test_t3_disposal.py" not in ln and "T3 处置" not in ln
         ]
         assert residual == [], f"处置符号仍有消费残留：{residual}"
+
+    def test_config_manager_get_config_not_reimported(self):
+        # get_config 专查：同名符号在 llm/reflex/download_api 是各自活端点函数（禁误伤），
+        # 这里只查 config_manager 面的消费残留（import/属性访问）。
+        root = Path(__file__).resolve().parent.parent
+        hits = []
+        for base in ("src", "tests", "scripts"):
+            for p in (root / base).rglob("*.py"):
+                if p.name == "test_t3_disposal.py":
+                    continue
+                for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+                    if "config_manager" in line and "get_config" in line:
+                        hits.append(f"{p.relative_to(root)}:{i}:{line.strip()}")
+        assert hits == [], f"config_manager.get_config 仍有消费残留：{hits}"
 
 
 class TestCoveringFacesCarrySemantics:
@@ -150,3 +165,30 @@ class TestCoveringFacesCarrySemantics:
         pending_after = engine.list_scripts(applied=False)
         assert [s["script_id"] for s in pending_after] == [pending[1]["script_id"]]
         assert engine.get_stats()["pending_scripts"] == 1
+
+    def test_config_read_write_semantics_via_manager(self, tmp_path, monkeypatch):
+        # get_config/save_config 语义经活面 ConfigManager.get/update 仍可达（删包装没删能力）
+        import src.config_manager as cm
+
+        monkeypatch.setattr(cm, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(cm, "CONFIG_PATH", tmp_path / "config.yaml")
+        mgr = cm.ConfigManager()
+        # 读语义（原 get_config 覆盖面）：整表/分节/分键/缺省 None
+        cfg = mgr.get()
+        assert isinstance(cfg, dict) and cfg["version"] == cm.DEFAULT_CONFIG["version"]
+        assert mgr.get(section="models") == cfg["models"]
+        assert mgr.get(section="models", key="default") == cfg["models"]["default"]
+        assert mgr.get(section="nope") is None
+        assert mgr.get(section="models", key="nope") is None
+        # 写语义（原 save_config 覆盖面）：update 落盘、新实例回读一致
+        mgr.update({"models": {"default": "x-test-model"}})
+        assert (tmp_path / "config.yaml").exists()
+        fresh = cm.ConfigManager()
+        assert fresh.get(section="models", key="default") == "x-test-model"
+
+    def test_config_api_face_carries_read_semantics(self, client):
+        # 覆盖语义的生产活面：GET /api/config（config_api 真消费 config_manager.get）
+        resp = client.get("/api/config")
+        assert resp.status_code in (200, 401)
+        if resp.status_code == 200:
+            assert isinstance(resp.json(), dict)

@@ -100,7 +100,3 @@ class ConfigManager:
 
 
 config_manager = ConfigManager()
-
-
-def get_config(section: str | None = None, key: str | None = None) -> Any:
-    return config_manager.get(section, key)

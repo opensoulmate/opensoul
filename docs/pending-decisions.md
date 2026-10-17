@@ -236,7 +236,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 选项：**A** 维持现状（24 项全留）/ **B** 逐项裁决（删被覆盖者、留其余）/ **C** 一律全删（含配置 API/测试支撑面）。
 - 权衡：A=死面留仓反复误读（H0 已实证误读案例：filter_tools 初判 T1 被复核降级）且 Phase H「死面清零」不推进，H1-① 留档「T3 两重复原语未动」持续悬置；C 违 H0 明示「无消费不等于断点」与宁窄勿滥——删 set_agent_card=丢 a2a 卡面配置口、删 reset_attributor=测试支撑面塌、删 gen_ai_attributes=丢 OTel semconv 对齐原语，是真丢能力非清死面；B 按证据分级（有覆盖/取代证据才删，git revert 可整体回滚），与 TL/DEC-⑮ 处置先例同纪律。
 - 建议：**B**。
-- 诚实边界：①config_manager.get_config 与已删 save_config 同型便利包装但未在 H0 T3 清单（名字级普查同名碰撞漏报方向所致），本拍不越清单处置，留档另拍可复核②KeyManager.get_keys（H1-②「不应建」件）不属本拍 24 项范围——「不建出口」裁决维持，方法本体留测试内省（test_key_remove_face 消费），若主张连方法一并删除另拍③删除件中被测试消费的两处（session_grants.filter_tools、batch_update_with_outcomes）测试契约随更新（断言意图改经活面表达，零意图丢失）④留口 13 项仍为死面（零生产消费不变），后续若出现「被活面覆盖」证据可再拍处置⑤全量回归+live 冒烟见周期日志 T3-① 行。
+- 诚实边界：①config_manager.get_config 与已删 save_config 同型便利包装但未在 H0 T3 清单（名字级普查同名碰撞漏报方向所致），本拍不越清单处置，留档另拍可复核——**【2026-10-17 DEC-⑳-① 已落】该复核件已处置：get_config 同判据删（单行委托 config_manager.get、全仓零调用点、语义被活面 config_api.py 8 消费点 100% 覆盖），异议沿用「⑳改A:get_config」逐件恢复**②KeyManager.get_keys（H1-②「不应建」件）不属本拍 24 项范围——「不建出口」裁决维持，方法本体留测试内省（test_key_remove_face 消费），若主张连方法一并删除另拍③删除件中被测试消费的两处（session_grants.filter_tools、batch_update_with_outcomes）测试契约随更新（断言意图改经活面表达，零意图丢失）④留口 13 项仍为死面（零生产消费不变），后续若出现「被活面覆盖」证据可再拍处置⑤全量回归+live 冒烟见周期日志 T3-① 行。
 
 ## 附：锚点核验
 
