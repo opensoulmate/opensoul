@@ -126,6 +126,7 @@ class DownloadPlugin(ABC):
     _running: dict[str, _RunningDownload]  # 每插件类独立，__init_subclass__ 建
     _paused: dict[str, tuple[str, str, bool]]  # task_id -> (url, dest, resume)
     _resume_handles: dict[str, asyncio.Task]  # resume_download 派生的后台任务
+    _canceled: dict[str, bool]  # 用户取消归因标记（_untrack 消费一次）
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
@@ -133,6 +134,7 @@ class DownloadPlugin(ABC):
         cls._running = {}
         cls._paused = {}
         cls._resume_handles = {}
+        cls._canceled = {}
 
     def _track(
         self,
@@ -146,6 +148,7 @@ class DownloadPlugin(ABC):
 
     def _untrack(self, task_id: str, progress: DownloadProgress | None = None) -> None:
         self._running.pop(task_id, None)
+        canceled = self._canceled.pop(task_id, None) is not None  # 归因标记消费一次
         if progress is None:
             return
         if task_id in self._paused:
@@ -156,6 +159,11 @@ class DownloadPlugin(ABC):
                 # 这个 error 是 pause() 自己的 SIGTERM，不是传输故障——如实标 paused
                 progress.status = "paused"
                 progress.error = None
+        elif canceled and progress.status == "error":
+            # 这个 error 是 cancel() 的 kill 退出码，不是传输故障——如实标
+            # canceled（链式 fallback 禁把用户取消当失败掉下一插件=双跑同 dest）
+            progress.status = "canceled"
+            progress.error = None
 
     async def pause(self, task_id: str) -> bool:
         """停传输并保留半成品+续传上下文。
@@ -199,8 +207,11 @@ class DownloadPlugin(ABC):
         paused = self._paused.pop(task_id, None)
         handle = self._resume_handles.pop(task_id, None)
         if handle is not None and not handle.done():
+            # 用户取消归因：被杀传输收尾时如实标 canceled（_untrack 消费标记）
+            self._canceled[task_id] = True
             handle.cancel()
         if running is not None:
+            self._canceled[task_id] = True
             running.proc.kill()
             return True
         return paused is not None or handle is not None
@@ -739,16 +750,11 @@ class DownloadManager:
         """Get a specific plugin"""
         return self._plugins.get(plugin_id)
 
-    def get_best_plugin(
+    def _candidates(
         self, require_resume: bool = False, require_p2p: bool = False
-    ) -> DownloadPlugin | None:
-        """Get the best available plugin matching requirements.
-
-        择优只在**可用**插件里选（函数名/文档即契约）：修前无可用候选时
-        fallback 返回一个不可用插件（"download() will fail and we'll fallback"
-        ——但全仓无该 fallback 链消费方）=「最优可用」名不符实，调用方拿去
-        硬跑必炸。现无可用候选如实返回 None，回落决策权在调用方。
-        """
+    ) -> list["DownloadPlugin"]:
+        """可用候选单一源（priority 升序+能力过滤）——get_best_plugin 择优与
+        download() fallback 链共用同一序，禁两套排序/过滤漂移（F4b-㉗ 纪律）。"""
         candidates = []
         for plugin in self._plugins.values():
             info = plugin.get_info()
@@ -761,7 +767,20 @@ class DownloadManager:
             candidates.append((info.priority, plugin))
 
         candidates.sort(key=lambda x: x[0])
-        return candidates[0][1] if candidates else None
+        return [plugin for _, plugin in candidates]
+
+    def get_best_plugin(
+        self, require_resume: bool = False, require_p2p: bool = False
+    ) -> DownloadPlugin | None:
+        """Get the best available plugin matching requirements.
+
+        择优只在**可用**插件里选（函数名/文档即契约）：修前无可用候选时
+        fallback 返回一个不可用插件（"download() will fail and we'll fallback"
+        ——但全仓无该 fallback 链消费方）=「最优可用」名不符实，调用方拿去
+        硬跑必炸。现无可用候选如实返回 None，回落决策权在调用方。
+        """
+        candidates = self._candidates(require_resume=require_resume, require_p2p=require_p2p)
+        return candidates[0] if candidates else None
 
     def find_task(self, task_id: str) -> tuple["DownloadPlugin", str] | None:
         """跨插件查在途任务（task 控制面路由单一判法）：(plugin, 状态) 或 None。"""
@@ -814,7 +833,20 @@ class DownloadManager:
         plugin_id: str | None = None,
         progress_cb: Callable[[DownloadProgress], None] | None = None,
     ) -> DownloadProgress:
-        """Download with auto-fallback across plugins"""
+        """Download with auto-fallback across plugins（跨插件 fallback 链单一源）。
+
+        链语义（接线前定形——修前全仓零消费方=无行为影响面）：
+        - plugin_id 指定=单插件直跑零 fallback（未命中/未安装如实 error 禁
+          静默换引擎硬跑）
+        - 缺省=候选链逐个真跑：链序=_candidates 单一源（priority 升序），
+          resume=True 只进可续传插件（require_resume 口径与 get_best_plugin
+          同源，⑨b「resume 需求随 req.resume」语义延续）；resume=False 全部
+          可用插件
+        - 只有真失败（status=="error"）才掉下一级；done/paused/canceled/未知
+          状态立即如实返回——尤其 paused/canceled 是用户意图，禁掉链接管
+          双跑同一 dest（⑨a native 双写者同型）
+        - 结果 plugin=真跑插件注册 id（声明从实现派生，禁插件自报顶替）
+        """
         # Get plugin chain
         if plugin_id:
             plugin = self.get_plugin(plugin_id)
@@ -822,24 +854,32 @@ class DownloadManager:
                 return DownloadProgress(
                     url=url, dest=dest, status="error", error=f"Plugin {plugin_id} not found"
                 )
+            if not plugin.is_available():
+                return DownloadProgress(
+                    url=url, dest=dest, status="error", error=f"Plugin {plugin_id} not available"
+                )
             plugins = [plugin]
         else:
-            # Build fallback chain
-            plugins = sorted(self._plugins.values(), key=lambda p: p.get_info().priority)
-            if resume:
-                plugins = [p for p in plugins if p.get_info().supports_resume] + [
-                    p for p in plugins if not p.get_info().supports_resume
-                ]
+            plugins = self._candidates(require_resume=resume)
 
+        if not plugins:
+            return DownloadProgress(
+                url=url,
+                dest=dest,
+                status="error",
+                error=f"No suitable plugins available (require_resume={resume})",
+            )
+
+        tried: list[str] = []
         last_error = None
         for plugin in plugins:
-            if not plugin.is_available():
-                continue
             info = plugin.get_info()
+            tried.append(info.id)
             logger.info(f"Trying download with {info.name}: {url}")
             try:
                 result = await plugin.download(url, dest, resume=resume, progress_cb=progress_cb)
-                if result.status == "done":
+                result.plugin = info.id  # 真跑插件注册 id 单点标注
+                if result.status != "error":
                     return result
                 last_error = result.error
                 logger.warning(f"{info.name} failed: {last_error}")
@@ -851,7 +891,7 @@ class DownloadManager:
             url=url,
             dest=dest,
             status="error",
-            error=f"All plugins failed. Last error: {last_error}",
+            error=f"All plugins failed ({', '.join(tried) or 'none'}). Last error: {last_error}",
         )
 
     async def auto_update_plugins(self) -> dict[str, bool]:

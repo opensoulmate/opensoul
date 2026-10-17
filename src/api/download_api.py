@@ -243,7 +243,13 @@ async def start_download(req: DownloadRequest):
 
 @router.post("/download/sync")
 async def download_sync(req: DownloadRequest):
-    """Download to completion（native 多段引擎或指定/择优插件，引擎同 _resolve_engine）。"""
+    """Download to completion（native 多段引擎或插件引擎，引擎同 _resolve_engine）。
+
+    auto（plugin_id 缺省）=跨插件 fallback 链（DownloadManager.download 首个
+    生产消费点，修前全仓零消费=wired-but-not-functional）：链首=择优同源，
+    真失败掉下一级，响应 plugin=真赢家注册 id 如实标注；显式 plugin_id/
+    "native" 单引擎直跑零 fallback（⑨b 契约不变）。
+    """
     dest = _resolve_dest(req)
     engine, plugin = _resolve_engine(req)
     if plugin is None:
@@ -263,7 +269,11 @@ async def download_sync(req: DownloadRequest):
             "error": task.error,
             "task_id": task.id,
         }
-    progress = await plugin.download(req.url, dest, resume=req.resume)
+    if req.plugin_id is not None:
+        progress = await plugin.download(req.url, dest, resume=req.resume)
+    else:
+        dm = get_download_manager()
+        progress = await dm.download(req.url, dest, resume=req.resume)
     return {
         "status": progress.status,
         "dest": progress.dest,
