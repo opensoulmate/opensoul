@@ -102,6 +102,12 @@ export default function GlandPage() {
   const [budgetLimit, setBudgetLimit] = useState('');
   const [settingBudget, setSettingBudget] = useState(false);
 
+  // Edit provider dialog（GLAND-④：PATCH 就地改流，不触钥）
+  const [editProvider, setEditProvider] = useState<Provider | null>(null);
+  const [editForm, setEditForm] = useState({ base_url: '', models: '', priority: 0, enabled: true });
+  const [savingProvider, setSavingProvider] = useState(false);
+  const [editError, setEditError] = useState('');
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -186,6 +192,67 @@ export default function GlandPage() {
       fetchData();
     } catch (e: any) {
       setError(e.message);
+    }
+  };
+
+  // ── Edit provider（GLAND-④：PATCH 就地改流） ──────────────
+
+  const parseModels = (s: string): Record<string, string> => {
+    const models: Record<string, string> = {};
+    if (s) {
+      s.split(',').forEach(m => {
+        const [k, v] = m.split(':').map(x => x.trim());
+        if (k && v) models[k] = v;
+      });
+    }
+    return models;
+  };
+
+  const openEditProvider = (p: Provider) => {
+    setEditProvider(p);
+    setEditForm({
+      base_url: p.base_url,
+      models: Object.entries(p.models || {}).map(([k, v]) => `${k}:${v}`).join(', '),
+      priority: p.priority,
+      enabled: p.enabled,
+    });
+    setEditError('');
+  };
+
+  const editHasChanges = (): boolean => {
+    if (!editProvider) return false;
+    return (
+      editForm.base_url !== editProvider.base_url ||
+      JSON.stringify(parseModels(editForm.models)) !== JSON.stringify(editProvider.models || {}) ||
+      editForm.priority !== editProvider.priority ||
+      editForm.enabled !== editProvider.enabled
+    );
+  };
+
+  const handleUpdateProvider = async () => {
+    if (!editProvider) return;
+    // 只发变更字段（PATCH 就地改语义：未给出的字段不动，keys 一律不动）
+    const payload: Record<string, unknown> = {};
+    if (editForm.base_url !== editProvider.base_url) payload.base_url = editForm.base_url;
+    const models = parseModels(editForm.models);
+    if (JSON.stringify(models) !== JSON.stringify(editProvider.models || {})) payload.models = models;
+    if (editForm.priority !== editProvider.priority) payload.priority = editForm.priority;
+    if (editForm.enabled !== editProvider.enabled) payload.enabled = editForm.enabled;
+    if (Object.keys(payload).length === 0) return;
+    try {
+      setSavingProvider(true);
+      setEditError('');
+      await apiFetch(`/api/gland/providers/${encodeURIComponent(editProvider.name)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      setEditProvider(null);
+      fetchData();
+    } catch (e: any) {
+      // 409 真因（持钥改道拒绝）/400/422 原样可见，禁静默吞
+      setEditError(e.message);
+    } finally {
+      setSavingProvider(false);
     }
   };
 
@@ -382,6 +449,12 @@ export default function GlandPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      onClick={() => openEditProvider(p)}
+                      title="编辑配置" variant="secondary" className="text-[10px] px-2 py-1"
+                    >
+                      <Settings className="w-3 h-3" />
+                    </Button>
                     <Button onClick={() => handleTestProvider(p.name)}
                       disabled={testing !== null}
                       
@@ -556,6 +629,55 @@ export default function GlandPage() {
                 <Button onClick={handleAddProvider} disabled={!newProvider.name || !newProvider.base_url || addingProvider} variant="primary">
                   {addingProvider ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   添加
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Provider Dialog（GLAND-④：PATCH 就地改，不触钥） ── */}
+      {editProvider && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditProvider(null)}>
+          <div className="bg-card rounded-lg border border-border w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="text-sm font-medium">编辑Provider — {editProvider.name}</h2>
+              <Button onClick={() => setEditProvider(null)} variant="icon-sm" className="hover:bg-muted"><X className="w-4 h-4" /></Button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Base URL</label>
+                <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md font-mono"
+                  value={editForm.base_url} onChange={e => setEditForm(f => ({ ...f, base_url: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">模型映射（task:model,逗号分隔；整表替换）</label>
+                <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md"
+                  value={editForm.models} onChange={e => setEditForm(f => ({ ...f, models: e.target.value }))}
+                  placeholder="chat:gpt-4o, embedding:text-embedding-3-small" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">优先级（数字越小越优先）</label>
+                <input className="w-full mt-1 px-3 py-1.5 text-xs bg-muted border border-border rounded-md"
+                  type="number" value={editForm.priority}
+                  onChange={e => setEditForm(f => ({ ...f, priority: parseInt(e.target.value) || 0 }))} />
+              </div>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input type="checkbox" checked={editForm.enabled}
+                  onChange={e => setEditForm(f => ({ ...f, enabled: e.target.checked }))} />
+                启用（摘牌/复牌不丢钥）
+              </label>
+              <div className="rounded-md bg-muted/50 border border-border p-2 text-[10px] text-muted-foreground">
+                就地改只动配置，API 密钥一律不动。持钥 provider 改 Base URL 会被拒绝（凭据端点绑定）——换端点请先移除密钥，或删除后重建。
+              </div>
+              {editError && (
+                <div className="rounded-md border border-red-500/30 bg-red-500/5 p-2 text-[10px] text-red-500">{editError}</div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button onClick={() => setEditProvider(null)} variant="secondary">取消</Button>
+                <Button onClick={handleUpdateProvider} disabled={savingProvider || !editHasChanges()} variant="primary">
+                  {savingProvider ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                  保存
                 </Button>
               </div>
             </div>
