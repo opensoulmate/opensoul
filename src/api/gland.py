@@ -317,6 +317,83 @@ async def remove_key(provider: str, index: int):
     return {"status": "ok", "provider": provider, "index": index, "remaining": remaining}
 
 
+def _validate_base_url(provider: str) -> str:
+    """验证用 base_url 单一取源=provider 注册表（ProviderConfig.base_url）。
+
+    keys 可存在于未注册 provider（load_from_env 的 mimo 等），但验证必须知道打哪个
+    /models 端点；无真源=如实 404，禁猜 URL 硬验。
+    """
+    cfg = gateway.providers.get(provider)
+    if cfg is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Provider '{provider}' not found: 无 base_url 可验证",
+        )
+    return cfg.base_url
+
+
+@router.post("/keys/{provider}/{index}/validate")
+async def validate_one_key(provider: str, index: int):
+    """单钥有效性验证面——真打 provider /models 验证该槽位 API key 是否可用。
+
+    index = GET /api/gland/keys 返回列表中的位置序号（0 起），与 DELETE 单钥移除面
+    同寻址语义。未命中（未知 provider / 越界 / 负 index）= 404 如实拒零副作用，
+    不谎报 ok。响应无 status 包装键——``ok`` 即本轮验证结果（True=该钥可用），
+    ``is_valid/fail_count/last_checked`` 为验证后的槽位真态（ok 与 is_valid 可不同：
+    瞬时网络故障 ok=False 而槽位要累计 3 次失败才标 invalid）。
+    """
+    _ensure_bootstrapped()
+    rows = gateway.key_manager.status().get(provider) or []
+    if not (0 <= index < len(rows)):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Key not found: provider='{provider}' index={index}",
+        )
+    base_url = _validate_base_url(provider)
+    ok = await gateway.key_manager.validate_key(provider, base_url, index)
+    row = gateway.key_manager.status()[provider][index]
+    return {
+        "provider": provider,
+        "index": index,
+        "ok": ok,
+        "masked_key": row["masked_key"],
+        "is_valid": row["is_valid"],
+        "fail_count": row["fail_count"],
+        "last_checked": row["last_checked"],
+    }
+
+
+@router.post("/keys/{provider}/validate")
+async def validate_provider_keys(provider: str):
+    """单 provider 全钥有效性验证面——逐钥真打 /models（validate_all 委托）。
+
+    provider 未注册（无 base_url 真源）= 404 如实拒；已注册但零钥=total 0 如实回
+    （幂等：没有可验的钥≠错误）。响应顶层恰 4 键 {provider,total,valid,results}，
+    results 逐行恰 6 键按槽位序（=GET /keys 位置序）。
+    """
+    _ensure_bootstrapped()
+    base_url = _validate_base_url(provider)
+    outcomes = await gateway.key_manager.validate_all(provider, base_url)
+    rows = gateway.key_manager.status().get(provider) or []
+    results = [
+        {
+            "index": i,
+            "ok": outcomes[i],
+            "masked_key": rows[i]["masked_key"],
+            "is_valid": rows[i]["is_valid"],
+            "fail_count": rows[i]["fail_count"],
+            "last_checked": rows[i]["last_checked"],
+        }
+        for i in range(len(outcomes))
+    ]
+    return {
+        "provider": provider,
+        "total": len(outcomes),
+        "valid": sum(1 for o in outcomes if o),
+        "results": results,
+    }
+
+
 @router.post("/budget")
 async def set_budget(body: BudgetUpdate):
     """Set the token budget limit (0 = unlimited)."""

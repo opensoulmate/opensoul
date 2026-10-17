@@ -88,9 +88,14 @@ class KeyManager:
     # ── health checking ──────────────────────────────────────────
 
     async def validate_key(self, provider: str, base_url: str, index: int = 0) -> bool:
-        """Ping the provider's models endpoint to verify the key works."""
+        """Ping the provider's models endpoint to verify the key works.
+
+        寻址收口（接线前定形，修前零消费方=无行为影响面）：未命中（未知 provider/
+        越界/负 index）恒 False——修前负 index 越过 ``index >= len`` 检查后
+        slots[-1] 静默误验末钥（与 remove_key 的负 index 未命中语义不对称）。
+        """
         slots = self._slots.get(provider, [])
-        if index >= len(slots):
+        if not (0 <= index < len(slots)):
             return False
 
         slot = slots[index]
