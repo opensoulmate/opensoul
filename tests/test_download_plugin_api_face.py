@@ -275,7 +275,11 @@ def test_auto_prefers_best_available_plugin(dl_client):
         json={"url": "http://x/f", "dest": str(tmp_path / "d.bin")},
     )
     assert resp.status_code == 200
-    assert resp.json()["plugin"] == "best"
+    data = resp.json()
+    # 契约随更新（H1-②b-⑭）：异步 auto=fallback 链 ack——真赢家未定 plugin 如实
+    # "auto"，择优语义在链序（链首=择优同源 _candidates）
+    assert data["plugin"] == "auto"
+    assert data["fallback_chain"] == ["best", "slow"]
     assert native.list_tasks() == []
 
 
@@ -289,7 +293,11 @@ def test_auto_require_resume_skips_non_resume_plugin(dl_client):
         json={"url": "http://x/f", "dest": str(tmp_path / "d.bin"), "resume": True},
     )
     assert resp.status_code == 200
-    assert resp.json()["plugin"] == "resumy"
+    data = resp.json()
+    # 契约随更新（H1-②b-⑭）：异步 auto=fallback 链 ack——resume=True 链序只含
+    # 可续传插件（require_resume 口径与择优同源），非续传被过滤不出现在链序
+    assert data["plugin"] == "auto"
+    assert data["fallback_chain"] == ["resumy"]
 
 
 def test_auto_falls_back_to_native_when_no_plugin_available(dl_client):

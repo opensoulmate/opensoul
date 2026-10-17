@@ -167,6 +167,7 @@ class DownloadRequest(BaseModel):
 
 
 NATIVE_ENGINE = "native"
+AUTO_CHAIN = "auto"  # auto fallback 链 ack 的 plugin 键：真赢家链跑完才知道，禁自报引擎
 
 
 def _task_token(registry_key: str) -> str:
@@ -211,13 +212,32 @@ def _resolve_engine(req: DownloadRequest) -> tuple[str, "DownloadPlugin | None"]
     return plugin.get_info().id, plugin
 
 
+async def _run_auto_chain(url: str, dest: str, resume: bool) -> None:
+    """auto 后台 fallback 链（与 /download/sync 同一 dm.download 单一源禁两套链）。
+
+    异步 ack 即刻返回无结果可报，链结果可见性=日志（成功 info 带真赢家注册 id、
+    失败 warning 带真因）+ /tasks 在途面——禁静默吞链结果（F2b-② 纪律）。
+    """
+    dm = get_download_manager()
+    progress = await dm.download(url, dest, resume=resume)
+    if progress.status == "error":
+        logger.warning(f"Async fallback chain failed for {url}: {progress.error}")
+    else:
+        logger.info(
+            f"Async fallback chain finished ({progress.status}, plugin={progress.plugin}): {url}"
+        )
+
+
 @router.post("/download")
 async def start_download(req: DownloadRequest):
     """Start a background download.
 
     引擎随 _resolve_engine 解析（plugin_id 真消费/get_best_plugin 择优）；
     plugin 引擎的 task_id=注册表键（dest）的 URL 安全令牌（与 /tasks/{token}
-    控制面同一寻址形），响应 plugin 键如实标注实际引擎。
+    控制面同一寻址形）。auto（plugin_id 缺省）=跨插件 fallback 链后台跑
+    （H1-②b-⑭ 链接入异步面）：ack 时真赢家未定，plugin 如实标 "auto" 禁自报
+    引擎，链序 fallback_chain 可观测（_candidates 单一源），实际引擎真源=
+    /tasks plugin_tasks；显式 plugin_id/"native" 单引擎契约不变。
     """
     dest = _resolve_dest(req)
     engine, plugin = _resolve_engine(req)
@@ -230,6 +250,18 @@ async def start_download(req: DownloadRequest):
             "url": req.url,
             "status": task.status.value,
             "plugin": NATIVE_ENGINE,
+        }
+    if req.plugin_id is None:
+        dm = get_download_manager()
+        chain = dm.chain_order(require_resume=req.resume)
+        asyncio.create_task(_run_auto_chain(req.url, dest, req.resume))
+        return {
+            "task_id": _task_token(dest),
+            "dest": dest,
+            "url": req.url,
+            "status": "downloading",
+            "plugin": AUTO_CHAIN,
+            "fallback_chain": chain,
         }
     asyncio.create_task(plugin.download(req.url, dest, resume=req.resume))
     return {

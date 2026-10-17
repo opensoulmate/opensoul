@@ -479,10 +479,17 @@ def test_sync_auto_delegates_to_manager_download(dl_client, monkeypatch):
     assert calls == [("http://x/f", str(tmp_path / "d.bin"), False, None)]
 
 
-def test_async_download_auto_stays_single_engine(dl_client):
-    """留档边界锁死：/download（异步）auto 仍单引擎直跑（链只进 sync 面；
-    异步面响应即刻无真实引擎可标，链接入另拍须先改本契约）。"""
+def test_async_download_auto_runs_fallback_chain(dl_client):
+    """契约随更新（H1-②b-⑭）：/download（异步）auto=跨插件 fallback 链后台跑。
+
+    修前（本函数原名 test_async_download_auto_stays_single_engine）：异步 auto
+    单引擎直跑零 fallback，留档边界注明「链接入另拍须先改本契约」——本拍即该拍：
+    ack 时真赢家未定，plugin 如实标 "auto" 禁自报引擎（结果 plugin=真跑注册 id
+    ⑬纪律在 ack 时点无结果可标），链序 fallback_chain 可观测（_candidates 单一源）。
+    """
     import time
+
+    from src.api.download_api import _task_token
 
     client, manager, native, tmp_path = dl_client
     cls = _make_plugin_cls()
@@ -490,12 +497,20 @@ def test_async_download_auto_stays_single_engine(dl_client):
     second = cls("second", [("done", None)], priority=10)
     manager.register(first)
     manager.register(second)
+    dest = str(tmp_path / "d.bin")
     resp = client.post(
         "/api/download/download",
-        json={"url": "http://x/f", "dest": str(tmp_path / "d.bin"), "resume": False},
+        json={"url": "http://x/f", "dest": dest, "resume": False},
     )
     assert resp.status_code == 200
-    assert resp.json()["plugin"] == "first"  # 择优单引擎标签（异步契约不变）
-    time.sleep(0.5)  # 后台 create_task 跑完
+    data = resp.json()
+    assert data["plugin"] == "auto"  # 真赢家未定禁自报引擎
+    assert data["fallback_chain"] == ["first", "second"]
+    assert data["task_id"] == _task_token(dest)
+    assert data["status"] == "downloading"
+    deadline = time.time() + 5
+    while time.time() < deadline and len(second.calls) == 0:
+        time.sleep(0.05)
+    # 异步面真消费链：链首失败掉下一级（修前 second.calls == [] 零 fallback）
     assert len(first.calls) == 1
-    assert second.calls == []  # 异步面零 fallback（边界锁死）
+    assert len(second.calls) == 1

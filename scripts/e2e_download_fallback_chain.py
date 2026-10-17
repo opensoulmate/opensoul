@@ -105,7 +105,7 @@ def main() -> int:
             f"无可续传插件→回落 native 契约（plugin={data.get('plugin')}）",
         )
 
-    # ── 异步 auto 契约不变面（链不进异步=留档边界） ────────────────
+    # ── 异步 auto=fallback 链 ack（H1-②b-⑭ 契约随更新） ─────────────
     dest2 = str(tmp / "dead2.bin")
     st, data2 = _req(
         "POST",
@@ -115,8 +115,13 @@ def main() -> int:
     check(st == 200, f"async auto HTTP 200 ({st})")
     if st == 200:
         check(
-            data2.get("plugin") in known,
-            f"async plugin 键=真实引擎非 'auto'（{data2.get('plugin')}）",
+            data2.get("plugin") == "auto",
+            f"async plugin 键如实 'auto'（真赢家未定禁自报，got {data2.get('plugin')}）",
+        )
+        chain = data2.get("fallback_chain")
+        check(
+            isinstance(chain, list) and all(isinstance(x, str) for x in chain),
+            f"fallback_chain 链序可观测（{chain}）",
         )
         tid = data2.get("task_id")
         removed = False

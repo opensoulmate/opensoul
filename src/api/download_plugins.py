@@ -782,6 +782,11 @@ class DownloadManager:
         candidates = self._candidates(require_resume=require_resume, require_p2p=require_p2p)
         return candidates[0] if candidates else None
 
+    def chain_order(self, require_resume: bool = False) -> list[str]:
+        """fallback 链可观测面：候选注册 id 序（_candidates 单一源，与链真跑序/
+        择优同序禁漂移）——异步 ack 的 fallback_chain 键数据源（H1-②b-⑭）。"""
+        return [p.get_info().id for p in self._candidates(require_resume=require_resume)]
+
     def find_task(self, task_id: str) -> tuple["DownloadPlugin", str] | None:
         """跨插件查在途任务（task 控制面路由单一判法）：(plugin, 状态) 或 None。"""
         for plugin in self._plugins.values():
