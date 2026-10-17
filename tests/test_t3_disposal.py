@@ -7,6 +7,10 @@
 本文件职责：
 1) 静态锁死——已删符号在目标模块永久缺席（禁复活），覆盖活面符号恒在场
 2) 语义回归——被覆盖语义经活面仍然可达（删包装没删能力）
+
+增删沿革：DEC-⑳-①（T3-②）增 config_manager.get_config；DEC-⑳-②（本拍）增
+gland/key_manager.get_keys（明文批量回吐便利包装，同判据：被活面 KeySlot.key
+100% 覆盖 + 全仓零生产消费，H1-②「回吐面不应存在」贯彻到方法本体）。
 """
 
 import ast
@@ -31,6 +35,7 @@ DELETED_WITH_COVER = [
     ("api/model_router.py", "save_config", "set_router_mode"),
     ("config_manager.py", "save_config", "update"),
     ("config_manager.py", "get_config", "get"),
+    ("gland/key_manager.py", "get_keys", "key"),
 ]
 
 
@@ -101,6 +106,32 @@ class TestDisposedSymbolsStayDead:
                     if "config_manager" in line and "get_config" in line:
                         hits.append(f"{p.relative_to(root)}:{i}:{line.strip()}")
         assert hits == [], f"config_manager.get_config 仍有消费残留：{hits}"
+
+    def test_key_manager_get_keys_stays_dead_and_keyslot_key_alive(self):
+        # DEC-⑳-② 专查：get_keys 方法本体禁复活；覆盖活面=KeySlot.key 逐槽解密原语恒在场
+        # （按类精确判——裸名 "key" 太泛，此处锚定 KeySlot 类体）。
+        names = _defs_and_assigns(SRC / "gland" / "key_manager.py")
+        assert "get_keys" not in names, "key_manager.get_keys 复活了（DEC-⑳-② 已删，禁复活）"
+        tree = ast.parse((SRC / "gland" / "key_manager.py").read_text(encoding="utf-8"))
+        keyslot = next(
+            n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "KeySlot"
+        )
+        methods = {d.name for d in keyslot.body if isinstance(d, ast.FunctionDef)}
+        assert "key" in methods, "KeySlot.key 活原语缺席（删件不得带走活面）"
+
+    def test_key_manager_get_keys_not_reconsumed(self):
+        # get_keys 专查：属性调用/再定义残留零容忍（按 .get_keys( / def get_keys 精确判，
+        # GET /keys HTTP 面等同名泛词不误伤）。
+        root = Path(__file__).resolve().parent.parent
+        hits = []
+        for base in ("src", "tests", "scripts"):
+            for p in (root / base).rglob("*.py"):
+                if p.name == "test_t3_disposal.py":
+                    continue
+                for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+                    if ".get_keys(" in line or "def get_keys" in line:
+                        hits.append(f"{p.relative_to(root)}:{i}:{line.strip()}")
+        assert hits == [], f"get_keys 仍有消费残留：{hits}"
 
 
 class TestCoveringFacesCarrySemantics:
@@ -192,3 +223,14 @@ class TestCoveringFacesCarrySemantics:
         assert resp.status_code in (200, 401)
         if resp.status_code == 200:
             assert isinstance(resp.json(), dict)
+
+    def test_decrypted_key_semantics_via_keyslot_key(self):
+        # DEC-⑳-② 覆盖语义回归：被删 get_keys 的语义=逐槽解密保序，经活原语
+        # KeySlot.key 仍可达（删包装没删能力）；next_key/validate_key 同一原语真消费。
+        from src.gland.key_manager import KeyManager
+
+        km = KeyManager()
+        s1 = km.add_key("prov-x", "kx-11111111")
+        s2 = km.add_key("prov-x", "kx-22222222")
+        assert [s.key for s in (s1, s2)] == ["kx-11111111", "kx-22222222"]
+        assert km.next_key("prov-x") in ("kx-11111111", "kx-22222222")

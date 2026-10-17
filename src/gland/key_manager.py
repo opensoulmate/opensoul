@@ -70,9 +70,10 @@ class KeyManager:
             return True
         return False
 
-    def get_keys(self, provider: str) -> list[str]:
-        """Return decrypted keys for *provider*."""
-        return [s.key for s in self._slots.get(provider, []) if s.is_valid]
+    # DEC-⑳-② 已删 get_keys（明文批量回吐便利包装——语义被活面 KeySlot.key
+    # 100% 覆盖（逐槽解密原语，next_key/validate_key/status 真消费），全仓零生产
+    # 消费；H1-②「回吐面不应存在」裁决贯彻到方法本体。测试内省改经 KeySlot.key
+    # 原语直接表达（tests/test_key_remove_face.py _slot_keys），断言意图零丢失。
 
     # ── round-robin selection ─────────────────────────────────────
 

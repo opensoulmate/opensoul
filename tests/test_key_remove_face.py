@@ -39,18 +39,28 @@ def client(km, monkeypatch):
 # ── KeyManager 原语 ─────────────────────────────────────────────
 
 
+def _slot_keys(km: KeyManager, provider: str) -> list[str]:
+    """测试内省：逐槽解密钥值（KeySlot.key 活原语直接表达）。
+
+    DEC-⑳-②：get_keys（明文批量回吐便利包装）已删（H1-②「回吐面不应存在」
+    贯彻到方法本体）；本 helper 只是断言读法，语义与被删包装逐字一致
+    （is_valid 过滤 + 保序解密），断言意图零丢失。
+    """
+    return [s.key for s in km._slots.get(provider, []) if s.is_valid]
+
+
 class TestRemoveKeyPrimitive:
     def test_remove_by_index_keeps_rest_in_order(self, km):
         km.add_key("prov-a", "key-one-111111")
         km.add_key("prov-a", "key-two-222222")
         km.add_key("prov-a", "key-three-333333")
         assert km.remove_key("prov-a", 1) is True
-        assert km.get_keys("prov-a") == ["key-one-111111", "key-three-333333"]
+        assert _slot_keys(km, "prov-a") == ["key-one-111111", "key-three-333333"]
 
     def test_remove_last_key_leaves_provider_empty(self, km):
         km.add_key("prov-b", "only-key-444444")
         assert km.remove_key("prov-b", 0) is True
-        assert km.get_keys("prov-b") == []
+        assert _slot_keys(km, "prov-b") == []
         assert km.next_key("prov-b") is None
 
     @pytest.mark.parametrize("index", [1, 99, -1])
@@ -58,7 +68,7 @@ class TestRemoveKeyPrimitive:
         km.add_key("prov-c", "key-five-555555")
         assert km.remove_key("prov-c", index) is False
         # 未命中零副作用：钥仍在场
-        assert km.get_keys("prov-c") == ["key-five-555555"]
+        assert _slot_keys(km, "prov-c") == ["key-five-555555"]
 
     def test_unknown_provider_returns_false(self, km):
         assert km.remove_key("prov-never", 0) is False
@@ -140,7 +150,7 @@ class TestExistingFacesUnchanged:
         data = resp.json()
         assert set(data.keys()) == {"status", "masked"}
         assert data["status"] == "ok"
-        assert km.get_keys("prov-h") == ["key-hh-343434"]
+        assert _slot_keys(km, "prov-h") == ["key-hh-343434"]
 
 
 # ── 静态接线普查 ────────────────────────────────────────────────
