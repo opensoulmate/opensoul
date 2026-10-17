@@ -927,8 +927,18 @@ async def list_all_tags():
 
 
 @router.post("/{session_id}/tags")
-async def add_session_tag(session_id: str, body: TagRequest):
-    """Add a tag to a session."""
+async def add_session_tag(
+    session_id: str,
+    body: TagRequest,
+    user_id: UUID = Depends(get_current_user),
+):
+    """Add a tag to a session.
+
+    身份轴（SESS-② 勘误留档缺口收口）：与同文件 rename/delete 等鉴权家族同款
+    get_current_user 门——修前 tags 写端点（add/remove）与 PATCH 同缺鉴权，
+    未认证调用方可给任意会话打/删标签。user_id 仅作鉴权轴（会话行无归属列，
+    行级过滤不存在=同 delete/rename 语义）。读面（GET tags）保留既有浏览语义。
+    """
     tag_name = body.tag_name.strip().lower()
     if not tag_name or len(tag_name) > 50:
         raise HTTPException(400, "Tag name must be 1-50 characters")
@@ -951,8 +961,16 @@ async def add_session_tag(session_id: str, body: TagRequest):
 
 
 @router.delete("/{session_id}/tags/{tag_name}")
-async def remove_session_tag(session_id: str, tag_name: str):
-    """Remove a tag from a session."""
+async def remove_session_tag(
+    session_id: str,
+    tag_name: str,
+    user_id: UUID = Depends(get_current_user),
+):
+    """Remove a tag from a session.
+
+    身份轴（SESS-② 勘误留档缺口收口）：同 add_session_tag 的 get_current_user 门
+    （鉴权轴非归属轴，同 delete/rename 语义）。
+    """
     db = _get_agent_db()
     if not db:
         raise HTTPException(500, "Database not available")
