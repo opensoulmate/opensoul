@@ -299,6 +299,24 @@ async def list_keys():
     return gateway.key_manager.status()
 
 
+@router.delete("/keys/{provider}/{index}")
+async def remove_key(provider: str, index: int):
+    """Remove a single API key — 单钥移除面（泄漏密钥应急摘除）。
+
+    index = GET /api/gland/keys 返回列表中的位置序号（0 起）。只删该槽位一把钥，
+    provider 与其余钥不动（整 provider 移除走 DELETE /providers/{name}，语义分界）。
+    未命中（未知 provider / 越界 / 负 index）= 404 如实拒，不谎报 ok。
+    """
+    _ensure_bootstrapped()
+    if not gateway.key_manager.remove_key(provider, index):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Key not found: provider='{provider}' index={index}",
+        )
+    remaining = len(gateway.key_manager.status().get(provider, []))
+    return {"status": "ok", "provider": provider, "index": index, "remaining": remaining}
+
+
 @router.post("/budget")
 async def set_budget(body: BudgetUpdate):
     """Set the token budget limit (0 = unlimited)."""
