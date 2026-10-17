@@ -215,6 +215,21 @@ async def capability_trends(days: int = Query(default=7)):
     return {"trend": capability_evaluator.get_trend(days)}
 
 
+@router.get("/capability/weak-dimensions")
+async def capability_weak_dimensions(
+    task_type: str = Query(default="", description="Filter by task type, or all"),
+    min_samples: int = Query(default=5, ge=1, description="Minimum samples per dimension"),
+):
+    """Get weak dimensions (avg score < 0.7) — capability short-board report."""
+    weak = capability_evaluator.get_weak_dimensions(task_type=task_type, min_samples=min_samples)
+    return {
+        "weak_dimensions": weak,
+        "task_type": task_type,
+        "min_samples": min_samples,
+        "count": len(weak),
+    }
+
+
 # ── Evaluation Loop (P0-5: agno/langfuse-style 评估闭环) ──────────────
 
 
