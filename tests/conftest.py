@@ -60,6 +60,14 @@ def _isolate_auto_graph_extraction(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_project_memory_cache(tmp_path, monkeypatch):
+    """project_memory 共享缓存全测试隔离（H1-②b-⑩ 增补）：acquire_project_memory
+    把 save_cache 落盘到 PROJECT_MEMORY_CACHE_DIR（缺省 ~/.opensoul）——测试
+    绝不写生产缓存目录。显式 cache_path/覆盖 env 的测试按其覆盖为准。"""
+    monkeypatch.setenv("PROJECT_MEMORY_CACHE_DIR", str(tmp_path / "pm_cache"))
+
+
+@pytest.fixture(autouse=True)
 def _isolate_echo_templates_db(tmp_path, monkeypatch):
     """ECHO_TEMPLATES_DB 全测试隔离（DEC-⑦-㉑ 增补，TL-①/PROACT-① 同族）：
     src.api.echo 模块级 template_engine 单例 import 即构造（修前缺省恒生产

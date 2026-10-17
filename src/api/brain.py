@@ -120,7 +120,7 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     # F3b-② 身份派生收口：tenant 声明只可确认绑定、不得矛盾（本端点不消费
     # tenant，收口在声明面；进程内直调不带 authorization=匿名语义，A1 接线不变）
     identity = bind_identity(authorization, req.tenant_id)
-    from src.cortex.project_memory import ProjectMemory
+    from src.cortex.project_memory import acquire_project_memory
     from src.cortex.risk_assessor import RiskAssessor
     from src.database.postgres import db_pool
     from src.learn.experience import ExperienceMemory
@@ -179,8 +179,11 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
     # F4b-㉜：同实例供 5d 相关经验观测面复用（get_relevant_experience 修前全仓
     # 零消费=wired-but-not-functional 产出面）。
     experience_memory = ExperienceMemory(db_pool, *ADVISORY_SCOPE)
+    # H1-②b-⑩ project_memory 调度：修前每请求构造 ProjectMemory=全仓重扫
+    # （H1-② 定性「缓存增量无调度，think 每请求全仓重扫」）→共享实例 TTL 节流
+    # 增量刷新，同 repo_root 请求间零扫描。
     assessor = RiskAssessor(
-        ProjectMemory(req.repo_root) if req.repo_root else None,
+        await acquire_project_memory(req.repo_root) if req.repo_root else None,
         experience_memory,
     )
     task_ctx = TaskContext(user_input=req.user_input, intent=intent)
@@ -568,12 +571,13 @@ async def status():
 
 @router.post("/refresh")
 async def refresh(repo_root: str = ""):
-    """刷新项目记忆"""
+    """刷新项目记忆（H1-②b-⑩：共享实例强制增量刷新+落盘——与 think 同一真源，
+    修前构造一次性 ProjectMemory 丢弃=刷新不影响 think 用的实例）"""
     if not repo_root:
         return {"status": "no_repo_root"}
-    from src.cortex.project_memory import ProjectMemory
+    from src.cortex.project_memory import acquire_project_memory
 
-    pm = ProjectMemory(repo_root)
+    pm = await acquire_project_memory(repo_root, force_refresh=True)
     stats = pm.get_stats()
     return {"status": "refreshed", **stats}
 
