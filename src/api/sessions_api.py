@@ -457,8 +457,14 @@ async def get_session(
 async def rename_session(
     session_id: str,
     body: dict,
+    user_id: UUID = Depends(get_current_user),
 ):
-    """Rename a session (update title) — works for both Hermes and agent sessions."""
+    """Rename a session (update title) — works for both Hermes and agent sessions.
+
+    身份轴（SESS-① 留档缺口收口）：与同文件 delete/get/search 等鉴权家族同款
+    get_current_user 门——修前本端点是家族唯一无鉴权写口，未认证调用方可改任意
+    会话标题。user_id 仅作鉴权轴（会话行无归属列，行级过滤不存在=同 delete 语义）。
+    """
     new_title = body.get("title", "").strip()
     if not new_title:
         raise HTTPException(status_code=400, detail="Title is required")
