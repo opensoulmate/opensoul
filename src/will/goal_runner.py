@@ -64,6 +64,11 @@ class GoalOutcome(StrEnum):
     NONE = "none"  # 不计分（question/suggest/todo等）
 
 
+# H1-②b-⑪：自驱循环步骤工具名（goal_loop 驱动每步以该名记事件）——
+# classify_tool_outcome 单一源判法消费（goal_loop.py 只 import 不手抄），禁第二套判法漂移。
+LOOP_STEP_TOOL = "goal_loop_step"
+
+
 class GoalEvent(BaseModel):
     """Goal循环中的一次事件记录"""
 
@@ -342,6 +347,14 @@ class GoalRunner:
                 return GoalOutcome.FAILED
             return GoalOutcome.SUCCESS
 
+        # 自驱循环步骤（H1-②b-⑪）：过程回合=LLM 建议/进展产出，非工具执行证据——
+        # 成功不计 success（禁 goal_report 靠循环 chatter 过事件验证=fabricated
+        # success），真失败计入（LLM 故障→连续失败 fail-stop 判定可达）。
+        if tool_name == LOOP_STEP_TOOL:
+            if result.get("error") or result.get("success") is False:
+                return GoalOutcome.FAILED
+            return GoalOutcome.NONE
+
         # 通用工具：error字段判定
         if result.get("error") or result.get("success") is False:
             return GoalOutcome.FAILED
@@ -531,11 +544,19 @@ class GoalRunner:
         self._save()
         return goal
 
-    def record_loop(self, goal_id: str) -> Goal | None:
-        """记录一次自主循环迭代，自动检查是否该停止。"""
+    def record_loop(self, goal_id: str, tenant_id: str | None = None) -> Goal | None:
+        """记录一次自主循环迭代，自动检查是否该停止。
+
+        H1-②b-⑪：首个生产消费点=goal_loop 自驱驱动（src/will/goal_loop.py
+        run_loop_iteration）——loop_count 自此在生产路径增长，_evaluate_state 的
+        max_loops 停机判定生产可达。tenant_id 给定时写闸门前置（③c-1 纪律：
+        跨租户恒拒，禁终态差分泄露他租户 goal 状态）。
+        """
         goal = self._goals.get(goal_id)
         if not goal:
             return None
+        if tenant_id is not None:
+            self.gate(self._tenant_val(tenant_id), goal.tenant_id, goal_id, "write")
         if goal.state != GoalState.ACTIVE:
             return goal
         goal.loop_count += 1

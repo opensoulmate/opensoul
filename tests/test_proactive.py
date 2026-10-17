@@ -125,6 +125,7 @@ def test_default_watchers_registered():
         "pattern_extract",
         "advisory_review",
         "self_evolve",
+        "goal_loop",
     }
     intervals = {
         w["name"]: w["interval_seconds"] for w in asyncio.run(eng.get_status())["watchers"]
@@ -136,6 +137,7 @@ def test_default_watchers_registered():
         > intervals["pattern_extract"]
         > intervals["experience_collect"]
         > intervals["heredity_triggers"]
+        > intervals["goal_loop"]
         > 0
     )
 

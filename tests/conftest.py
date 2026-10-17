@@ -139,6 +139,23 @@ def _isolate_behavior_execution_faces(tmp_path, monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_goal_loop_faces(tmp_path, monkeypatch):
+    """H1-②b-⑪ goal 自驱循环面全测试隔离（PROACT-③ 同族）：
+    - will_goals.json（GoalRunner._PERSIST_PATH 写入+回载面）：tmp 每用例
+      独立，测试进程心跳 tick goal_loop 绝不读写生产 will_goals.json；
+    - 模块单例 _runner 每用例复位（构造期 _load 已读真源的陈旧目标禁泄漏进新用例）；
+    - goal_loop 步执行器 LLM 面：llm_api_key 置空→ default_step_executor 如实
+      回无配置零网络（禁测试进程打真 LLM；逐测试 monkeypatch 换 settings 可覆盖）。"""
+    import src.will.goal_loop as goal_loop_mod
+    import src.will.goal_runner as goal_runner_mod
+    from src.config import Settings
+
+    monkeypatch.setattr(goal_runner_mod.GoalRunner, "_PERSIST_PATH", tmp_path / "will_goals.json")
+    monkeypatch.setattr(goal_runner_mod, "_runner", None)
+    monkeypatch.setattr(goal_loop_mod, "settings", Settings(llm_api_key=""))
+
+
 class _LazyEvolutionEngine:
     """EvolutionEngine 懒替身：首次属性访问才构造 tmp 实例（数据面同真实现）。"""
 

@@ -189,6 +189,20 @@ async def self_evolve(
     return await run_evolution_cycle(tenant_id=tenant_id, agent_id=agent_id, db_pool=db_pool)
 
 
+def goal_loop() -> dict:
+    """H1-②b-⑪ 自驱循环自动调度：run_active_goal_loops 周期化。
+
+    与手动端点 POST /api/will/goals/{goal_id}/loop 共用
+    run_loop_iteration 同一代码路径（F2b-① 纪律，禁两套编排）；
+    record_loop 计次+max_loops 停机判定随每拍真执行（自驱循环轴自此有
+    驱动方）。全部 ACTIVE goal 系统视图逐个推进，单 goal 失败不掀
+    翻其余。
+    """
+    from src.will.goal_loop import run_active_goal_loops
+
+    return run_active_goal_loops()
+
+
 # 行为 → 执行间隔（秒）：维护类低频、采集类中频、巡检类高频
 DEFAULT_INTERVALS: dict[str, float] = {
     "memory_decay": 6 * 3600,
@@ -200,11 +214,14 @@ DEFAULT_INTERVALS: dict[str, float] = {
     # G1-② 全链最低频（采集1h/提取2h/回流4h/进化8h）：基于积累数据进化，
     # 提案签名去重+审批管线（声明不等于执行）不刷屏
     "self_evolve": 8 * 3600,
+    # H1-②b-⑪ 自驱循环工作类节拍：每拍对每个 ACTIVE goal 一次真 LLM 步，
+    # 高频保持目标推进可见（成本随 ACTIVE goal 数线性）
+    "goal_loop": 300,
 }
 
 
 def register_default_watchers(engine: Any) -> list[str]:
-    """把六个默认主动行为注册进 ProactiveEngine（幂等：同名覆盖同一行为）。"""
+    """把七个默认主动行为注册进 ProactiveEngine（幂等：同名覆盖同一行为）。"""
     specs = {
         "memory_decay": (partial(memory_decay), DEFAULT_INTERVALS["memory_decay"]),
         "experience_collect": (
@@ -215,6 +232,7 @@ def register_default_watchers(engine: Any) -> list[str]:
         "pattern_extract": (partial(pattern_extract), DEFAULT_INTERVALS["pattern_extract"]),
         "advisory_review": (partial(advisory_review), DEFAULT_INTERVALS["advisory_review"]),
         "self_evolve": (partial(self_evolve), DEFAULT_INTERVALS["self_evolve"]),
+        "goal_loop": (partial(goal_loop), DEFAULT_INTERVALS["goal_loop"]),
     }
     for name, (fn, interval) in specs.items():
         engine.register_watcher(name, fn, interval_seconds=interval)

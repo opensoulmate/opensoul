@@ -1,5 +1,6 @@
 """OpenWill API — 意志系统：工作流编排、条件触发、多分支流程。"""
 
+import asyncio
 import hmac
 from typing import Any, Optional
 
@@ -705,6 +706,7 @@ async def dag_stats():
 
 
 # ── P1 Goal自主目标循环（kilocode goal/runner.ts移植）──
+from src.will.goal_loop import run_loop_iteration
 from src.will.goal_runner import (
     GoalAccessDenied as _GoalAccessDenied,
 )
@@ -853,6 +855,28 @@ async def record_goal_event(
         raise HTTPException(404, "Goal not found or already terminal")
     goal = runner.get_goal(goal_id)
     return {"event": event.model_dump(), "goal_state": goal.state.value if goal else "unknown"}
+
+
+@router.post("/goals/{goal_id}/loop")
+async def goal_loop_step(goal_id: str, authorization: str | None = Header(None)):
+    """Run one self-driven loop iteration for the goal (H1-②b-⑪ 自驱循环).
+
+    与 proactive goal_loop 行为共用 run_loop_iteration 同一代码路径：
+    真 LLM 步产出朝目标的下一步动作/进展（事件留痕）＋record_loop 计次（
+    max_loops 停机判定随之生效）。非 ACTIVE goal 如实 skipped 不触达执行器。
+    F3b-⑧：行归属租户从认证身份派生（bind_identity，匿名=default）。
+    """
+    identity = bind_identity(authorization)
+    runner = get_goal_runner()
+    try:
+        result = await asyncio.to_thread(
+            run_loop_iteration, goal_id, runner=runner, tenant_id=identity.tenant_id
+        )
+    except _GoalAccessDenied as e:
+        raise HTTPException(403, f"goal access denied: {e.reason}")
+    if result is None:
+        raise HTTPException(404, "Goal not found")
+    return result
 
 
 @router.post("/goals/{goal_id}/pause")

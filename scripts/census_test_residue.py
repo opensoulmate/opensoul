@@ -522,6 +522,7 @@ PROACTIVE_INTERVALS = {
     "pattern_extract": 7200.0,
     "advisory_review": 14400.0,
     "self_evolve": 28800.0,
+    "goal_loop": 300.0,
 }
 # PROACT-① 收口时刻（2026-10-14 15:37 CST=07:37 UTC）：in-process 测试写方自此隔离
 # 进 tmp（PROACTIVE_DB env），此后新增 A 类行=隔离仍在漏（增长闸门，after_tl2_6 同款）。
