@@ -942,6 +942,22 @@ async def decision_list(
     return {"decisions": entries, "count": len(entries)}
 
 
+@router.get("/decisions/pending")
+async def decision_pending(
+    domain: str = Query(default=""),
+    agent_id: str = Query(default=""),
+):
+    """待回填盘点（TradingAgents get_pending_entries）：pending 复盘查询面。
+
+    与 GET /decisions?status=pending 的差异：agent_id 过滤 + created_at 升序
+    （先进先出复盘顺序，list_decisions 是降序+limit 截断）。
+    entries[].decision_id 可直接喂 POST /decisions/{decision_id}/outcome 回填闭环
+    ——盘点出待回填项后按 id 回填，不再只靠调用方自留 decision_id。
+    """
+    entries = _decision_log.get_pending_entries(domain=domain, agent_id=agent_id)
+    return {"entries": entries, "count": len(entries), "domain": domain, "agent_id": agent_id}
+
+
 @router.get("/decisions/stats")
 async def decision_stats():
     """决策日志统计：success_rate/by_domain/provider成功率——"有没有进化"的度量面。"""
