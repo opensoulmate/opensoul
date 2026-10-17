@@ -5,7 +5,6 @@
 - api/search.py POST /api/search/reindex：手动全量重建
 - api/vein.py + api/capture.py写入点：index_knowledge_doc()增量索引
 - services/knowledge.py create/update 写面：index_knowledge_doc()增量索引（KN-②）
-- api/vein.py删除knowledge时：delete_knowledge_doc()
 
 设计约束：
 - 全部操作fire-and-forget语义：索引失败不阻塞业务主流程（mem0 §1.1失败可见=logger.warning）
@@ -104,18 +103,6 @@ def schedule_index(knowledge_id: str) -> None:
         pass
     except Exception as e:
         logger.warning("meili schedule_index %s failed: %s", knowledge_id, e)
-
-
-def delete_knowledge_doc(knowledge_id: str) -> bool:
-    """删除索引条目（knowledge删除时调用）。"""
-    if not meili_client.AVAILABLE:
-        return False
-    try:
-        meili_client.delete_document(str(knowledge_id))
-        return True
-    except Exception as e:
-        logger.warning("meili delete %s failed: %s", knowledge_id, e)
-        return False
 
 
 def get_index_stats() -> dict:

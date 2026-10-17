@@ -165,10 +165,6 @@ class MigrationEngine:
             for s in scripts
         ]
 
-    def get_pending_migrations(self, component_id: str = None) -> list[dict]:
-        """Get all pending (unapplied) migration scripts."""
-        return self.list_scripts(component_id=component_id, applied=False)
-
     def get_stats(self) -> dict:
         total_schemas = sum(len(v) for v in self._schemas.values())
         applied = sum(1 for s in self._scripts if s.applied)

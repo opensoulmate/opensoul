@@ -36,7 +36,6 @@ class TestSessionGrants:
     def test_fail_closed_default_deny(self, gate):
         # 零grant = 零可见（Letta memory-confinement fail-closed）
         assert gate.is_tool_allowed("sess-unknown", "mcp-github", "list_issues") is False
-        assert gate.filter_tools("sess-unknown", [{"server_id": "mcp-github", "name": "x"}]) == []
 
     def test_cross_session_isolation(self, gate):
         gate.grant("sess-1", "mcp-github", "*")
@@ -62,16 +61,6 @@ class TestSessionGrants:
             gate.grant("s", "", "*")
         with pytest.raises(ValueError):
             gate.grant("s", "mcp-github", "")
-
-    def test_filter_tools(self, gate):
-        gate.grant("sess-1", "mcp-github", "list_issues")
-        tools = [
-            {"server_id": "mcp-github", "name": "list_issues"},
-            {"server_id": "mcp-github", "name": "create_pr"},
-            {"server_id": "mcp-memory", "name": "search_nodes"},
-        ]
-        visible = gate.filter_tools("sess-1", tools)
-        assert [t["name"] for t in visible] == ["list_issues"]
 
     def test_allowed_server_ids(self, gate):
         gate.grant("sess-1", "a", "*")

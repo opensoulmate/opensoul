@@ -1,8 +1,6 @@
 """模型路由配置 API"""
 
-import json
 import os
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter
@@ -10,45 +8,6 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# 配置文件路径
-CONFIG_DIR = Path.home() / "opensoul" / "data"
-CONFIG_FILE = CONFIG_DIR / "model_router_config.json"
-
-# 默认配置
-DEFAULT_CONFIG = {
-    "enabled": False,
-    "mode": "auto",
-    "defaultStrategy": "local-first",
-    "autoParams": {
-        "shortTextThreshold": 50,
-        "codeDetection": True,
-        "questionDetection": True,
-        "imageAnalysis": True,
-    },
-    "rules": [
-        {
-            "id": "rule-1",
-            "name": "简单对话",
-            "description": "日常对话、简单问答",
-            "localModel": "mimo-7b-local",
-            "onlineModel": "mimo-v2.5-pro",
-        },
-        {
-            "id": "rule-2",
-            "name": "代码生成",
-            "description": "代码编写、调试、分析",
-            "localModel": "mimo-7b-local",
-            "onlineModel": "mimo-v2.5-pro",
-        },
-        {
-            "id": "rule-3",
-            "name": "复杂推理",
-            "description": "多步骤推理、数学计算",
-            "localModel": "mimo-7b-local",
-            "onlineModel": "mimo-v2.5-pro",
-        },
-    ],
-}
 
 # 路由模式配置
 ROUTER_MODES = {
@@ -59,24 +18,6 @@ ROUTER_MODES = {
 }
 
 current_mode = "balance"
-
-
-def load_config() -> dict:
-    """加载配置"""
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return DEFAULT_CONFIG.copy()
-
-
-def save_config(config: dict):
-    """保存配置"""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
 
 
 class RouterModeRequest(BaseModel):

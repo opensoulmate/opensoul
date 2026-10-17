@@ -366,18 +366,6 @@ def require_permission(resource: str, action: str):
     return _check
 
 
-# ── Audit middleware helper ─────────────────────────────────────────────
-
-
-def audit_write(action: str, resource: str):
-    """Call this inside handlers to record an audit entry."""
-
-    def _record(user_id: int | None, detail: str = "", ip: str = "", tenant_id: str | None = None):
-        _record_audit(user_id, action, resource, detail, ip, tenant_id)
-
-    return _record
-
-
 # ── Routes: Authentication ─────────────────────────────────────────────
 
 

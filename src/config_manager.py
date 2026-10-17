@@ -104,7 +104,3 @@ config_manager = ConfigManager()
 
 def get_config(section: str | None = None, key: str | None = None) -> Any:
     return config_manager.get(section, key)
-
-
-def save_config(data: dict[str, Any]) -> dict[str, Any]:
-    return config_manager.update(data)

@@ -122,24 +122,5 @@ class QdrantStore:
             points_selector=ids,
         )
 
-    def delete_by_knowledge_id(self, knowledge_id: UUID):
-        """Delete all points belonging to a knowledge item."""
-        if not self.AVAILABLE:
-            logger.debug("Qdrant unavailable, skipping delete_by_knowledge_id")
-            return
-        if not self._check_connection():
-            return
-        self.client.delete(
-            collection_name=settings.qdrant_collection,
-            points_selector=Filter(
-                must=[
-                    FieldCondition(
-                        key="knowledge_id",
-                        match=MatchValue(value=str(knowledge_id)),
-                    )
-                ]
-            ),
-        )
-
 
 qdrant_client = QdrantStore()

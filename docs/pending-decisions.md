@@ -226,6 +226,18 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 
 
+## ⑳ T3 死面处置（T3 重复/便利/配置原语 20 项 + H1-② 降级 4 项：删除 or 留口）
+
+**状态：已按建议默认 B 先行执行（2026-10-17 DEC-⑳）**——依据：H1-②b-⑮ 周期日志候选首件「T3 降级 4 项处置」+ H0 留档「T3 重复/便利/配置原语 20 项（删除 or 留口另拍，无消费不等于断点）」+ H1-② 诚实边界②「降级 4 项不删（T3 处置另拍）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑲ 自决先例。实现=**逐项裁决：删 10（语义被活面 100% 覆盖：重复原语/别名/便利包装/被 route_policy 取代）+ 留 13（配置 API/独特语义/测试支撑面，宁窄勿滥）**，git 可回滚。**若拍板回一句即改道：「⑳改A」=revert 全部删除件恢复（回死面态）、「⑳改A:<符号>」=只恢复指定件、「⑳改C」=反向全删（留口 13 项也删，需接受丢配置口/测试支撑面）**。
+
+**处置依据（逐条实证，file:line 对 H0 工件 data/dead_face_census_h0.json + H1-② 工件 data/h1_t2_review_h1_2.json）**：
+- **删 10**（每项均验证覆盖活面真在场且删除零行为影响，tests/test_t3_disposal.py 静态锁死禁复活）：①services/meili_indexer.delete_knowledge_doc（重复——主删除面 services/knowledge.py:353 已清 meili doc；其 docstring 自证「api/vein.py删除knowledge时调用」实际零调用=H0 追线实证）②database/qdrant.delete_by_knowledge_id（重复——主面走 delete_points 按 embedding_id 删）③middleware/auth.get_current_active_user（别名——docstring 自证 Alias，get_current_user 已检 active）④mcp/session_grants.SessionToolGate.filter_tools（便利包装——is_tool_allowed 活且 api/mcp.py 双重过滤真消费）⑤hippo/decision_log.batch_update_with_outcomes（H1-② 降级件：update_with_outcome 便利包）⑥healer/diagnose.OrganHealer.heal_all + _noop（H1-② 降级件：/heal-all 端点自带诊断-修复-复查循环更全且不调此方法）⑦heredity/migration.get_pending_migrations（H1-② 降级件：list_scripts(applied=False) 便利包装）⑧api/enterprise.audit_write（H1-② 降级件：装饰器工厂便利包，_record_audit 7+ 真写点活）⑨api/model_router.load_config/save_config + 孤儿常量 CONFIG_DIR/CONFIG_FILE/DEFAULT_CONFIG + 随删孤儿 import（被 route_policy 持久层取代——/config 端点 docstring 自证「接线route_policy持久层」，CONFIG_FILE 面零其余消费）⑩config_manager.save_config（便利包装——config_manager.update 活，api/config_api 直用 update）。
+- **留 13**（无「被活面覆盖」证据，H0「无消费不等于断点」）：a2a set_agent_card/set_extended_agent_card（进程内配置 API，published() fold 与 extendedAgentCard 派生的配置口）、nest get_by_namespace（namespace 逆查唯一语义）、pulse timer.cancel_signal（软取消状态原语，与 delete_signal 硬删分界）、vein get_latest_version/get_version_count（语义化查询）、mirror get_variable（单键读，与 set_variable 成对）、session_fsm can_transition（dry-run 判定唯一语义）、trajectory gen_ai_attributes（OTel GenAI semconv 纯函数，spec 对齐）、isolation reset_probe_cache（模块缓存重置口）、token_attribution reset_attributor/items_from_openai_tools（测试支撑面/转换原语，测试面广泛消费）、dag_planner visualize_ascii（ASCII 渲染与 to_mermaid 非同格式，非 100% 覆盖）。
+- 选项：**A** 维持现状（24 项全留）/ **B** 逐项裁决（删被覆盖者、留其余）/ **C** 一律全删（含配置 API/测试支撑面）。
+- 权衡：A=死面留仓反复误读（H0 已实证误读案例：filter_tools 初判 T1 被复核降级）且 Phase H「死面清零」不推进，H1-① 留档「T3 两重复原语未动」持续悬置；C 违 H0 明示「无消费不等于断点」与宁窄勿滥——删 set_agent_card=丢 a2a 卡面配置口、删 reset_attributor=测试支撑面塌、删 gen_ai_attributes=丢 OTel semconv 对齐原语，是真丢能力非清死面；B 按证据分级（有覆盖/取代证据才删，git revert 可整体回滚），与 TL/DEC-⑮ 处置先例同纪律。
+- 建议：**B**。
+- 诚实边界：①config_manager.get_config 与已删 save_config 同型便利包装但未在 H0 T3 清单（名字级普查同名碰撞漏报方向所致），本拍不越清单处置，留档另拍可复核②KeyManager.get_keys（H1-②「不应建」件）不属本拍 24 项范围——「不建出口」裁决维持，方法本体留测试内省（test_key_remove_face 消费），若主张连方法一并删除另拍③删除件中被测试消费的两处（session_grants.filter_tools、batch_update_with_outcomes）测试契约随更新（断言意图改经活面表达，零意图丢失）④留口 13 项仍为死面（零生产消费不变），后续若出现「被活面覆盖」证据可再拍处置⑤全量回归+live 冒烟见周期日志 T3-① 行。
+
 ## 附：锚点核验
 
 本件引用的全部 file:line 锚点已程序化核验（逐条对当前 HEAD 源码回读，结果存 `data/dec1_anchor_verification.json`）；核验不通过的锚点不上墙。核验方式见周期日志 DEC-① 行。

@@ -363,19 +363,6 @@ class OrganHealer:
 
         return result
 
-    async def heal_all(self, results: list[DiagnosisResult]) -> list[DiagnosisResult]:
-        """Attempt to heal all failed organs."""
-        tasks = []
-        for r in results:
-            if not r.healthy and r.recommended_action != Action.NONE:
-                tasks.append(self.heal(r))
-            else:
-                tasks.append(asyncio.coroutine(lambda r=r: r)() if False else self._noop(r))
-        return await asyncio.gather(*tasks)
-
-    async def _noop(self, r: DiagnosisResult) -> DiagnosisResult:
-        return r
-
     # ── Diagnosis + Heal combined ─────────────────────────────
 
     async def diagnose_and_heal(self, organ: str, endpoint: str) -> DiagnosisResult:

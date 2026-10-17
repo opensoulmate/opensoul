@@ -381,24 +381,6 @@ class DecisionLog:
         )
         return entry
 
-    def batch_update_with_outcomes(self, updates: list[dict]) -> list[dict]:
-        """批量回填（TradingAgents batch_update_with_outcomes）。每项需含decision_id或domain。"""
-        results = []
-        for u in updates:
-            if not isinstance(u, dict):
-                continue
-            r = self.update_with_outcome(
-                decision_id=u.get("decision_id", ""),
-                domain=u.get("domain", ""),
-                outcome=u.get("outcome", ""),
-                metrics=u.get("metrics"),
-                reflection=u.get("reflection", ""),
-                success=u.get("success"),
-                resolution_date=u.get("resolution_date", ""),
-            )
-            results.append({"ok": r is not None, "result": r})
-        return results
-
     # ── 查询路径 ──────────────────────────────────────────────
 
     def _query(self, sql: str, params: list) -> list[dict]:

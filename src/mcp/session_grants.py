@@ -150,14 +150,6 @@ class SessionToolGate:
         ).fetchall()
         return {r["server_id"] for r in rows}
 
-    def filter_tools(self, session_id: str, tools: list[dict]) -> list[dict]:
-        """按 grant 过滤 registry 工具列表（每项需含 server_id + name 键）。"""
-        return [
-            t
-            for t in tools
-            if self.is_tool_allowed(session_id, t.get("server_id", ""), t.get("name", ""))
-        ]
-
     # ── 发布侧auth：consumer token 签发/校验 ─────────────────────
 
     def issue_consumer(self, consumer_id: str, scopes: list[str] | None = None) -> tuple[str, dict]:

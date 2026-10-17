@@ -42,11 +42,6 @@ async def get_current_user(
     }
 
 
-async def get_current_active_user(user: dict = Depends(get_current_user)) -> dict:
-    """Alias that makes intent explicit — user is already checked active."""
-    return user
-
-
 async def get_agent_from_header(request: Request) -> dict | None:
     """Extract agent token from X-Agent-Token header and validate."""
     token = request.headers.get("X-Agent-Token")

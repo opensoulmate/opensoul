@@ -98,16 +98,21 @@ class TestDecisionLogCore:
         assert "STORE" in events and "RESOLVE" in events
 
     def test_batch_update(self, log):
+        # T3 处置：batch_update_with_outcomes 便利包已删（H1-② 降级件），
+        # 回填语义=逐条 update_with_outcome（单条面为唯一回填真源）。
         e1 = log.store_decision(decision="b1", domain="batch")
         e2 = log.store_decision(decision="b2", domain="batch")
-        results = log.batch_update_with_outcomes(
-            [
-                {"decision_id": e1["decision_id"], "outcome": "o1", "success": True},
-                {"decision_id": e2["decision_id"], "outcome": "o2", "success": False},
-                {"decision_id": "dec_missing", "outcome": "x"},
-            ]
-        )
-        assert [r["ok"] for r in results] == [True, True, False]
+        results = []
+        for u in [
+            {"decision_id": e1["decision_id"], "outcome": "o1", "success": True},
+            {"decision_id": e2["decision_id"], "outcome": "o2", "success": False},
+            {"decision_id": "dec_missing", "outcome": "x", "success": None},
+        ]:
+            r = log.update_with_outcome(
+                decision_id=u["decision_id"], outcome=u["outcome"], success=u["success"]
+            )
+            results.append(r is not None)
+        assert results == [True, True, False]
 
     def test_list_and_stats(self, log):
         log.store_decision(decision="p1", domain="dom_a")
