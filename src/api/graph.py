@@ -1,12 +1,18 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from src.api._errors import stats_error
 from src.database.postgres import db_pool
 from src.models.entity import GraphData, RelationCreate, RelationResponse
 from src.services.entity import get_entity_with_relations, list_entities
-from src.services.graph import create_relation, get_graph, list_relations
+from src.services.graph import (
+    create_relation,
+    find_path,
+    get_entity_neighbors,
+    get_graph,
+    list_relations,
+)
 
 router = APIRouter()
 
@@ -68,10 +74,50 @@ async def get_entity_detail(entity_id: UUID, user_id: str = Query("default")):
     uid = _resolve_user_id(user_id)
     entity = await get_entity_with_relations(entity_id, uid)
     if not entity:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Entity not found")
     return entity
+
+
+@router.get("/entities/{entity_id}/neighbors")
+async def get_neighbors(
+    entity_id: UUID,
+    user_id: str = Query("default", description="User ID (UUID or username)"),
+):
+    """Entity neighbors: directly connected entities + relation types/direction.
+
+    H1-②b-⑦a 查询面出口（get_entity_neighbors 首个 API 消费点，修前零出口）。
+    """
+    uid = _resolve_user_id(user_id)
+    result = await get_entity_neighbors(uid, entity_id)
+    if result["entity"] is None:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    return result
+
+
+@router.get("/paths")
+async def get_paths(
+    source_id: UUID,
+    target_id: UUID,
+    user_id: str = Query("default", description="User ID (UUID or username)"),
+    max_depth: int = Query(5, ge=1, le=10, description="Max path length in nodes"),
+):
+    """All paths between two entities (BFS). H1-②b-⑦a 查询面出口（find_path 首个
+    API 消费点，修前零出口）。两端实体都须可见，否则 404（缺/跨用户同形=无存在性
+    探测面）；无路可走=空 paths 如实回，不谎报错误。
+    """
+    uid = _resolve_user_id(user_id)
+    if (await get_entity_with_relations(source_id, uid)) is None or (
+        await get_entity_with_relations(target_id, uid)
+    ) is None:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    paths = await find_path(uid, source_id, target_id, max_depth)
+    return {
+        "source_id": source_id,
+        "target_id": target_id,
+        "max_depth": max_depth,
+        "paths": paths,
+        "count": len(paths),
+    }
 
 
 @router.post("/relations", response_model=RelationResponse)

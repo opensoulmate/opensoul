@@ -20,7 +20,9 @@ def _convert_sql_for_sqlite(sql: str, args: tuple) -> tuple[str, tuple]:
 
     Handles:
     - $N → ? positional placeholders
-    - ANY($N) → expanded IN (?, ?, ...)
+    - "= ANY($N)" → " IN (?, ...)"（等号并入替换，禁产出 "= IN"=非法 SQL——
+      2026-10-17 实证：旧实现只换 ANY($N) 本身，`= ANY($1)` 变 `= IN (?)`
+      sqlite 必炸 near "IN"，而既有测试只断言字符串从未真执行把 bug 锁死）
     - NOW() → datetime('now')
     - UUID objects → str for SQLite compatibility
     - 单tuple/list参数展开（调用约定兼容层，2026-09-21实证修复）
@@ -35,7 +37,11 @@ def _convert_sql_for_sqlite(sql: str, args: tuple) -> tuple[str, tuple]:
     # ProgrammingError绑定失败（"写了≠接线了"的适配层形态：表建好了，
     # 查询照样全挂）。仅当「单序列参数」且「占位符数量与序列长度一致」
     # 时展开；数量不一致保持原样→sqlite按原样报绑定错误（不静默吞）。
-    if len(args) == 1 and isinstance(args[0], (list, tuple)):
+    if len(args) == 1 and isinstance(args[0], (list, tuple)) and "ANY(" not in sql:
+        # ANY($N) 形态的调用约定=数组作单参传入（graph get_graph 的
+        # source_id = ANY($1) AND target_id = ANY($1) 同一 $1 复用两处），
+        # 命中"占位符出现次数==序列长度"巧合（恰 2 实体）会被误展开成
+        # 两标量错绑——ANY 形态一律不走单序列展开。
         seq = tuple(args[0])
         n_sqlite = sql.count("?")
         n_pg = len(_PARAM_RE.findall(sql))
@@ -52,18 +58,24 @@ def _convert_sql_for_sqlite(sql: str, args: tuple) -> tuple[str, tuple]:
     #     OFFSET 绑到 limit=50）→ 列表恒空；ANY($N) 展开后后续 $N 的参数位置
     #     也会错位。本扫描对两种情形按编号正确绑定。
     #     无 $N 的 "?" 风格调用点（services/feedback.py 等）参数原样透传。
-    _TOKEN_RE = re.compile(r"ANY\(\$(\d+)\)|\$(\d+)")
+    _TOKEN_RE = re.compile(r"\s*=\s*ANY\(\$(\d+)\)|ANY\(\$(\d+)\)|\$(\d+)")
     expanded_args: list = []
 
     def _scan(m: re.Match) -> str:
-        if m.group(1):
-            arg = args[int(m.group(1)) - 1]
+        if m.group(1) or m.group(2):
+            # "= ANY($N)" 连等号一起替换 → " IN (...)"；bare ANY($N) → "IN (...)"。
+            n = int(m.group(1) or m.group(2))
+            prefix = " IN (" if m.group(1) else "IN ("
+            arg = args[n - 1]
             if isinstance(arg, (list, tuple)):
+                if not arg:
+                    # 空数组：`= ANY('{}')` 语义=False——禁产出 "IN ()"=非法 SQL。
+                    return prefix + "SELECT 1 WHERE 0)"
                 expanded_args.extend(arg)
-                return "IN (" + ", ".join("?" for _ in arg) + ")"
+                return prefix + ", ".join("?" for _ in arg) + ")"
             expanded_args.append(arg)
-            return "IN (?)"
-        expanded_args.append(args[int(m.group(2)) - 1])
+            return prefix + "?)"
+        expanded_args.append(args[int(m.group(3)) - 1])
         return "?"
 
     if _PARAM_RE.search(sql):
