@@ -1,10 +1,14 @@
+import asyncio
 import json
+import logging
 import uuid as _uuid
 from uuid import UUID
 
 from src.database.meilisearch import meili_client
 from src.database.postgres import db_pool
 from src.database.qdrant import qdrant_client
+
+logger = logging.getLogger(__name__)
 
 try:
     from qdrant_client.models import PointStruct
@@ -13,6 +17,7 @@ except ImportError:
 from src.models.knowledge import KnowledgeCreate, KnowledgeUpdate, normalize_tags
 from src.services.chunking import smart_chunk
 from src.services.embedding import get_embeddings_batch
+from src.services.graph import build_graph_from_text
 from src.services.meili_indexer import index_knowledge_doc
 
 
@@ -122,6 +127,32 @@ async def _drop_chunk_face(knowledge_id: str) -> None:
     await db_pool.execute("DELETE FROM knowledge_chunks WHERE knowledge_id = $1", knowledge_id)
 
 
+async def _auto_build_graph(knowledge_id: str, text: str, user_id: UUID) -> None:
+    """知识入库自动建图（H1-②b-⑦b）——build_graph_from_text 首个生产接线。
+
+    best-effort 旁路纪律（G1-⑤ 同族）：建图（LLM 抽取）失败 logger.warning 带真因
+    可见，绝不吃掉入库主路径；建图结果不进 create 响应（后台派生面，可观测面=
+    /api/graph 查询面（含 ⑦a neighbors/paths）+ 日志）。
+    """
+    try:
+        graph = await build_graph_from_text(text or "", user_id)
+    except Exception as exc:  # 旁路面全捕获：失败可见（warning）不外抛不阻断
+        logger.warning("auto graph build failed for knowledge %s: %s", knowledge_id, exc)
+        return
+    logger.info(
+        "auto graph built for knowledge %s: nodes=%d edges=%d",
+        knowledge_id,
+        len(graph.nodes),
+        len(graph.edges),
+    )
+
+
+def _schedule_auto_graph(knowledge_id: str, text: str, user_id: UUID) -> "asyncio.Task":
+    """自动建图调度口（独立成缝）：LLM 抽取 timeout=60s 禁阻塞入库响应，
+    故后台任务 fire-and-forget（meili 索引 fire-and-forget 语义同族）。"""
+    return asyncio.create_task(_auto_build_graph(knowledge_id, text, user_id))
+
+
 async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
     knowledge_id = str(_uuid.uuid4())
     await db_pool.execute(
@@ -150,6 +181,12 @@ async def create_knowledge(data: KnowledgeCreate, user_id: UUID) -> dict:
     # 修前 meili 异常逃逸=行已落库后 create 500 部分写，现按 meili_indexer 既有
     # fire-and-forget 语义失败 logger.warning 不阻断业务主流程。
     await index_knowledge_doc(knowledge_id)
+
+    # 知识入库自动建图（H1-②b-⑦b）：build_graph_from_text 首个生产接线——后台
+    # 任务 best-effort（抽取 LLM 调用禁阻塞入库响应），失败 logger.warning 可见
+    # 绝不吃掉入库主路径。单一接线点：POST /、upload、pipeline、agent、mcp 五
+    # 个入库调用方全经 create_knowledge 同口。
+    _schedule_auto_graph(knowledge_id, data.content, user_id)
 
     # 响应走 get_knowledge 同一读真源（链接面 GROUP_CONCAT）：create/get/list
     # 三面 tags 同源禁双源漂移（修前 create 回吐存储行原样=tags 文本触发 500）

@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 EXTRACTION_PROMPT = """Extract entities and relations from the following text.
 Return a JSON object with two keys:
-- "entities": list of {"name": str, "type": str, "description": str}
-- "relations": list of {"source": str, "target": str, "relation_type": str}
+- "entities": list of {{"name": str, "type": str, "description": str}}
+- "relations": list of {{"source": str, "target": str, "relation_type": str}}
 
 Entity types: person, place, concept, event, organization, technology, other
 

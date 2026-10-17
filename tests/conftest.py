@@ -44,6 +44,22 @@ def _isolate_timeline_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_auto_graph_extraction(monkeypatch):
+    """自动建图 LLM 抽取面全测试隔离（H1-②b-⑦b 增补）：create_knowledge 会后台
+    调度 build_graph_from_text→extract_entities_and_relations（真 LLM HTTP
+    timeout=60s），测试默认把 graph 模块绑定的抽取 seam 替换为空结果（=无 LLM
+    key 的既有降级形态：零实体零动作），防测试进程真打 LLM/后台任务写非隔离图面。
+    需要建图行为的测试覆盖同一 seam（graph_mod.extract_entities_and_relations）
+    即可——本 fixture 缺省值可被 per-test monkeypatch 覆盖。"""
+    import src.services.graph as graph_mod
+
+    async def _no_extraction(_text: str):
+        return {"entities": [], "relations": []}
+
+    monkeypatch.setattr(graph_mod, "extract_entities_and_relations", _no_extraction)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_echo_templates_db(tmp_path, monkeypatch):
     """ECHO_TEMPLATES_DB 全测试隔离（DEC-⑦-㉑ 增补，TL-①/PROACT-① 同族）：
     src.api.echo 模块级 template_engine 单例 import 即构造（修前缺省恒生产
