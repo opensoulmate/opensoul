@@ -373,6 +373,15 @@ class ModelRouter:
         logger.info("Registered provider=%s base_url=%s priority=%d", name, base_url, priority)
         return cfg
 
+    def has_provider(self, name: str) -> bool:
+        """Whether *name* is currently registered（注册面冲突判定单一口，GLAND-②）。
+
+        HTTP 注册面 create 语义的冲突判定真源（同名已注册=409 拒，禁静默覆盖）；
+        引擎层 add_provider 的 upsert 语义（内部备胎幂等重注册）不经此口——
+        register_local_backup「已注册→幂等返回不重建ProviderConfig」即其真依赖。
+        """
+        return name in self.providers
+
     def remove_provider(self, name: str) -> int | None:
         """Remove a provider and cascade-remove its keys（整 provider 移除含钥）。
 

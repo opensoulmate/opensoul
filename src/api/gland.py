@@ -262,8 +262,26 @@ async def list_providers():
 
 @router.post("/providers")
 async def add_provider(body: ProviderCreate):
-    """Register a new provider at runtime."""
+    """Register a new provider at runtime（create 面：同名已注册=409 拒，禁静默覆盖）。
+
+    GLAND-②（DEC-㉒ 自决取 A）：注册面=create 语义——同名注册=身份冲突如实 409
+    零副作用（既有注册与钥一字不动）；替换=先 DELETE /api/gland/providers/{name}
+    （GLAND-① 级联清钥=旧凭据随旧注册撤销）再 POST 新注册——「同名再注册即复用
+    旧钥」在注册面构造上不可达（DEC-㉑ 命名的残留面收口）。引擎层
+    ModelRouter.add_provider 保持 upsert（内部备胎幂等重注册语义：
+    register_local_backup「已注册→幂等返回不重建ProviderConfig」/variant 备胎注册），
+    本闸只收外部注册面（冲突判定单一口 has_provider）。
+    """
     _ensure_bootstrapped()
+    if gateway.has_provider(body.name):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Provider '{body.name}' already registered; "
+                f"DELETE /api/gland/providers/{body.name} first (removes its keys) "
+                "to replace it"
+            ),
+        )
     gateway.add_provider(
         name=body.name,
         base_url=body.base_url,

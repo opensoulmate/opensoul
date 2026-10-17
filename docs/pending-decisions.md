@@ -247,9 +247,19 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 选项：**A** 维持不触钥（钥独立于 provider 注册，孤钥合法留驻）/ **B** 级联清钥（整 provider 移除含钥=注册与其凭据同生共死）/ **C** 不触钥+孤钥可见性/单独批量清理口。
 - 权衡：A 持续=凭据滞留（移除注册后旧钥仍可被同名再注册复用、GET /keys 面残留），且与「语义分界」docstring 漂移；C 只是暴露不清理且需发明第二套判法（「孤钥=垃圾」不成立一刀切，见边界②）；B 语义自洽（provider 身份含其凭据，移除=撤销）、与单钥面形成完整删除语义分层（单钥摘除 / 整 provider 摘除）。
 - 建议：**B**。
-- 诚实边界：①钥真源是内存+env bootstrap（load_from_env/_ensure_bootstrapped）——级联清钥作用域=当前进程，重启后 env 钥随 bootstrap 回来（DELETE 不可能永久销 env 钥，如实）②钥可合法存在于未注册 provider（env bootstrap mimo 等、POST /keys 对未注册名）——「孤钥=垃圾」不成立一刀切，故 **DELETE 未命中绝不触钥**（测试锁死：404 零副作用，绝不变相清钥）；此类钥的批量清理仍只有单钥面（如需批量口按「㉑改C」另拍）③同名覆盖注册面未动：add_provider 同名直接覆盖注册仍保留旧钥打向新 base_url（本拍只收「先删后加」路径不复用旧钥；覆盖注册面如需同名先清钥/拒注册另拍）④响应契约变更 {"status":"ok"}→{"status","provider","keys_removed"}（加性；admin-ui 两消费面 llm/gland 页只读状态码不读响应体，grep 实证零破坏）⑤ModelRouter.remove_provider 返回契约 bool→`int | None`（仓内唯一消费点 api/gland.py:286 已随更新）。
+- 诚实边界：①钥真源是内存+env bootstrap（load_from_env/_ensure_bootstrapped）——级联清钥作用域=当前进程，重启后 env 钥随 bootstrap 回来（DELETE 不可能永久销 env 钥，如实）②钥可合法存在于未注册 provider（env bootstrap mimo 等、POST /keys 对未注册名）——「孤钥=垃圾」不成立一刀切，故 **DELETE 未命中绝不触钥**（测试锁死：404 零副作用，绝不变相清钥）；此类钥的批量清理仍只有单钥面（如需批量口按「㉑改C」另拍）③同名覆盖注册面未动：add_provider 同名直接覆盖注册仍保留旧钥打向新 base_url（本拍只收「先删后加」路径不复用旧钥；覆盖注册面如需同名先清钥/拒注册另拍）——**【2026-10-18 DEC-㉒ 已落】该另拍已处置：注册面 create 语义收口（同名注册 409 拒零副作用=禁静默覆盖禁静默清钥，替换=先 DELETE 级联清钥再 POST，「同名再注册即复用旧钥」注册面构造上不可达），异议沿用「㉒改B/C」即改道**④响应契约变更 {"status":"ok"}→{"status","provider","keys_removed"}（加性；admin-ui 两消费面 llm/gland 页只读状态码不读响应体，grep 实证零破坏）⑤ModelRouter.remove_provider 返回契约 bool→`int | None`（仓内唯一消费点 api/gland.py:286 已随更新）。
 
 
+
+## ㉒ add_provider 同名覆盖注册面清钥语义（同名再注册复用旧钥残留面）
+
+**状态：已按建议默认 A 先行执行（2026-10-18 GLAND-②）**——依据：GLAND-① 周期日志候选次件「add_provider 同名覆盖注册面清钥语义（可另拍）」+㉑ 诚实边界③留档件+用户「权限/审批阻塞时别停工等批」铁律+①~㉑ 自决先例。实现=**注册面 create 语义收口**：POST /api/gland/providers 同名已注册=409 如实拒零副作用（既有注册与钥一字不动），替换=先 DELETE /api/gland/providers/{name}（GLAND-① 级联清钥=旧凭据随旧注册撤销）再 POST 新注册——「同名再注册即复用旧钥」在注册面构造上不可达；冲突判定单一口 ModelRouter.has_provider；引擎层 add_provider upsert 语义不动（内部真依赖 register_local_backup「已注册→幂等返回不重建ProviderConfig」/register_variant_backup 注册块）。**若拍板回一句即改道：「㉒改B」=同名覆盖先清钥（POST 照常 200 覆盖但旧钥级联清、keys_removed 如实计数）、「㉒改C」=revert 本拍（回同名静默覆盖保留旧钥打向新 base_url）**。
+
+**现状（控制组+live --pre 双实证 2026-10-18）**：POST /api/gland/providers 对同名 provider 直接覆盖注册（gateway.add_provider upsert）但仍保留旧钥打向新 base_url——live --pre 同探针硬证：同名 POST 200 静默覆盖、注册指向新 base_url 而旧钥 gl2e...1111 留驻+新钥 gl2e...2222 累加（2 钥并存）=「同名再注册即复用旧钥」（DEC-㉑ 命名的凭据滞留残留面）；且 create 面静默覆盖既有身份=谎报「新建」。
+- 选项：**A** 同名注册 409 拒（create 语义，替换=先 DELETE 级联清钥再 POST）/ **B** 同名覆盖先清钥（upsert+清钥，keys_removed 如实计数）/ **C** 维持现状。
+- 权衡：C 持续=凭据滞留+create 面谎报（㉑③ 已点名）；B 消滞留但引入静默破坏面——意外撞名（手误/同名不同端点）时 POST 一把清掉既有 provider 全部钥并覆盖其配置（与「禁静默破坏」F3b-③b-3 纪律相悖，且 ㉑②「钥处置宁窄勿滥」同向）；A 非破坏零静默（冲突=如实 409 零副作用），凭据滞留构造上不可达（同名身份必须先经 DELETE=旧凭据随旧注册撤销），与全仓「如实拒禁静默假成功/宁窄勿滥」纪律一致，替换流程显式可审计。
+- 建议：**A**。
+- 诚实边界：①引擎层 ModelRouter.add_provider 保持 upsert（内部真依赖：register_variant_backup 注册块无条件重注册、register_local_backup 幂等短路在调用方；两语义刻意分面——HTTP 注册面=create、引擎面=upsert，tests/test_provider_reregister_face.py TestEngineUpsertBoundary 锁死禁静默统一）②409 契约变更如实记：修前同名 POST 200 静默覆盖现 409——admin-ui llm/gland 两消费面均为「新增」表单非编辑流（grep 实证零破坏面，撞名时从静默覆盖变可见报错=诚实面扩大）③就地改 provider 配置（base_url/priority）不再能经 POST——路径=DELETE（级联清钥）+POST（带新钥）；「保钥就地改配置」能力有意移除（凭据随端点绑定：旧钥不应打向新 base_url），如需 PATCH 就地改（不触钥）另拍④has_provider 判定→add_provider 落写微窗口（单进程内存管理面低频）如实记⑤POST /keys 对任意 provider 名加钥的显式面不动（㉑② 语义：钥可合法存在于未注册 provider，显式动作非滞留）。
 
 ## 附：锚点核验
 
