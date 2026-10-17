@@ -145,6 +145,12 @@ class NativeDownloader:
         if task and task.status == DownloadStatus.PAUSED:
             task._pause_event.clear()
             task.status = DownloadStatus.DOWNLOADING
+            if task_id in self._running:
+                # 原 worker 还活着：它正等在 _pause_event 上，清事件即续跑同一条
+                # 传输。修前无条件重开 _run_download = 两个写者同时写同一 dest
+                # （双跑损坏——续传面真缺陷，H1-②b-⑨a 收口）。
+                return
+            # worker 已不在（异常退出等）：从半成品重跑
             bg_task = asyncio.create_task(self._run_download(task))
             self._running[task_id] = bg_task
             bg_task.add_done_callback(lambda _: self._running.pop(task_id, None))

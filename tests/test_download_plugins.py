@@ -138,9 +138,11 @@ class TestAria2Plugin:
             assert p.is_available() is False
 
     @pytest.mark.asyncio
-    async def test_resume_download_returns_true(self):
+    async def test_resume_download_no_task_is_honest_refusal(self):
+        # 契约随更新（H1-②b-⑨a）：修前断言 resume_download("any") is True——
+        # 锁死的正是假承诺（单行常量返回、什么都没续）。现：无 paused 任务如实 False。
         p = Aria2Plugin()
-        assert await p.resume_download("any") is True
+        assert await p.resume_download("any") is False
 
     @pytest.mark.asyncio
     async def test_pause_no_task(self):
@@ -199,9 +201,10 @@ class TestCurlResumePlugin:
         assert info.priority == 45
 
     @pytest.mark.asyncio
-    async def test_resume_download_returns_true(self):
+    async def test_resume_download_no_task_is_honest_refusal(self):
+        # 契约随更新（H1-②b-⑨a）：修前断言 True=锁死假承诺，现无 paused 任务如实 False。
         p = CurlResumePlugin()
-        assert await p.resume_download("any") is True
+        assert await p.resume_download("any") is False
 
 
 class TestAxelPlugin:

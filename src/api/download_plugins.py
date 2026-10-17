@@ -82,6 +82,20 @@ class PluginInfo:
     priority: int = 100  # lower = higher priority
 
 
+@dataclass
+class _RunningDownload:
+    """In-flight plugin download: the process plus the context needed to
+    genuinely resume after a pause (re-run the binary with its continuation
+    flag). Task identity = the ``dest`` path the download registers under —
+    the same key ``pause``/``resume_download``/``cancel`` get as task_id.
+    """
+
+    url: str
+    dest: str
+    resume: bool
+    proc: asyncio.subprocess.Process
+
+
 class DownloadPlugin(ABC):
     """Abstract base for download plugins"""
 
@@ -101,20 +115,95 @@ class DownloadPlugin(ABC):
         """Download a file with optional resume support"""
         ...
 
-    @abstractmethod
+    # ── task registry + pause/resume/cancel（全部插件单一源） ──────────
+    # 修前（H1-② 定性⑦ 假承诺面）：各插件 pause/resume_download/cancel 是
+    # 单行 return True/False 常量——resume_download 什么都没续（接线即谎报
+    # ok，F4b-⑲ 同型；Odl 连 pause/cancel 都是纯常量零操作）。现语义：
+    # pause=停传输（SIGTERM）保留半成品+续传上下文；resume_download=真重跑
+    # download(resume=True) 续传（continuation flag 由各 download() 的
+    # resume=True 路径携带）；每个返回值反映真实发生的事，禁常量假承诺。
+
+    _running: dict[str, _RunningDownload]  # 每插件类独立，__init_subclass__ 建
+    _paused: dict[str, tuple[str, str, bool]]  # task_id -> (url, dest, resume)
+    _resume_handles: dict[str, asyncio.Task]  # resume_download 派生的后台任务
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        super().__init_subclass__(**kwargs)
+        # 每插件类独立注册表（沿用旧 _tasks 类属性的隔离语义，禁跨插件共享）
+        cls._running = {}
+        cls._paused = {}
+        cls._resume_handles = {}
+
+    def _track(
+        self,
+        task_id: str,
+        url: str,
+        dest: str,
+        resume: bool,
+        proc: asyncio.subprocess.Process,
+    ) -> None:
+        self._running[task_id] = _RunningDownload(url=url, dest=dest, resume=resume, proc=proc)
+
+    def _untrack(self, task_id: str, progress: DownloadProgress | None = None) -> None:
+        self._running.pop(task_id, None)
+        if progress is None:
+            return
+        if task_id in self._paused:
+            if progress.status == "done":
+                # pause 落地前刚好跑完：没有可续的东西，续传上下文作废
+                self._paused.pop(task_id, None)
+            elif progress.status == "error":
+                # 这个 error 是 pause() 自己的 SIGTERM，不是传输故障——如实标 paused
+                progress.status = "paused"
+                progress.error = None
+
     async def pause(self, task_id: str) -> bool:
-        """Pause a download"""
-        ...
+        """停传输并保留半成品+续传上下文。
 
-    @abstractmethod
+        True=任务现在确实处于 paused（运行中→已停；已停→幂等 True）；
+        无此任务如实 False。
+        """
+        running = self._running.get(task_id)
+        if running is None:
+            return task_id in self._paused
+        self._paused[task_id] = (running.url, running.dest, running.resume)
+        self._running.pop(task_id, None)
+        running.proc.terminate()
+        return True
+
     async def resume_download(self, task_id: str) -> bool:
-        """Resume a paused download"""
-        ...
+        """真续传：重跑 download(resume=True)，二进制从半成品继续。
 
-    @abstractmethod
+        False=如实拒绝：插件声明不支持续传（supports_resume=False）、
+        无 paused 任务、或任务正在运行（没东西可续）。
+        """
+        if not self.get_info().supports_resume:
+            return False
+        ctx = self._paused.pop(task_id, None)
+        if ctx is None:
+            return False
+        url, dest, _resume_flag = ctx
+        handle = asyncio.create_task(self.download(url, dest, resume=True))
+
+        def _cleanup(_h: asyncio.Task) -> None:
+            if self._resume_handles.get(task_id) is handle:
+                self._resume_handles.pop(task_id, None)
+
+        handle.add_done_callback(_cleanup)
+        self._resume_handles[task_id] = handle
+        return True
+
     async def cancel(self, task_id: str) -> bool:
-        """Cancel a download"""
-        ...
+        """杀传输并丢弃续传上下文。True=确实取消了东西（运行中/已停/续传中）。"""
+        running = self._running.pop(task_id, None)
+        paused = self._paused.pop(task_id, None)
+        handle = self._resume_handles.pop(task_id, None)
+        if handle is not None and not handle.done():
+            handle.cancel()
+        if running is not None:
+            running.proc.kill()
+            return True
+        return paused is not None or handle is not None
 
     @abstractmethod
     def is_available(self) -> bool:
@@ -142,8 +231,6 @@ class DownloadPlugin(ABC):
 
 class Aria2Plugin(DownloadPlugin):
     """aria2c - supports HTTP resume, BitTorrent, Metalink"""
-
-    _tasks: dict[str, asyncio.subprocess.Process] = {}
 
     def get_info(self) -> PluginInfo:
         return PluginInfo(
@@ -204,7 +291,7 @@ class Aria2Plugin(DownloadPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            self._tasks[dest] = proc
+            self._track(dest, url, dest, resume, proc)
 
             while True:
                 line = await (proc.stdout.readline() if proc.stdout else asyncio.sleep(0))
@@ -252,29 +339,11 @@ class Aria2Plugin(DownloadPlugin):
             progress.status = "error"
             progress.error = str(e)
         finally:
-            self._tasks.pop(dest, None)
+            self._untrack(dest, progress)
 
         if progress_cb:
             progress_cb(progress)
         return progress
-
-    async def pause(self, task_id: str) -> bool:
-        proc = self._tasks.get(task_id)
-        if proc:
-            proc.terminate()
-            return True
-        return False
-
-    async def resume_download(self, task_id: str) -> bool:
-        # aria2 handles resume automatically with --continue=true
-        return True
-
-    async def cancel(self, task_id: str) -> bool:
-        proc = self._tasks.pop(task_id, None)
-        if proc:
-            proc.kill()
-            return True
-        return False
 
     def is_available(self) -> bool:
         return shutil.which("aria2c") is not None
@@ -347,8 +416,6 @@ class Aria2Plugin(DownloadPlugin):
 class WgetPlugin(DownloadPlugin):
     """wget - supports HTTP resume via Range header"""
 
-    _tasks: dict[str, asyncio.subprocess.Process] = {}
-
     def get_info(self) -> PluginInfo:
         return PluginInfo(
             id="wget",
@@ -392,7 +459,7 @@ class WgetPlugin(DownloadPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            self._tasks[dest] = proc
+            self._track(dest, url, dest, resume, proc)
 
             while True:
                 line = await (proc.stdout.readline() if proc.stdout else asyncio.sleep(0))
@@ -417,28 +484,11 @@ class WgetPlugin(DownloadPlugin):
             progress.status = "error"
             progress.error = str(e)
         finally:
-            self._tasks.pop(dest, None)
+            self._untrack(dest, progress)
 
         if progress_cb:
             progress_cb(progress)
         return progress
-
-    async def pause(self, task_id: str) -> bool:
-        proc = self._tasks.get(task_id)
-        if proc:
-            proc.terminate()
-            return True
-        return False
-
-    async def resume_download(self, task_id: str) -> bool:
-        return True  # wget -c handles resume
-
-    async def cancel(self, task_id: str) -> bool:
-        proc = self._tasks.pop(task_id, None)
-        if proc:
-            proc.kill()
-            return True
-        return False
 
     def is_available(self) -> bool:
         return shutil.which("wget") is not None
@@ -511,8 +561,6 @@ class WgetPlugin(DownloadPlugin):
 class CurlPlugin(DownloadPlugin):
     """curl - basic download, always available as fallback"""
 
-    _tasks: dict[str, asyncio.subprocess.Process] = {}
-
     def get_info(self) -> PluginInfo:
         return PluginInfo(
             id="curl",
@@ -555,7 +603,7 @@ class CurlPlugin(DownloadPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            self._tasks[dest] = proc
+            self._track(dest, url, dest, resume, proc)
 
             while True:
                 line = await (proc.stdout.readline() if proc.stdout else asyncio.sleep(0))
@@ -572,28 +620,11 @@ class CurlPlugin(DownloadPlugin):
             progress.status = "error"
             progress.error = str(e)
         finally:
-            self._tasks.pop(dest, None)
+            self._untrack(dest, progress)
 
         if progress_cb:
             progress_cb(progress)
         return progress
-
-    async def pause(self, task_id: str) -> bool:
-        proc = self._tasks.get(task_id)
-        if proc:
-            proc.terminate()
-            return True
-        return False
-
-    async def resume_download(self, task_id: str) -> bool:
-        return False  # curl doesn't support resume in our impl
-
-    async def cancel(self, task_id: str) -> bool:
-        proc = self._tasks.pop(task_id, None)
-        if proc:
-            proc.kill()
-            return True
-        return False
 
     def is_available(self) -> bool:
         return shutil.which("curl") is not None
@@ -822,8 +853,6 @@ def get_download_manager() -> DownloadManager:
 class AxelPlugin(DownloadPlugin):
     """axel - multi-threaded download accelerator with resume"""
 
-    _tasks: dict[str, asyncio.subprocess.Process] = {}
-
     def get_info(self) -> PluginInfo:
         return PluginInfo(
             id="axel",
@@ -869,7 +898,7 @@ class AxelPlugin(DownloadPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            self._tasks[dest] = proc
+            self._track(dest, url, dest, resume, proc)
 
             while True:
                 line = await (proc.stdout.readline() if proc.stdout else asyncio.sleep(0))
@@ -905,28 +934,11 @@ class AxelPlugin(DownloadPlugin):
             progress.status = "error"
             progress.error = str(e)
         finally:
-            self._tasks.pop(dest, None)
+            self._untrack(dest, progress)
 
         if progress_cb:
             progress_cb(progress)
         return progress
-
-    async def pause(self, task_id: str) -> bool:
-        proc = self._tasks.get(task_id)
-        if proc:
-            proc.terminate()
-            return True
-        return False
-
-    async def resume_download(self, task_id: str) -> bool:
-        return True
-
-    async def cancel(self, task_id: str) -> bool:
-        proc = self._tasks.pop(task_id, None)
-        if proc:
-            proc.kill()
-            return True
-        return False
 
     def is_available(self) -> bool:
         return shutil.which("axel") is not None
@@ -999,8 +1011,6 @@ class AxelPlugin(DownloadPlugin):
 class CurlResumePlugin(DownloadPlugin):
     """curl with HTTP Range header for resume support"""
 
-    _tasks: dict[str, asyncio.subprocess.Process] = {}
-
     def get_info(self) -> PluginInfo:
         return PluginInfo(
             id="curl-resume",
@@ -1045,7 +1055,7 @@ class CurlResumePlugin(DownloadPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            self._tasks[dest] = proc
+            self._track(dest, url, dest, resume, proc)
 
             while True:
                 line = await (proc.stdout.readline() if proc.stdout else asyncio.sleep(0))
@@ -1062,28 +1072,11 @@ class CurlResumePlugin(DownloadPlugin):
             progress.status = "error"
             progress.error = str(e)
         finally:
-            self._tasks.pop(dest, None)
+            self._untrack(dest, progress)
 
         if progress_cb:
             progress_cb(progress)
         return progress
-
-    async def pause(self, task_id: str) -> bool:
-        proc = self._tasks.get(task_id)
-        if proc:
-            proc.terminate()
-            return True
-        return False
-
-    async def resume_download(self, task_id: str) -> bool:
-        return True
-
-    async def cancel(self, task_id: str) -> bool:
-        proc = self._tasks.pop(task_id, None)
-        if proc:
-            proc.kill()
-            return True
-        return False
 
     def is_available(self) -> bool:
         return shutil.which("curl") is not None
@@ -1157,8 +1150,6 @@ class CurlResumePlugin(DownloadPlugin):
 class OdlPlugin(DownloadPlugin):
     """odl - Rust native multi-segment downloader, no external deps"""
 
-    _tasks: dict[str, asyncio.subprocess.Process] = {}
-
     def get_info(self) -> PluginInfo:
         return PluginInfo(
             id="odl",
@@ -1196,6 +1187,8 @@ class OdlPlugin(DownloadPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
+            self._track(dest, url, dest, resume, proc)
+
             while True:
                 line = await (proc.stdout.readline() if proc.stdout else asyncio.sleep(0))
                 if not line:
@@ -1226,19 +1219,9 @@ class OdlPlugin(DownloadPlugin):
         except Exception as e:
             progress.status = "error"
             progress.error = str(e)
+        finally:
+            self._untrack(dest, progress)
         return progress
-
-    async def pause(self, task_id: str) -> bool:
-        return True
-
-    async def pause_download(self, task_id: str) -> bool:
-        return True
-
-    async def resume_download(self, task_id: str) -> bool:
-        return True
-
-    async def cancel(self, task_id: str) -> bool:
-        return True
 
     async def get_version(self) -> str | None:
         try:
@@ -1256,8 +1239,6 @@ class OdlPlugin(DownloadPlugin):
 
 class RsyncPlugin(DownloadPlugin):
     """rsync - delta sync for large files, resume support"""
-
-    _tasks: dict[str, asyncio.subprocess.Process] = {}
 
     def get_info(self) -> PluginInfo:
         return PluginInfo(
@@ -1310,7 +1291,7 @@ class RsyncPlugin(DownloadPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            self._tasks[dest] = proc
+            self._track(dest, url, dest, resume, proc)
 
             while True:
                 line = await (proc.stdout.readline() if proc.stdout else asyncio.sleep(0))
@@ -1340,28 +1321,11 @@ class RsyncPlugin(DownloadPlugin):
             progress.status = "error"
             progress.error = str(e)
         finally:
-            self._tasks.pop(dest, None)
+            self._untrack(dest, progress)
 
         if progress_cb:
             progress_cb(progress)
         return progress
-
-    async def pause(self, task_id: str) -> bool:
-        proc = self._tasks.get(task_id)
-        if proc:
-            proc.terminate()
-            return True
-        return False
-
-    async def resume_download(self, task_id: str) -> bool:
-        return True
-
-    async def cancel(self, task_id: str) -> bool:
-        proc = self._tasks.pop(task_id, None)
-        if proc:
-            proc.kill()
-            return True
-        return False
 
     def is_available(self) -> bool:
         return shutil.which("rsync") is not None
