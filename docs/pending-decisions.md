@@ -25,6 +25,7 @@
 | ⑰ | ws_chat connected 帧 user_id 载荷收口（dict repr 怪形→纯用户 id） | DEC-⑭-③ 边界④留档+DEC-⑯ 候选首件 | 取 B（载荷=纯用户 id，向生态参照形 acp-proxy ws_chat.py 对齐）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑰）** | ~~"⑰取B"~~ 已落，异议回「⑰改A」（回 dict repr 怪形）/「⑰改C」（整键移除 connected 帧 user_id）即改道 |
 | ⑱ | WS 连接审计面（terminal 先拍，拆件 ⑱-②/③/④） | DEC-⑭-① 边界⑤留档 | 取 B（terminal WS 面先拍）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑱+⑱-②/⑱-③/⑱-④ 四面全落）** | ~~"⑱取B"~~ 四面全落，异议回「⑱改A」（revert 撤审计面）/「⑱改C」（organ 归口改独立安全 organ）即改道 |
 | ⑲ | link.py receive_webhook token 化（OpenLink connector webhook 入口凭据门） | DEC-① 1a 契约锁死后另拍（DEC-⑬ 边界④留档） | 取 B（register 签发回调 token，X-Callback-Token 或 X-Signature HMAC 等效证明，缺/错 401 零副作用）——**已按建议默认 B 先行执行 2026-10-16（DEC-⑲）** | ~~"⑲取B"~~ 已落，异议回「⑲改A」（revert 回 id 即凭证）/「⑲改C」（改全局共享 secret）即改道 |
+| ㉑ | remove_provider 清钥语义（孤钥清理） | H1-②b-④ 语义分界留档+最新周期日志候选「remove_provider 清钥语义（孤钥清理语义需拍板）」 | 取 B（整 provider 移除级联清钥：注册与其凭据同生共死）——**已按建议默认 B 先行执行 2026-10-18（GLAND-①）** | ~~"㉑取B"~~ 已落，异议回「㉑改A」（revert 回不触钥）/「㉑改C」（不触钥+孤钥可见性/单独批量清理口）即改道 |
 
 ---
 
@@ -237,6 +238,18 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - 权衡：A=死面留仓反复误读（H0 已实证误读案例：filter_tools 初判 T1 被复核降级）且 Phase H「死面清零」不推进，H1-① 留档「T3 两重复原语未动」持续悬置；C 违 H0 明示「无消费不等于断点」与宁窄勿滥——删 set_agent_card=丢 a2a 卡面配置口、删 reset_attributor=测试支撑面塌、删 gen_ai_attributes=丢 OTel semconv 对齐原语，是真丢能力非清死面；B 按证据分级（有覆盖/取代证据才删，git revert 可整体回滚），与 TL/DEC-⑮ 处置先例同纪律。
 - 建议：**B**。
 - 诚实边界：①config_manager.get_config 与已删 save_config 同型便利包装但未在 H0 T3 清单（名字级普查同名碰撞漏报方向所致），本拍不越清单处置，留档另拍可复核——**【2026-10-17 DEC-⑳-① 已落】该复核件已处置：get_config 同判据删（单行委托 config_manager.get、全仓零调用点、语义被活面 config_api.py 8 消费点 100% 覆盖），异议沿用「⑳改A:get_config」逐件恢复**②KeyManager.get_keys（H1-②「不应建」件）不属本拍 24 项范围——「不建出口」裁决维持，方法本体留测试内省（test_key_remove_face 消费），若主张连方法一并删除另拍——**【2026-10-17 DEC-⑳-② 已落】该另拍已处置：get_keys 方法本体同判据删（T3-① 判据「便利包装被活面 100% 覆盖」：语义=逐槽解密保序、被活面 KeySlot.key 原语 100% 覆盖（key_manager.py:86 next_key/:106 validate_key/:143 status/:163 比对四真消费点），全仓零生产消费；H1-②「回吐面不应存在」贯彻到方法本体）。DEC-⑳ 原留理由「方法本体留测试内省」不因删丢失：测试内省改经同一活原语 KeySlot.key 直接表达（tests/test_key_remove_face.py _slot_keys helper，is_valid 过滤+保序解密语义与被删包装逐字一致，断言意图零丢失）；禁复活锁死进 tests/test_t3_disposal.py（DELETED_WITH_COVER 注册+KeySlot 类体精确判+`.get_keys(`/`def get_keys` 消费残留零容忍专查+覆盖语义回归）。异议沿用「⑳改A:get_keys」逐件恢复**③删除件中被测试消费的两处（session_grants.filter_tools、batch_update_with_outcomes）测试契约随更新（断言意图改经活面表达，零意图丢失）④留口 13 项仍为死面（零生产消费不变），后续若出现「被活面覆盖」证据可再拍处置——**【2026-10-17 DEC-⑳-③ 已落】留口 13 项复审（T3-④）已处置：删 1（vein/versioning.get_latest_version——留口判据「独特语义」被复审推翻：SQL 与活面 get_history(file_id, 1) 逐字同构（ORDER BY version_number DESC LIMIT 1）语义 100% 覆盖非独特，全仓零生产消费零测试消费，禁复活锁死进 tests/test_t3_disposal.py）+维持留口 12（逐项复审判据仍成立：配置 API 2=set_agent_card/set_extended_agent_card 效果被 published()/GetExtendedAgentCard 活面真消费；独特语义 7=get_by_namespace 逆查轴/cancel_signal 软取消态/get_version_count count 语义不被 limit 截断的 get_history 覆盖（且 api/vein.py:284 len(get_history()) 超 50 版误计=覆盖缺失活证据）/get_variable 单键读带闸/can_transition 非变更有效性查询/gen_ai_attributes OTel semconv/reset_probe_cache 惰性失效与 probe_isolation(force=True) 即时重探语义分界/visualize_ascii ASCII 渲染与 to_mermaid 不同输出形态；测试支撑 3=reset_attributor（3 测试文件真消费）/items_from_openai_tools（唯一工具归因构造器）/get_variable 同时是测试支撑面）。过程发现留档：api/vein.py:284 version_count= len(get_version_history(file_id)) 缺省 limit=50 截断，超 50 版文件计数虚低（复审发现的覆盖缺失活证据，修复件=wire get_version_count 或调 limit 另拍）；api/vein.py:273 get_version_history(file_id, limit=1) 双调手工重演最新版语义（被删方法的覆盖证据本体，cleanup 另拍）。异议沿用「⑳改A:get_latest_version」逐件恢复**⑤全量回归+live 冒烟见周期日志 T3-① 行。
+
+## ㉑ remove_provider 清钥语义（孤钥清理）
+
+**状态：已按建议默认 B 先行执行（2026-10-18 GLAND-①）**——依据：H1-②b-⑦c 周期日志候选首件之外次件「remove_provider 清钥语义（孤钥清理语义需拍板）」+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~⑳ 自决先例。实现=**整 provider 移除级联清钥**：KeyManager.remove_provider_keys 级联清钥原语（本 provider 全部钥槽+轮转指针，0=如实计数非错误）+ ModelRouter.remove_provider 契约 bool→`int | None`（命中=注册与钥同删返回移除数；未命中=None 零副作用）+ API 响应加性键 keys_removed（falsy 陷阱收口：0 钥成功移除不得被 `if not ...` 当未命中）。**若拍板回一句即改道：「㉑改A」=revert 本拍（回不触钥=移除注册后钥留驻）、「㉑改C」=回不触钥但加孤钥可见性（/keys 标 unregistered）+单独批量清理口（需另拍实现）**。
+
+**现状（控制组+live --pre 双实证 2026-10-18）**：DELETE /api/gland/providers/{name} 只 pop 配置不动 KeyManager._slots——移除注册后其钥留驻内存（GET /keys 可见面、同名再注册即复用旧钥），与 H1-②b-④ 单钥面 docstring「整 provider 移除走 DELETE /providers/{name}，语义分界」漂移=孤钥（live --pre P3 同探针 leftover=1 硬证）。H1-② 定性⑩「remove_provider 只删整个 provider=泄漏密钥无单钥移除面」的叙事把 DELETE /providers 当钥删除通道，实际它从不触钥——语义缺口即此件。
+- 选项：**A** 维持不触钥（钥独立于 provider 注册，孤钥合法留驻）/ **B** 级联清钥（整 provider 移除含钥=注册与其凭据同生共死）/ **C** 不触钥+孤钥可见性/单独批量清理口。
+- 权衡：A 持续=凭据滞留（移除注册后旧钥仍可被同名再注册复用、GET /keys 面残留），且与「语义分界」docstring 漂移；C 只是暴露不清理且需发明第二套判法（「孤钥=垃圾」不成立一刀切，见边界②）；B 语义自洽（provider 身份含其凭据，移除=撤销）、与单钥面形成完整删除语义分层（单钥摘除 / 整 provider 摘除）。
+- 建议：**B**。
+- 诚实边界：①钥真源是内存+env bootstrap（load_from_env/_ensure_bootstrapped）——级联清钥作用域=当前进程，重启后 env 钥随 bootstrap 回来（DELETE 不可能永久销 env 钥，如实）②钥可合法存在于未注册 provider（env bootstrap mimo 等、POST /keys 对未注册名）——「孤钥=垃圾」不成立一刀切，故 **DELETE 未命中绝不触钥**（测试锁死：404 零副作用，绝不变相清钥）；此类钥的批量清理仍只有单钥面（如需批量口按「㉑改C」另拍）③同名覆盖注册面未动：add_provider 同名直接覆盖注册仍保留旧钥打向新 base_url（本拍只收「先删后加」路径不复用旧钥；覆盖注册面如需同名先清钥/拒注册另拍）④响应契约变更 {"status":"ok"}→{"status","provider","keys_removed"}（加性；admin-ui 两消费面 llm/gland 页只读状态码不读响应体，grep 实证零破坏）⑤ModelRouter.remove_provider 返回契约 bool→`int | None`（仓内唯一消费点 api/gland.py:286 已随更新）。
+
+
 
 ## 附：锚点核验
 

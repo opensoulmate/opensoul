@@ -277,11 +277,16 @@ async def add_provider(body: ProviderCreate):
 
 @router.delete("/providers/{name}")
 async def remove_provider(name: str):
-    """Remove a provider."""
+    """Remove a provider and its keys（整 provider 移除级联清钥，GLAND-①）。
+
+    未命中 404 零副作用（不触任何钥）；命中=注册与其钥一并移除，keys_removed 如实
+    计数（0=该 provider 本无钥，注册照删）。
+    """
     _ensure_bootstrapped()
-    if not gateway.remove_provider(name):
+    keys_removed = gateway.remove_provider(name)
+    if keys_removed is None:
         raise HTTPException(status_code=404, detail=f"Provider '{name}' not found")
-    return {"status": "ok"}
+    return {"status": "ok", "provider": name, "keys_removed": keys_removed}
 
 
 @router.post("/keys")

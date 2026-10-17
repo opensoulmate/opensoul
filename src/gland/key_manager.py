@@ -70,6 +70,20 @@ class KeyManager:
             return True
         return False
 
+    def remove_provider_keys(self, provider: str) -> int:
+        """Remove every key held for *provider* — 整 provider 移除级联清钥原语。
+
+        GLAND-①（DEC-㉑ 取 B）：provider 注册与其凭据同生共死——remove_provider
+        级联清钥防凭据滞留（移除注册后旧钥留驻 = 同名再注册即复用旧钥）。返回移除
+        钥数（0=本无钥，如实计数非错误）；只动本 provider 的槽与轮转指针，其余
+        provider 一行不动。
+        """
+        slots = self._slots.pop(provider, [])
+        self._indices.pop(provider, None)
+        if slots:
+            logger.info("Removed %d key(s) for provider=%s", len(slots), provider)
+        return len(slots)
+
     # DEC-⑳-② 已删 get_keys（明文批量回吐便利包装——语义被活面 KeySlot.key
     # 100% 覆盖（逐槽解密原语，next_key/validate_key/status 真消费），全仓零生产
     # 消费；H1-②「回吐面不应存在」裁决贯彻到方法本体。测试内省改经 KeySlot.key

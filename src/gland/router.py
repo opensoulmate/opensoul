@@ -373,8 +373,18 @@ class ModelRouter:
         logger.info("Registered provider=%s base_url=%s priority=%d", name, base_url, priority)
         return cfg
 
-    def remove_provider(self, name: str) -> bool:
-        return self.providers.pop(name, None) is not None
+    def remove_provider(self, name: str) -> int | None:
+        """Remove a provider and cascade-remove its keys（整 provider 移除含钥）。
+
+        GLAND-①（DEC-㉑ 取 B）：provider 注册与其凭据同生共死——移除注册即撤销其
+        钥（防凭据滞留：旧钥留驻 = 同名再注册即复用旧钥）。返回移除钥数（0=该
+        provider 本无钥，注册照删）；未命中（provider 不存在）= None 零副作用
+        ——绝不顺带清同名钥（env bootstrap 钥可合法存在于未注册 provider，
+        DELETE 不得变相清钥）。
+        """
+        if self.providers.pop(name, None) is None:
+            return None
+        return self.key_manager.remove_provider_keys(name)
 
     def list_providers(self) -> list[dict]:
         out = []
