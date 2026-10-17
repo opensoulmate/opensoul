@@ -176,6 +176,10 @@ async def get_memory(memory_id: str):
     mem = store.get(memory_id)
     if not mem:
         raise HTTPException(404, "Memory not found")
+    # 会话活动接线（H1-②b-②）：记忆访问=所属会话活动——store.get 在记忆级
+    # "refreshes access"，此处把同一语义在会话级镜像（touch=时间戳刷新+
+    # IDLE/EXPIRED 复活，会话缺席如实 no-op）。
+    sessions.touch(mem.session_id)
     decay = store.decay_engine.calculate(
         mem.created_at, mem.last_accessed_at, mem.access_count, mem.importance
     )

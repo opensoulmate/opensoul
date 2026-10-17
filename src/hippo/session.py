@@ -70,22 +70,44 @@ class SessionManager:
                 session.last_active_at = time.time()
             return session
 
+    def _note_activity_locked(self, session: Session) -> None:
+        """Record session activity (must hold self._lock).
+
+        Single source for "this session is being used" semantics (H1-②b-②):
+        refreshes last_active_at and revives IDLE/EXPIRED -> ACTIVE.  ARCHIVED
+        keeps its status — archiving is explicit user intent that incidental
+        activity must not silently undo (the timestamp still refreshes so the
+        record stays truthful).
+        """
+        session.last_active_at = time.time()
+        if session.status in (SessionStatus.IDLE, SessionStatus.EXPIRED):
+            session.status = SessionStatus.ACTIVE
+
     def touch(self, session_id: str) -> bool:
-        """Update session activity timestamp."""
+        """Record session activity (refresh timestamp, revive from idle/expiry).
+
+        Returns True if the session existed and the activity was recorded.
+        """
         with self._lock:
             session = self._sessions.get(session_id)
             if session:
-                session.last_active_at = time.time()
-                session.status = SessionStatus.ACTIVE
+                self._note_activity_locked(session)
                 return True
             return False
 
     def increment_memory_count(self, session_id: str, count: int = 1):
-        """Increment the memory count for a session."""
+        """Increment the memory count for a session.
+
+        A memory write is session activity (H1-②b-②): the timestamp/status
+        refresh goes through the same _note_activity_locked primitive as
+        touch(), so a long session that keeps receiving memories no longer
+        goes stale/idle/expired behind the writer's back.
+        """
         with self._lock:
             session = self._sessions.get(session_id)
             if session:
                 session.memory_count += count
+                self._note_activity_locked(session)
 
     def list_sessions(
         self,
