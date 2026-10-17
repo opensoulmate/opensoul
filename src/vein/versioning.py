@@ -101,7 +101,11 @@ class VersionManager:
     # 替代读法：(self.get_history(file_id, 1) or [None])[0]（同 None/最新版语义）。
 
     def get_version_count(self, file_id: str) -> int:
-        """Get total number of versions for a file."""
+        """Get total number of versions for a file.
+
+        T3-⑤ 已接线（不再是留口死面）：file_store.get_version_count→api/vein.py
+        update 响应 version_count 首个真消费点（count 不被 limit 截断）。
+        """
         row = self._db.execute(
             "SELECT COUNT(*) FROM file_versions WHERE file_id = ?",
             (file_id,),

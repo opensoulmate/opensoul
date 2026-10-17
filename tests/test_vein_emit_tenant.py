@@ -358,7 +358,10 @@ class TestVeinEmitTenantInvariants:
         五 cache handler 落 bind_identity（+5，stats 系统视图不带），键 7 处
         （五 handler 各 1 + download 缓存读/delete 缓存失效两内部维护点带行
         租户键——push_event emit 面零变化），总数 23 handler / 41 键。
+        契约随更新（T3-⑤ version_count 计数面接线）：update 响应 version_count
+        计数走 get_version_count 读面带行租户键（+1，修前 len(get_version_history)
+        系统视图零键）——push_event emit 面零变化，总数 23 handler / 42 键。
         """
         src = (Path(__file__).parent.parent / "src" / "api" / "vein.py").read_text(encoding="utf-8")
         assert src.count("identity = bind_identity(authorization)") == 23
-        assert src.count("tenant_id=identity.tenant_id") == 41
+        assert src.count("tenant_id=identity.tenant_id") == 42

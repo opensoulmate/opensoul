@@ -281,7 +281,9 @@ async def update_file_content(
         "name": meta.name,
         "content_hash": meta.content_hash,
         "size": meta.size,
-        "version_count": len(store.get_version_history(file_id)),
+        # T3-⑤：计数走 count 语义（get_version_count），修前 len(get_version_history)
+        # 缺省 limit=50 截断——超 50 版文件计数虚低（T3-④ 留档覆盖缺失活证据根因）。
+        "version_count": store.get_version_count(file_id, tenant_id=identity.tenant_id),
     }
 
 

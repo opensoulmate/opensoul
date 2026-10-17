@@ -341,6 +341,21 @@ class FileStore:
             return []
         return self._versions.get_history(file_id, limit)
 
+    def get_version_count(self, file_id: str, tenant_id: str | None = None) -> int:
+        """Get total number of versions for a file (count semantics, never truncated).
+
+        T3-⑤（T3-④ 留口件 get_version_count 接线，覆盖缺失活证据的根因修）：
+        count 语义不被 limit 截断——get_history(file_id, limit) 只回 ≤limit 行，
+        len() 计数对超限文件虚低（api/vein.py update 响应 version_count 修前
+        缺省 limit=50 超 50 版误计）；本口 COUNT(*) 全量计数。
+        DEC-⑦-⑩ 归属闸（get_version_history 同款）：tenant_id 显式给出时行缺失/
+        跨租户回 0（与 not-found 同契约，不差分泄露）；None=系统视图不闸（既有
+        内部调用面字节不变）。
+        """
+        if tenant_id is not None and self.get_meta(file_id, tenant_id=tenant_id) is None:
+            return 0
+        return self._versions.get_version_count(file_id)
+
     def get_version(
         self, file_id: str, version_number: int, tenant_id: str | None = None
     ) -> FileVersion | None:
