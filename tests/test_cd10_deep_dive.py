@@ -260,14 +260,22 @@ class TestEndpointDriftEvidence:
         line = [l for l in code.splitlines() if "decay/simulate" in l and "apiFetch" in l][0]
         assert "method: 'POST'" in line
 
-    def test_soma_route_is_get_but_rescan_calls_post(self):
+    def test_soma_route_and_ui_method_aligned(self):
+        """契约随更新（CD-⑭ 修复候选④ soma discovery/scan 重扫方法漂移收口落）：
+        ENDPOINT_VERDICTS 证据「重扫调用点 method:'POST' 恒 405 空转」是 CD-⑨
+        快照的历史记录（裁决工件冻结不改），本锚点改锁修复后状态——重扫调用点
+        收编真源 GET（apiFetch 缺省 GET 形），方法漂移复发此锚先炸。"""
         src = _src("src/api/soma_discovery.py")
         assert '@router.get("/scan", response_model=ScanResult)' in src
         assert '@router.post("/scan"' not in src
         ui = _src("admin-ui/app/soma/page.tsx")
-        assert "await apiFetch('/api/soma/discovery/scan', { method: 'POST' })" in ui
+        code = "\n".join(l.split("//")[0] for l in ui.splitlines())
+        lines = [l for l in code.splitlines() if "discovery/scan" in l and "apiFetch" in l]
+        assert lines, "discovery/scan 调用点提取异常（提取失效=断言空转）"
+        for l in lines:
+            assert "method:" not in l, f"调用点显式声明方法（修前 POST 漂移形残留）: {l}"
 
-    def test_soma_fallback_get_really_rescans(self):
+    def test_soma_api_full_scan_really_rescans(self):
         """CD-⑨「fallback GET 不重扫=假功能」勘误锚点：api_full_scan 每次全量扫描。"""
         node = _func_tree("src/api/soma_discovery.py", "api_full_scan")
         names = {
@@ -277,4 +285,8 @@ class TestEndpointDriftEvidence:
         }
         assert {"scan_processes", "scan_cli_tools", "scan_services"} <= names
         ui = _src("admin-ui/app/soma/page.tsx")
-        assert "Fallback: just re-fetch" in ui
+        # 契约随更新（CD-⑭）：修前 catch 兜底「Fallback: just re-fetch」是 POST 405
+        # 的漂移补偿路径，随方法收编一并移除——重扫直达真源 GET 即真重扫
+        # （勘误本体「api_full_scan 每次全量扫描」不变）。
+        assert "Fallback: just re-fetch" not in ui
+        assert "Force rescan via POST" not in ui

@@ -179,16 +179,9 @@ def test_census_counts_after_fix(census_report):
     # 漂移修复）：hippo (retention,) 调用点已收编真源 POST 方法（unresolved_endpoint
     # 解析成功=produced），从候选集消失=已落修复件（消失=需复核→本行即复核记录），
     # 非静默漂移。
-    ue_expected = {
-        ("soma/page.tsx", ("adapters",)),
-        ("soma/page.tsx", ("cli_tools",)),
-        ("soma/page.tsx", ("cli_tools", "version")),
-        ("soma/page.tsx", ("processes",)),
-        ("soma/page.tsx", ("processes", "cpu")),
-        ("soma/page.tsx", ("processes", "mem")),
-        ("soma/page.tsx", ("scan_time",)),
-        ("soma/page.tsx", ("services",)),
-        ("soma/page.tsx", ("services", "protocol")),
-        ("soma/page.tsx", ("services", "state")),
-    }
+    # 契约随更新（CD-⑭ 修复候选④ soma discovery/scan 重扫方法漂移收口）：soma
+    # 重扫调用点已收编真源 GET 方法（修前 method:'POST' 恒 405=端点解析失败，
+    # 10 键全挂 unresolved_endpoint），从候选集消失=已落修复件（消失=需复核→
+    # 本行即复核记录），非静默漂移。unresolved_endpoint 全局归零（候选集空）。
+    ue_expected = set()
     assert ue == ue_expected, f"端点映射缺口集漂移: {sorted(ue)}"

@@ -517,12 +517,12 @@ export default function SomaPage() {
   const handleRescan = async () => {
     try {
       setScanning(true);
-      // Force rescan via POST
-      const result = await apiFetch('/api/soma/discovery/scan', { method: 'POST' });
+      setError('');
+      // Rescan via the true-source GET endpoint (api_full_scan runs a full scan on every call)
+      const result = await apiFetch('/api/soma/discovery/scan');
       setData(result);
-    } catch {
-      // Fallback: just re-fetch
-      await fetchScan();
+    } catch (e: any) {
+      setError(e.message);
     } finally {
       setScanning(false);
     }
