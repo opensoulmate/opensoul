@@ -103,3 +103,58 @@ unresolved_shape 25 / unresolved_path 3（路径面：in_openapi 141、missing_i
    GLAND-⑤「收编真源键非 API 加别名堵漏」纪律）——按最小件可再拆。
 2. 待确认层 38 项深挖（跨模块形状推断或逐页 live 探针）。
 3. ㉔ 处置拍板（D→B/C/维持，可由 cron 代跑）/temp- 别名行取舍（需拍板）/用户实测反馈（无输入）。
+
+## CD-③ 待确认层深挖（2026-10-18）——43 条逐项裁决（零行为改动，修复件另拍）
+
+> 工具：`scripts/census_contract_drift_deep_dive.py`（裁决单一源+完整性门）
+> 工件：`data/census_contract_drift_deep_dive.json`
+> 测试：`tests/test_contract_drift_deep_dive.py` 19 例（覆盖完整性门+真源形状证据锁）
+
+深挖口径：对 CD-② 修后工件（`data/census_contract_drift_post_fix.json`）的全部 43 条
+非 produced findings 逐条裁决——静态不可定型的跨模块 bare return / `to_dict()` 接收者 /
+for-loop 字面量，用**源码真源逐字读取+调用点归属复核**定型（禁推断当实证）。
+每条裁决带 evidence（真源位置），`build_artifact` 完整性门=任一 finding 无裁决拒出工件。
+
+**总账：43 条 = resolved_ok 33 + confirmed_drift 8（键级）+ ruled_false_positive 2；
+confirmed_drift 归 4 个修复候选；工具归属漂移 4 条（挂错 endpoint，按真 endpoint 判定）。**
+
+### 真断点（confirmed_drift 8 键 → 4 修复候选，一候选一拍）
+
+| 候选 | 消费面 | 真源 | 症状 |
+|---|---|---|---|
+| ①dedup 元素键收编 | dedup/page.tsx DuplicatePair 接口平铺 8 键 | `get_duplicate_report` 元素=`{item_a:{id,title},item_b:{id,title},similarity}`（deduplication.py:130-136 字面量全解析） | 8 键仅 similarity 在场；title_a/title_b/id_a/id_b/content_type/created_at_a/created_at_b 7 键缺席（普查只抓到 3 键，深挖扩面补 5）→ 重复对卡片标题/ID/时间全 undefined、删除按钮 id 失效、过滤失效 |
+| ②gland 页消费键收编 | gland/page.tsx `data.message`（:149）+ usage 面板 `data.input/output/requests`（:532/:538） | test_provider 返回 `{status,provider,model,reply}`（router.py:979-1012）；`by_provider=usage_by_provider()=dict[str,int]`（token_meter.py:38/:118-119 元素=int 非对象） | message 恒 undefined→`\|\|` 回落恒吃「连接成功」模型 reply 永不显示；usage 面板对 int 元素取 .input/.output/.requests 恒 undefined→各 Provider 用量恒显示 0 |
+| ③traces events 端点改指真端点 | traces/page.tsx:252 `data.events \|\| []` | GET /api/trajectory/sessions/{id} 返回 `session.to_dict()`（store.py:76-104 无 events 键）；真源=GET /api/trajectory/sessions/{id}/events（trajectory.py:268-291 `{session_id,events,count}`） | 会话详情展开恒空事件列表（有事件也不显示） |
+| ④limb windows 元素容器收编 | limb/page.tsx:130 `Array.isArray(data.windows)` | `list_windows() -> list[WindowInfo]` 裸数组（limb_rpa.py:678） | 对裸数组取 .windows 恒 undefined→恒回落 []，Windows 列表永不渲染（WindowInfo 元素字段与 UI 消费一致，仅容器形漂移） |
+
+### resolved_ok 33 键（普查提取边界假阳，源码定型=真源键在场）
+
+- agent-proxy send ×3（AgentResponse response_model 字段 response/success/error）
+- dedup `duplicates.similarity`（同元素兄弟键漂移→候选①）
+- downloader tasks ×2（DownloadTask.to_dict id/status）+ cache files.name（list_cache 字面量）
+- hermes sessions/total ×2（_list_sessions_sync `{"sessions","total"}`）
+- marketplace sources（endpoint 变量双值 /skills|agents/sources 均 `{"sources":…}`）
+- nest tenants ×5（Tenant.to_dict name/tier/description/owner_user_id/tags）
+- knowledge 元素 ×3（KnowledgeBase title/content/metadata，response_model 基类并入）
+- system organs ×3 + diagnostics check-all ×2（元素字面量 key/enabled/status）
+- trajectory search 元素 ×4（TrajectoryEvent asdict id/agent_id/event_type/status）
+- vision ×2（api/vision.py 返回字面量 image_base64/format）
+- workspace dir entries ×4（list_directory for-loop 字面量 name/path/type/size/modified/hidden——普查「for-loop 字面量不可静态定型」诚实边界由源码读取闭合）
+
+### ruled_false_positive 2（CD-① 已排除随附证据不复挖）
+
+users `data.users`（Array.isArray 三元防御真消费数组分支）/ agents `data.agents`（_detect_cache spread 真源在场）。
+
+### 工具归属漂移（4 条，census 启发式已知边界新增形态）
+
+消费键挂错 endpoint：gland input/output/requests 归 `/api/gland/test`（真消费在
+`/api/gland/usage` by_provider 元素）、system `organs.status` 归 `/api/organs`（真消费在
+`/api/diagnostics/check-all` organHealth）——赋值切段把元素消费挂到邻近 apiFetch。
+按真 endpoint 判定（3 键落候选②、status=resolved_ok），note 入工件。
+
+### 诚实边界
+
+1. 裁决=源码静态读取+调用点归属复核，非逐页 live 探针（live 证据在 CD-①/② 既有探针）。
+2. 普查消费面启发式漏收（dedup 平铺 8 键只抓 3）→扩面键随候选①登记，非普查定罪。
+3. 本拍零行为改动；4 修复候选按「一候选一拍」拆件另拍（CD-①→CD-② 先例）。
+4. evidence 行号以本拍 HEAD 源码为准，行号漂移不改判（形状由 tests 证据锁把守）。
