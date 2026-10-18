@@ -296,6 +296,20 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 **诚实边界**：①可救性=页界探针+内容抽样推断，非 `sqlite3 .recover` 实跑（实跑产出 GB 级中间件=处置预备动作，留拍板后）②根因归因=WAL-reset bug 时间线强相关（告警→45 分钟后损坏，告警所指 concurrent openers 场景=cron 多进程共开）**非逐字节法证定论**③`hermes doctor`/`hermes update` 触碰 Hermes 平台运行时（本拍未执行）④sessions/ 782 文件与 state.db 行级对账未做（等处置拍）⑤顺带发现（不属本件另列候选）：`PATCH /api/sessions/{session_id}` 无 `get_current_user` 依赖（同文件其余写端点均有）=身份轴缺口，另拍可复核⑥HERMES_HOME 换路径后 `_DB_PATH` 硬编码 `~/.hermes/state.db`（profile 隔离场景指向主库）——既有语义非本拍引入，留档。
 
+## ㉕ dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type）
+
+**状态：待拍板（CD-④ 已按 CD 系列 wire 权威纪律收口=UI 收编真源嵌套键+死显示面清零；恢复时间/类型显示需真源形状变更→CD-③ 证据锁「真源形状变了→①裁决失效须复挖」，不自决另拍）**——依据：CD-③ 深挖裁决候选①证据原文「created_at_* 与 content_type 真源根本不产出=时间显示全部失效」+ CD-④ 诚实边界留档。
+
+**现状**：`get_duplicate_report` 元素=`{item_a:{id,title},item_b:{id,title},similarity}`（services/deduplication.py 字面量，tests/test_contract_drift_deep_dive.py 证据锁把守）；CD-④ 后 dedup 卡片=标题/ID/相似度/删除按钮全真源键，**时间行与 content_type 徽章已移除**（修前恒 `'-'`/`'unknown'` 假渲染=死显示面）。但 knowledge 表 **`created_at`/`content_type` 真列在场**（且 SELECT 行已载入内存、content_type 仅差 SELECT 列清单一项）——数据在场、仅报告字面量不产出。
+
+**选项**：
+- **A 维持收口**：卡片不显示时间/类型（现状）。零契约变更，但用户裁决"删 A 还是删 B"时看不到哪条新。
+- **B 真源补现（建议）**：`get_duplicate_report` 元素 item 内补 `created_at`/`content_type`（真列直出零 fabrication，SELECT 补 content_type 列）+ UI 恢复时间行/类型徽章消费嵌套新键 + `tests/test_contract_drift_deep_dive.py` 证据锁随契约更新（裁决重挖=「真源根本不产出」勘误为「报告字面量不产出、DB 真列在场」，历史裁决文本不改写）。
+- **权衡**：dedup 卡片的用途=人工逐对裁决删哪条（保留策略按时间保早/保新），时间是核心语义非装饰；B 是加性契约（既有消费键零变化）。
+- **拍板方式**：回「**㉕取B**」（cron 代跑下拍执行）/「㉕取A」/「㉕维持」。
+
+**诚实边界**：①A 收口=有意的能力取舍非 bug（真源无产出禁假渲染）②B 涉真源形状变更=CD-③ 证据锁触发复挖，须显式改锁+勘误记档③DedupResult 面另有未裁决漂移（UI `merged` 键真源不产出、`details` 元素=dict 渲染 `[object Object]`）——CD-③ 普查未列，另拍复核。
+
 ## 附：锚点核验
 
 本件引用的全部 file:line 锚点已程序化核验（逐条对当前 HEAD 源码回读，结果存 `data/dec1_anchor_verification.json`）；核验不通过的锚点不上墙。核验方式见周期日志 DEC-① 行。

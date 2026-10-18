@@ -158,3 +158,30 @@ users `data.users`（Array.isArray 三元防御真消费数组分支）/ agents 
 2. 普查消费面启发式漏收（dedup 平铺 8 键只抓 3）→扩面键随候选①登记，非普查定罪。
 3. 本拍零行为改动；4 修复候选按「一候选一拍」拆件另拍（CD-①→CD-② 先例）。
 4. evidence 行号以本拍 HEAD 源码为准，行号漂移不改判（形状由 tests 证据锁把守）。
+
+## CD-④ 修复候选①——dedup 元素键收编（2026-10-18）
+
+> 消费面：`admin-ui/app/dedup/page.tsx` DuplicatePair 平铺 8 键形
+> 真源：`services/deduplication.py get_duplicate_report` 元素=`{item_a:{id,title},item_b:{id,title},similarity}`
+> 测试：`tests/test_cd4_repair.py` 7 例；live e2e：`scripts/e2e_cd4_dedup_keys_ui.py`
+
+收口（UI 消费面收编真源嵌套元素键，真源零改动=CD 系列 wire 权威纪律）：
+- DuplicatePair 收编 `{item_a:{id,title}, item_b:{id,title}, similarity}`，标题/ID/
+  删除按钮/搜索过滤/React key 全改嵌套访问——修前标题/ID 全空渲染、onRemove(undefined)
+  失效（多 pair 下=整列表全清）、搜索过滤裸 toLowerCase 对 undefined 必炸（输入即页崩）。
+- created_at_*/content_type（CD-③ 裁决「真源根本不产出」）→ 死显示面收口（时间行/
+  formatTime/'unknown' 假徽章移除），恢复显示=真源补现候选 **pending-decisions ㉕**
+  （knowledge 真列在场；涉证据锁「真源形状变了→①裁决失效须复挖」需拍板，不自决）。
+
+验证：新测 7 + 控制组（HEAD 3be46b06 旧 UI）7 failed/0 passed（全行为断言旧代码全炸=
+平铺形硬反证）+ live 双向 e2e：--pre 7/15（8 项修复断言全炸=修前缺口硬证：标题空/
+'unknown' 徽章在场/展开 id 空白/过滤页崩/删除全清）→ --post 15/15（两 pair 判别：
+删甲组对乙组对存活）+ 清痕 remaining=0。census 修后 findings：7 个平铺漂移键全部消失、
+duplicates/total_pairs produced 照旧（similarity 仍 unresolved_shape=启发式不识嵌套元素
+访问的既有边界，CD-③ 已裁 resolved_ok 由证据锁把守）。
+
+诚实边界：①census 启发式对嵌套 `item_a.id` 形不产 findings（漏报面，CD-③ 诚实边界2
+同型；tests/test_cd4_repair.py 消费⊆真源行为桥补位）②DedupResult 面（POST /deduplicate
+响应）另有未裁决漂移——UI `merged` 键真源不产出、`details` 元素=dict 渲染必炸 React
+child——CD-③ 普查未列，另拍复核（pending-decisions ㉕ 边界③）③搜索占位符「搜索标题、
+ID、类型...」随 content_type 过滤收口改「搜索标题、ID...」。

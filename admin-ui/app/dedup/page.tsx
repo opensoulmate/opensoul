@@ -12,15 +12,20 @@ import { Badge, tone } from '@/components/ui/badge';
 
 // ── Types ───────────────────────────────────────────────────
 
+// CD-④ 元素键收编：DuplicatePair 收编真源嵌套形（get_duplicate_report 元素=
+// {item_a:{id,title},item_b:{id,title},similarity}，deduplication.py 字面量真源）。
+// 修前平铺 8 键形（平铺 id/title/内容类型/创建时间 四对键）对真源恒
+// undefined：标题/ID 全空渲染、删除按钮 id 失效、搜索过滤对缺失 id 调
+// toLowerCase 必炸（页崩）。
+interface DuplicateItem {
+  id: string;
+  title: string;
+}
+
 interface DuplicatePair {
-  id_a: string;
-  id_b: string;
-  title_a: string;
-  title_b: string;
+  item_a: DuplicateItem;
+  item_b: DuplicateItem;
   similarity: number;
-  content_type: string;
-  created_at_a: string;
-  created_at_b: string;
 }
 
 interface DedupResult {
@@ -32,14 +37,8 @@ interface DedupResult {
 
 // ── Helpers ─────────────────────────────────────────────────
 
-function formatTime(ts: string) {
-  if (!ts) return '-';
-  try {
-    return new Date(ts).toLocaleString('zh-CN', {
-      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-    });
-  } catch { return ts; }
-}
+// （formatTime 已随 created_at_* 死显示面收口移除——真源元素无时间产出，
+//  时间显示恢复=真源补现候选，见 pending-decisions ㉕。）
 
 function SimilarityBar({ value }: { value: number }) {
   const pct = Math.min(100, Math.round(value * 100));
@@ -83,14 +82,11 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <Badge variant="bare" className={`${sev.badge}`}>{sev.label}</Badge>
-            <Badge variant="muted">
-              {pair.content_type || 'unknown'}
-            </Badge>
           </div>
           <div className="mt-1 text-xs">
-            <span className="text-foreground font-medium truncate">{pair.title_a || pair.id_a}</span>
+            <span className="text-foreground font-medium truncate">{pair.item_a.title || pair.item_a.id}</span>
             <ArrowRight className="w-3 h-3 inline mx-1 text-muted-foreground" />
-            <span className="text-foreground font-medium truncate">{pair.title_b || pair.id_b}</span>
+            <span className="text-foreground font-medium truncate">{pair.item_b.title || pair.item_b.id}</span>
           </div>
         </div>
         <div className="shrink-0 mr-2">
@@ -107,30 +103,28 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
                 <Database className="w-3 h-3 text-blue-500" />
                 <span className="text-[10px] font-medium text-blue-500">条目 A</span>
               </div>
-              <p className="text-xs font-medium">{pair.title_a || '无标题'}</p>
-              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{pair.id_a}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{formatTime(pair.created_at_a)}</p>
+              <p className="text-xs font-medium">{pair.item_a.title || '无标题'}</p>
+              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{pair.item_a.id}</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex items-center gap-1.5 mb-1">
                 <Database className="w-3 h-3 text-violet-500" />
                 <span className="text-[10px] font-medium text-violet-500">条目 B</span>
               </div>
-              <p className="text-xs font-medium">{pair.title_b || '无标题'}</p>
-              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{pair.id_b}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{formatTime(pair.created_at_b)}</p>
+              <p className="text-xs font-medium">{pair.item_b.title || '无标题'}</p>
+              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{pair.item_b.id}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => onRemove(pair.id_b)}
+              onClick={() => onRemove(pair.item_b.id)}
               variant="chip-sm" className="flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20"
             >
               <Trash2 className="w-3 h-3" />删除条目B（保留A）
             </Button>
             <Button
-              onClick={() => onRemove(pair.id_a)}
+              onClick={() => onRemove(pair.item_a.id)}
               variant="chip-sm" className="flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20"
             >
               <Trash2 className="w-3 h-3" />删除条目A（保留B）
@@ -190,7 +184,7 @@ export default function DedupPage() {
 
   const handleRemove = (id: string) => {
     // Just remove from local state (actual deletion would need a dedicated API)
-    setDuplicates((prev) => prev.filter((p) => p.id_a !== id && p.id_b !== id));
+    setDuplicates((prev) => prev.filter((p) => p.item_a.id !== id && p.item_b.id !== id));
     setTotalPairs((prev) => Math.max(0, prev - 1));
   };
 
@@ -201,11 +195,12 @@ export default function DedupPage() {
     if (simFilter === 'low' && p.similarity >= 0.7) return false;
     if (search) {
       const q = search.toLowerCase();
-      return (p.title_a || '').toLowerCase().includes(q) ||
-        (p.title_b || '').toLowerCase().includes(q) ||
-        p.id_a.toLowerCase().includes(q) ||
-        p.id_b.toLowerCase().includes(q) ||
-        (p.content_type || '').toLowerCase().includes(q);
+      // 收编真源键（修前平铺 id 键恒 undefined 调 toLowerCase 必炸=搜索即页崩；
+      // content_type 真源不产出，过滤面一并收口禁搜不存在的字段）
+      return (p.item_a.title || '').toLowerCase().includes(q) ||
+        (p.item_b.title || '').toLowerCase().includes(q) ||
+        (p.item_a.id || '').toLowerCase().includes(q) ||
+        (p.item_b.id || '').toLowerCase().includes(q);
     }
     return true;
   });
@@ -245,7 +240,7 @@ export default function DedupPage() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
             className="w-full pl-8 pr-3 py-1.5 text-xs bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
-            placeholder="搜索标题、ID、类型..."
+            placeholder="搜索标题、ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -315,7 +310,7 @@ export default function DedupPage() {
       {/* ── Duplicate List ── */}
       <div className="space-y-2">
         {filtered.map((pair) => {
-          const pairKey = `${pair.id_a}-${pair.id_b}`;
+          const pairKey = `${pair.item_a.id}-${pair.item_b.id}`;
           return (
             <DuplicatePairCard
               key={pairKey}
