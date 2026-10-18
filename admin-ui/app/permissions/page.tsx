@@ -45,21 +45,26 @@ export default function PermissionsPage() {
 
   const fetchRoles = useCallback(async () => {
     try {
-      const data = await apiFetch('/api/permission/roles/all');
-      setRoles(Array.isArray(data) ? data : data.roles || []);
-    } catch {
-      // fallback: try enterprise endpoint
-      try {
-        const data = await apiFetch('/api/permission/policies');
-        setRoles(Array.isArray(data) ? data : data.roles || []);
-      } catch { /* ignore */ }
-    }
+      // 真源=GET /api/permission/policies（CD-①-C：/api/permission/roles/all 无路由，
+      // 'all' 被当 username 落 list_roles 回 {username:'all',roles:[]}）。
+      // 真源元素形状=行数组（live 实证）：roles=角色映射行 [user, role]、
+      // policies=策略行 [role, resource, action]；角色名=两处去重并集。
+      const data = await apiFetch('/api/permission/policies');
+      const policyRows: string[][] = Array.isArray(data?.policies) ? data.policies : [];
+      const roleRows: string[][] = Array.isArray(data?.roles) ? data.roles : [];
+      const names = new Set<string>();
+      for (const row of policyRows) { if (row?.[0]) names.add(row[0]); }
+      for (const row of roleRows) { if (row?.[1]) names.add(row[1]); }
+      setRoles([...names].sort().map((name) => ({ name })));
+    } catch { /* ignore */ }
   }, []);
 
   const fetchPolicies = useCallback(async () => {
     try {
       const data = await apiFetch('/api/permission/policies');
-      setPolicies(Array.isArray(data) ? data : data.policies || []);
+      // 真源元素形状=策略行数组 [role, resource, action]（live 实证），收编为 UI 契约对象
+      const rows: string[][] = Array.isArray(data?.policies) ? data.policies : [];
+      setPolicies(rows.map((r) => ({ role: r?.[0] ?? '', resource: r?.[1] ?? '', action: r?.[2] ?? '' })));
     } catch { /* ignore */ }
   }, []);
 

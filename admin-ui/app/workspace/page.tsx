@@ -119,7 +119,7 @@ export default function WorkspacePage() {
     try {
       setLoading(true);
       setError('');
-      const data = await apiFetch(`/api/workspace/dir?path=${encodeURIComponent(path)}`);
+      const data = await apiFetch(`/api/dir?path=${encodeURIComponent(path)}`);
       setEntries(data.entries || []);
       setCurrentPath(data.path || path);
     } catch (e: any) {
@@ -143,7 +143,7 @@ export default function WorkspacePage() {
     } else {
       // Load file
       setLoadingFile(true);
-      apiFetch(`/api/workspace/file?path=${encodeURIComponent(entry.path)}`)
+      apiFetch(`/api/file?path=${encodeURIComponent(entry.path)}`)
         .then((data) => setViewingFile(data))
         .catch((e) => setError(e.message))
         .finally(() => setLoadingFile(false));
@@ -154,7 +154,7 @@ export default function WorkspacePage() {
     if (!cmdInput.trim()) return;
     setCmdRunning(true);
     try {
-      const data = await apiFetch('/api/workspace/execute', {
+      const data = await apiFetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cmd: cmdInput, cwd: currentPath === '~' ? undefined : currentPath }),

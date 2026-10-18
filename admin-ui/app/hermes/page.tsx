@@ -111,7 +111,7 @@ function SendDialog({ sessionId, onClose }: { sessionId: string; onClose: () => 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, session_id: sessionId }),
       });
-      setResult(data.status === 'ok' ? '消息已发送' : `状态: ${data.status}`);
+      setResult(data.ok ? '消息已发送' : `发送未确认: ${data.content ?? JSON.stringify(data)}`);
       setText('');
     } catch (e: any) {
       setResult(`错误: ${e.message}`);

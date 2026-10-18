@@ -220,7 +220,7 @@ export default function LimbPage() {
   const handleScreenshot = async () => {
     try {
       const data = await apiFetch('/api/limb/rpa/screenshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      if (data.image) setScreenshotResult(`data:image/png;base64,${data.image}`);
+      if (data.base64) setScreenshotResult(`data:image/png;base64,${data.base64}`);
     } catch (e: any) { setError(e.message); }
   };
 
