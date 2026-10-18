@@ -15,6 +15,9 @@ GLAND-⑤ trajectory 页 UI↔API 契约漂移（UI 读 session_id/event_count/u
 
 消费面提取为静态启发式（赋值切段+别名追踪），漏收=漏报（如实边界），误收=
 进候选层由人工复核过滤；本工具只产候选与证据（file:line），不改任何代码。
+提取只看真代码：注释/字符串字面文本遮蔽后不参与提取（字面文本非消费）；
+typed 赋值（const x: T = apiFetch…）、?. 可选链、setX(data) 整体直传、
+模板串字面量感知调用截取均在提取面（CD-⑨ 提取精度收口）。
 """
 
 from __future__ import annotations
@@ -32,18 +35,20 @@ REPO = Path(__file__).resolve().parent.parent
 # ─────────────────────────── UI 消费面提取 ───────────────────────────
 
 _ASSIGN_RE = re.compile(
-    r"const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?apiFetch\s*(?:<[^>]*>)?\s*\("
+    r"const\s+([A-Za-z_$][\w$]*)\s*(?::[^;\n]*?)?=\s*(?:await\s+)?apiFetch\s*(?:<[^>]*>)?\s*\("
 )
 _METHOD_RE = re.compile(r"method\s*:\s*['\"]([A-Za-z]+)['\"]")
 _DESTRUCT_RE = re.compile(r"const\s*\{([^}]*)\}\s*=\s*([A-Za-z_$][\w$]*)\s*[;\n]")
+_ACC = r"(?:\?\.|\.)"  # 访问符：`?.` 可选链与 `.` 同消费语义（?. 整类漏报收口）
 _ALIAS_RE = re.compile(
-    r"const\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\s*[?.]{1,2}\s*([A-Za-z_$][\w$]*)"
+    r"const\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\s*" + _ACC + r"\s*([A-Za-z_$][\w$]*)"
     r"(?:\s*[|]{2}\s*[A-Za-z_$][\w$]*)?"
 )
-_PROP_RE = re.compile(r"([A-Za-z_$][\w$]*)\s*[?.]\s*([A-Za-z_$][\w$]*)")
-_ITEM_MAP_RE = re.compile(
-    r"([A-Za-z_$][\w$]*)\s*[?.]?\s*(?:map|forEach|filter|find|some|every)\s*\(\s*"
-    r"(?:\(\s*([A-Za-z_$][\w$]*)\s*\)|([A-Za-z_$][\w$]*))"
+_PROP_RE = re.compile(r"([A-Za-z_$][\w$]*)\s*" + _ACC + r"\s*([A-Za-z_$][\w$]*)")
+_ITEM_CHAIN_RE = re.compile(
+    r"\b([A-Za-z_$][\w$]*)((?:\s*" + _ACC + r"\s*[A-Za-z_$][\w$]*|\s*\([^()]*\))*)"
+    r"\s*" + _ACC + r"\s*(?:map|forEach|filter|find|some|every)\s*\(\s*"
+    r"(?:\(\s*([A-Za-z_$][\w$]*)[^)]*\)|([A-Za-z_$][\w$]*))"
 )
 _FOROF_RE = re.compile(r"for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+([A-Za-z_$][\w$]*)")
 # JS 内建成员（数组/字符串/对象方法与属性）——不是 API 响应键，禁误收
@@ -55,6 +60,182 @@ _BUILTIN_MEMBERS = {
     "match", "startsWith", "endsWith", "padStart", "padEnd", "charAt", "at", "then",
     "catch", "finally", "hasOwnProperty", "toFixed",
 }
+
+
+_REGEX_PREV_CHARS = set("([,=:[!&|?;+-*%~^<>")
+
+
+def _literal_end(s: str, start: int) -> int:
+    """字面量（'…'/"…"/`…`）闭合定界符下标；转义与模板 ${...} 内嵌字面量不误判。
+    未闭合=-1。"""
+    quote = s[start]
+    i = start + 1
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == quote:
+            return i
+        if c == "\n" and quote != "`":
+            return -1
+        if quote == "`" and c == "$" and i + 1 < n and s[i + 1] == "{":
+            j = _template_expr_end(s, i + 2)
+            if j < 0:
+                return -1
+            i = j
+            continue
+        i += 1
+    return -1
+
+
+def _template_expr_end(s: str, i: int) -> int:
+    """${ 后表达式结尾 '}' 的下一位置（花括号深度+内嵌字面量感知）；未闭合=-1。"""
+    depth = 1
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c in "'\"`":
+            j = _literal_end(s, i)
+            if j < 0:
+                return -1
+            i = j + 1
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return -1
+
+
+def _mask_code(src: str, blank_strings: bool = True) -> str:
+    """注释/字符串/模板字面量内部遮蔽为等长空白（换行保留=偏移与行号不变）。
+
+    消费键/调用点提取只看真代码：注释与字符串里的「data.键」是字面文本不是消费
+    （CD-⑦ 注释盲区+字符串同型误收根因修）。模板 ${...} 表达式内是真代码不遮蔽
+    （内嵌字面量递归遮蔽）；正则字面量按前一显著字符启发式识别（边界：return /x/
+    形漏判按代码处理）。blank_strings=False 只剥注释（method: 'POST' 取值在字符
+    串里，须见原文）。
+    """
+    out = list(src)
+    n = len(src)
+
+    def blank(pos: int) -> None:
+        if 0 <= pos < n and out[pos] != "\n":
+            out[pos] = " "
+
+    def mask_string(i: int, quote: str) -> int:
+        i += 1
+        while i < n:
+            c = src[i]
+            if c == "\\":
+                if blank_strings:
+                    blank(i)
+                    blank(i + 1)
+                i += 2
+                continue
+            if c == quote:
+                return i + 1
+            if c == "\n" and quote != "`":
+                return i
+            if quote == "`" and c == "$" and i + 1 < n and src[i + 1] == "{":
+                i = code(i + 2, True)
+                continue
+            if blank_strings:
+                blank(i)
+            i += 1
+        return i
+
+    def mask_regex(i: int) -> int:
+        blank(i)
+        i += 1
+        in_class = False
+        while i < n:
+            c = src[i]
+            if c == "\\":
+                blank(i)
+                blank(i + 1)
+                i += 2
+                continue
+            if c == "\n":
+                return i
+            if c == "[":
+                in_class = True
+            elif c == "]":
+                in_class = False
+            elif c == "/" and not in_class:
+                blank(i)
+                i += 1
+                while i < n and src[i].isalpha():
+                    blank(i)
+                    i += 1
+                return i
+            blank(i)
+            i += 1
+        return i
+
+    def code(i: int, stop_at_brace: bool) -> int:
+        depth = 0
+        prev_sig = ""
+        while i < n:
+            c = src[i]
+            if c == "/" and i + 1 < n and src[i + 1] == "/":
+                while i < n and src[i] != "\n":
+                    blank(i)
+                    i += 1
+                continue
+            if c == "/" and i + 1 < n and src[i + 1] == "*":
+                blank(i)
+                blank(i + 1)
+                i += 2
+                while i < n and not (src[i] == "*" and i + 1 < n and src[i + 1] == "/"):
+                    blank(i)
+                    i += 1
+                if i < n:
+                    blank(i)
+                    blank(i + 1)
+                    i += 2
+                continue
+            if c == "/" and prev_sig in _REGEX_PREV_CHARS:
+                i = mask_regex(i)
+                continue
+            if c in "'\"`":
+                i = mask_string(i, c)
+                prev_sig = "'"
+                continue
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                if stop_at_brace and depth == 0:
+                    return i + 1
+                depth = max(depth - 1, 0)
+            if not c.isspace():
+                prev_sig = c
+            i += 1
+        return i
+
+    code(0, False)
+    return "".join(out)
+
+
+def _chain_keys(chain_src: str) -> tuple:
+    """元素链中间键（dedupResult.details.slice(0,5) → ("details",)）：方法调用
+    token（后随 '('）与 JS 内建成员非响应键。"""
+    method_at = {m.start() for m in re.finditer(r"[A-Za-z_$][\w$]*\s*\(", chain_src)}
+    out = []
+    for m in re.finditer(r"[A-Za-z_$][\w$]*", chain_src):
+        tok = m.group(0)
+        if m.start() in method_at or tok in _BUILTIN_MEMBERS:
+            continue
+        out.append(tok)
+    return tuple(out)
 
 
 @dataclass
@@ -77,12 +258,12 @@ def _normalize_path(raw: str) -> str:
     i = 0
     while i < len(p):
         if p.startswith("${", i):
-            j = p.find("}", i)
+            j = _template_expr_end(p, i + 2)
             if j < 0:
                 break
             if (out[-1] if out else "") == "/":
                 out.append("{}")
-                i = j + 1
+                i = j
             else:
                 break  # query 尾参数拼接（${qs}）——路径到此为止
         else:
@@ -126,26 +307,27 @@ def extract_ui_callsites(source: str) -> list[CallSite]:
     消费键=响应变量赋值切段（本次赋值 → 同名变量下次赋值）内的属性访问、
     解构、别名（const x = var.key）与元素级访问（x.map(it => it.k)）。
     """
-    lines = source.splitlines()
+    src_raw = source
+    source = _mask_code(source)  # 提取只看真代码（注释/字符串字面文本非消费）
+    opts_text = _mask_code(src_raw, blank_strings=False)  # method 取值在字符串里
     sites: list[CallSite] = []
-    assigns = []  # (line_no, var, match_start)
+    assigns = []  # (line_no, var, match_start, open_idx)
     for m in _ASSIGN_RE.finditer(source):
         line_no = source[: m.start()].count("\n") + 1
-        assigns.append((line_no, m.group(1), m.start()))
+        assigns.append((line_no, m.group(1), m.start(), m.end() - 1))
 
-    for line_no, var, start in assigns:
-        open_idx = source.index("(", start)
+    for line_no, var, start, open_idx in assigns:
         _, arg_start, call_end = _extract_first_arg(source, open_idx)
-        arg_src = source[arg_start:call_end].strip() if arg_start >= 0 else ""
+        arg_src = src_raw[arg_start:call_end].strip() if arg_start >= 0 else ""
         raw_path = ""
         path_dynamic = False
         if arg_src and arg_src[0] in "'\"`":
             quote = arg_src[0]
-            endq = arg_src.find(quote, 1)
+            endq = _literal_end(arg_src, 0)
             raw_path = arg_src[1:endq if endq > 0 else len(arg_src)]
         else:
             path_dynamic = True  # 路径非字面量（变量/拼接）——禁按空串匹配
-        opts_src = source[open_idx:call_end]
+        opts_src = opts_text[open_idx:call_end]
         mm = _METHOD_RE.search(opts_src)
         method = (mm.group(1) if mm else "GET").upper()
         path = _normalize_path(raw_path)
@@ -154,9 +336,19 @@ def extract_ui_callsites(source: str) -> list[CallSite]:
 
         # 赋值切段（字符域）：本次调用右括号 → 同名变量下次赋值起点
         seg_end_char = len(source)
-        for l2, v2, s2 in assigns:
+        for l2, v2, s2, _o2 in assigns:
             if v2 == var and s2 > start:
                 seg_end_char = s2
+                break
+        # 同名变量任何 keyword 再赋值都断段（含非 apiFetch 形 const data: T =
+        # await res.json()——不断段则后续消费错挂到上一 callsite）
+        for rm in re.finditer(
+            r"(?<![\w$.])(?:const|let|var)\s+%s\b\s*(?::[^=;\n]*?)?=(?!=)(?!>)" % re.escape(var),
+            source[start:],
+        ):
+            pos = start + rm.start()
+            if pos > start and pos < seg_end_char:
+                seg_end_char = pos
                 break
         segment = source[call_end:seg_end_char]
         seg_base = call_end
@@ -172,16 +364,29 @@ def extract_ui_callsites(source: str) -> list[CallSite]:
             if src_var == var:
                 aliases[alias] = (var, (key,))
         for am in re.finditer(
-            r"set([A-Z][\w$]*)\s*\(\s*([A-Za-z_$][\w$]*)\s*[?.]\s*([A-Za-z_$][\w$]*)",
+            r"set([A-Z][\w$]*)\s*\(\s*([A-Za-z_$][\w$]*)\s*" + _ACC + r"\s*([A-Za-z_$][\w$]*)",
             segment,
         ):
+            if segment[: am.start()].rstrip().endswith("=>"):
+                continue  # 箭头形参遮蔽（(data) => setX(data)）——非本 callsite 变量
             if am.group(2) == var:
                 x = am.group(1)
                 aliases[x] = (var, (am.group(3),))
                 aliases[x[0].lower() + x[1:]] = (var, (am.group(3),))
+        # 整体直传形 setX(var)（CD-⑧ setDedupResult(data)）→ 状态变量=整个响应对象
+        for am in re.finditer(
+            r"set([A-Z][\w$]*)\s*\(\s*([A-Za-z_$][\w$]*)\s*\)",
+            segment,
+        ):
+            if segment[: am.start()].rstrip().endswith("=>"):
+                continue  # 箭头形参遮蔽（(data) => setX(data)）——非本 callsite 变量
+            if am.group(2) == var:
+                x = am.group(1)
+                aliases[x] = (var, ())
+                aliases[x[0].lower() + x[1:]] = (var, ())
         # 变量本身也是元素容器别名（data.sessions ?? data 形）
         for am in re.finditer(
-            r"const\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\s*[?.]\s*([A-Za-z_$][\w$]*)\s*"
+            r"const\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\s*" + _ACC + r"\s*([A-Za-z_$][\w$]*)\s*"
             r"[|]{2}\s*([A-Za-z_$][\w$]*)",
             segment,
         ):
@@ -206,37 +411,55 @@ def extract_ui_callsites(source: str) -> list[CallSite]:
                         add_key((name,), ln)
             for pm in _PROP_RE.finditer(seg):
                 if pm.group(1) == var:
-                    add_key((pm.group(2),), ln)
+                    add_key((pm.group(2),), ln)  # _PROP_RE 已含 ?. 可选链
 
         # ② 全文件：别名访问/元素级访问（state 别名链的消费点在组件 JSX 域，切段外）
         for base, (src_var, prefix) in aliases.items():
-            for pm in re.finditer(r"\b%s\s*[?.]\s*([A-Za-z_$][\w$]*)" % re.escape(base), source):
+            if base == var:
+                continue  # 自身别名（setData(data)）走 ①③ 切段域，禁全文件扩面
+            for pm in re.finditer(
+                r"\b%s\s*" % re.escape(base) + _ACC + r"\s*([A-Za-z_$][\w$]*)", source
+            ):
                 add_key(prefix + (pm.group(1),), source[: pm.start()].count("\n") + 1)
-            for em in _ITEM_MAP_RE.finditer(source):
+            for dm in _DESTRUCT_RE.finditer(source):
+                if dm.group(2) != base:
+                    continue
+                for part in dm.group(1).split(","):
+                    name = part.split(":")[0].strip()
+                    if re.fullmatch(r"[A-Za-z_$][\w$]*", name or ""):
+                        add_key(prefix + (name,), source[: dm.start()].count("\n") + 1)
+            for em in _ITEM_CHAIN_RE.finditer(source):
                 if em.group(1) != base:
                     continue
-                item = em.group(2) or em.group(3)
+                chain = _chain_keys(em.group(2))
+                item = em.group(3) or em.group(4)
                 rest = source[em.end(): em.end() + 400]
-                for ip in re.finditer(r"\b%s\s*[?.]\s*([A-Za-z_$][\w$]*)" % re.escape(item), rest):
-                    add_key(prefix + (ip.group(1),), source[: em.start()].count("\n") + 1)
+                for ip in re.finditer(
+                    r"\b%s\s*" % re.escape(item) + _ACC + r"\s*([A-Za-z_$][\w$]*)", rest
+                ):
+                    add_key(prefix + chain + (ip.group(1),), source[: em.start()].count("\n") + 1)
             for fm in _FOROF_RE.finditer(source):
                 if fm.group(2) != base:
                     continue
                 item = fm.group(1)
                 rest = source[fm.end(): fm.end() + 800]
-                for ip in re.finditer(r"\b%s\s*[?.]\s*([A-Za-z_$][\w$]*)" % re.escape(item), rest):
+                for ip in re.finditer(
+                    r"\b%s\s*" % re.escape(item) + _ACC + r"\s*([A-Za-z_$][\w$]*)", rest
+                ):
                     add_key(prefix + (ip.group(1),), source[: fm.start()].count("\n") + 1)
 
-        # ③ 切段内 var 元素级直写形（data.sessions.map((s) => s.k) → ("sessions","k")）
-        for em in re.finditer(
-            r"\b%s\s*[?.]\s*([A-Za-z_$][\w$]*)\s*[?.]?\s*(?:map|forEach|filter|find|some|every)\s*"
-            r"\(\s*(?:\(\s*([A-Za-z_$][\w$]*)\s*\)|([A-Za-z_$][\w$]*))" % re.escape(var),
-            segment,
-        ):
-            row_key, item = em.group(1), em.group(2) or em.group(3)
+        # ③ 切段内 var 元素级直写形（data.sessions.map((s) => s.k) → ("sessions","k")；
+        #    链式容器 dedupResult.details.slice(0,5).map((d) => d.k) → ("details","k")）
+        for em in _ITEM_CHAIN_RE.finditer(segment):
+            if em.group(1) != var:
+                continue
+            chain = _chain_keys(em.group(2))
+            item = em.group(3) or em.group(4)
             rest = segment[em.end(): em.end() + 400]
-            for ip in re.finditer(r"\b%s\s*[?.]\s*([A-Za-z_$][\w$]*)" % re.escape(item), rest):
-                add_key((row_key, ip.group(1)), seg_line(em.start()))
+            for ip in re.finditer(
+                r"\b%s\s*" % re.escape(item) + _ACC + r"\s*([A-Za-z_$][\w$]*)", rest
+            ):
+                add_key(chain + (ip.group(1),), seg_line(em.start()))
         sites.append(site)
     return sites
 

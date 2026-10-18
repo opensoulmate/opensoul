@@ -139,15 +139,53 @@ def test_workspace_census_zero_ghost_endpoint(census_report):
 
 
 def test_census_counts_after_fix(census_report):
-    counts = census_report["counts"]
-    assert counts.get("unresolved_endpoint", 0) == 0, (
-        f"修前 6 个 unresolved_endpoint 应归零: {counts}"
-    )
-    # drift_hard 残留=users/page.tsx data.users（CD-① 已裁决误报：三元防御分支，
-    # 工具已知边界）；四处修复件键面不得再有 hard
-    hard = [
-        f
+    # 契约随更新（CD-⑨ census 工具提取精度收口）：旧口径「unresolved_endpoint 归零、
+    # drift_hard 只剩已裁决误报」建立在旧工具漏报面（typed 赋值/?. 可选链/整体直传形
+    # 零提取）之上。CD-⑨ 修复提取面后普查覆盖面扩大（findings 148→408），浮出新候选
+    # ——登记不等于裁决，逐项裁决=下一拍深挖件（CD-③ 先例）。断言意图零丢失：
+    # CD-① 修复件键面零回归 + 新候选集锁定（候选集再变必须重审，禁静默漂移）。
+    hard = {
+        (f["page"], tuple(f["key"]))
         for f in census_report["findings"]
-        if f["verdict"] == "drift_hard" and not f["page"].endswith("users/page.tsx")
-    ]
-    assert hard == [], f"修复件外新增 drift_hard: {hard}"
+        if f["verdict"] == "drift_hard"
+    }
+    # users/page.tsx data.users=CD-① 已裁决误报（三元防御分支，工具已知边界）
+    # 其余 12=CD-⑨ 新浮出待裁决候选（nest/stats 例已抽验=真漂移：真源只出
+    # tenants/isolation，UI 读 total_tenants 等 4 键恒回落）
+    hard_expected = {
+        ("users/page.tsx", ("users",)),
+        ("feedback/page.tsx", ("confidence",)),
+        ("feedback/page.tsx", ("type",)),
+        ("immune/page.tsx", ("findings", "label")),
+        ("immune/page.tsx", ("findings", "risk")),
+        ("logs/page.tsx", ("buffer_size",)),
+        ("logs/page.tsx", ("organ_probes",)),
+        ("logs/page.tsx", ("sse_clients",)),
+        ("nest/page.tsx", ("active_tenants",)),
+        ("nest/page.tsx", ("suspended_tenants",)),
+        ("nest/page.tsx", ("total_policies",)),
+        ("nest/page.tsx", ("total_tenants",)),
+        ("voice/page.tsx", ("error",)),
+    }
+    assert hard == hard_expected, f"漂移候选集漂移（新增=待裁决/消失=需复核）: {sorted(hard)}"
+    ue = {
+        (f["page"], tuple(f["key"]))
+        for f in census_report["findings"]
+        if f["verdict"] == "unresolved_endpoint"
+    }
+    # 11=CD-⑨ 新浮出端点映射缺口（live 实证：GET decay/simulate 与 POST
+    # discovery/scan 均 405=UI 方法漂移真断点，修复件另拍）
+    ue_expected = {
+        ("hippo/page.tsx", ("retention",)),
+        ("soma/page.tsx", ("adapters",)),
+        ("soma/page.tsx", ("cli_tools",)),
+        ("soma/page.tsx", ("cli_tools", "version")),
+        ("soma/page.tsx", ("processes",)),
+        ("soma/page.tsx", ("processes", "cpu")),
+        ("soma/page.tsx", ("processes", "mem")),
+        ("soma/page.tsx", ("scan_time",)),
+        ("soma/page.tsx", ("services",)),
+        ("soma/page.tsx", ("services", "protocol")),
+        ("soma/page.tsx", ("services", "state")),
+    }
+    assert ue == ue_expected, f"端点映射缺口集漂移: {sorted(ue)}"

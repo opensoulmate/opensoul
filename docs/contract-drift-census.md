@@ -319,3 +319,55 @@ API 回读真删 1 条、清痕 remaining=0）。
 details 只显示前 5 条（既有 slice(0,5) 语义不变）⑤ census 工具未列此面
 （CD-③ 普查未列=启发式对响应整体直传 `setDedupResult(data)` 形不提取消费键，
 工具 bug 修候选延续留档）。
+
+## CD-⑨ census 工具提取精度收口（2026-10-18）
+
+> 修复件：CD-⑥/⑦/⑧ 留档「census 工具 bug 修」4 件 + 深挖扩面 2 件（归属精度）。
+> 零 UI/真源改动——只修普查工具本体（scripts/census_contract_drift.py）；
+> 修复后真仓普查覆盖面 148→402 findings（旧工具大面积漏报）。
+> 测试：tests/test_cd9_census_tool_fixes.py 23 例；真仓工件：
+> data/census_contract_drift_pre_cd9_findings.json（修前）/ post_cd9.json（修后）。
+
+修复面：
+① typed 赋值（CD-⑥）：`const data: T = await apiFetch(...)` 不进 _ASSIGN_RE——
+   typed callsite 整体不可见，同名变量切段失界把其消费错挂上一 callsite（留档
+   「events 键被错挂 list_sessions」根因）→ 注解形进提取 + open_idx 取 match 尾
+   括号（类型注解含括号不吞调用点）。
+② 模板串截断（CD-⑥）：_extract_first_arg 括号深度不感知字面量——模板表达式内
+   字符串的 ")" 截断 call_end 致路径丢尾段、双花括号对象形致杂散尾段 → 字面量
+   感知（_mask_code + _literal_end + _template_expr_end）+ _normalize_path 模板
+   表达式按花括号深度匹配（内嵌字面量不误判）。
+③ 注释盲区（CD-⑦）：注释/字符串字面文本内「data.键」被误提取消费键 → 提取只看
+   真代码（注释与字符串内部遮蔽为等长空白=偏移行号不变；模板表达式内是真代码
+   不遮蔽，反向守卫锁死；key_lines 行号保真测试锁死）。
+④ 整体直传（CD-⑧）：setX(data) 形零消费键 → 状态变量=整个响应对象别名（属性/
+   解构/链式元素 `details.slice(0,5).map((d))` → (details,title) 全提取）。
+⑤ 深挖扩面·可选链整类漏报：`data?.k` / `data.list?.map` / 别名 ?? 回落——访问符
+   单字符吞不下可选链（_ALIAS_RE 旧 [?.] 1-2 字符还把 "??" 当访问符造假键路径）
+   → 统一访问符常量 _ACC（`?.` 与 `.` 两分支）。
+⑥ 深挖扩面·归属精度（新提取面逼出）：同名变量非 apiFetch 再赋值（`const data:
+   T = await res.json()`）不断段=后续消费错挂上一 callsite（pipeline uploadResult
+   形）；箭头形参遮蔽（`.then((data) => setX(data))`）建别名=形参当响应变量
+   （workspace viewingFile 形）→ 切段边界泛化到任意 keyword 再赋值 + setter 直接
+   跟在箭头后不建别名。
+
+新浮出候选（登记不等于裁决，逐项裁决=下一拍深挖件，CD-③ 先例；候选集锁定进
+tests/test_cd1_repair.py::test_census_counts_after_fix 契约基线，再变必须重审）：
+- drift_hard 12（users 1 例=CD-① 已裁决误报之外）：feedback extract confidence/
+  type、immune moderate findings.label / findings.risk、logs summary buffer_size/
+  organ_probes / sse_clients、nest stats total_tenants / active_tenants /
+  suspended_tenants / total_policies、voice synthesize/json error。抽验 nest/stats
+  真漂移坐实：真源 GET /api/nest/stats 只出 tenants/isolation 两键，UI 读
+  total_tenants 等 4 键恒回落显示（修复件另拍）。
+- unresolved_endpoint 11：hippo GET /api/hippo/decay/simulate（1 键）+ soma POST
+  /api/soma/discovery/scan（10 键）。live 实证双 405=UI 方法漂移真断点：GET
+  decay/simulate 405（真源 @router.post，「模拟衰减」按钮必炸）、POST
+  discovery/scan 405（真源只有 GET /scan，UI「Force rescan via POST」落 fallback
+  GET 不重扫=假功能）——修复件另拍。
+
+诚实边界：①提取仍是静态启发式，unresolved_shape 109 / unresolved_path 7 含
+误收待裁决层（工具口径不变）②apiFetch 之外的取数（裸 fetch/axios/.then 链）
+不在提取面（workspace viewingFile 等消费键随其 callsite 漏报=如实边界）③键名与
+JS 内建成员同名（如 entries）被词表滤除=漏报（既有口径）④正则字面量按前一显著
+字符启发式识别（return /x/ 形漏判按代码处理）⑤旧口径「unresolved_endpoint 归零
+/ drift_hard 只剩已裁决误报」系旧工具漏报面假象，随契约更新如实改写。
