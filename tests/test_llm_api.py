@@ -13,44 +13,16 @@ class TestLLMHealth:
 
 
 class TestLLMConfig:
-    @pytest.fixture(autouse=True)
-    def _restore_live_config(self, client):
-        """POST /api/llm/config 持久化写穿live .env——测试后必须完整恢复
-        （2026-09-19实证：config测试曾污染生产base_url/model无人恢复）。"""
-        snap = client.get("/api/llm/config").json()
-        yield
-        std = snap.get("standard") or {}
-        sub = snap.get("subscription") or {}
-        client.post(
-            "/api/llm/config",
-            json={
-                "variant": "subscription",
-                "base_url": sub.get("base_url", ""),
-                "api_key": sub.get("api_key", ""),
-                "model": sub.get("model", ""),
-            },
-        )
-        client.post(
-            "/api/llm/config",
-            json={
-                "variant": "standard",
-                "base_url": std.get("base_url", ""),
-                "api_key": std.get("api_key", ""),
-                "model": std.get("model", ""),
-            },
-        )
-        client.post(
-            "/api/llm/config",
-            json={
-                "variant": snap.get("active_variant", "standard"),
-                "base_url": snap.get("base_url", ""),
-                "api_key": snap.get("api_key", ""),
-                "model": snap.get("model", ""),
-            },
-        )
+    """config 写穿端点测试——隔离面 llm_config_client（conftest）。
 
-    def test_get_config(self, client):
-        resp = client.get("/api/llm/config")
+    2026-10-18 周期#552：此前本类走 live :8090 + _restore_live_config 测试后恢复，
+    跑测窗口内 save_config 四路写穿生产配置（REJ552 验收 0/2 "Unsupported model
+    test-model" 实证，详见 conftest.llm_config_client 与 test_llm.py 同类注释）；
+    现改为 gene_client 同款隔离面，写穿只落 tmp，生产零接触。
+    """
+
+    def test_get_config(self, llm_config_client):
+        resp = llm_config_client.get("/api/llm/config")
         assert resp.status_code == 200
         data = resp.json()
         assert "base_url" in data
@@ -59,14 +31,14 @@ class TestLLMConfig:
         # 契约（2026-09-19实证）：默认返回真实key供settings页表单回写
         # （settings-client.tsx:384/:545 填充+原样POST回写，masked默认值会覆盖真实key）；
         # 掩码机制用显式 ?masked=true 验证
-        resp_masked = client.get("/api/llm/config", params={"masked": True})
+        resp_masked = llm_config_client.get("/api/llm/config", params={"masked": True})
         assert resp_masked.status_code == 200
         masked = resp_masked.json()
         if masked["api_key"]:
             assert masked["api_key"] == "***"
 
-    def test_update_config(self, client):
-        resp = client.post(
+    def test_update_config(self, llm_config_client):
+        resp = llm_config_client.post(
             "/api/llm/config",
             json={"model": "test-model"},
         )
@@ -74,12 +46,12 @@ class TestLLMConfig:
         data = resp.json()
         assert data["model"] == "test-model"
 
-    def test_update_config_partial(self, client):
+    def test_update_config_partial(self, llm_config_client):
         """Updating one field should not clear others."""
         # First set a model
-        client.post("/api/llm/config", json={"model": "partial-test"})
+        llm_config_client.post("/api/llm/config", json={"model": "partial-test"})
         # Then update only base_url
-        resp = client.post(
+        resp = llm_config_client.post(
             "/api/llm/config",
             json={"base_url": "http://test.example.com"},
         )

@@ -13,49 +13,17 @@ class TestLLMHealth:
 
 
 class TestLLMConfig:
-    @pytest.fixture(autouse=True)
-    def _restore_live_config(self, client):
-        """POST /api/llm/config 会持久化写穿live .env（save_config→_save_overrides_to_env）。
+    """config 写穿端点测试——隔离面 llm_config_client（conftest）。
 
-        2026-09-19实证：本套件的config测试曾把生产LLM_BASE_URL覆盖为
-        http://test.example.com、LLM_MODEL覆盖为partial-test且无人恢复——
-        生产LLM调用全部指向无效地址。fixture在类内每个测试前快照live配置、
-        测试后按 subscription→standard→active_variant+legacy 顺序完整恢复。
-        """
-        snap = client.get("/api/llm/config").json()
-        yield
-        std = snap.get("standard") or {}
-        sub = snap.get("subscription") or {}
-        client.post(
-            "/api/llm/config",
-            json={
-                "variant": "subscription",
-                "base_url": sub.get("base_url", ""),
-                "api_key": sub.get("api_key", ""),
-                "model": sub.get("model", ""),
-            },
-        )
-        client.post(
-            "/api/llm/config",
-            json={
-                "variant": "standard",
-                "base_url": std.get("base_url", ""),
-                "api_key": std.get("api_key", ""),
-                "model": std.get("model", ""),
-            },
-        )
-        client.post(
-            "/api/llm/config",
-            json={
-                "variant": snap.get("active_variant", "standard"),
-                "base_url": snap.get("base_url", ""),
-                "api_key": snap.get("api_key", ""),
-                "model": snap.get("model", ""),
-            },
-        )
+    2026-10-18 周期#552：此前本类走 live :8090 + _restore_live_config 测试后恢复——
+    跑测窗口内 save_config 四路写穿生产配置，SoulMate agent spawn 撞上窗口即以
+    test-model-v1 打真实 LLM 全回合 400（REJ552 验收 0/2 实证）；且恢复 payload 取错
+    响应形状（GET /config 无顶层 standard/subscription 键）恢复不可靠。现改为
+    gene_client 同款隔离面，测试面=真实router代码，写穿只落 tmp，生产零接触。
+    """
 
-    def test_get_config(self, client):
-        resp = client.get("/api/llm/config")
+    def test_get_config(self, llm_config_client):
+        resp = llm_config_client.get("/api/llm/config")
         assert resp.status_code == 200
         data = resp.json()
         assert "base_url" in data
@@ -65,7 +33,7 @@ class TestLLMConfig:
         # settings-client.tsx 用该值填充表单并在保存时原样POST回写，
         # 若默认masked，"***"会在下次保存时覆盖真实key（灾难）。
         # 掩码机制通过显式 ?masked=true 验证。
-        resp_masked = client.get("/api/llm/config", params={"masked": True})
+        resp_masked = llm_config_client.get("/api/llm/config", params={"masked": True})
         assert resp_masked.status_code == 200
         masked = resp_masked.json()
         if masked["api_key"]:
@@ -75,8 +43,8 @@ class TestLLMConfig:
             if masked.get(slot, {}).get("api_key"):
                 assert masked[slot]["api_key"] == "***"
 
-    def test_save_config_updates_base_url(self, client):
-        resp = client.post(
+    def test_save_config_updates_base_url(self, llm_config_client):
+        resp = llm_config_client.post(
             "/api/llm/config",
             json={"base_url": "https://test.example.com/v1"},
         )
@@ -84,8 +52,8 @@ class TestLLMConfig:
         data = resp.json()
         assert data["base_url"] == "https://test.example.com/v1"
 
-    def test_save_config_updates_model(self, client):
-        resp = client.post(
+    def test_save_config_updates_model(self, llm_config_client):
+        resp = llm_config_client.post(
             "/api/llm/config",
             json={"model": "test-model-v1"},
         )
@@ -93,22 +61,42 @@ class TestLLMConfig:
         data = resp.json()
         assert data["model"] == "test-model-v1"
 
-    def test_save_config_partial_update(self, client):
+    def test_save_config_partial_update(self, llm_config_client):
         """Only provided fields should be updated."""
         # Get current config
         # Update only model
-        resp = client.post("/api/llm/config", json={"model": "partial-test"})
+        resp = llm_config_client.post("/api/llm/config", json={"model": "partial-test"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["model"] == "partial-test"
 
-    def test_save_config_empty_body(self, client):
+    def test_save_config_empty_body(self, llm_config_client):
         """Empty body should not change anything."""
-        before = client.get("/api/llm/config").json()
-        resp = client.post("/api/llm/config", json={})
+        before = llm_config_client.get("/api/llm/config").json()
+        resp = llm_config_client.post("/api/llm/config", json={})
         assert resp.status_code == 200
         after = resp.json()
         assert before["model"] == after["model"]
+
+    def test_config_never_writes_production_env(self, llm_config_client):
+        """隔离护栏（gene_client 同款"隔离护栏断言"）：写穿落 tmp，生产 .env 字节恒等。"""
+        import os
+
+        import src.api.llm as llm_api
+
+        prod_env = os.path.normpath(
+            os.path.join(os.path.dirname(llm_api.__file__), "..", "..", ".env")
+        )
+        prod_acp = os.path.join(
+            os.environ.get("OPENMATE_ROOT", "/home/climbing/openmate"), "acp-proxy", ".env"
+        )
+        before = {p: open(p, "rb").read() for p in (prod_env, prod_acp) if os.path.exists(p)}
+        resp = llm_config_client.post("/api/llm/config", json={"model": "isolation-probe"})
+        assert resp.status_code == 200
+        for p, b in before.items():
+            assert open(p, "rb").read() == b, f"生产配置被测试写穿: {p}"
+        # 写穿确实发生、且落在 tmp 面（证明不是端点没写，而是写去了隔离面）
+        assert "isolation-probe" in open(llm_config_client.app.state.llm_env_path).read()
 
 
 class TestLLMTestConnection:

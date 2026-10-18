@@ -237,6 +237,42 @@ def gene_client(tmp_path, monkeypatch):
 
 
 @pytest.fixture()
+def llm_config_client(tmp_path, monkeypatch):
+    """LLM /api/llm/config 隔离测试面：真实router + tmp env/profiles，绝不写生产配置。
+
+    背景（2026-10-18 周期#552 实证）：test_llm.py/test_llm_api.py 的 config 测试此前
+    经 live :8090 POST /api/llm/config——save_config 四路写穿生产（模块内存
+    _llm_overrides + opensoul/.env + acp-proxy/.env + data/llm_profiles.json），
+    _restore_live_config 只在测试后恢复且恢复payload取错响应形状（GET /config 无顶层
+    standard/subscription 键→恒空串→"空值保留现有生效值"语义把污染值又写回去），
+    跑测窗口内真实消费方读到测试值（实证：SoulMate 验收 REJ552 0/2 全部
+    "Unsupported model test-model-v1"，agent spawn 读 .env 撞上测试窗口）。
+    gene_client 同款隔离：测试面=真实router代码，数据面=tmp。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import src.api.llm as llm_api
+
+    env_file = tmp_path / "opensoul.env"
+    env_file.write_text(
+        "LLM_API_KEY=\nLLM_BASE_URL=\nLLM_MODEL=\nLLM_ACTIVE_VARIANT=\n"
+        "LLM_STANDARD_API_KEY=\nLLM_STANDARD_BASE_URL=\nLLM_STANDARD_MODEL=\n"
+        "LLM_SUBSCRIPTION_API_KEY=\nLLM_SUBSCRIPTION_BASE_URL=\nLLM_SUBSCRIPTION_MODEL=\n"
+    )
+    monkeypatch.setattr(llm_api, "ENV_PATH", str(env_file))
+    monkeypatch.setattr(llm_api, "_PROFILES_PATH", tmp_path / "llm_profiles.json")
+    monkeypatch.setattr(llm_api, "_llm_overrides", {})
+    monkeypatch.setenv("ACP_PROXY_ENV", str(tmp_path / "acp-proxy.env"))
+
+    app = FastAPI()
+    app.include_router(llm_api.router, prefix="/api/llm")
+    app.state.llm_env_path = str(env_file)
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
 def will_client(tmp_path, monkeypatch):
     """will/hippo jobs API隔离测试面：真实router + tmp独立数据面，绝不写生产
     job_queue.db / evolution.db / long_term_memory.db（gene_client同款路线；
