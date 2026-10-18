@@ -5,8 +5,9 @@
    +confirmed_drift 必带 repair_candidate+工件真落盘回读。
 2. TestSourceAnchors：7 条裁决引用的真源锚点逐条程序化核验（AST/源码文本，
    防无据断言——裁决说在场的键必须真的在场、说缺席的必须真的缺席）。
-3. TestExpandedFindings：3 条端点级扩面（line/pie/scatter /json 404 死路径）
-   的 UI url 字面量在场+真源路由缺席双向锁死。
+3. TestExpandedFindings：3 条端点级扩面（line/pie/scatter /json 404 死路径）的
+   UI url 字面量在场+真源路由面锁死（CD-⑲ 裁决时锁「缺席」，CD-㉑ 端点补齐后按
+   CD-⑰/CD-⑳ 先例契约随更新翻转「在场」）。
 """
 
 from __future__ import annotations
@@ -223,11 +224,13 @@ class TestExpandedFindings:
             assert e.get("note")
 
     def test_missing_json_endpoints_absent_from_router(self):
-        # 说缺席的必须真的缺席：line/pie/scatter 的 /json 变体真源路由不存在
+        # 契约随更新（CD-㉑ 修复候选②「vision chart json 端点面补齐」）：line/pie/scatter
+        # 的 /json 变体已补齐真源路由（CD-⑲ 裁决时「缺席」证据锁按 CD-⑰/CD-⑳ 先例翻转
+        # 「在场」——端点再消失=修复回退此锚点先炸，断言意图零丢失）。
         paths = _router_paths(V_API)
-        assert "/chart/line/json" not in paths
-        assert "/chart/pie/json" not in paths
-        assert "/chart/scatter/json" not in paths
+        assert "/chart/line/json" in paths
+        assert "/chart/pie/json" in paths
+        assert "/chart/scatter/json" in paths
         # 对照面：可达两端点真在场
         assert "/chart/bar/json" in paths
         assert "/mindmap/json" in paths

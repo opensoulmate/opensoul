@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from src.vision.chart_generator import ChartGenerator
+from src.vision.chart_generator import ChartGenerator, ChartResult
 from src.vision.dag_visualizer import DAGVisualizer
 from src.vision.mindmap import MindMapGenerator
 
@@ -185,6 +185,26 @@ async def create_scatter_plot(req: ScatterRequest):
 # ── Chart JSON Endpoints (return metadata only) ───────────
 
 
+def _chart_json_payload(result: ChartResult, output_file: str) -> dict:
+    """chart/json 家族响应载荷单一源（7 键）。
+
+    line/pie/scatter 三个 /json 变体共用本装配口（F4b-㉗ 纪律：禁手抄漂移）；
+    bar_chart_json 的内联字面量是 CD-⑲ 证据锁锚点不搬动，两形由
+    tests/test_cd21_repair.py 平价锁死（键集漂移任一侧必炸）。
+    """
+    return {
+        "format": result.format,
+        "engine": result.engine,
+        "chart_type": result.chart_type,
+        "size_bytes": result.size_bytes,
+        "elapsed_ms": int(result.elapsed_seconds * 1000),
+        "output_file": output_file,
+        "image_base64": base64.b64encode(result.image_data).decode()
+        if result.format == "png"
+        else "",
+    }
+
+
 @router.post("/chart/bar/json")
 async def bar_chart_json(req: BarChartRequest):
     """Generate bar chart, return metadata only."""
@@ -211,6 +231,57 @@ async def bar_chart_json(req: BarChartRequest):
         if result.format == "png"
         else "",
     }
+
+
+@router.post("/chart/line/json")
+async def line_chart_json(req: LineChartRequest):
+    """Generate line chart, return metadata only."""
+    if not req.x or not req.series:
+        raise HTTPException(400, "x values and at least one series required")
+    result = charts.line_chart(
+        x=req.x,
+        series=req.series,
+        title=req.title,
+        xlabel=req.xlabel,
+        ylabel=req.ylabel,
+    )
+    output_file = ""
+    if req.save_output:
+        fname = req.output_name or f"line-{int(time.time())}"
+        output_file = charts.save_output(result.image_data, fname, result.format)
+    return _chart_json_payload(result, output_file)
+
+
+@router.post("/chart/pie/json")
+async def pie_chart_json(req: PieChartRequest):
+    """Generate pie chart, return metadata only."""
+    if not req.labels or not req.values:
+        raise HTTPException(400, "Labels and values required")
+    result = charts.pie_chart(labels=req.labels, values=req.values, title=req.title)
+    output_file = ""
+    if req.save_output:
+        fname = req.output_name or f"pie-{int(time.time())}"
+        output_file = charts.save_output(result.image_data, fname, result.format)
+    return _chart_json_payload(result, output_file)
+
+
+@router.post("/chart/scatter/json")
+async def scatter_chart_json(req: ScatterRequest):
+    """Generate scatter plot, return metadata only."""
+    if not req.x or not req.y:
+        raise HTTPException(400, "x and y values required")
+    result = charts.scatter_plot(
+        x=req.x,
+        y=req.y,
+        title=req.title,
+        xlabel=req.xlabel,
+        ylabel=req.ylabel,
+    )
+    output_file = ""
+    if req.save_output:
+        fname = req.output_name or f"scatter-{int(time.time())}"
+        output_file = charts.save_output(result.image_data, fname, result.format)
+    return _chart_json_payload(result, output_file)
 
 
 # ── Mind Map Endpoints ─────────────────────────────────────
