@@ -4,20 +4,23 @@ import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import {
   Settings, Database, HardDrive, Cpu, RefreshCw, ToggleLeft, ToggleRight,
-  Server, Clock, Shield, X, Save, Activity, CheckCircle, XCircle,
+  Server, Shield, X, Save, Activity, CheckCircle, XCircle,
   AlertTriangle, Loader2, Play, Zap, ChevronDown, ChevronRight,
-  BarChart3, Terminal, Globe, Info
+  BarChart3, Terminal, Info
 } from 'lucide-react';
 import { Badge, TONES } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // ── Types ───────────────────────────────────────────────────
 
+// 真源 GET /api/health（src/main.py health）消费子集——消费键⊆真源产出（名对齐令执行，
+// tests/test_cd18_repair.py 形状锁）。uptime 死声明键已清零：/api/health 与
+// /api/system/overview 双真源恒不产出 uptime（uptime_check_ms=健康检查耗时非运行时间，
+// 禁冒充）；恢复显示=真源补现候选 pending-decisions ㉘a，不自决。
 interface SystemInfo {
   status: string;
   version: string;
   database: string;
-  uptime: string;
 }
 
 interface Organ {
@@ -34,17 +37,17 @@ interface OrganHealth {
   data?: any;
 }
 
-interface QuickOverview {
-  version: string;
-  uptime: string;
-  organs_total: number;
-  organs_healthy: number;
-  knowledge_entries: number;
-  active_agents: number;
-  recent_sessions: number;
-  memory_mb: number;
-  cpu_percent: number;
-  disk_usage: Record<string, any>;
+// 真源 GET /api/system/overview 消费子集（键名=真源键名原样，名对齐令执行，
+// tests/test_cd18_repair.py 形状锁恒锁「消费键⊆真源产出」）。修前 QuickOverview
+// 11 键打在超轻量状态口 /api/system/quick（真源恰 4 键 status/db/version/timestamp）
+// =打错面（CD-⑥/CD-⑪「改指真源」先例）：器官 undefined/undefined、活跃Agent/
+// 近期会话 undefined、CPU/内存 ||0 假 0 大面积假渲染；统计改从本页已取的
+// /api/system/overview 真源键收编。活跃Agent/近期会话/运行时间真源不产出→死显示
+// 清零（CD-④ 纪律）+恢复显示=真源补现候选 pending-decisions ㉘a/㉘b，不自决。
+interface OverviewStats {
+  organs: { healthy_count: number; total_count: number };
+  metrics: { cpu_percent: number; memory: { used_mb: number } };
+  knowledge: { total_entries: number };
 }
 
 interface BootstrapStatus {
@@ -55,16 +58,6 @@ interface BootstrapStatus {
 type Tab = 'overview' | 'organs' | 'config' | 'bootstrap';
 
 // ── Helpers ─────────────────────────────────────────────────
-
-function formatUptime(seconds: number) {
-  if (!seconds || seconds < 0) return '—';
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return `${d}天 ${h}小时`;
-  if (h > 0) return `${h}小时 ${m}分钟`;
-  return `${m}分钟`;
-}
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
@@ -90,7 +83,7 @@ export default function SystemPage() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [organs, setOrgans] = useState<Organ[]>([]);
   const [organHealth, setOrganHealth] = useState<OrganHealth[]>([]);
-  const [quick, setQuick] = useState<QuickOverview | null>(null);
+  const [stats, setStats] = useState<OverviewStats | null>(null);
   const [bootstrap, setBootstrap] = useState<BootstrapStatus | null>(null);
   const [config, setConfig] = useState<Record<string, any>>({});
   const [configText, setConfigText] = useState('');
@@ -104,21 +97,18 @@ export default function SystemPage() {
 
   const fetchOverview = useCallback(async () => {
     try {
-      const [health, overview, quickData] = await Promise.allSettled([
+      const [health, overview] = await Promise.allSettled([
         apiFetch('/api/health'),
         apiFetch('/api/system/overview'),
-        apiFetch('/api/system/quick'),
       ]);
       const h = health.status === 'fulfilled' ? health.value : null;
       const o = overview.status === 'fulfilled' ? overview.value : null;
-      const q = quickData.status === 'fulfilled' ? quickData.value : null;
       setInfo({
         status: (h as any)?.status || 'ok',
         version: (h as any)?.version || (o as any)?.version || '—',
-        database: (o as any)?.database || 'SQLite',
-        uptime: (o as any)?.uptime || '—',
+        database: (h as any)?.database?.type ?? '—',
       });
-      if (q) setQuick(q as unknown as QuickOverview);
+      if (o) setStats(o as unknown as OverviewStats);
     } catch { /* ignore */ }
   }, []);
 
@@ -228,7 +218,6 @@ export default function SystemPage() {
               <div className="flex items-center gap-4 mt-1 text-[10px] text-muted-foreground">
                 <span>版本 {info?.version}</span>
                 <span>数据库 {info?.database}</span>
-                <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />运行 {info?.uptime}</span>
               </div>
             </div>
           </div>
@@ -239,15 +228,13 @@ export default function SystemPage() {
       </div>
 
       {/* ── Quick Stats ── */}
-      {quick && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {[
-            { label: '器官', value: `${quick.organs_healthy}/${quick.organs_total}`, icon: <Cpu className="w-3.5 h-3.5 text-blue-500" /> },
-            { label: '知识条目', value: quick.knowledge_entries, icon: <Database className="w-3.5 h-3.5 text-violet-500" /> },
-            { label: '活跃Agent', value: quick.active_agents, icon: <Activity className="w-3.5 h-3.5 text-emerald-500" /> },
-            { label: '近期会话', value: quick.recent_sessions, icon: <Globe className="w-3.5 h-3.5 text-amber-500" /> },
-            { label: 'CPU', value: `${(quick.cpu_percent || 0).toFixed(1)}%`, icon: <Cpu className="w-3.5 h-3.5 text-cyan-500" /> },
-            { label: '内存', value: `${quick.memory_mb || 0} MB`, icon: <HardDrive className="w-3.5 h-3.5 text-pink-500" /> },
+            { label: '器官', value: `${stats.organs.healthy_count}/${stats.organs.total_count}`, icon: <Cpu className="w-3.5 h-3.5 text-blue-500" /> },
+            { label: '知识条目', value: stats.knowledge.total_entries, icon: <Database className="w-3.5 h-3.5 text-violet-500" /> },
+            { label: 'CPU', value: stats.metrics.cpu_percent != null ? `${stats.metrics.cpu_percent.toFixed(1)}%` : '—', icon: <Cpu className="w-3.5 h-3.5 text-cyan-500" /> },
+            { label: '内存', value: stats.metrics.memory?.used_mb != null ? `${stats.metrics.memory.used_mb} MB` : '—', icon: <HardDrive className="w-3.5 h-3.5 text-pink-500" /> },
             { label: '已启用', value: `${enabledCount}/${organs.length}`, icon: <ToggleRight className="w-3.5 h-3.5 text-emerald-500" /> },
             { label: '健康检查', value: totalOrganCount > 0 ? `${healthyOrganCount}/${totalOrganCount}` : '—', icon: <Shield className="w-3.5 h-3.5 text-red-400" /> },
           ].map((s, i) => (
@@ -338,7 +325,7 @@ export default function SystemPage() {
           </div>
 
           {/* Quick Overview Details */}
-          {quick && (
+          {stats && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -347,10 +334,9 @@ export default function SystemPage() {
                 </div>
                 <div className="space-y-2 text-xs">
                   {[
-                    { label: '版本', value: quick.version },
-                    { label: '运行时间', value: formatUptime(parseInt(quick.uptime) || 0) },
-                    { label: 'CPU 使用率', value: `${(quick.cpu_percent || 0).toFixed(1)}%` },
-                    { label: '内存使用', value: `${quick.memory_mb || 0} MB` },
+                    { label: '版本', value: info?.version },
+                    { label: 'CPU 使用率', value: stats.metrics.cpu_percent != null ? `${stats.metrics.cpu_percent.toFixed(1)}%` : '—' },
+                    { label: '内存使用', value: stats.metrics.memory?.used_mb != null ? `${stats.metrics.memory.used_mb} MB` : '—' },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center justify-between py-1 border-b border-border/50 last:border-0">
                       <span className="text-muted-foreground">{item.label}</span>
@@ -366,9 +352,7 @@ export default function SystemPage() {
                 </div>
                 <div className="space-y-2 text-xs">
                   {[
-                    { label: '知识条目', value: quick.knowledge_entries },
-                    { label: '活跃 Agent', value: quick.active_agents },
-                    { label: '近期会话', value: quick.recent_sessions },
+                    { label: '知识条目', value: stats.knowledge.total_entries },
                     { label: '已启用器官', value: `${enabledCount} / ${organs.length}` },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center justify-between py-1 border-b border-border/50 last:border-0">

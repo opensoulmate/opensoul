@@ -351,6 +351,32 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 **诚实边界**：①A（a/b 两子件）收口=有意的能力取舍非 bug（真源无产出禁假渲染/真 0 如实）②㉗a 取 B=真源形状变更，CD-⑮ test_cd15 形状锁须显式改+勘误记档（同 ㉕ 证据锁纪律）③㉗b 取 B 的闭集=人工归类（词表无内生问题类标注），漏收/误收按宁窄勿滥调闭集④动态 type（_audit 变量/link_gateway evt.event_type）静态不可枚举，人工枚举调用点零 'error'/'alert'（CD-⑮ 记档）。
 
+## ㉘ system 页统计/横幅死显示恢复（㉘a 运行时间/uptime 真源补现 / ㉘b 活跃Agent/近期会话 真源补现）
+
+**状态：待拍板（CD-⑱ 已按 CD 系列 wire 权威纪律收口=真源键在场改指真源、真源不产出死显示清零；恢复显示需真源补现（uptime/活跃Agent/近期会话 语义无产出面），不自决另拍）**——依据：CD-⑰ 诚实边界①留档候选「常驻横幅 SystemInfo 显示键深挖（'undefined/undefined' 疑同型漂移）」深挖裁决（CD-⑱，live 修前/修后同探针双向硬证）。
+
+### ㉘a 运行时间显示恢复（真源补现 uptime 语义）
+
+**现状**：GET /api/health 与 GET /api/system/overview 双真源恒不产出 uptime（health.uptime_check_ms=健康检查耗时非运行时间，禁冒充；源码+live 双实证，tests/test_cd18_repair.py 形状锁恒锁）；修前 banner「运行 —」恒死值+运行时信息「运行时间」行 formatUptime(parseInt(quick.uptime) || 0) 恒「0 分钟」=死显示面。CD-⑱ 后两显示已移除（CD-④ 纪律）、SystemInfo.uptime 死声明键+formatUptime 死 helper 双清零（CD-⑦ 纪律）。
+
+**选项**：
+- **A 维持收口**（现状）：不显示运行时间。零契约变更。
+- **B 真源补现（建议）**：uptime 语义二选一——**B1** OpenSoul 进程运行时长（metrics_api `_start_time` 派生 opensoul_uptime_seconds 同源语义；真源加性键）/ **B2** 主机运行时长（psutil.boot_time 派生，diagnostics `_get_system_info` uptime_seconds 同源语义）——B1=服务视角「系统运行时间」、B2=运维视角「主机运行时间」，语义不同须拍板禁猜；+ UI 恢复 banner「运行」与运行时信息「运行时间」两显示消费新键 + test_cd18_repair 形状锁随契约更新（勘误「双真源恒不产出」为「修前恒不产出」，㉕/㉗ 证据锁纪律）。
+- **权衡**：两显示都是加性键零破坏；B1 语义与「系统管理」页自我指涉一致，B2 数值更大更稳定（不随服务重启清零）。
+- **拍板方式**：回「**㉘a取B1**」/「**㉘a取B2**」（cron 代跑下拍执行）/「㉘a取A」/「㉘a维持」。
+
+### ㉘b 活跃Agent/近期会话显示恢复（真源补现 两统计语义）
+
+**现状**：两统计在 /api/system/quick（真源恰 4 键 status/db/version/timestamp）与 /api/system/overview（9 键）均无产出面；修前 UI quick.active_agents/quick.recent_sessions 恒 undefined（「活跃Agent undefined」「近期会话 undefined」假渲染）。CD-⑱ 后统计条两卡+数据统计面板两行已移除、QuickOverview 死声明整体清零、/api/system/quick 死消费面收口（4 键零显示消费，端点真源零改动保留）。真源候选=语义需拍板（非形状问题）：活跃Agent=多智能体协调器 get_active_agents（GET /api/brain/agents，协调器注册活跃 agent）还是 agent_registry 行（GET /api/agents/registry，探测注册 5 分钟活跃窗语义）；近期会话=哪个会话面（hippo sessions？trajectory sessions？）+「近期」窗口定义。
+
+**选项**：
+- **A 维持收口**（现状）：不显示两统计。零契约变更。
+- **B 真源补现（建议）**：随拍定语义真源加性补现（如 B1 活跃Agent=agent_registry 5 分钟活跃窗行数、B2 近期会话=指定会话面 24h 窗口计数；具体面随拍）+ UI 恢复两卡/两行消费新键 + test_cd18_repair 形状锁随契约更新。
+- **权衡**：两统计是看板常用语义，但语义面多候选禁猜（CD-⑮ 同纪律）；活跃Agent 两候选语义不同轴（协调器注册 vs 探测注册活跃窗）。
+- **拍板方式**：回「**㉘b取B**」（语义随拍）/「**㉘b取A**」/「**㉘b维持**」。两子件独立互不阻塞（回「㉘a取B1 ㉘b取B」即两件都下拍执行）。
+
+**诚实边界**：①A 收口=有意的能力取舍非 bug（真源无产出禁假渲染/假 0）②任一取 B=真源形状变更，CD-⑱ test_cd18_repair 形状锁（quick 恒不产出统计键/health 恒不产出 uptime）须显式改+勘误记档（㉕/㉗ 证据锁纪律）③㉘a B1/B2 是语义二选一（进程 vs 主机 uptime）非实现细节④活跃Agent 若取 /api/brain/agents 语义=协调器注册活跃 agent，与 agent_registry「探测注册 5 分钟活跃窗」不同轴，随拍定。
+
 ## 附：锚点核验
 
 本件引用的全部 file:line 锚点已程序化核验（逐条对当前 HEAD 源码回读，结果存 `data/dec1_anchor_verification.json`）；核验不通过的锚点不上墙。核验方式见周期日志 DEC-① 行。
