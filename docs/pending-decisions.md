@@ -324,6 +324,33 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 **诚实边界**：①A 收口=有意的能力取舍非 bug（真源无产出禁假渲染）②by_provider 元素升对象=既有 UI 消费面再收编（CD-⑤ 已收 int 形，B 拍须同步 UI+契约测试随更新）③record() 签名加 task=全调用点（chat/embed/llm 直通等）接线面，非 token_meter 内改。
 
+## ㉗ logs 页统计卡显示恢复与词表对齐（㉗a recent_count 真源补现 / ㉗b 错误/告警卡事件词表对齐）
+
+**状态：待拍板（CD-⑮ 已按 CD 系列 wire 权威纪律收口=recent_count 死显示卡移除禁假 0；恢复显示与词表映射均涉语义设计/真源形状变更，不自决另拍）**——依据：CD-⑭ 留档候选首件「最近事件卡 recent_count 深挖」深挖裁决（CD-⑮，行为实证补 census unresolved_shape 工具边界）。
+
+### ㉗a 最近事件显示恢复（真源补现 recent_count 窗口计数）
+
+**现状**：`get_stream_summary()`（GET /api/events/summary 别名同形）恰 5 键 `total_events/by_organ/by_type/most_active_organ/collected_at`（源码+live 双实证），全仓零 recent_count 产出点；修前 UI 最近事件卡 `{summary?.recent_count || 0}` 恒 undefined 恒假 0（死显示键）。CD-⑮ 后卡已移除（CD-④ 死显示面收口先例）、EventSummary 死声明键清零、grid 收 4 列；tests/test_cd15_repair.py 形状锁死（真源补现 recent_count 会先炸锁=改道须先改锁）。
+
+**选项**：
+- **A 维持收口**（现状）：无「最近事件」卡。零契约变更。
+- **B 真源补现（建议）**：`get_stream_summary()` 加 `recent_count`（加性键）=时间窗内事件数（窗口语义二选一：B1 近 24h 窗口计数（需事件时间轴，_collect_all_events 事件带 timestamp/collected_at 可算）/ B2 缓冲区事件数 len(_event_buffer)（与 health buffer_size 同值，语义「最近缓冲事件」））+ UI 恢复卡片消费新键 + test_cd15 形状锁随契约更新（勘误「全仓零产出点」为「修前零产出」）。
+- **权衡**：卡的用途=一眼看到「最近活动量」；B1 语义最贴「最近」但需窗口定义拍板；B2 零新计算但与页脚「缓冲」重复展示同值。
+- **拍板方式**：回「**㉗a取B1**」/「**㉗a取B2**」（cron 代跑下拍执行）/「㉗a取A」/「㉗a维持」。
+
+### ㉗b 错误/告警卡事件词表对齐（by_type.error/alert 精确查询 vs 生产词表错位）
+
+**现状**：错误/告警卡按 `by_type.error + by_type.alert` 精确键计数。深挖全量枚举生产 type 词表（event_stream 探针 26 字面量+push_event 45 字面量+_audit 动态词表 12 类+event_bridge emit 2 调用面）**零 'error'/'alert' 精确键**→卡恒 0；而真实问题类事件用异名词表（`health_alert`/`security`/`intrusion_detected`/`brute_force`/`ip_blocked`/`permission_denied`/`content_blocked`/`request_blocked`/`component_error`/`pipeline_blocked`/`webhook_failed`/*_rejected 等，live 实证 by_type 有 `health_alert: 1` 而卡显示 0=读者语义漏计）。但 by_type 是开放 dict（Record<string,number>），查询形合法、未来生产者产出 'error'/'alert' 即生效（src/nerve/event_bridge.py:162 严重度映射即按 `("error","alert","failure")` 预留语义类设计）→**真 0 非假 0、非死显示键**（CD-⑮ 裁决与 recent_count 分野，测试锁死卡面维持现状不许误删/误改）。
+
+**选项**：
+- **A 维持精确查询**（现状）：'error'/'alert' 是预留语义类，生产面启用即自动生效；当前恒 0=如实（零该类事件）。代价：health_alert 等异名问题类事件不入卡（读者看「0」以为无告警）。
+- **B UI 收编生产词表闭集（建议）**：卡改为计数问题类闭集 `{health_alert, security, intrusion_detected, brute_force, ip_blocked, permission_denied, content_blocked, request_blocked, component_error, pipeline_blocked, webhook_failed}` + 各 `*_rejected`（闭集单一源常量，卡片标签改「问题类事件」或保留「错误/告警」）；test_cd15 词表锚点随更新。
+- **C 生产者收编 error/alert 词表**：问题类事件统一改发 'error'/'alert' 两类（event_bridge 严重度词表对齐），by_type 精确查询自动生效；代价=全生产调用点语义改写（46+ 调用点大件）且历史事件词表分叉。
+- **权衡**：B 最小件且如实（按真源词表计数）；C 词表归一但大件；A 零改动但卡面长期误导。若取 B 建议闭集按「security 族+失败族」定义并留扩展注释。
+- **拍板方式**：回「**㉗b取B**」（cron 代跑下拍执行）/「㉗b取A」/「㉗b取C」/「㉗b维持」。两子件独立互不阻塞（回「㉗a取B1 ㉗b取B」即两件都下拍执行）。
+
+**诚实边界**：①A（a/b 两子件）收口=有意的能力取舍非 bug（真源无产出禁假渲染/真 0 如实）②㉗a 取 B=真源形状变更，CD-⑮ test_cd15 形状锁须显式改+勘误记档（同 ㉕ 证据锁纪律）③㉗b 取 B 的闭集=人工归类（词表无内生问题类标注），漏收/误收按宁窄勿滥调闭集④动态 type（_audit 变量/link_gateway evt.event_type）静态不可枚举，人工枚举调用点零 'error'/'alert'（CD-⑮ 记档）。
+
 ## 附：锚点核验
 
 本件引用的全部 file:line 锚点已程序化核验（逐条对当前 HEAD 源码回读，结果存 `data/dec1_anchor_verification.json`）；核验不通过的锚点不上墙。核验方式见周期日志 DEC-① 行。
