@@ -31,7 +31,8 @@ unresolved_shape 的普查 note（「形状提取失败」/「元素形状未解
 - cortex.think 返回体是 LLM JSON 直通（动态形状）：按 SYSTEM_PROMPT 声明面定型，
   实际 LLM 输出可能偏离 prompt（如实记，非本裁决可证伪）。
 - repair_candidate 只登记不执行（一候选一拍，执行纪律#7）；recent_count 一条的
-  修复已由 CD-⑮ 先行落地，以 repair_status 如实标注。
+  修复已由 CD-⑮ 先行落地，以 repair_status 如实标注；agent recall 一条的修复已由
+  CD-㉓ 落地，同款标注（锚点改锁修复后状态）。
 """
 from __future__ import annotations
 
@@ -148,15 +149,19 @@ SHAPE_VERDICTS = {
     # ── agent recall：rag_query 返回体（answer/sources）与 UI 契约（query/results）漂移 ──
     ("agent.recall:450", "results"): {
         "verdict": _D,
-        "repair_candidate": "agent recall 响应面消费键收编（results↔sources 漂移+检索面板恒空）",
+        "repair_candidate": "已收口：CD-㉓ agent recall 响应面消费键收编（2026-10-19）",
+        "repair_status": "landed@CD-㉓",
         "evidence": "真源 rag_query 返回恰 {answer,sources}（src/services/rag.py:53，空结果/"
         "无 key 分支 :14/:37 同形）无 results 键——UI recallResults.results（agent-nodes/"
         "page.tsx:515 .length ?? 0、:517 (results||[]).map、:530）恒回落空列表=检索结果面板"
         "恒显示 0 条（显示行为损失），真源 sources[{id,score}] 无人读；UI 另读 recallResults"
-        ".query（:515）真源亦不产出、answer 无人读（同根扩面 EXPANDED_FINDINGS）",
+        ".query（:515）真源亦不产出、answer 无人读（同根扩面 EXPANDED_FINDINGS）——CD-㉓ 已"
+        "收口（UI 收编真源 answer/sources、死键 query/results 清零，2026-10-19），当前 "
+        "agent-nodes/page.tsx 已无 recallResults.results/.query 消费=修复真落地；锚点改锁"
+        "修复后状态（recallResults.sources 漂移复发先炸）",
         "anchors": [
             (RG, 53, 'return {"answer": answer, "sources": sources}'),
-            (U_AN, 515, "recallResults.results"),
+            (U_AN, 520, "recallResults.sources"),
         ],
     },
     # ── agent-proxy CLI Agent 面：handler 内联构造 ──
@@ -859,7 +864,7 @@ EXPANDED_FINDINGS = [
         "page": "agent-nodes/page.tsx",
         "keys": ["query", "answer"],
         "verdict": _D,
-        "repair_candidate": "agent recall 响应面消费键收编（results↔sources 漂移+检索面板恒空）",
+        "repair_candidate": "已收口：CD-㉓ agent recall 响应面消费键收编（2026-10-19）",
         "note": "与 results 同根（真源 rag_query 返回恰 {answer,sources}，src/services/rag.py:53）"
         "：UI recallResults.query（agent-nodes/page.tsx:515）真源不产出=查询回显行恒空、answer"
         "真源产出无人读（检索面板只读 results=整面契约漂移）",

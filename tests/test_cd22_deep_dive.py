@@ -287,6 +287,17 @@ class TestKnownDrifts:
         # 修复真落地：当前 UI 已无 recent_count 消费
         assert "recent_count" not in _src("admin-ui/app/logs/page.tsx")
 
+    def test_agent_recall_repair_landed(self, artifact):
+        rows = self._rows(artifact)
+        r = rows[("agent.recall:450", "results")]
+        assert r["verdict"] == _D
+        assert r.get("repair_status") == "landed@CD-㉓"
+        assert "已收口" in r["repair_candidate"]
+        # 修复真落地：当前 UI 已无修前死键消费、真源键已收编
+        assert "recallResults.query" not in _src("admin-ui/app/agent-nodes/page.tsx")
+        assert "recallResults.results" not in _src("admin-ui/app/agent-nodes/page.tsx")
+        assert "recallResults.sources" in _src("admin-ui/app/agent-nodes/page.tsx")
+
     def test_every_drift_has_ui_symptom_anchor(self, artifact):
         rows = self._rows(artifact)
         for key in self.DRIFT_KEYS:
@@ -306,7 +317,7 @@ class TestExpandedFindings:
         ("admin-ui/app/knowledge-graph/page.tsx", "rel.target_entity_id"),
         ("admin-ui/app/connectors/page.tsx", "p.memory.toFixed"),
         ("admin-ui/app/benchmark/page.tsx", "r.success_rate"),
-        ("admin-ui/app/agent-nodes/page.tsx", "recallResults.query"),
+        ("admin-ui/app/agent-nodes/page.tsx", "recallResults.sources"),
     ]
 
     def test_expanded_all_confirmed_with_candidate(self, artifact):

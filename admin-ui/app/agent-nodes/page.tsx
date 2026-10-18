@@ -41,9 +41,14 @@ interface ReportForm {
   data: string;
 }
 
+interface RecallSource {
+  id: any;
+  score: any;
+}
+
 interface RecallResult {
-  results: any[];
-  query: string;
+  answer: string;
+  sources: RecallSource[];
 }
 
 type Tab = 'nodes' | 'memory' | 'register';
@@ -512,22 +517,24 @@ export default function AgentNodesPage() {
               {recallResults && (
                 <div className="space-y-2 max-h-[400px] overflow-auto">
                   <p className="text-[10px] text-muted-foreground">
-                    查询: "{recallResults.query}" · {recallResults.results?.length ?? 0} 条结果
+                    查询: "{recallQuery}" · {recallResults.sources.length} 条结果
                   </p>
-                  {(recallResults.results || []).map((item: any, i: number) => (
+                  <div className="rounded border border-border p-2 text-xs whitespace-pre-wrap">
+                    {recallResults.answer}
+                  </div>
+                  {recallResults.sources.map((item: any, i: number) => (
                     <div key={i} className="rounded border border-border p-2 text-xs">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium">{item.title || item.id || `结果 ${i + 1}`}</span>
-                        {item.score !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{item.id ?? `结果 ${i + 1}`}</span>
+                        {item.score !== undefined && item.score !== null && (
                           <Badge variant="default">
                             {(item.score * 100).toFixed(1)}%
                           </Badge>
                         )}
                       </div>
-                      <p className="text-muted-foreground text-[10px] line-clamp-3">{item.content || item.text || JSON.stringify(item).slice(0, 200)}</p>
                     </div>
                   ))}
-                  {recallResults.results?.length === 0 && (
+                  {recallResults.sources.length === 0 && (
                     <div className="text-center py-6 text-muted-foreground text-xs">未找到相关记忆</div>
                   )}
                 </div>
