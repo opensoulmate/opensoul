@@ -182,8 +182,9 @@ class TestSourceAnchors:
 
     def test_ui_consumption_anchors(self):
         ui = _src(V_UI)
-        # 假 0 回落遮蔽锚点（CD-⑱ 同型）：elapsed_ms || 0
-        assert "previewMeta.elapsed_ms || 0" in ui
+        # 假 0 回落遮蔽锚点（契约随更新，CD-⑰ 先例：修前「在场」证据锁翻转「清零」）：
+        # CD-⑳ 收口后 `previewMeta.elapsed_ms || 0` 假 0 形清零——复发=收口失效此锚点先炸
+        assert "previewMeta.elapsed_ms || 0" not in ui
         # resolved_ok 消费点锚点
         assert "data.image_base64" in ui
         assert "data.format === 'png'" in ui

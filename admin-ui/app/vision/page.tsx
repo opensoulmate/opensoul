@@ -30,6 +30,20 @@ interface SavedOutput {
 
 type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'mindmap';
 
+// ── 真源键收编（CD-⑳）────────────────────────────────────────
+// preview elapsed 兄弟端点各按真源键收编：bar/json 产出 elapsed_ms（int ms）、
+// mindmap/json 产出 elapsed_seconds（float s）。逐端点真源键换算显示 ms；
+// 两键皆缺席=真源不产出，返回空串禁 fabricate 0（CD-④/⑮ 死显示清零纪律）。
+const previewElapsedLabel = (m: Record<string, any>): string => {
+  const ms =
+    typeof m.elapsed_ms === 'number'
+      ? m.elapsed_ms
+      : typeof m.elapsed_seconds === 'number'
+        ? Math.round(m.elapsed_seconds * 1000)
+        : null;
+  return ms !== null ? ` · ${ms}ms` : '';
+};
+
 // ── Main Page ───────────────────────────────────────────────
 
 export default function VisionPage() {
@@ -365,7 +379,7 @@ export default function VisionPage() {
             <span className="text-sm font-medium">预览</span>
             {previewMeta && (
               <span className="text-[10px] text-muted-foreground ml-auto">
-                {previewMeta.engine} · {previewMeta.format} · {previewMeta.elapsed_ms || 0}ms
+                {previewMeta.engine} · {previewMeta.format}{previewElapsedLabel(previewMeta)}
                 {previewMeta.size_bytes ? ` · ${(previewMeta.size_bytes / 1024).toFixed(1)}KB` : ''}
               </span>
             )}
