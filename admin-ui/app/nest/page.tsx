@@ -50,12 +50,20 @@ interface AuditEntry {
 }
 
 interface Stats {
-  total_tenants?: number;
-  active_tenants?: number;
-  suspended_tenants?: number;
-  by_tier?: Record<string, number>;
-  total_policies?: number;
-  total_audit_entries?: number;
+  tenants?: {
+    total_tenants?: number;
+    by_tier?: Record<string, number>;
+    by_status?: Record<string, number>;
+    total_storage_bytes?: number;
+    total_documents?: number;
+  };
+  isolation?: {
+    total_access_checks?: number;
+    blocked_attempts?: number;
+    block_rate?: number;
+    by_resource_type?: Record<string, number>;
+    policies_count?: number;
+  };
 }
 
 type Tab = 'tenants' | 'policies' | 'audit';
@@ -342,19 +350,19 @@ export default function NestPage() {
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold">{stats.total_tenants ?? filteredTenants.length}</div>
+          <div className="text-2xl font-bold">{stats.tenants?.total_tenants ?? '-'}</div>
           <div className="text-xs text-muted-foreground">总租户数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-emerald-600">{stats.active_tenants ?? '-'}</div>
+          <div className="text-2xl font-bold text-emerald-600">{stats.tenants?.by_status ? (stats.tenants.by_status.active ?? 0) : '-'}</div>
           <div className="text-xs text-muted-foreground">活跃租户</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-amber-500">{stats.suspended_tenants ?? '-'}</div>
+          <div className="text-2xl font-bold text-amber-500">{stats.tenants?.by_status ? (stats.tenants.by_status.suspended ?? 0) : '-'}</div>
           <div className="text-xs text-muted-foreground">已暂停</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold">{policies.length || stats.total_policies || '-'}</div>
+          <div className="text-2xl font-bold">{stats.isolation?.policies_count ?? '-'}</div>
           <div className="text-xs text-muted-foreground">隔离策略</div>
         </div>
       </div>

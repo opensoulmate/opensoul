@@ -155,16 +155,17 @@ def test_census_counts_after_fix(census_report):
     # 契约随更新（CD-⑪ 修复候选① logs stream summary 消费键收编）：logs 三键
     # （buffer_size/organ_probes/sse_clients）已收编真源 /api/events/health 键形，
     # 从候选集消失=已落修复件（消失=需复核→本行即复核记录），非静默漂移。
+    # 契约随更新（CD-⑫ 修复候选② nest stats 消费键收编）：nest 四键
+    # （total_tenants/active_tenants/suspended_tenants/total_policies）已收编
+    # 真源 /api/nest/stats 两层键形（tenants.* 嵌套+by_status 派生+isolation.
+    # policies_count），从候选集消失=已落修复件（消失=需复核→本行即复核记录），
+    # 非静默漂移。
     hard_expected = {
         ("users/page.tsx", ("users",)),
         ("feedback/page.tsx", ("confidence",)),
         ("feedback/page.tsx", ("type",)),
         ("immune/page.tsx", ("findings", "label")),
         ("immune/page.tsx", ("findings", "risk")),
-        ("nest/page.tsx", ("active_tenants",)),
-        ("nest/page.tsx", ("suspended_tenants",)),
-        ("nest/page.tsx", ("total_policies",)),
-        ("nest/page.tsx", ("total_tenants",)),
         ("voice/page.tsx", ("error",)),
     }
     assert hard == hard_expected, f"漂移候选集漂移（新增=待裁决/消失=需复核）: {sorted(hard)}"
