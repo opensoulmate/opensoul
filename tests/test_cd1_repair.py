@@ -174,10 +174,12 @@ def test_census_counts_after_fix(census_report):
         for f in census_report["findings"]
         if f["verdict"] == "unresolved_endpoint"
     }
-    # 11=CD-⑨ 新浮出端点映射缺口（live 实证：GET decay/simulate 与 POST
-    # discovery/scan 均 405=UI 方法漂移真断点，修复件另拍）
+    # 10=CD-⑨ 新浮出端点映射缺口（live 实证：POST discovery/scan 405=UI 方法漂移
+    # 真断点，修复件另拍）。契约随更新（CD-⑬ 修复候选③ hippo decay/simulate 方法
+    # 漂移修复）：hippo (retention,) 调用点已收编真源 POST 方法（unresolved_endpoint
+    # 解析成功=produced），从候选集消失=已落修复件（消失=需复核→本行即复核记录），
+    # 非静默漂移。
     ue_expected = {
-        ("hippo/page.tsx", ("retention",)),
         ("soma/page.tsx", ("adapters",)),
         ("soma/page.tsx", ("cli_tools",)),
         ("soma/page.tsx", ("cli_tools", "version")),

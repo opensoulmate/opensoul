@@ -247,16 +247,18 @@ class TestKeyShapeEvidence:
 
 
 class TestEndpointDriftEvidence:
-    def test_hippo_route_is_post_but_ui_calls_get(self):
+    def test_hippo_route_and_ui_method_aligned(self):
+        """契约随更新（CD-⑬ 修复候选③ hippo decay/simulate 方法漂移修复落）：
+        VERDICTS 证据「调用点 apiFetch 缺省 GET 恒 405」是 CD-⑨ 快照的历史记录
+        （裁决工件冻结不改），本锚点改锁修复后状态——调用点声明 POST 与真源路由
+        对齐（方法漂移复发此锚先炸）。"""
         src = _src("src/api/hippo.py")
         assert '@router.post("/decay/simulate")' in src
         assert '@router.get("/decay/simulate")' not in src
         ui = _src("admin-ui/app/hippo/page.tsx")
-        call = "apiFetch(`/api/hippo/decay/simulate?${params}`)"
-        assert call in ui
-        # 调用点不带 method 参数=apiFetch 默认 GET
-        line = [l for l in ui.splitlines() if "decay/simulate" in l][0]
-        assert "method" not in line
+        code = "\n".join(l.split("//")[0] for l in ui.splitlines())
+        line = [l for l in code.splitlines() if "decay/simulate" in l and "apiFetch" in l][0]
+        assert "method: 'POST'" in line
 
     def test_soma_route_is_get_but_rescan_calls_post(self):
         src = _src("src/api/soma_discovery.py")

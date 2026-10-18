@@ -204,7 +204,9 @@ export default function HippoPage() {
         importance: simForm.importance,
         access_count: simForm.access_count,
       });
-      const data = await apiFetch(`/api/hippo/decay/simulate?${params}`);
+      // CD-⑬ 方法漂移收口：真源路由是 POST，修前 apiFetch 缺省 GET 恒 405（模拟面板
+      // 永不渲染、setSimResult 永不置位）——调用方法收编真源。
+      const data = await apiFetch(`/api/hippo/decay/simulate?${params}`, { method: 'POST' });
       setSimResult(data);
     } catch (e: any) {
       setError(e.message);
