@@ -21,28 +21,39 @@ interface Provider {
   consecutive_failures: number;
 }
 
+// 真源 GET /api/gland/keys = key_manager.status() 形：dict[provider, 槽位列表]；
+// KeySlot 为 UI 展平行形（provider 取字典键，槽位键原样收编）。
 interface KeySlot {
   provider: string;
   masked_key: string;
-  active: boolean;
+  is_valid: boolean;
+  fail_count: number;
+  last_checked: number;
 }
 
+// 真源 GET /api/gland/usage = token_meter.summary() 形（by_provider 元素=int 累计
+// token 总数；total_input_tokens/total_output_tokens/total_requests/budget_used_pct
+// 等键真源不产出，禁编造）。
 interface UsageSummary {
-  total_input_tokens: number;
-  total_output_tokens: number;
-  total_requests: number;
-  budget_limit: number;
-  budget_used_pct: number;
-  by_provider: Record<string, { input: number; output: number; requests: number }>;
+  total_tokens: number;
+  budget_limit: number | null;
+  remaining_budget: number | null;
+  call_count: number;
+  by_model: Record<string, number>;
+  by_user: Record<string, number>;
+  by_provider: Record<string, number>;
 }
 
+// 真源 GET /api/gland/usage/recent records 元素形（timestamp=epoch 秒 float；
+// task/input_tokens/output_tokens 键真源不产出）。
 interface UsageRecord {
-  timestamp: string;
   provider: string;
   model: string;
-  input_tokens: number;
-  output_tokens: number;
-  task: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  user_id: string | null;
+  timestamp: number;
 }
 
 interface HealthData {
@@ -61,13 +72,14 @@ function formatNumber(n: number): string {
   return String(n);
 }
 
-function formatTime(ts: string) {
+function formatTime(ts: number) {
   if (!ts) return '-';
   try {
-    return new Date(ts).toLocaleString('zh-CN', {
+    // 真源 timestamp=epoch 秒（time.time()），乘 1000 转毫秒（直接 new Date(ts) 落 1970）
+    return new Date(ts * 1000).toLocaleString('zh-CN', {
       month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
     });
-  } catch { return ts; }
+  } catch { return String(ts); }
 }
 
 function StatusDot({ enabled }: { enabled: boolean }) {
@@ -123,7 +135,22 @@ export default function GlandPage() {
     if (p.status === 'fulfilled') setProviders(p.value.providers || []);
     if (k.status === 'fulfilled') {
       const keyData = k.value;
-      setKeys(Array.isArray(keyData) ? keyData : keyData.keys || keyData.slots || []);
+      // 真源形 dict[provider, 槽位列表] → 展平 UI 行（修前 .keys/.slots 双回落恒 []）
+      const flat: KeySlot[] = [];
+      if (keyData && typeof keyData === 'object' && !Array.isArray(keyData)) {
+        Object.entries(keyData).forEach(([provider, slots]) => {
+          (Array.isArray(slots) ? slots : []).forEach((s: Record<string, unknown>) => {
+            flat.push({
+              provider,
+              masked_key: String(s.masked_key ?? ''),
+              is_valid: Boolean(s.is_valid),
+              fail_count: Number(s.fail_count ?? 0),
+              last_checked: Number(s.last_checked ?? 0),
+            });
+          });
+        });
+      }
+      setKeys(flat);
     }
     if (u.status === 'fulfilled') setUsage(u.value);
     if (r.status === 'fulfilled') setRecentUsage(r.value.records || []);
@@ -146,7 +173,13 @@ export default function GlandPage() {
         method: 'POST',
         body: providerName ? JSON.stringify({ provider: providerName }) : undefined,
       });
-      setTestResult({ provider: providerName || 'auto', ok: true, msg: data.message || '连接成功' });
+      // 真源 test_provider 形 {status,provider,model,reply}——reply=模型真实回复
+      // （修前消费回执 message 键而真源无此键恒回落「连接成功」，模型 reply 永不显示）
+      setTestResult({
+        provider: data.provider || providerName || 'auto',
+        ok: data.status === 'ok',
+        msg: [data.model, data.reply].filter(Boolean).join(' → ') || '连接成功',
+      });
     } catch (e: any) {
       setTestResult({ provider: providerName || 'auto', ok: false, msg: e.message });
     } finally {
@@ -290,6 +323,9 @@ export default function GlandPage() {
     }
   };
 
+  // 预算使用率=真源键派生（total_tokens/budget_limit；budget_used_pct 键真源不产出）
+  const budgetUsedPct = usage && usage.budget_limit ? (usage.total_tokens / usage.budget_limit) * 100 : 0;
+
   if (loading) return <div className="text-sm text-muted-foreground p-4">加载中...</div>;
 
   return (
@@ -314,15 +350,12 @@ export default function GlandPage() {
           <div className="text-xs text-muted-foreground">API密钥</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold">{formatNumber(usage?.total_requests || 0)}</div>
+          <div className="text-2xl font-bold">{formatNumber(usage?.call_count || 0)}</div>
           <div className="text-xs text-muted-foreground">总请求数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold">{formatNumber((usage?.total_input_tokens || 0) + (usage?.total_output_tokens || 0))}</div>
+          <div className="text-2xl font-bold">{formatNumber(usage?.total_tokens || 0)}</div>
           <div className="text-xs text-muted-foreground">总Token数</div>
-          <div className="text-[10px] text-muted-foreground">
-            入: {formatNumber(usage?.total_input_tokens || 0)} / 出: {formatNumber(usage?.total_output_tokens || 0)}
-          </div>
         </div>
       </div>
 
@@ -336,7 +369,7 @@ export default function GlandPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
-                {formatNumber((usage?.total_input_tokens || 0) + (usage?.total_output_tokens || 0))} / {formatNumber(usage.budget_limit)}
+                {formatNumber(usage.total_tokens)} / {formatNumber(usage.budget_limit)}
               </span>
               <Button onClick={() => { setBudgetLimit(String(usage.budget_limit)); setShowBudget(true); }} variant="secondary" className="text-[10px] px-2 py-0.5">修改</Button>
             </div>
@@ -344,14 +377,14 @@ export default function GlandPage() {
           <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all ${
-                (usage.budget_used_pct || 0) > 90 ? 'bg-red-500' :
-                (usage.budget_used_pct || 0) > 70 ? 'bg-amber-500' : 'bg-green-500'
+                budgetUsedPct > 90 ? 'bg-red-500' :
+                budgetUsedPct > 70 ? 'bg-amber-500' : 'bg-green-500'
               }`}
-              style={{ width: `${Math.min(100, usage.budget_used_pct || 0)}%` }}
+              style={{ width: `${Math.min(100, budgetUsedPct)}%` }}
             />
           </div>
           <div className="text-right text-[10px] text-muted-foreground mt-1">
-            {(usage.budget_used_pct || 0).toFixed(1)}% 已使用
+            {budgetUsedPct.toFixed(1)}% 已使用
           </div>
         </div>
       ) : (
@@ -498,16 +531,14 @@ export default function GlandPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{k.provider || 'unknown'}</span>
-                      {k.active !== undefined && (
-                        <Badge variant="bare" className={`${
- k.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
- }`}>
-                          {k.active ? '活跃' : '闲置'}
-                        </Badge>
-                      )}
+                      <span className="text-sm font-medium">{k.provider}</span>
+                      <Badge variant="bare" className={`${
+k.is_valid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
+}`}>
+                        {k.is_valid ? '有效' : '无效'}
+                      </Badge>
                     </div>
-                    <span className="text-[10px] font-mono text-muted-foreground">{k.masked_key || '****'}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{k.masked_key}</span>
                   </div>
                 </div>
               ))
@@ -528,22 +559,19 @@ export default function GlandPage() {
                 <p className="text-xs">暂无用量数据</p>
               </div>
             ) : (
-              Object.entries(usage?.by_provider || {}).map(([name, data]) => {
-                const total = (data.input || 0) + (data.output || 0);
-                const maxTotal = Math.max(...Object.values(usage?.by_provider || {}).map(d => (d.input || 0) + (d.output || 0)), 1);
+              Object.entries(usage?.by_provider || {}).map(([name, tokens]) => {
+                // 真源 by_provider 元素=int（该 provider 累计 token 总数），
+                // 入/出/请求拆分真源不产出不渲染（修前三键恒 undefined 恒 0）
+                const total = tokens || 0;
+                const maxTotal = Math.max(...Object.values(usage?.by_provider || {}), 1);
                 return (
                   <div key={name} className="p-3 hover:bg-muted/30">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{name}</span>
-                      <span className="text-[10px] text-muted-foreground">{formatNumber(data.requests || 0)} 请求</span>
+                      <span className="text-[10px] text-muted-foreground">合计: {formatNumber(total)} tokens</span>
                     </div>
-                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden mb-1">
+                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                       <div className="h-full bg-primary rounded-full" style={{ width: `${(total / maxTotal) * 100}%` }} />
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                      <span>入: {formatNumber(data.input || 0)}</span>
-                      <span>出: {formatNumber(data.output || 0)}</span>
-                      <span>合计: {formatNumber(total)}</span>
                     </div>
                   </div>
                 );
@@ -567,9 +595,8 @@ export default function GlandPage() {
                 <span className="text-muted-foreground shrink-0 w-24">{formatTime(r.timestamp)}</span>
                 <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">{r.provider}</span>
                 <span className="font-mono text-muted-foreground truncate flex-1">{r.model}</span>
-                <span className="text-muted-foreground shrink-0">{r.task}</span>
                 <span className="text-muted-foreground shrink-0 text-[10px]">
-                  {formatNumber(r.input_tokens)}→{formatNumber(r.output_tokens)}
+                  {formatNumber(r.prompt_tokens)}→{formatNumber(r.completion_tokens)}
                 </span>
               </div>
             ))}

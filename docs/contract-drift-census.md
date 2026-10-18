@@ -185,3 +185,45 @@ duplicates/total_pairs produced 照旧（similarity 仍 unresolved_shape=启发�
 响应）另有未裁决漂移——UI `merged` 键真源不产出、`details` 元素=dict 渲染必炸 React
 child——CD-③ 普查未列，另拍复核（pending-decisions ㉕ 边界③）③搜索占位符「搜索标题、
 ID、类型...」随 content_type 过滤收口改「搜索标题、ID...」。
+
+## CD-⑤ 修复候选②——gland 页消费键收编（2026-10-18）
+
+> 消费面：`admin-ui/app/gland/page.tsx` 四组消费键（测试回执/usage 顶层/by_provider
+> 元素/recent records 元素 + keys 面板）
+> 真源：`src/gland/router.py test_provider` `{status,provider,model,reply}`、
+> `src/gland/token_meter.py summary()/recent_records()`、`src/gland/key_manager.py status()`
+> 测试：`tests/test_cd5_repair.py` 15 例；live e2e：`scripts/e2e_cd5_gland_keys_ui.py`
+
+收口（UI 消费面收编真源键，真源零改动=CD 系列 wire 权威纪律）：
+- CD-③ 裁决两键组：①测试回执 `data.message`（真源无此键）→ 收编
+  `{status,provider,model,reply}`（修前 || 回落恒吃「连接成功」模型 reply 永不显示=
+  回落遮蔽型 drift）②by_provider 元素按 `{input,output,requests}` 对象消费 → 元素=int
+  直接消费（修前三键恒 undefined，各 Provider 用量恒显示 0）。
+- 深挖扩面（普查启发式漏收，如实记）：UsageSummary 顶层 4 键（total_input_tokens/
+  total_output_tokens/total_requests/budget_used_pct）真源不产出（真源=total_tokens/
+  call_count/budget_limit/remaining_budget/by_model/by_user/by_provider）——修前总请求数/
+  总Token数恒 0、预算条恒 0%；UsageRecord 元素（input_tokens/output_tokens/task）对
+  真源 recent_records 元素（prompt_tokens/completion_tokens/...）漂移 + timestamp 真源=
+  epoch 秒被当毫秒解析落 1970；keys 面板 `keyData.keys||keyData.slots` 双回落对真源
+  `dict[provider, 槽位列表]` 恒 []=密钥列表恒空（`k.active` 亦非真源键，真源=`is_valid`）。
+- 死显示面收口（真源不产出禁编造，CD-④ 同款）：「入: x / 出: y」拆分行、by_provider
+  入/出/请求拆分行、record task 列移除；预算使用率=真源键派生（total_tokens/
+  budget_limit）。恢复显示=真源补现候选 **pending-decisions ㉖**（需拍板不自决）。
+
+验证：新测 15（源码消费面 9+census 真跑真仓 2+行为桥真源实跑 4）+ 控制组（HEAD
+9155ae6e 旧 UI）15 failed/0 passed（全行为断言旧代码全炸=修前硬反证）+ 相关回归 63
+（cd5 15+cd4 7+cd1 9+census 13+deep-dive 19）+ 全量 non-a2a 5872 passed 0 failed
+（记账闭环 5857+15=5872 精确吻合）+ test_a2a live 20（总账 5892 对平）+ live 双向 e2e：
+--pre 8/18（10 项修复断言全炸=修前缺口硬证：请求数/Token 恒 0、入/出假拆分在场、
+Provider 用量恒 0、密钥列表恒空、回执恒「连接成功」、时间落 1970、undefined 渲染）→
+--post 19/19（真 LLM chat 真记账 call_count=2/total_tokens=65、by_provider `{openai:65}`
+int 元素、真 masked_key 2 行、真回执 `openai: mimo-v2.6-pro → pong`、prompt→completion
+真数值、时间=当日）+ 零持久写入（探针只进内存 token_meter）。
+
+诚实边界：①census 修后 gland 残留 findings 4 条（status/provider/model/reply 标
+unresolved_shape）=census 对变量返回 handler（test_connection `return result`，
+dynamic=True 形状提取失败）的启发式盲区，行为桥（test_provider 真跑）证明真产出——
+与 CD-④ 边界③同型；②入/出 token 拆分、by_provider 请求计数、record task 列=有意收口
+非 bug（真源 summary/元素不产出），恢复=真源补现候选 ㉖；③keys 展平行的 fail_count/
+last_checked 已收编进类型但未渲染（真源在场，按需显示另拍）；④HealthData.token_meter
+类型随 UsageSummary 同步收编（真源 health 带 token_meter=summary() 同形）。
