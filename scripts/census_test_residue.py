@@ -940,6 +940,35 @@ def census_proactive(out):
     }
 
 
+# ---- session_tags 行分类规则（SESS-⑦ 单一源=下方 classify_session_tag 纯函数）----
+# A=确证探针残留：client-key 别名行且客户端会话 id 自述测试/探针标识（闭集硬前缀）。
+# 判据出处：client-key:<客户端会话 id> 是 acp-proxy soulmate_agent alias persist 的
+# 「客户端会话 id → agent 会话」去重别名（全仓唯一写点），id 段自述前缀=对象级硬标识
+# （TL-③ 同款「自述测试标识」判法）。temp-/om-/grp-=真实客户端会话 id 形态
+# （OpenMate temp- 临时 id / om- 会话 id / grp- 群 id），有真实用户会话混挂（11 条
+# temp- 挂活会话），一律 U 不动（宁窄勿滥，留拍板）。
+SESSION_TAG_A_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("client-key:rej-", "client_key_rej_probe"),
+    ("client-key:probe-", "client_key_probe"),
+    ("client-key:diag-", "client_key_diag_probe"),
+    ("client-key:smoke-", "client_key_smoke_probe"),
+    ("client-key:term-probe-", "client_key_term_probe_e2e"),
+)
+
+
+def classify_session_tag(tag_name: str) -> tuple[str, str]:
+    """session_tags 行分类（纯函数单一源，禁在别处手抄判法）。
+
+    只认 client-key: 之后 id 段的自述测试/探针硬前缀（闭集）；其余一律 U（不动）。
+    agent:*（OpenMate 功能标签）、client-key:temp-|om-|grp-（真实客户端会话 id）不入 A。
+    """
+    t = (tag_name or "").strip()
+    for prefix, rule in SESSION_TAG_A_PREFIXES:
+        if t.startswith(prefix):
+            return "A", rule
+    return "U", "unmatched"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", help="把清点结果落成 JSON 工件")
