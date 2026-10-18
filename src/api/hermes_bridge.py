@@ -15,6 +15,10 @@ from src.api.user import get_current_user
 
 router = APIRouter()
 
+# Hermes 会话库单一路径源（SESS-⑥）：修前三 handler 内联 expanduser 三处
+# 手抄，收口为模块常量（测试可注入隔离，绝不写生产库）。
+_DB_PATH = os.path.expanduser("~/.hermes/state.db")
+
 
 @router.get("/health")
 async def hermes_bridge_health():
@@ -138,8 +142,7 @@ async def get_session_messages(session_id: str, user_id: UUID = Depends(get_curr
     import sqlite3
 
     try:
-        db_path = os.path.expanduser("~/.hermes/state.db")
-        db = sqlite3.connect(db_path)
+        db = sqlite3.connect(_DB_PATH)
         db.row_factory = sqlite3.Row
         rows = db.execute(
             """SELECT id, role, content, tool_calls, tool_name, timestamp
@@ -170,6 +173,18 @@ async def get_session_messages(session_id: str, user_id: UUID = Depends(get_curr
             )
 
         return {"messages": messages, "total": len(messages)}
+    except sqlite3.DatabaseError as e:
+        # SESS-⑥ 同族降级（SESS-④/⑤ 家族语义）：只认 sqlite3.DatabaseError
+        # 家族不宽泛吞（自身 bug 不静默）；本面纯 hermes 读面无 agent 回落面
+        # -> 空载荷+加性键 hermes_unreadable（不谎报"真无消息"，C2 失败带
+        # error 字段禁空列表冒充）+日志带真因。
+        logger.warning("get_session_messages: hermes store unreadable (%s)", e)
+        return {
+            "messages": [],
+            "total": 0,
+            "error": "hermes session store unreadable",
+            "hermes_unreadable": True,
+        }
     except Exception as e:
         logger.error("get_session_messages error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -181,8 +196,7 @@ async def delete_session(session_id: str, user_id: UUID = Depends(get_current_us
     import sqlite3
 
     try:
-        db_path = os.path.expanduser("~/.hermes/state.db")
-        db = sqlite3.connect(db_path)
+        db = sqlite3.connect(_DB_PATH)
         # Delete messages first
         db.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
         # Delete session
@@ -195,6 +209,16 @@ async def delete_session(session_id: str, user_id: UUID = Depends(get_current_us
         db.commit()
         db.close()
         return {"success": True, "deleted_session": session_id}
+    except sqlite3.DatabaseError as e:
+        # SESS-⑥ 同族降级：200+success:False 既有失败契约字节不变，只换
+        # 真因文案+加性键 hermes_unreadable（与 sessions_api delete 降级
+        # 真因同文案同族）。
+        logger.warning("delete_session: hermes store unreadable (%s)", e)
+        return {
+            "success": False,
+            "error": "hermes session store unreadable",
+            "hermes_unreadable": True,
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -235,8 +259,7 @@ async def search_sessions(q: str = "", user_id: UUID = Depends(get_current_user)
     if not q:
         return {"sessions": [], "query": q}
     try:
-        db_path = os.path.expanduser("~/.hermes/state.db")
-        db = sqlite3.connect(db_path)
+        db = sqlite3.connect(_DB_PATH)
         db.row_factory = sqlite3.Row
 
         # Search session titles
@@ -313,5 +336,14 @@ async def search_sessions(q: str = "", user_id: UUID = Depends(get_current_user)
                 )
 
         return {"sessions": results, "query": q, "total": len(results)}
+    except sqlite3.DatabaseError as e:
+        # SESS-⑥ 同族降级：error 键集（sessions+error）修前形状字节不变，
+        # 只换真因文案+加性键 hermes_unreadable（禁空列表冒充"无搜索结果"）。
+        logger.warning("search_sessions: hermes store unreadable (%s)", e)
+        return {
+            "sessions": [],
+            "error": "hermes session store unreadable",
+            "hermes_unreadable": True,
+        }
     except Exception as e:
         return {"sessions": [], "error": str(e)}

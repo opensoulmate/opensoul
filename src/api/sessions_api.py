@@ -253,7 +253,15 @@ async def search_sessions(
     if not q:
         return {"sessions": [], "query": q}
 
-    db = _get_db()
+    try:
+        db = _get_db()
+    except sqlite3.DatabaseError as e:
+        logger.warning("search_sessions: hermes store unreachable (%s)", e)
+        return {
+            "sessions": [],
+            "error": "hermes session store unreadable",
+            "hermes_unreadable": True,
+        }
     if not db:
         return {"sessions": [], "query": q, "error": "No session database found"}
 
@@ -329,6 +337,17 @@ async def search_sessions(
                 )
 
         return {"sessions": results, "query": q, "total": len(results)}
+    except sqlite3.DatabaseError as e:
+        # SESS-⑥ 同族降级（SESS-④/⑤ 家族语义）：只认 DatabaseError 家族
+        # 不宽泛吞；本面纯 hermes 搜索面无 agent 回落 -> error 键集修前
+        # 形状字节不变+真因文案+加性键 hermes_unreadable（禁空列表冒充
+        # "无搜索结果"）+日志带真因。
+        logger.warning("search_sessions: hermes store unreadable (%s)", e)
+        return {
+            "sessions": [],
+            "error": "hermes session store unreadable",
+            "hermes_unreadable": True,
+        }
     except Exception as e:
         logger.error("search_sessions error: %s", e)
         return {"sessions": [], "error": str(e)}
