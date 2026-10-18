@@ -267,3 +267,55 @@ test_a2a live 20（总账 5904）+ live 双向 e2e --pre 13/21（8 修复断言�
 内→路径归一丢尾段（typed 形下 events 键被错挂 list_sessions）③agent 多值显示
 收编单值 agent_id（会话级多 agent=真源补现另拍）④SessionDetail 接口保留作真源形
 文档面（不作类型注解=census 提取契约）。
+
+## CD-⑧ DedupResult 面漂移复核+收口——POST /deduplicate 响应面（2026-10-18）
+
+> 复核件：CD-④ 诚实边界②留档「DedupResult 面（POST /deduplicate 响应）另有未裁决
+> 漂移——UI `merged` 键真源不产出、`details` 元素=dict 渲染必炸 React child——CD-③
+> 普查未列，另拍复核」——复核即切片本体（F4b-㉗ 先例），复核产出两处收口同拍落。
+> 消费面：`admin-ui/app/dedup/page.tsx` DedupResult 接口+结果面板
+> 真源：`src/services/deduplication.py deduplicate_knowledge` 返回字面量
+> `{total, duplicates_found, duplicates_removed, removed_ids, details?}`，details
+> 元素=`{id, title, duplicate_of, similarity}`（dict）
+> 测试：`tests/test_cd8_repair.py` 12 例；live e2e：`scripts/e2e_cd8_dedup_result_ui.py`
+
+复核定性（源码真源逐字，未裁决漂移坐实非推测）：修前 UI DedupResult 接口
+`{duplicates_found, duplicates_removed, merged, details: string[]}`：
+① `merged` 死显示键——真源根本不产出（去重只删不合并，无 merge 语义），「已合并」
+   统计恒空白（CD-④「真源不产出禁假渲染」同型）；
+② `details` 元素按 string 渲染 `{d}`——真源元素是 dict，React 渲染 dict child 必炸
+   「Objects are not valid as a React child」=点「自动去重」出结果面板即整页崩
+   （硬断点，比 CD-④ 恒空白重：统计卡尚可渲染、明细区一渲染就崩）。
+
+收口（UI 消费面收编真源键，真源零改动=CD 系列 wire 权威纪律）：
+① DedupResult 收编真源五键形（details 可选=早期返回分支（≤1 条）无该键）+
+   DedupDetail 收编元素 dict 形；
+② merged 死显示键收口→真源键 total（扫描条目）显示（CD-⑤「真源键派生显示」同款）；
+③ details 元素按 dict 真源键渲染（title||id / duplicate_of / similarity 百分比），
+   crash 形 `{d}` 清零。
+
+三重校验：Gate1 git diff admin-ui 1 源文件 25+/5-+新测 12 例+部署脚本+e2e 探针+
+构建产物 397 文件真落盘（chr(124) 字节编辑绕 patch 竖线坑，探针零星号损坏）②
+Gate2 部署 dedup chunk（159qemgsga_ev.js）旧漂移串（`.merged`/「已合并」）残留=0+
+新真源键（「扫描条目」/`.duplicate_of`/「重复，相似度」）真消费③Gate3 四层实证：
+新测 12 passed+控制组（HEAD 24b30531 旧 UI）7F/5P 精确命中——7 行为/结构断言旧代码
+全炸（含「UI 消费键端点不产出: merged」修前硬反证）、5 不变面（API 行为契约）新旧
+皆过非自嗨+CD-④ 既有 7 零回归+全量 non-a2a pytest 5895 passed 0 failed（539s；
+记账闭环 CD-⑦ 记档 5892 collected+本拍新测 12=5904=5895+9 deselected 精确吻合）+
+test_a2a live 分跑 20 passed+live 9 passed（总账 5924=CD-⑦ 总账 5912+12 对平实测
+collected）+live 真浏览器 e2e 19/19（S0 安全前置：全库
+pre-existing 重复对=0 才准点「自动去重」——该按钮不带 user_id=全库去重，有他人重复
+对在场即 REFUSE 禁误删他人数据→真 seed 1 pair→真点击流「自动去重→确认去重」→
+结果面板真渲染：三卡真值 1 发现重复/1 已删除/2 扫描条目（修前第三卡 merged 恒
+空白）、明细行真 dict 键「已删除 <title>（与 <id> 重复，相似度 100%）」、window
+error 监听零 React child 崩溃、banner 仍在页未崩、'undefined'/「已合并」零出现、
+API 回读真删 1 条、清痕 remaining=0）。
+
+诚实边界：① --pre 双 bundle 浏览器 e2e 未跑（修前反证=控制组 7F+CD-④ 留档源码
+定性；e2e 首轮一轮页面加载卡死假阴（P1 20s 超时全灭），带自诊断复跑 19/19——
+暂定性环境 flake 如实记非代码问题）② 早期返回分支（≤1 条）无 details 键——UI 守卫
+`dedupResult.details &&` 在场（测试锁死），未 fabricate 空数组③「已合并」显示恢复
+=真源补现候选（真源本无 merge 语义——如需合并能力=功能新增另拍非键名对齐）④
+details 只显示前 5 条（既有 slice(0,5) 语义不变）⑤ census 工具未列此面
+（CD-③ 普查未列=启发式对响应整体直传 `setDedupResult(data)` 形不提取消费键，
+工具 bug 修候选延续留档）。

@@ -28,11 +28,24 @@ interface DuplicatePair {
   similarity: number;
 }
 
+// CD-⑧ DedupResult 收编真源形（deduplicate_knowledge 返回字面量真源：
+// {total, duplicates_found, duplicates_removed, removed_ids, details?}，
+// details 元素=dict {id,title,duplicate_of,similarity} 非 string[]）。修前两处漂移：
+// merged 键真源根本不产出=死显示键（「已合并」恒空白）、details 元素按 string 渲染
+// {d} 对 dict 必炸 React child（去重完成即整页崩）。
+interface DedupDetail {
+  id: string;
+  title: string | null;
+  duplicate_of: string;
+  similarity: number;
+}
+
 interface DedupResult {
+  total: number;
   duplicates_found: number;
   duplicates_removed: number;
-  merged: number;
-  details: string[];
+  removed_ids: string[];
+  details?: DedupDetail[];
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -282,14 +295,16 @@ export default function DedupPage() {
               <div className="text-[10px] text-muted-foreground">已删除</div>
             </div>
             <div>
-              <div className="text-lg font-bold text-blue-500">{dedupResult.merged}</div>
-              <div className="text-[10px] text-muted-foreground">已合并</div>
+              <div className="text-lg font-bold text-blue-500">{dedupResult.total}</div>
+              <div className="text-[10px] text-muted-foreground">扫描条目</div>
             </div>
           </div>
           {dedupResult.details && dedupResult.details.length > 0 && (
             <div className="mt-2 space-y-0.5">
               {dedupResult.details.slice(0, 5).map((d, i) => (
-                <p key={i} className="text-[10px] text-muted-foreground">{d}</p>
+                <p key={i} className="text-[10px] text-muted-foreground">
+                  已删除 {d.title || d.id}（与 {d.duplicate_of} 重复，相似度 {Math.round(d.similarity * 100)}%）
+                </p>
               ))}
             </div>
           )}
