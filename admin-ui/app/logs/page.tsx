@@ -30,9 +30,8 @@ interface EventSummary {
 
 interface StreamSummary {
   buffer_size: number;
-  sse_clients: number;
-  organ_probes: number;
-  last_refresh: string;
+  probes_configured: number;
+  sse_subscribers: number;
 }
 
 export default function LogsPage() {
@@ -74,7 +73,7 @@ export default function LogsPage() {
 
   const fetchStreamSummary = useCallback(async () => {
     try {
-      const data = await apiFetch('/api/events/stream/summary');
+      const data = await apiFetch('/api/events/health');
       setStreamSummary(data);
     } catch {}
   }, []);
@@ -237,7 +236,7 @@ export default function LogsPage() {
             <Radio className="w-4 h-4 text-emerald-500" />
             <span className="text-xs text-muted-foreground">SSE客户端</span>
           </div>
-          <div className="text-2xl font-bold mt-1">{streamSummary?.sse_clients || 0}</div>
+          <div className="text-2xl font-bold mt-1">{streamSummary?.sse_subscribers || 0}</div>
         </div>
       </div>
 
@@ -345,7 +344,7 @@ export default function LogsPage() {
       <div className="text-[10px] text-muted-foreground text-center">
         显示 {filtered.length}/{displayLogs.length} 条日志
         {useSse && <span> | SSE实时模式</span>}
-        {streamSummary && <span> | 缓冲: {streamSummary.buffer_size} | 探针: {streamSummary.organ_probes}</span>}
+        {streamSummary && <span> | 缓冲: {streamSummary.buffer_size} | 探针: {streamSummary.probes_configured}</span>}
       </div>
     </div>
   );

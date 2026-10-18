@@ -150,17 +150,17 @@ def test_census_counts_after_fix(census_report):
         if f["verdict"] == "drift_hard"
     }
     # users/page.tsx data.users=CD-① 已裁决误报（三元防御分支，工具已知边界）
-    # 其余 12=CD-⑨ 新浮出待裁决候选（nest/stats 例已抽验=真漂移：真源只出
+    # 其余 9=CD-⑨ 新浮出待裁决候选（nest/stats 例已抽验=真漂移：真源只出
     # tenants/isolation，UI 读 total_tenants 等 4 键恒回落）
+    # 契约随更新（CD-⑪ 修复候选① logs stream summary 消费键收编）：logs 三键
+    # （buffer_size/organ_probes/sse_clients）已收编真源 /api/events/health 键形，
+    # 从候选集消失=已落修复件（消失=需复核→本行即复核记录），非静默漂移。
     hard_expected = {
         ("users/page.tsx", ("users",)),
         ("feedback/page.tsx", ("confidence",)),
         ("feedback/page.tsx", ("type",)),
         ("immune/page.tsx", ("findings", "label")),
         ("immune/page.tsx", ("findings", "risk")),
-        ("logs/page.tsx", ("buffer_size",)),
-        ("logs/page.tsx", ("organ_probes",)),
-        ("logs/page.tsx", ("sse_clients",)),
         ("nest/page.tsx", ("active_tenants",)),
         ("nest/page.tsx", ("suspended_tenants",)),
         ("nest/page.tsx", ("total_policies",)),

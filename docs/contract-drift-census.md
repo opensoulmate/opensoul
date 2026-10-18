@@ -438,3 +438,46 @@ drift_suspect 18 / unresolved_shape 109 / unresolved_path 7 仍留待裁决层�
 ⑤EXPANDED_FINDINGS 2 条（logs 同义异名对 probes_configured/sse_subscribers、
 nest 嵌套可用面 tenants.total_tenants/by_status）=普查未列同根登记，供修复件对齐
 真源名禁再手抄同义名。
+
+## CD-⑪ 修复候选①——logs stream summary 消费键收编（2026-10-18）
+
+范围：CD-⑩ 修复候选 4 件「一候选一拍」首件——logs/page.tsx 打错面三键
+（buffer_size/organ_probes/sse_clients，CD-⑩ confirmed_drift）+ EXPANDED_FINDINGS
+同义异名对（organ_probes←probes_configured、sse_clients←sse_subscribers，
+「修复件收编时按真源名对齐，禁再手抄同义名」）。
+
+勘误如实记：CD-⑩ 证据写「真源=GET /api/events/stream/health」路径不实——
+stream_health 装饰器 @router.get("/health")（event_stream.py:828）挂载
+prefix=/api/events（main.py:727），live openapi 实证真路径=/api/events/health
+（无 /stream/health）。本拍按真路径收口（同型教训：证据锚点引 file:line 对、
+路径串也要对）。
+
+修前（CD-⑩ 证据+本拍 live 复证）：三键取数打在 GET /api/events/stream/summary
+（get_stream_summary 恰 5 键 total_events/by_organ/by_type/most_active_organ/
+collected_at，无三键中任一）——页脚「缓冲: undefined | 探针: undefined」假渲染、
+SSE客户端卡恒 `|| 0` 假 0。
+
+收口（UI 消费面收编真源键，真源零改动=CD 系列 wire 权威纪律，1 源文件 5+/6-）：
+- fetchStreamSummary 取数改指真源 GET /api/events/health（三键同面一次取足）；
+- 三键全改真源名：buffer_size 原名在场不动、organ_probes→probes_configured、
+  sse_clients→sse_subscribers（EXPANDED_FINDINGS 名对齐令执行）；
+- StreamSummary 接口收编真源形，死声明键 last_refresh（真源不产出且全页零消费）
+  声明清零（CD-⑦ 死显示键声明/消费双清零纪律）。
+
+契约随更新：tests/test_cd1_repair.py 候选集锁（hard_expected）移除 logs 三键
+（消失=已落修复件，锁注释即复核记录，非静默漂移）；残留候选 10=users 误报 1+
+待裁决 9（nest 4/feedback 2/immune 2/voice 1）。
+
+证据：tests/test_cd11_repair.py 8 例（源码消费面 4：取数真指 health/真源键在场/
+同义异名+死声明零残留/接口⊆真源 + 行为桥 2：stream_health 真跑消费⊆真源、
+旧 summary 面真跑锁死恒不产出三键禁回指 + census 真跑真仓 2：漂移键 findings
+消失+health 调用点 verdict=produced）。live e2e
+scripts/e2e_cd11_logs_health_keys_ui.py 11/11（真 CDP：页脚「缓冲: 40 | 探针: 26」
+真值==live /api/events/health 逐键对账、SSE 卡==sse_subscribers、'undefined' 零出现）。
+
+诚实边界：①/api/events/summary 面（EventSummary：total_events/by_organ/by_type/
+recent_count）仍 unresolved_shape 未裁决层不动——其中 recent_count 疑似死显示键
+（get_summary 委托 get_stream_summary 5 键无 recent_count，「最近事件」卡疑恒 0），
+留待裁决层深挖另拍②三键数值实时变动（buffer_size 随事件流涨落），e2e 对账取
+导航时点真值③sse_subscribers 生产恒 0（无活跃 SSE 订阅时），键名对账为主④
+㉔/㉕/㉖ 拍板件不属本拍。
