@@ -969,6 +969,43 @@ def classify_session_tag(tag_name: str) -> tuple[str, str]:
     return "U", "unmatched"
 
 
+# ---- session_tags 悬挂别名行分类规则（SESS-⑧ 单一源=下方 classify_session_alias 纯函数）----
+# A=确证悬挂别名：client-key:<om-|grp- 真实客户端会话 id> 别名且映射目标不可恢复——
+# 目标既无 agent_sessions 行也无 agent_messages 消息。判据出处（消费方自身语义）：
+# acp-proxy soulmate_agent._reload_session_from_db「恢复条件 = agent_sessions有行
+# OR agent_messages有消息」——双轴皆空=会话本体不存在且零历史，别名把客户端键接到
+# 空幽灵上（重连也只会得到 0 消息空会话），删=零丢失。
+# U=temp- 客户端 id（真实用户临时 id 取舍待拍板，SESS-⑦ 留档：即使目标死也 U——
+# 拍板面宁窄勿滥）/ 目标可恢复（任一轴在场，删=丢重连去重映射禁动）/ 非 client-key 行。
+SESSION_ALIAS_LIVE_PREFIXES: tuple[str, ...] = ("om-", "grp-")
+
+
+def classify_session_alias(
+    tag_name: str, target_has_row: bool, target_msg_count: int
+) -> tuple[str, str]:
+    """session_tags 悬挂别名行分类（纯函数单一源，禁在别处手抄判法）。
+
+    只认 client-key: 之后客户端 id 段的 om-/grp- 真实客户端会话 id 形态 + 目标双轴皆空；
+    temp-（拍板面）与目标可恢复（agent_sessions 行或 agent_messages 任一在场）一律 U。
+    """
+    t = (tag_name or "").strip()
+    if not t.startswith("client-key:"):
+        return "U", "non_alias_tag"
+    client_id = t[len("client-key:"):]
+    dead = (not target_has_row) and (not int(target_msg_count or 0))
+    if client_id.startswith("om-"):
+        return ("A", "alias_dead_target_om") if dead else ("U", "alias_live_target_om")
+    if client_id.startswith("grp-"):
+        return ("A", "alias_dead_target_grp") if dead else ("U", "alias_live_target_grp")
+    if client_id.startswith("temp-"):
+        return (
+            ("U", "alias_temp_dead_pending_decision")
+            if dead
+            else ("U", "alias_temp_live_pending_decision")
+        )
+    return "U", "unmatched"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", help="把清点结果落成 JSON 工件")
