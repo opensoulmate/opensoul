@@ -46,14 +46,17 @@ interface HistoryRecord {
   duration_ms?: number;
 }
 
+// 真源形状收编（CD-⑦）：GET /api/limb/rpa/windows 元素=response_model WindowInfo
+// （src/api/limb_rpa.py WindowInfo：id/title/x/y/width/height/focused 七键）。
+// 修前声明 app? 且渲染消费 w.app——真源根本不产出该键（死显示键，条件渲染恒假）。
 interface WindowInfo {
   id: string;
   title: string;
-  app?: string;
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  focused: boolean;
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
@@ -127,7 +130,12 @@ export default function LimbPage() {
   const fetchWindows = async () => {
     try {
       const data = await apiFetch('/api/limb/rpa/windows');
-      setWindows(Array.isArray(data.windows) ? data.windows : []);
+      // 容器形收编（CD-⑦）：真源响应=裸数组 list[WindowInfo]（limb_rpa.py list_windows
+      // response_model=list[WindowInfo]），修前按 {windows:[...]} 包装容器形取值
+      // ——对裸数组恒 undefined 恒回落 []（Windows 列表永不渲染）。
+      // （注：历史记述避开「data.键」属性访问形——census 工具不剥注释会误提取消费键，
+      //   工具盲区另拍修；本行记述刻意不写属性访问形让 findings 反映真消费面。）
+      setWindows(Array.isArray(data) ? data : []);
     } catch (e: any) { setError(e.message); }
   };
 
@@ -514,7 +522,6 @@ export default function LimbPage() {
                 <div key={w.id} className="flex items-center gap-3 p-2 rounded bg-muted/30 text-xs">
                   <Monitor className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                   <span className="font-medium truncate flex-1">{w.title}</span>
-                  {w.app && <span className="text-[10px] text-muted-foreground">{w.app}</span>}
                   {w.width && w.height && <span className="text-[10px] text-muted-foreground">{w.width}×{w.height}</span>}
                 </div>
               ))}
