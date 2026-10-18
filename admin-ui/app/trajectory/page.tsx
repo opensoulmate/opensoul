@@ -15,14 +15,12 @@ import { Button } from '@/components/ui/button';
 
 interface TrajectorySession {
   id: string;
-  session_id: string;
   agent_id: string;
   task_description: string;
   tags: string[];
   status: string;
-  event_count: number;
+  total_events: number;
   created_at: string;
-  updated_at: string;
   ended_at?: string;
 }
 
@@ -587,7 +585,7 @@ export default function TrajectoryPage() {
   const filtered = sessions.filter(s => {
     if (search) {
       const q = search.toLowerCase();
-      return (s.session_id || '').toLowerCase().includes(q) ||
+      return (s.id || '').toLowerCase().includes(q) ||
         (s.agent_id || '').toLowerCase().includes(q) ||
         (s.task_description || '').toLowerCase().includes(q);
     }
@@ -702,9 +700,9 @@ export default function TrajectoryPage() {
           ) : (
             <div className="space-y-2">
               {filtered.map((s) => (
-                <div key={s.session_id} className="border border-border rounded-lg bg-card hover:bg-muted/20 transition-colors">
+                <div key={s.id} className="border border-border rounded-lg bg-card hover:bg-muted/20 transition-colors">
                   <Button
-                    onClick={() => setDetailSession(s.session_id)}
+                    onClick={() => setDetailSession(s.id)}
                     variant="row" className="gap-3 p-3"
                   >
                     <div className="relative">
@@ -715,7 +713,7 @@ export default function TrajectoryPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium font-mono truncate">{s.session_id}</span>
+                        <span className="text-sm font-medium font-mono truncate">{s.id}</span>
                         {s.status && <StatusBadge status={s.status} />}
                         <Badge variant="muted" className="flex items-center gap-1">
                           <Lock className="w-2.5 h-2.5" />不可变
@@ -728,21 +726,21 @@ export default function TrajectoryPage() {
                         {s.agent_id && (
                           <span className="flex items-center gap-1"><Bot className="w-2.5 h-2.5" />{s.agent_id}</span>
                         )}
-                        <span className="flex items-center gap-1"><FileText className="w-2.5 h-2.5" />{s.event_count} 事件</span>
-                        <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{formatRelative(s.updated_at || s.created_at)}</span>
+                        <span className="flex items-center gap-1"><FileText className="w-2.5 h-2.5" />{s.total_events} 事件</span>
+                        <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{formatRelative(s.ended_at || s.created_at)}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {s.status === 'running' && (
                         <Button
-                          onClick={(e) => { e.stopPropagation(); doEnd(s.session_id); }}
+                          onClick={(e) => { e.stopPropagation(); doEnd(s.id); }}
                           variant="icon-md" className="hover:bg-muted" title="结束会话"
                         >
                           <StopCircle className="w-3.5 h-3.5 text-amber-500" />
                         </Button>
                       )}
                       <Button
-                        onClick={(e) => { e.stopPropagation(); doDelete(s.session_id); }}
+                        onClick={(e) => { e.stopPropagation(); doDelete(s.id); }}
                         variant="icon-md" className="hover:bg-red-500/10" title="删除"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-red-500" />
