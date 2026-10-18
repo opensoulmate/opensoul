@@ -48,8 +48,8 @@ interface QuickOverview {
 }
 
 interface BootstrapStatus {
-  initialized: boolean;
-  steps: Array<{ name: string; status: string; message?: string }>;
+  bootstrapped: boolean;
+  items: Record<string, boolean>;
 }
 
 type Tab = 'overview' | 'organs' | 'config' | 'bootstrap';
@@ -450,7 +450,7 @@ export default function SystemPage() {
               <div className="flex items-center gap-2">
                 <Play className="w-4 h-4 text-blue-500" />
                 <span className="text-sm font-medium">系统初始化</span>
-                {bootstrap && <StatusBadge status={bootstrap.initialized ? 'ok' : 'uninitialized'} />}
+                {bootstrap && <StatusBadge status={bootstrap.bootstrapped ? 'ok' : 'uninitialized'} />}
               </div>
               <Button onClick={runBootstrap}
                 disabled={bootstrapping} variant="primary" className="gap-1.5">
@@ -461,18 +461,16 @@ export default function SystemPage() {
             <p className="text-xs text-muted-foreground mb-3">
               初始化将创建必要的数据库表、默认配置和基础数据。幂等操作，可重复执行。
             </p>
-            {bootstrap?.steps && bootstrap.steps.length > 0 && (
+            {bootstrap?.items && Object.keys(bootstrap.items).length > 0 && (
               <div className="space-y-1.5">
-                {bootstrap.steps.map((step, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
-                    {step.status === 'ok' ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> :
-                     step.status === 'error' ? <XCircle className="w-4 h-4 text-red-500 shrink-0" /> :
-                     <Clock className="w-4 h-4 text-muted-foreground shrink-0" />}
+                {Object.entries(bootstrap.items).map(([name, ok]) => (
+                  <div key={name} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
+                    {ok ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> :
+                     <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
                     <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium">{step.name}</span>
-                      {step.message && <p className="text-[10px] text-muted-foreground truncate">{step.message}</p>}
+                      <span className="text-xs font-medium">{name}</span>
                     </div>
-                    <StatusBadge status={step.status} />
+                    <StatusBadge status={ok ? 'ok' : 'error'} />
                   </div>
                 ))}
               </div>

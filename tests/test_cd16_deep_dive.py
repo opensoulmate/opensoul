@@ -238,11 +238,20 @@ class TestConfirmedDriftAnchors:
         raise AssertionError("bootstrap.state property not found")
 
     def test_ui_dead_display_face(self):
+        """CD-⑯ 真断点锚点——契约随更新（CD-⑰ 修复后翻转锁）。
+
+        修前本锁断言死消费点/死声明键「在场」（裁决证据=死面真实存在）；
+        CD-⑰ system bootstrap status 消费键收编已修复→锚点翻转为「清零」
+        （死面再出现=修复回退先炸；裁决本体由 test_repair_candidates_registered
+        工件锁继续锁死，断言意图零丢失）。
+        """
         src = _src("admin-ui/app/system/page.tsx")
-        assert "bootstrap.initialized" in src  # 死消费点（真源无 initialized）
-        assert "bootstrap?.steps" in src  # 死消费点（真源无 steps，块永不渲染）
-        assert "initialized: boolean;" in src  # 死声明键（CD-⑦ 纪律修复件处置）
-        assert "steps: Array<{ name: string; status: string; message?: string }>;" in src
+        assert "bootstrap.initialized" not in src  # 死消费点已清（CD-⑰ 收编 bootstrapped）
+        assert "bootstrap?.steps" not in src  # 死消费点已清（CD-⑰ 整块重编 items）
+        assert "initialized: boolean;" not in src  # 死声明键已清（CD-⑦ 纪律）
+        assert "steps: Array<{ name: string; status: string; message?: string }>;" not in src
+        assert "bootstrap.bootstrapped" in src  # 真源键消费在场（修复面锚点）
+        assert "Object.entries(bootstrap.items)" in src  # steps 块整块处置锚点
 
     def test_repair_candidates_registered(self, artifact):
         drift_keys = {
