@@ -13,21 +13,21 @@ import { Button } from '@/components/ui/button';
 // ── Types ───────────────────────────────────────────────────
 
 interface TrajectorySession {
-  session_id: string;
-  event_count: number;
-  first_event: string;
-  last_event: string;
-  agents: string;
+  id: string;
+  agent_id: string;
+  total_events: number;
+  created_at: string;
+  ended_at: string | null;
 }
 
 interface TrajectoryEvent {
-  id: number;
+  id: string;
   session_id: string;
   agent_id: string;
   event_type: string;
   content: string;
   metadata: Record<string, any>;
-  timestamp: string;
+  created_at: string;
 }
 
 interface SessionDetail {
@@ -105,7 +105,7 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
   events: TrajectoryEvent[];
   loadingEvents: boolean;
 }) {
-  const agentList = (session.agents || '').split(',').filter(Boolean);
+  const agentList = session.agent_id ? [session.agent_id] : [];
 
   return (
     <div className="border border-border rounded-lg bg-card">
@@ -123,14 +123,14 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium font-mono truncate">{session.session_id}</span>
+            <span className="text-sm font-medium font-mono truncate">{session.id}</span>
             <Badge variant="muted" className="flex items-center gap-1">
               <Lock className="w-2.5 h-2.5" />不可变
             </Badge>
           </div>
           <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">
-              <FileText className="w-2.5 h-2.5" />{session.event_count} 事件
+              <FileText className="w-2.5 h-2.5" />{session.total_events} 事件
             </span>
             {agentList.length > 0 && (
               <span className="flex items-center gap-1">
@@ -138,14 +138,14 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
               </span>
             )}
             <span className="flex items-center gap-1">
-              <Clock className="w-2.5 h-2.5" />{formatRelative(session.last_event)}
+              <Clock className="w-2.5 h-2.5" />{formatRelative(session.ended_at || session.created_at)}
             </span>
           </div>
         </div>
 
         <div className="text-right shrink-0 mr-2">
-          <div className="text-xs text-muted-foreground">{formatTime(session.first_event)}</div>
-          <div className="text-[10px] text-muted-foreground">→ {formatTime(session.last_event)}</div>
+          <div className="text-xs text-muted-foreground">{formatTime(session.created_at)}</div>
+          <div className="text-[10px] text-muted-foreground">→ {formatTime(session.ended_at || session.created_at)}</div>
         </div>
 
         {expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
@@ -184,7 +184,7 @@ function SessionCard({ session, expanded, onToggle, events, loadingEvents }: {
                         <span className="text-[10px] text-muted-foreground font-mono">{evt.agent_id}</span>
                       )}
                       <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
-                        {formatTime(evt.timestamp)}
+                        {formatTime(evt.created_at)}
                       </span>
                     </div>
                     {evt.content && (
@@ -248,7 +248,7 @@ export default function TracesPage() {
     if (sessionDetail[sessionId]) return; // already loaded
     try {
       setLoadingDetail(sessionId);
-      const data = await apiFetch(`/api/trajectory/sessions/${encodeURIComponent(sessionId)}`);
+      const data = await apiFetch(`/api/trajectory/sessions/${encodeURIComponent(sessionId)}/events`);
       setSessionDetail(prev => ({ ...prev, [sessionId]: data.events || [] }));
     } catch (e: any) {
       setError(e.message);
@@ -270,8 +270,8 @@ export default function TracesPage() {
   const filtered = sessions.filter((s) => {
     if (search) {
       const q = search.toLowerCase();
-      return s.session_id.toLowerCase().includes(q) ||
-        (s.agents || '').toLowerCase().includes(q);
+      return s.id.toLowerCase().includes(q) ||
+        (s.agent_id || '').toLowerCase().includes(q);
     }
     return true;
   });
@@ -290,7 +290,7 @@ export default function TracesPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="text-2xl font-bold text-amber-500">
-            {sessions.reduce((s, sess) => s + sess.event_count, 0)}
+            {sessions.reduce((s, sess) => s + sess.total_events, 0)}
           </div>
           <div className="text-xs text-muted-foreground">总事件数</div>
         </div>
@@ -303,7 +303,7 @@ export default function TracesPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="text-2xl font-bold text-primary">
-            {new Set(sessions.flatMap(s => (s.agents || '').split(',').filter(Boolean))).size}
+            {new Set(sessions.map(s => s.agent_id).filter(Boolean)).size}
           </div>
           <div className="text-xs text-muted-foreground">参与Agent数</div>
         </div>
@@ -340,12 +340,12 @@ export default function TracesPage() {
       <div className="space-y-2">
         {filtered.map((session) => (
           <SessionCard
-            key={session.session_id}
+            key={session.id}
             session={session}
-            expanded={expandedSession === session.session_id}
-            onToggle={() => handleToggleSession(session.session_id)}
-            events={sessionDetail[session.session_id] || []}
-            loadingEvents={loadingDetail === session.session_id}
+            expanded={expandedSession === session.id}
+            onToggle={() => handleToggleSession(session.id)}
+            events={sessionDetail[session.id] || []}
+            loadingEvents={loadingDetail === session.id}
           />
         ))}
       </div>

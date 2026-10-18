@@ -227,3 +227,43 @@ dynamic=True 形状提取失败）的启发式盲区，行为桥（test_provider
 非 bug（真源 summary/元素不产出），恢复=真源补现候选 ㉖；③keys 展平行的 fail_count/
 last_checked 已收编进类型但未渲染（真源在场，按需显示另拍）；④HealthData.token_meter
 类型随 UsageSummary 同步收编（真源 health 带 token_meter=summary() 同形）。
+
+## CD-⑥ 修复候选③——traces events 端点改指真端点 + 同页消费键深挖扩面（2026-10-18）
+
+> 测试：`tests/test_cd6_repair.py` 12 例（源码消费面 6 + census 真跑真仓 3 + 行为桥真 API 3）
+> 探针：`scripts/e2e_cd6_traces_events_ui.py`（真浏览器 CDP + Network 域真请求观测）
+> 部署：`scripts/deploy_cd6_admin.py`（dry-run 对账 + traces 专属 chunk 回读）
+
+**候选③ 本体**：traces/page.tsx loadSessionDetail 的 `data.events` 打在
+GET /api/trajectory/sessions/{id}（真源 `session.to_dict()` 无 events 键）→
+会话详情展开恒空事件列表。收口=取数改指真端点 GET /api/trajectory/sessions/{id}/events
+（真源 `{session_id,events,count}`，data.events 真源键在场）。
+
+**深挖扩面（普查启发式漏收如实记，CD-⑤ 同款）**：census 只抓 apiFetch 调用点顶层
+响应键，`setSessions(Array.isArray(data.sessions)?data.sessions:[])` 三元回落形
+不进元素级消费链 → session 元素键漂移零 findings：
+- session 元素 5 键全漂移（session_id/event_count/first_event/last_event/agents
+  对真源 id/total_events/created_at/ended_at/agent_id）→ 列表行 React key 全
+  undefined（React 对 undefined 渲染为空、不显字面 'undefined'——P7 'undefined'
+  探测恒真探不到，逐键断言逼出）、事件数/时间全空、Agent 恒空、搜索过滤对
+  undefined toLowerCase 必炸；
+- event 元素 timestamp 漂移（真源 created_at）→ 事件时间恒空。
+
+收口（UI 消费面收编真源键，真源零改动=CD 系列 wire 权威纪律，GLAND-⑤ 根因修
+非 API 加别名堵漏）：接口收编真源形状+消费点全改真源键；agents 逗号串→真源
+agent_id 单值（真源无多 agent 字段禁编造）；ended_at 可空走 ended_at||
+created_at 回落（GLAND-⑤ 同款如实妥协）。
+
+三重校验：新测 12 passed + 控制组（HEAD f5f7432e 旧 UI）11F/1P 精确命中（1
+不变面=旧端点真无 events 键真源不变量）+ 相关回归 54（CD 系）+ 轨迹域 82 +
+全量 non-a2a 5875 passed 0 failed（记账 5872+12=5884=5875+9 deselected 吻合）+
+test_a2a live 20（总账 5904）+ live 双向 e2e --pre 13/21（8 修复断言全炸缺口硬证）
+→ --post 21/21（Network 真端点恰 1 次+旧详情端点 0 次、展开 3/3 事件内容真渲染）。
+
+诚实边界：①census 对元素级键零 findings=启发式盲区（三元回落 setter），行为桥
+逐键对账补位（CD-④ 边界③同型）②census 工具 bug 2 处如实记（本拍以无注解形绕开，
+工具修复另拍）：typed 赋值 `const data: T = await apiFetch(...)` 不进 _ASSIGN_RE
+提取；_extract_first_arg 括号深度把模板串 `${{...}}` 的 call_end 截断在模板表达式
+内→路径归一丢尾段（typed 形下 events 键被错挂 list_sessions）③agent 多值显示
+收编单值 agent_id（会话级多 agent=真源补现另拍）④SessionDetail 接口保留作真源形
+文档面（不作类型注解=census 提取契约）。
