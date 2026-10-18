@@ -371,3 +371,70 @@ tests/test_cd1_repair.py::test_census_counts_after_fix 契约基线，再变必�
 JS 内建成员同名（如 entries）被词表滤除=漏报（既有口径）④正则字面量按前一显著
 字符启发式识别（return /x/ 形漏判按代码处理）⑤旧口径「unresolved_endpoint 归零
 / drift_hard 只剩已裁决误报」系旧工具漏报面假象，随契约更新如实改写。
+
+## CD-⑩ 新浮出候选逐项深挖裁决（2026-10-18）——24 条逐项裁决（零行为改动，修复件另拍）
+
+范围与工具：CD-⑨ 新浮出候选=drift_hard 13 + unresolved_endpoint 11 共 24 条
+（CD-⑨ 记档「drift_hard 12」=剔除 CD-③ 已裁决 users 误报后的候选口径，工件实测
+13 为准，users 随新工件复核维持）。裁决单一源=scripts/census_contract_drift_deep_dive_cd10.py
+（CD-③ 同哲学：VERDICTS 键级裁决 + ENDPOINT_VERDICTS 端点级裁决，每条强制
+evidence 源码 file:line 锚点，完整性门双向拒出工件），工件
+data/census_contract_drift_deep_dive_cd10.json。
+
+裁决汇总：resolved_ok 14 / confirmed_drift 8 / ruled_false_positive 2 +
+端点级 confirmed_drift 2 → 修复候选 4 件（一候选一拍 CD-④ 先例，修复件另拍）：
+1. logs stream summary 消费键收编（3 键）
+2. nest stats 消费键收编（4 键）
+3. hippo decay/simulate 方法漂移修复（1 键 + 端点级）
+4. soma discovery/scan 重扫方法漂移收口（端点级）
+
+resolved_ok 14（真源键在场、消费路径可达）：
+- feedback extract entries 元素 type/confidence——真源=FeedbackExtractResponse
+  （response_model src/api/feedback.py:22）entries:list[FeedbackEntry]，FeedbackEntry
+  type/confidence 字段在场（src/models/feedback.py:19/22）；census 元素形状提取看不穿
+  response_model list[Model] 间接=提取边界假阳。
+- immune moderate findings 元素 label/risk——src/api/immune.py:98-100 返回字面量
+  findings=[{type,label,risk}] 三键全在场；census 未解析 list comprehension 内 dict
+  字面量=提取边界假阳。
+- soma discovery/scan 10 键（adapters/cli_tools/version/processes/cpu/mem/scan_time/
+  services/protocol/state）——ScanResult 与元素模型 ProcessInfo/CLITool/ServiceInfo
+  字段全在场（src/api/soma_discovery.py:165-197），初始 GET 调用点 :506 真消费可达。
+
+confirmed_drift 8（真断点，逐条 evidence 见工件）：
+- logs 3 键（buffer_size/organ_probes/sse_clients）：get_stream_summary 恰 5 键
+  （event_stream.py:800-806），真源在 /stream/health（buffer_size/probes_configured/
+  sse_subscribers，:831-837）=打错面+同义异名；修前页脚「缓冲: undefined」、SSE 卡恒 0。
+- nest 4 键（total_tenants/active_tenants/suspended_tenants/total_policies）：响应恰
+  {tenants,isolation}（nest.py:260-266），total_tenants 在嵌套层（tenant.py:492-498），
+  active/suspended 可由 by_status 派生但真源无键、total_policies 全层缺失；修前恒回落。
+- hippo 1 键（retention）：键本体在场（hippo.py:278-284）但唯一生产调用点 :207 默认
+  GET vs 路由 @router.post（:267）恒 405=setSimResult 永不置位、模拟面板死——根因=
+  端点方法漂移（ENDPOINT_VERDICTS hippo 条）。
+
+ruled_false_positive 2（消费点非缺陷）：
+- users 38 users——CD-③ 已裁决误报随新工件复核维持（真源裸数组
+  response_model=list[UserListItem]，UI Array.isArray 三元容错数组分支真消费）。
+- voice 201 error——error 键=本地 catch 构造（voice/page.tsx:127-128
+  setTestResult({error:e.message})）非 wire 消费（synthesize/json 成功形无 error、
+  失败走 HTTPException）。
+
+端点级 confirmed_drift 2（live 双 405 复证）：
+- hippo/page.tsx:207 GET /api/hippo/decay/simulate vs 路由 POST——本拍 live：GET 405
+  / POST 200 响应含 retention 等 7 键真源在场。
+- soma/page.tsx:521 POST /api/soma/discovery/scan vs 路由 GET（soma_discovery.py:1472）
+  ——本拍 live：POST 405 / GET 200 真扫描（scan_time/processes 真产出）。
+
+勘误如实记（深挖逼出）：CD-⑨ 记档「POST discovery/scan 405 落 fallback GET
+不重扫=假功能」措辞不实——api_full_scan 每次全量扫描（soma_discovery.py:1474-1487
+scan_processes/scan_cli_tools/scan_services 真跑），handleRescan catch fallback
+（soma/page.tsx:523-525）走 GET fetchScan=真重扫真刷新，显示面非死非假功能；真断点=
+POST 调用恒 405 空转（方法漂移）。
+
+诚实边界：①裁决=源码静态锚点（AST/文本逐条程序化核验）+CD-⑨ live 双 405 沿用+本拍
+live 复证四面真响应形状（hippo/nest/logs/soma）②范围纪律只裁决 24 条，
+drift_suspect 18 / unresolved_shape 109 / unresolved_path 7 仍留待裁决层不动
+③修复件 4 件另拍（一候选一拍），本拍零行为改动零 UI 改动④nest total_policies 真源
+全层缺失（isolation.stats() 只出访问审计计数），修复件需另裁「补现或移除显示」
+⑤EXPANDED_FINDINGS 2 条（logs 同义异名对 probes_configured/sse_subscribers、
+nest 嵌套可用面 tenants.total_tenants/by_status）=普查未列同根登记，供修复件对齐
+真源名禁再手抄同义名。
