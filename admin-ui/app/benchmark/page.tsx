@@ -14,18 +14,46 @@ interface BenchmarkTarget {
   endpoint: string;
 }
 
-interface BenchmarkResult {
-  organ: string;
-  iterations: number;
-  concurrency: number;
-  avg_ms: number;
+// 结果元素延迟键层（真源 src/benchmark/engine.py _result_to_dict 的 latency 嵌套）
+interface BenchmarkLatency {
   min_ms: number;
   max_ms: number;
+  avg_ms: number;
   p50_ms: number;
   p95_ms: number;
   p99_ms: number;
-  success_rate: number;
-  total_time_ms: number;
+}
+
+// 运行/快速基准结果元素（真源 _result_to_dict：延迟键全在 latency 嵌套、success 是计数非率）
+interface BenchmarkResultItem {
+  organ: string;
+  label: string;
+  iterations: number;
+  success: number;
+  errors: number;
+  latency: BenchmarkLatency;
+  throughput_rps: number;
+  total_duration_ms: number;
+  timestamp: number;
+}
+
+// 最新结果元素（真源 get_latest->benchmarks 行 dict：延迟键平铺、success 是计数非率）
+interface LatestBenchmarkRow {
+  id: number;
+  run_id: string;
+  organ: string;
+  label: string;
+  iterations: number;
+  success: number;
+  errors: number;
+  min_ms: number;
+  max_ms: number;
+  avg_ms: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  rps: number;
+  total_ms: number;
   timestamp: number;
 }
 
@@ -37,12 +65,12 @@ interface BenchmarkRun {
   started_at: number;
   finished_at: number | null;
   status: string;
-  results: BenchmarkResult[];
+  results: BenchmarkResultItem[];
 }
 
 export default function BenchmarkPage() {
   const [targets, setTargets] = useState<BenchmarkTarget[]>([]);
-  const [latest, setLatest] = useState<Record<string, BenchmarkResult>>({});
+  const [latest, setLatest] = useState<Record<string, LatestBenchmarkRow>>({});
   const [runs, setRuns] = useState<BenchmarkRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -138,6 +166,8 @@ export default function BenchmarkPage() {
 
   const formatMs = (ms: number) => ms < 1 ? `${(ms * 1000).toFixed(0)}µs` : ms < 1000 ? `${ms.toFixed(1)}ms` : `${(ms / 1000).toFixed(2)}s`;
   const formatPct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  // 成功率=真源键派生（success 计数 / iterations；真源无 success_rate 键——CD-⑤ 预算使用率同款派生）
+  const successRate = (success: number, iterations: number) => success / iterations;
   const formatTs = (ts: number) => { try { return new Date(ts * 1000).toLocaleString('zh-CN'); } catch { return '-'; } };
 
   const latestEntries = Object.entries(latest).sort((a, b) => (a[1].avg_ms || 0) - (b[1].avg_ms || 0));
@@ -243,12 +273,12 @@ export default function BenchmarkPage() {
               {lastResult.results.map((r) => (
                 <div key={r.organ} className="grid grid-cols-[1fr_80px_80px_80px_80px_80px_80px] gap-2 items-center px-4 py-2 border-b border-border last:border-b-0 text-xs">
                   <span className="font-medium">{r.organ}</span>
-                  <span className={r.avg_ms < 100 ? 'text-green-500' : r.avg_ms < 500 ? 'text-orange-500' : 'text-red-500'}>{formatMs(r.avg_ms)}</span>
-                  <span className="text-muted-foreground">{formatMs(r.p50_ms)}</span>
-                  <span className="text-muted-foreground">{formatMs(r.p95_ms)}</span>
-                  <span className="text-muted-foreground">{formatMs(r.p99_ms)}</span>
-                  <span className="text-muted-foreground">{formatMs(r.min_ms)}</span>
-                  <span className={r.success_rate >= 1 ? 'text-green-500' : 'text-orange-500'}>{formatPct(r.success_rate)}</span>
+                  <span className={r.latency.avg_ms < 100 ? 'text-green-500' : r.latency.avg_ms < 500 ? 'text-orange-500' : 'text-red-500'}>{formatMs(r.latency.avg_ms)}</span>
+                  <span className="text-muted-foreground">{formatMs(r.latency.p50_ms)}</span>
+                  <span className="text-muted-foreground">{formatMs(r.latency.p95_ms)}</span>
+                  <span className="text-muted-foreground">{formatMs(r.latency.p99_ms)}</span>
+                  <span className="text-muted-foreground">{formatMs(r.latency.min_ms)}</span>
+                  <span className={successRate(r.success, r.iterations) >= 1 ? 'text-green-500' : 'text-orange-500'}>{formatPct(successRate(r.success, r.iterations))}</span>
                 </div>
               ))}
             </div>
@@ -289,7 +319,7 @@ export default function BenchmarkPage() {
                     <span>P95: {formatMs(r.p95_ms)}</span>
                     <span>P99: {formatMs(r.p99_ms)}</span>
                     <span>最小: {formatMs(r.min_ms)}</span>
-                    <span>成功率: {formatPct(r.success_rate)}</span>
+                    <span>成功率: {formatPct(successRate(r.success, r.iterations))}</span>
                   </div>
                 </div>
               ))}

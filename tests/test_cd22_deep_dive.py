@@ -5,8 +5,8 @@
    +confirmed_drift 必带 repair_candidate+工件真落盘回读+109 条 join 精确对账。
 2. TestSourceAnchors：全行 anchors 逐条程序化核验（锚点行真含声明子串）+坏锚点拒出
    工件（防无据断言）+AST 级「说在场的键真在场、说缺席的键真缺席」硬反证。
-3. TestKnownDrifts：15 条 confirmed_drift 与 3 条 ruled_false_positive 逐条定型锁死。
-4. TestExpandedFindings：4 条同根扩面登记的 UI 消费字面量在场+repair_candidate 强制。
+3. TestKnownDrifts：15 条 confirmed_drift 与 3 条 ruled_false_positive 逐条定型锁死（已收口件 landed 锚点随 CD-15/23/24 落地翻转）。
+4. TestExpandedFindings：4 条同根扩面登记的 UI 消费字面量在场（已收口件翻转清零）+repair_candidate 强制。
 """
 
 from __future__ import annotations
@@ -298,6 +298,18 @@ class TestKnownDrifts:
         assert "recallResults.results" not in _src("admin-ui/app/agent-nodes/page.tsx")
         assert "recallResults.sources" in _src("admin-ui/app/agent-nodes/page.tsx")
 
+    def test_benchmark_latency_repair_landed(self, artifact):
+        rows = self._rows(artifact)
+        for handler in ("benchmark.run_benchmark:81", "benchmark.quick_benchmark:100"):
+            r = rows[(handler, "results.avg_ms")]
+            assert r["verdict"] == _D
+            assert r.get("repair_status") == "landed@CD-㉔"
+            assert "已收口" in r["repair_candidate"]
+        # 修复真落地：当前 UI 运行结果块已无平铺漂移读、latency 嵌套键已收编
+        ui = _src("admin-ui/app/benchmark/page.tsx")
+        assert "r.success_rate" not in ui
+        assert "r.latency.avg_ms" in ui
+
     def test_every_drift_has_ui_symptom_anchor(self, artifact):
         rows = self._rows(artifact)
         for key in self.DRIFT_KEYS:
@@ -316,8 +328,11 @@ class TestExpandedFindings:
         ("admin-ui/app/knowledge-graph/page.tsx", "rel.relation_type"),
         ("admin-ui/app/knowledge-graph/page.tsx", "rel.target_entity_id"),
         ("admin-ui/app/connectors/page.tsx", "p.memory.toFixed"),
-        ("admin-ui/app/benchmark/page.tsx", "r.success_rate"),
         ("admin-ui/app/agent-nodes/page.tsx", "recallResults.sources"),
+    ]
+    # 已收口件（CD-㉔）：修前消费字面量「在场」证据锁按 CD-17 先例翻转「清零」
+    LANDED_ABSENT_LITERALS = [
+        ("admin-ui/app/benchmark/page.tsx", "r.success_rate"),
     ]
 
     def test_expanded_all_confirmed_with_candidate(self, artifact):
@@ -331,6 +346,10 @@ class TestExpandedFindings:
     def test_expanded_ui_literals_present(self):
         for path, sub in self.UI_LITERALS:
             assert sub in _src(path), (path, sub)
+
+    def test_expanded_landed_literals_cleared(self):
+        for path, sub in self.LANDED_ABSENT_LITERALS:
+            assert sub not in _src(path), (path, sub)
 
     def test_expanded_not_in_findings_join(self, tool, artifact):
         assert all("consumed_key" not in e for e in artifact["expanded_findings"])

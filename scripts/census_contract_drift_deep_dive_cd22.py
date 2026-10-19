@@ -32,7 +32,7 @@ unresolved_shape 的普查 note（「形状提取失败」/「元素形状未解
   实际 LLM 输出可能偏离 prompt（如实记，非本裁决可证伪）。
 - repair_candidate 只登记不执行（一候选一拍，执行纪律#7）；recent_count 一条的
   修复已由 CD-⑮ 先行落地，以 repair_status 如实标注；agent recall 一条的修复已由
-  CD-㉓ 落地，同款标注（锚点改锁修复后状态）。
+  CD-㉓ 落地、benchmark results 延迟键一条的修复已由 CD-㉔ 落地，同款标注（锚点改锁修复后状态）。
 """
 from __future__ import annotations
 
@@ -118,22 +118,26 @@ def _bench_shape() -> dict:
             "（真源 results[].organ 可得目标名无人拼）",
             "anchors": [
                 (BE, 168, '"organs_benchmarked": len(results),'),
-                (U_BP, 238, "lastResult.organs?.join"),
+                (U_BP, 268, "lastResult.organs?.join"),
             ],
         },
         "results.avg_ms": {
             "verdict": _D,
-            "repair_candidate": "benchmark results 元素延迟键收编真源（latency.* 平铺漂移）",
+            "repair_candidate": "已收口：CD-㉔ benchmark results 元素延迟键收编真源（2026-10-19）",
+            "repair_status": "landed@CD-㉔",
             "evidence": "结果元素 _result_to_dict 平铺键恰 organ/label/iterations/success/"
             "errors/latency{...}/throughput_rps/total_duration_ms/timestamp（src/benchmark/"
             "engine.py:356-374），avg_ms 在 latency 嵌套内（:366）无平铺 avg_ms——UI r.avg_ms"
             "（benchmark/page.tsx:246）恒 undefined（数值着色分支恒假+formatMs(undefined) "
             "假渲染），真值 latency.avg_ms 无人读（CD-⑳ 回落遮蔽同型）；同根平铺漂移 "
-            "p50/p95/p99/min/success_rate 以 EXPANDED_FINDINGS 登记",
+            "p50/p95/p99/min/success_rate 以 EXPANDED_FINDINGS 登记——CD-㉔ 已收口（UI "
+            "元素消费收编 latency 嵌套键、success_rate 真源不产出改 success/iterations "
+            "派生，2026-10-19），当前 benchmark/page.tsx 运行结果块已无平铺 r.avg_ms 消费="
+            "修复真落地；锚点改锁修复后状态（r.latency.avg_ms 漂移复发先炸）",
             "anchors": [
                 (BE, 363, '"latency": {'),
                 (BE, 366, '"avg_ms": r.avg_ms,'),
-                (U_BP, 246, "r.avg_ms"),
+                (U_BP, 276, "r.latency.avg_ms"),
             ],
         },
         "results.organ": {
@@ -854,7 +858,7 @@ EXPANDED_FINDINGS = [
         "page": "benchmark/page.tsx",
         "keys": ["p50_ms", "p95_ms", "p99_ms", "min_ms", "success_rate"],
         "verdict": _D,
-        "repair_candidate": "benchmark results 元素延迟键收编真源（latency.* 平铺漂移）",
+        "repair_candidate": "已收口：CD-㉔ benchmark results 元素延迟键收编真源（2026-10-19）",
         "note": "与 results.avg_ms 同根（结果元素 _result_to_dict 延迟键全在 latency 嵌套"
         "（src/benchmark/engine.py:363-370），成功率是 success 计数非 success_rate 率）：UI 平铺"
         "读 r.p50_ms/r.p95_ms/r.p99_ms/r.min_ms/r.success_rate（benchmark/page.tsx:247-251）恒 "
