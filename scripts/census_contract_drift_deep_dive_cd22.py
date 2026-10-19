@@ -306,14 +306,19 @@ SHAPE_VERDICTS = {
     },
     ("cortex.think:128", "reasoning_steps"): {
         "verdict": _D,
-        "repair_candidate": "cortex 推理步骤收编真源（reasoning_steps↔reasoning 漂移）",
+        "repair_candidate": "已收口：CD-㉖ cortex 推理步骤收编真源（reasoning_steps↔reasoning 漂移）（2026-10-19）",
+        "repair_status": "landed@CD-㉖",
         "evidence": "SYSTEM_PROMPT 声明键是 reasoning（字符串，src/cortex/chain_of_thought.py:17）"
         "无 reasoning_steps（数组）——UI thinkResult.reasoning_steps && .length>0"
         "（cortex/page.tsx:391）恒 falsy=推理步骤块永不渲染（显示行为损失），真源 reasoning "
-        "字符串无人读；动态形状按 prompt 声明面定型（实际 LLM 输出可能偏离 prompt，诚实边界）",
+        "字符串无人读；动态形状按 prompt 声明面定型（实际 LLM 输出可能偏离 prompt，诚实边界）"
+        "——CD-㉖ 已收口（UI 推理步骤块改收编真源 reasoning 字符串逐字渲染（whitespace-pre-wrap "
+        "不 fabricate 步骤结构）、死声明键 reasoning_steps/question 双清零，2026-10-19），当前 "
+        "cortex/page.tsx 已无 thinkResult.reasoning_steps 消费=修复真落地；锚点改锁修复后状态"
+        "（reasoning_steps 漂移复发先炸）",
         "anchors": [
             (CT, 17, '"reasoning": "step-by-step logical deduction",'),
-            (U_CP, 391, "thinkResult.reasoning_steps"),
+            (U_CP, 390, "{thinkResult.reasoning && ("),
         ],
     },
     # ── dedup：get_duplicate_report 元素 + deduplicate_knowledge 返回面 ──

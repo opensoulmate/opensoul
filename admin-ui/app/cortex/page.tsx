@@ -47,8 +47,7 @@ interface AgentResult {
 }
 
 interface ThinkResult {
-  question: string;
-  reasoning_steps?: string[];
+  reasoning?: string;
   answer?: string;
   confidence?: number;
   [key: string]: any;
@@ -388,17 +387,10 @@ export default function CortexPage() {
               </Button>
               {thinkResult && (
                 <div className="space-y-2">
-                  {thinkResult.reasoning_steps && thinkResult.reasoning_steps.length > 0 && (
+                  {thinkResult.reasoning && (
                     <div className="rounded-lg border border-border bg-muted/30 p-3">
                       <div className="text-[10px] font-medium text-muted-foreground mb-2">推理步骤</div>
-                      <div className="space-y-1">
-                        {thinkResult.reasoning_steps.map((step, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs">
-                            <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center text-[9px] font-bold shrink-0">{i + 1}</span>
-                            <p className="text-muted-foreground">{step}</p>
-                          </div>
-                        ))}
-                      </div>
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{thinkResult.reasoning}</p>
                     </div>
                   )}
                   {thinkResult.answer && (
