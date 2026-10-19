@@ -284,8 +284,8 @@ SHAPE_VERDICTS = {
         "行为损失（消费点非缺陷：普查归属误挂）",
         "anchors": [
             (CA, 58, '"config": cfg,'),
-            (U_SP, 203, "organHealth.filter(o => o.status"),
-            (U_SP, 175, "/api/diagnostics/check-all"),
+            (U_SP, 219, "organHealth.filter(o => o.status"),
+            (U_SP, 191, "/api/diagnostics/check-all"),
         ],
     },
     # ── cortex think：LLM JSON 直通，按 SYSTEM_PROMPT 声明面定型 ──

@@ -32,7 +32,7 @@
 | ㉕ | dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type） | CD-④ 诚实边界留档 | 取 B（真源补现：元素 item 补真列+UI 恢复时间行/类型徽章）——**已按建议默认 B 先行执行 2026-10-19（DEC-㉕-①/DEDUP-①）** | ~~"㉕取B"~~ 已落，异议回「㉕改A」（revert 回不显示时间/类型）即改道 |
 | ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉖-①）** | ~~"㉖取B1"~~ 已落，异议回「㉖改A」即 revert；B2（task 轴）仍待拍，回「㉖B2」即下拍执行 |
 | ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）——**㉗a 已按建议默认 B1 先行执行 2026-10-20（DEC-㉗a-①）**；㉗b 取 B（问题类闭集）仍待拍 | ~~"㉗a取B1"~~ 已落，异议回「㉗a改A」（revert 回无卡）/「㉗a改B2」（改缓冲计数）即改道；㉗b 回「㉗b取B」 |
-| ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）；㉘b 取 B（语义随拍） | "㉘a取B1" / "㉘a取B2" / "㉘b取B" / "㉘a维持 ㉘b维持" |
+| ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉘a-①）**；㉘b 取 B（语义随拍）仍待拍 | ~~"㉘a取B1"~~ 已落，异议回「㉘a改A」（revert 回不显示）/「㉘a改B2」（改主机 uptime）即改道；㉘b 回「㉘b取B」 |
 | ㉙ | timeline/proactive e2e 探针残留 194+2 行删除（TR-② 闸门回归清单） | TR-② 闸门复跑（2026-10-19） | 取 B（清单精确删+备份+回读，TL-④ 纪律）——**清点已落（TR-②，零删除），删除待拍板** | "㉙删"（cron 代跑）/ "㉙维持" |
 
 ---
@@ -363,6 +363,8 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 **状态：待拍板（CD-⑱ 已按 CD 系列 wire 权威纪律收口=真源键在场改指真源、真源不产出死显示清零；恢复显示需真源补现（uptime/活跃Agent/近期会话 语义无产出面），不自决另拍）**——依据：CD-⑰ 诚实边界①留档候选「常驻横幅 SystemInfo 显示键深挖（'undefined/undefined' 疑同型漂移）」深挖裁决（CD-⑱，live 修前/修后同探针双向硬证）。
 
 ### ㉘a 运行时间显示恢复（真源补现 uptime 语义）
+
+**状态：B1 已按建议默认先行执行 2026-10-20（DEC-㉘a-①）**——按「别停工等批」铁律＋DEC-①~㉗a 自决先例自决取 B1（OpenSoul 进程运行时长）：GET /api/system/overview 加性键 uptime_seconds（与 /metrics opensoul_uptime_seconds 同走 metrics_api.uptime_seconds() 单一源）+UI 复原 banner「运行」span/运行时信息「运行时间」行/formatUptime/Clock。异议回「㉘a改A」（revert 回不显示）/「㉘a改B2」（改主机 uptime，psutil.boot_time 语义）即改道。
 
 **现状**：GET /api/health 与 GET /api/system/overview 双真源恒不产出 uptime（health.uptime_check_ms=健康检查耗时非运行时间，禁冒充；源码+live 双实证，tests/test_cd18_repair.py 形状锁恒锁）；修前 banner「运行 —」恒死值+运行时信息「运行时间」行 formatUptime(parseInt(quick.uptime) || 0) 恒「0 分钟」=死显示面。CD-⑱ 后两显示已移除（CD-④ 纪律）、SystemInfo.uptime 死声明键+formatUptime 死 helper 双清零（CD-⑦ 纪律）。
 

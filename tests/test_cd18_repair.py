@@ -32,11 +32,21 @@ Banner）+Quick Stats 统计条逐键深挖，同根扩面到 overview tab 运�
   会话语义）不自决；
 - /api/system/quick 死消费面清零（修后 4 键零显示消费，端点真源零改动保留）。
 
+【勘误/契约随更新（DEC-㉘a-①，2026-10-20）】㉘a 按 DEC 自决先例取 B1（OpenSoul 进程
+运行时长）真源补现先行执行：/api/system/overview 加性键 uptime_seconds（与 /metrics
+opensoul_uptime_seconds 同走 metrics_api.uptime_seconds() 单一源）+UI 复原 banner「运行」
+span/运行时信息「运行时间」行/formatUptime（真 0 显示 0 分钟，CD-⑳/㉚ 纪律）/Clock import
+（CD-⑱ 移除件复原）。证据锁纪律（㉕/㉗）：原文「双真源恒不产出 uptime」勘误为「修前恒
+不产出」——uptime/formatUptime/「运行时间」/banner/Clock 从死键锁退出（复活=真消费），
+活跃Agent/近期会话/Globe 仍死（㉘b 待拍）锁维持；health 恒不产出 uptime 锁维持（uptime
+落 overview 非 health，uptime_check_ms 禁冒充语义零变化）。
+
 断言四层（禁自嗨恒真断言）：
 ①源码消费面：死键/死显示/死 helper/死 import/假 0/硬编码 fabrication 清零 + 真源键
   真消费 + 消费访问⊆真源键（防再发明键）；
 ②行为桥：三真源真跑形状锁死（quick 恒不产出统计键、health 恒不产出 uptime、overview
-  消费键⊆产出键、metrics 降级形状恰 {error}='—' 占位非假 0 的真源依据）；
+  消费键⊆产出键+uptime_seconds 真产出、metrics 降级形状恰 {error}='—' 占位非假 0 的
+  真源依据）；
 ③真源锚点：quick/health/overview 端点源码锚点（单一源）；
 ④census 真跑真仓：死键 findings 全消失（工具边界如实记：Promise.allSettled 解构形
   三调用点 census 不提取=CD-⑨ 同族既有工具边界，非本拍引入）。
@@ -74,6 +84,8 @@ TRUE_HEALTH_KEYS = (
 # 真源 GET /api/system/quick 产出键（system_overview.system_quick_status，live 实证一致）
 TRUE_QUICK_KEYS = ("status", "db", "version", "timestamp")
 # 修前死显示/死声明键（/api/system/quick 恒不产出的统计键 + SystemInfo/QuickOverview 死键）
+# 【DEC-㉘a-① 契约随更新】uptime/formatUptime 退出死键锁（真源补现 overview.uptime_seconds
+# 后复活为真消费/真 helper）；QuickOverview 与活跃Agent/recent_sessions 等 ㉘b 待拍死键维持。
 DEAD_KEYS = (
     "organs_healthy",
     "organs_total",
@@ -82,9 +94,7 @@ DEAD_KEYS = (
     "recent_sessions",
     "memory_mb",
     "disk_usage",
-    "uptime",
     "QuickOverview",
-    "formatUptime",
 )
 # 修后 UI 对 /api/system/overview 的合法消费访问（前缀形，stats.<prefix>）
 _ALLOWED_STATS_ACCESS = (
@@ -116,19 +126,32 @@ def test_dead_keys_zero_residue():
 
 
 def test_dead_display_labels_removed():
-    """死显示面（假 0/undefined 载体）整体移除禁假渲染（CD-④ 纪律）。"""
+    """死显示面（假 0/undefined 载体）整体移除禁假渲染（CD-④ 纪律）。
+
+    【DEC-㉘a-① 契约随更新】「运行时间」行与 banner「运行」span 随真源补现复活
+    （修复面锚点=回归先炸）；活跃Agent/近期会话仍死（㉘b 待拍）锁维持。
+    """
     code = _code()
-    for label in ("活跃Agent", "活跃 Agent", "近期会话", "运行时间"):
+    for label in ("活跃Agent", "活跃 Agent", "近期会话"):
         assert label not in code, f"死显示行/卡残留: {label}"
-    # banner「运行」span（uptime 死显示载体）清零——按词边界防误杀「运行时信息」面板
-    assert not re.search(r"运行 \{", code), "banner 运行 span 残留"
+    # ㉘a 修复面锚点：banner「运行」span + 运行时信息「运行时间」行复活（真消费）
+    assert re.search(r"运行 \{formatUptime\(info\?\.uptime_seconds\)\}", code), (
+        "banner 运行 span 未复活（㉘a 恢复面回退先炸）"
+    )
+    assert "{ label: '运行时间', value: formatUptime(info?.uptime_seconds) }" in code, (
+        "运行时信息「运行时间」行未复活（㉘a 恢复面回退先炸）"
+    )
 
 
 def test_dead_icon_imports_cleared():
-    """死卡/死 span 图标 Clock/Globe import+消费清零（CD-⑰ Zap 死 import 清零纪律）。"""
+    """死卡/死 span 图标 Globe import+消费清零（CD-⑰ Zap 死 import 清零纪律）。
+
+    【DEC-㉘a-① 契约随更新】Clock 随 banner「运行」span 复活为真消费（修复面锚点）；
+    Globe 仍死（近期会话卡 ㉘b 待拍）锁维持。
+    """
     code = _code()
-    assert not re.search(r"\bClock\b", code), "死 import Clock 残留"
     assert not re.search(r"\bGlobe\b", code), "死 import Globe 残留"
+    assert re.search(r"\bClock\b", code), "Clock import 未复活（㉘a banner 修复面回退先炸）"
 
 
 def test_hardcoded_fabrication_cleared():
@@ -153,6 +176,15 @@ def test_true_source_keys_really_consumed():
         assert chain in code, f"真源键未消费: {chain}"
 
 
+def test_uptime_true_source_key_consumed():
+    """【DEC-㉘a-①】overview.uptime_seconds 真源加性键真消费（两显示恰 2 消费点）。"""
+    code = _code()
+    assert "uptime_seconds: (o as any)?.uptime_seconds" in code, "setInfo 装配未收 uptime_seconds"
+    assert code.count("formatUptime(info?.uptime_seconds)") == 2, (
+        "uptime_seconds 消费点数漂移（banner+运行时间行恰 2 处）"
+    )
+
+
 def test_stats_consumed_access_subset_of_true_source():
     """stats.* 消费访问 ⊆ 真源产出键路径（防未来再发明键=此桥先炸）。"""
     code = _code().replace("?.", ".")
@@ -166,11 +198,14 @@ def test_stats_consumed_access_subset_of_true_source():
 
 
 def test_info_consumed_keys_subset_of_assembly():
-    """info.* 消费键恰 {status,version,database}（uptime 死键清零后再发明键先炸）。"""
+    """info.* 消费键恰 {status,version,database,uptime_seconds}（uptime 死键复活后
+    【DEC-㉘a-① 契约随更新】=真源补现键，再发明键先炸）。"""
     code = _code()
     consumed = set(re.findall(r"info\??\.([A-Za-z_$][\w$]*)", code))
     assert consumed, "info 消费键为空（提取失效=断言空转）"
-    assert consumed == {"status", "version", "database"}, f"info 消费键集漂移: {consumed}"
+    assert consumed == {"status", "version", "database", "uptime_seconds"}, (
+        f"info 消费键集漂移: {consumed}"
+    )
 
 
 def test_fetch_wiring_only_true_sources():
@@ -212,7 +247,8 @@ def test_health_shape_lock_never_produces_uptime():
 
 
 def test_overview_consumed_keys_subset_of_produced():
-    """/api/system/overview 真跑：UI 消费键⊆产出键（行为桥）。"""
+    """/api/system/overview 真跑：UI 消费键⊆产出键（行为桥）+【DEC-㉘a-①】uptime_seconds
+    加性键真产出（真源补现锚点=键消失先炸）。"""
     from src.api import system_overview
 
     resp = asyncio.run(system_overview.system_overview())
@@ -222,6 +258,10 @@ def test_overview_consumed_keys_subset_of_produced():
     assert "cpu_percent" in resp["metrics"], "metrics.cpu_percent 消费依据键缺席"
     assert "used_mb" in resp["metrics"].get("memory", {}), "metrics.memory.used_mb 消费依据键缺席"
     assert "total_entries" in resp["knowledge"], "knowledge.total_entries 消费依据键缺席"
+    assert "uptime_seconds" in resp, "uptime_seconds 加性键缺席（㉘a 真源补现回退先炸）"
+    assert isinstance(resp["uptime_seconds"], (int, float)), (
+        "uptime_seconds 非数值（形状变了须复挖）"
+    )
 
 
 def test_overview_interface_subset_of_produced():
@@ -249,7 +289,7 @@ def test_overview_interface_subset_of_produced():
 
     si = re.search(r"interface SystemInfo \{([^}]*)\}", src)
     assert si, "SystemInfo 接口未找到（提取失效=断言空转）"
-    si_keys = set(re.findall(r"^\s+([A-Za-z_$][\w$]*):", si.group(1), re.M))
+    si_keys = set(re.findall(r"^\s+([A-Za-z_$][\w$]*)\??:", si.group(1), re.M))
     assert si_keys, "SystemInfo 键提取为空（提取失效=断言空转）"
     for k in si_keys:
         assert k in resp or k in TRUE_HEALTH_KEYS, f"SystemInfo 声明键真源不产出: {k}"

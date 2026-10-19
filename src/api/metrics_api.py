@@ -38,6 +38,15 @@ _latency_count: dict[str, int] = defaultdict(int)
 _start_time = time.time()
 
 
+def uptime_seconds() -> float:
+    """OpenSoul 进程运行时长（秒）——进程 uptime 单一源（DEC-㉘a-① 真源补现 B1 语义）。
+
+    /metrics 的 opensoul_uptime_seconds 与 /api/system/overview 的 uptime_seconds
+    同走本口（禁两套解释漂移）。
+    """
+    return time.time() - _start_time
+
+
 def record_request(
     method: str,
     path: str,
@@ -101,7 +110,7 @@ def _normalize_path(path: str) -> str:
 def _format_metrics() -> str:
     """Generate Prometheus exposition format text."""
     lines: list[str] = []
-    now = time.time()
+    time.time()
 
     # ── Metadata ──
     lines.append("# HELP opensoul_info OpenSoul instance information")
@@ -115,7 +124,7 @@ def _format_metrics() -> str:
     # ── Uptime ──
     lines.append("# HELP opensoul_uptime_seconds Time since OpenSoul started")
     lines.append("# TYPE opensoul_uptime_seconds gauge")
-    lines.append(f"opensoul_uptime_seconds {now - _start_time:.1f}")
+    lines.append(f"opensoul_uptime_seconds {uptime_seconds():.1f}")
     lines.append("")
 
     # ── Process metrics ──

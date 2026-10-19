@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import {
   Settings, Database, HardDrive, Cpu, RefreshCw, ToggleLeft, ToggleRight,
-  Server, Shield, X, Save, Activity, CheckCircle, XCircle,
+  Server, Clock, Shield, X, Save, Activity, CheckCircle, XCircle,
   AlertTriangle, Loader2, Play, Zap, ChevronDown, ChevronRight,
   BarChart3, Terminal, Info
 } from 'lucide-react';
@@ -14,13 +14,15 @@ import { Button } from '@/components/ui/button';
 // ── Types ───────────────────────────────────────────────────
 
 // 真源 GET /api/health（src/main.py health）消费子集——消费键⊆真源产出（名对齐令执行，
-// tests/test_cd18_repair.py 形状锁）。uptime 死声明键已清零：/api/health 与
-// /api/system/overview 双真源恒不产出 uptime（uptime_check_ms=健康检查耗时非运行时间，
-// 禁冒充）；恢复显示=真源补现候选 pending-decisions ㉘a，不自决。
+// tests/test_cd18_repair.py 形状锁）。uptime 死键已随真源补现复活：/api/system/overview
+// 加性键 uptime_seconds（OpenSoul 进程运行时长，DEC-㉘a-① 真源补现 B1，与 /metrics
+// opensoul_uptime_seconds 同走 metrics_api.uptime_seconds() 单一源；uptime_check_ms=
+// 健康检查耗时非运行时间，禁冒充）。
 interface SystemInfo {
   status: string;
   version: string;
   database: string;
+  uptime_seconds?: number;
 }
 
 interface Organ {
@@ -58,6 +60,19 @@ interface BootstrapStatus {
 type Tab = 'overview' | 'organs' | 'config' | 'bootstrap';
 
 // ── Helpers ─────────────────────────────────────────────────
+
+// 运行时长显示（CD-⑱ 死 helper 清零件随 DEC-㉘a-① 真源补现复活，现为真消费）。
+// 缺席/非法='—' 占位非假 0；真 0 显示「0分钟」（CD-⑳/㉚ 真 0 禁遮蔽纪律，
+// 与 CD-⑱ 移除前 helper 的 `!seconds` 把 0 折 '—' 刻意不同）。
+function formatUptime(seconds?: number | null) {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '—';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}天 ${h}小时`;
+  if (h > 0) return `${h}小时 ${m}分钟`;
+  return `${m}分钟`;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
@@ -107,6 +122,7 @@ export default function SystemPage() {
         status: (h as any)?.status || 'ok',
         version: (h as any)?.version || (o as any)?.version || '—',
         database: (h as any)?.database?.type ?? '—',
+        uptime_seconds: (o as any)?.uptime_seconds,
       });
       if (o) setStats(o as unknown as OverviewStats);
     } catch { /* ignore */ }
@@ -218,6 +234,7 @@ export default function SystemPage() {
               <div className="flex items-center gap-4 mt-1 text-[10px] text-muted-foreground">
                 <span>版本 {info?.version}</span>
                 <span>数据库 {info?.database}</span>
+                <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />运行 {formatUptime(info?.uptime_seconds)}</span>
               </div>
             </div>
           </div>
@@ -335,6 +352,7 @@ export default function SystemPage() {
                 <div className="space-y-2 text-xs">
                   {[
                     { label: '版本', value: info?.version },
+                    { label: '运行时间', value: formatUptime(info?.uptime_seconds) },
                     { label: 'CPU 使用率', value: stats.metrics.cpu_percent != null ? `${stats.metrics.cpu_percent.toFixed(1)}%` : '—' },
                     { label: '内存使用', value: stats.metrics.memory?.used_mb != null ? `${stats.metrics.memory.used_mb} MB` : '—' },
                   ].map((item, i) => (

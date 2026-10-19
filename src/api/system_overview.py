@@ -11,6 +11,7 @@ import time
 
 from fastapi import APIRouter, Header
 
+from src.api.metrics_api import uptime_seconds
 from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
@@ -287,6 +288,9 @@ async def system_overview():
         "elapsed_ms": elapsed,
         "version": "2.0.0",
         "system_status": organs.get("status", "unknown"),
+        # uptime_seconds=OpenSoul 进程运行时长（DEC-㉘a-① 真源补现 B1 加性键），
+        # 与 /metrics opensoul_uptime_seconds 同走 metrics_api.uptime_seconds() 单一源
+        "uptime_seconds": round(uptime_seconds(), 1),
         "organs": organs,
         "metrics": metrics,
         "knowledge": knowledge,
