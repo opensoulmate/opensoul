@@ -29,6 +29,7 @@
 | ㉒ | add_provider 同名覆盖注册面清钥语义（同名再注册复用旧钥残留面） | ㉑ 诚实边界③留档件 | 取 A（同名 409 拒零副作用，替换=DELETE+POST）——**已按建议默认 A 先行执行 2026-10-18（GLAND-②）** | ~~"㉒取A"~~ 已落，异议回「㉒改B」（同名覆盖先清钥）/「㉒改C」（revert 静默覆盖）即改道 |
 | ㉓ | gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许） | GLAND-② 诚实边界③「PATCH 就地改（不触钥）另拍」 | 取 A（持钥改道 409 原子拒；无钥/同值照常；不触钥）——**已按建议默认 A 先行执行 2026-10-18（GLAND-③）** | ~~"㉓取A"~~ 已落，异议回「㉓改B」（持钥也允许显式改道）/「㉓改C」（revert 撤 PATCH 面） |
 | ㉔ | sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db） | GLAND-④ 留档候选首件 | 取 D→B（先 `hermes doctor`/`hermes update` 防复发，再归档+sqlite3 .recover 抽取+对账+原子替换；对账不过落 C）——**本拍=决策材料件先落（SESS-①，零处置），处置涉 ~/opensoul 外数据需拍板** | "㉔取D→B" / "㉔取C" / "㉔维持" |
+| ㉙ | timeline/proactive e2e 探针残留 194+2 行删除（TR-② 闸门回归清单） | TR-② 闸门复跑（2026-10-19） | 取 B（清单精确删+备份+回读，TL-④ 纪律）——**清点已落（TR-②，零删除），删除待拍板** | "㉙删"（cron 代跑）/ "㉙维持" |
 
 ---
 
@@ -376,6 +377,23 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - **拍板方式**：回「**㉘b取B**」（语义随拍）/「**㉘b取A**」/「**㉘b维持**」。两子件独立互不阻塞（回「㉘a取B1 ㉘b取B」即两件都下拍执行）。
 
 **诚实边界**：①A 收口=有意的能力取舍非 bug（真源无产出禁假渲染/假 0）②任一取 B=真源形状变更，CD-⑱ test_cd18_repair 形状锁（quick 恒不产出统计键/health 恒不产出 uptime）须显式改+勘误记档（㉕/㉗ 证据锁纪律）③㉘a B1/B2 是语义二选一（进程 vs 主机 uptime）非实现细节④活跃Agent 若取 /api/brain/agents 语义=协调器注册活跃 agent，与 agent_registry「探测注册 5 分钟活跃窗」不同轴，随拍定。
+
+## ㉙ timeline/proactive e2e 探针残留删除（TR-② 闸门回归 194+2 行）
+
+**状态：待拍板（TR-② 清点=决策材料件先落零删除零写入，TL-③「删除动作一律留待用户拍板」/TL-④「清单精确删+备份+回读」纪律）**——依据：TR-② 闸门复跑（2026-10-19）after_tl2_6_cutoff_A=194 回归浮出（TL-②-⑥ 收口时刻曾归零）。
+
+**现状**：194 行 timeline A 类+2 行 proactive A 类全部为 live e2e 探针副作用行（逐行硬标识 e2e* 文件名/agent id/goal，全数确证无真实事件混入）；根因=探针「取证后清痕」清单只覆盖资源行、漏事件行面（详见 docs/test-residue-census.md TR-② 节）。删除清单已就绪=`data/test_residue_census_gate_rerun_20261019.json` 的 `timeline.A_event_ids`（194）+`proactive.A_event_ids`（2）。
+
+**选项**：
+- **A 维持留驻**：196 行继续留在生产 timeline/proactive（闸门指标常红，回归监控失效）。
+- **B 清单精确删+备份+回读（建议）**：先备份 data/timeline.db+data/proactive.db → 按 event_id 精确删 → 回读 remaining=0 → 闸门复跑归零（TL-④ 先例全流程留痕可回滚）。
+- **C 只删 timeline 留 proactive**：proactive 仅 2 行，收益趋零。
+
+**权衡**：B 与 TL-④ 同纪律（清单精确删非盲删，194 行逐行硬标识确证 A 类=与 TL-③ 盲删风险情形不同）；A 让闸门指标永久失真。
+
+**拍板方式**：回「**㉙删**」（cron 代跑下拍执行）/「㉙维持」。
+
+**诚实边界**：①删除按 id 精确清单，绝不按 LIKE 批量（清痕纪律补记见 TR-② 节）②删后闸门须复跑对账归零才算收口③后续 live 探针清痕必须含事件行面（纪律已补记），否则闸门会再次变红④proactive 2 行含 1 个同秒重复组（A_excess_lower_bound=1），同清单处置。
 
 ## 附：锚点核验
 

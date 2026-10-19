@@ -58,6 +58,46 @@ U 类主分布（不动）：brain/think 1,905（含自动开发 cron 真事件�
 
 TL-②-⑥ 收口时刻（2026-10-13 20:30 CST）之后新增 **A 类行 = 0**：pytest 写方全收编后测试残留不再进入生产 timeline（后续周期 live e2e 探针行亦已各自清痕）。闸门指标入工具（`after_tl2_6_cutoff_A`），后续周期可复跑盯回归。
 
+## TR-② 闸门复跑（2026-10-19）——after_tl2_6_cutoff_A 回归 194 行浮出（决策材料件，零删除零写入）
+
+TL-③ 留档「后续周期可复跑盯回归」首次执行。工具同 `scripts/census_test_residue.py`（只读 `mode=ro`），工件 `data/test_residue_census_gate_rerun_20261019.json`（event_id 清单单一源）。
+
+### 闸门破口确认
+
+`after_tl2_6_cutoff_A = 194`（TL-②-⑥ 收口时刻曾为 0）——**测试残留重新进入生产 timeline 的回归坐实**。时点分布：2026-10-15: 26 / 10-16: 20 / 10-17: 87 / 10-18: 61（首行 10-15、末行 2026-10-18 23:51）。当前 timeline 全部 A 类 194 行=post-cutoff 行（历史 A 类已由 TL-④ 清单删除），A/B/U 现值 194 / 22,034 / 6,396（三分合计 28,624=total 对平；B 类=TL-⑰ 裁决保留的 nerve 风暴史+4 行 sandbox_exec）。
+
+### 归因（逐行硬标识，194 行全数确证 A 类无混入）
+
+全部为 **live e2e 探针副作用行**（summary/detail 内文件名·agent id·goal 带 e2e 硬标识，触发规则 `timeline_api_probe`（e2e/sentinel 标记））：
+
+| 探针族（硬标识前缀） | 行数 | 时点 |
+|---|---|---|
+| t3e-e2e-*（55 版压测形 t3e-e2e-99e357cb v1..v55+姊妹文件） | 61 | 10-17 23:51 |
+| t3f-e2e-* | 61 | 10-18 |
+| e2e74-* | 18 | 10-15 |
+| e2e-g15-* / e2e-pre-g15b（collab WS 对） | 14 | 10-17 |
+| e2e-probe-msg / e2e-revoke-msg（link ws_message） | 9 | 10-16 |
+| e2e-echo-stats-* | 8 | 10-15 |
+| t3d4-e2e-* | 7 | 10-17 |
+| e2e-tok-* / e2e-ui-token-* / e2e-dec-ui-token-show（link connector） | 6 | 10-16 |
+| e2eG1*（brain verify goal） | 5 | 10-17 |
+| e2e-vca-*（vein file_deleted） | 5 | 10-16 |
+
+按面：vein/file_updated 121、vein/file_deleted 17、vein/file_uploaded 12、link/ws_message 9、echo/message_sent 8、immune/collab_ws_connected 7、immune/collab_ws_closed 7、link/connector_created 6、brain/verify 5、vein/file_rollback 2（合计 194 对平）。trigger 判定：e2e@summary+detail 161、e2e@summary 24、e2e@detail 9。
+
+### 根因（机制级，非隔离回归）
+
+live 探针「取证后清痕 remaining=0」的清痕面**只覆盖探针自建资源行**（file/connector/agent/课程等），而 `push_event` 落 timeline 的副作用行从不入清痕清单——各探针 resource remaining=0 与事件行残留并存（本次 194 行即实证）。TL-②-⑥ 收编的是 pytest 写方（conftest 进程内 tmp 数据面，**仍然有效**——pytest 面零新增行），live 真栈路径靠探针自清而清痕清单缺 timeline 面=闸门破口机制。
+
+### proactive 面同查
+
+`after_proact1_cutoff A = 2`（同秒同 watcher 重复组 1 个，`A_excess_lower_bound = 1`）——同为探针行，量级 2，event_id 入同工件 `proactive.A_event_ids`。
+
+### 处置（按 TL-③/TL-④ 纪律：删除动作待拍板）
+
+- **删除清单已就绪**：`timeline.A_event_ids` 194 条 + `proactive.A_event_ids` 2 条（工件单一源），删除按 TL-④ 先例=备份+按 id 精确删+回读 remaining=0；登记 pending-decisions **㉙** 待拍板。
+- **纪律补记（后续探针必守）**：live 探针「取证后清痕 remaining=0」必须覆盖**事件行面**（timeline events / proactive_events 按 event_id 删），非仅资源行面——本次 194 行=清痕清单缺事件行面的直接代价。
+
 ## 独立复算交叉核对（防工具自嗨）
 
 与工具输出逐值对平：stub-agent verify 1,138 ✓ / 192.168.99.99 275 ✓ / nerve 风暴 22,030 ✓ / `[Pipeline] test` 391 ✓ / perm t1+t2+api-test 567 ✓ / A+B+U=38,027=total ✓。
