@@ -359,6 +359,18 @@ class TestKnownDrifts:
         assert "entity.type" not in ui
         assert "selectedEntity.entity_type" in ui
 
+    def test_learn_total_quizzes_repair_landed(self, artifact):
+        rows = self._rows(artifact)
+        r = rows[("learn.learn_stats:425", "total_quizzes")]
+        assert r["verdict"] == _D
+        assert r.get("repair_status") == "landed@CD-㉙"
+        assert "已收口" in r["repair_candidate"]
+        # 修复真落地：当前 UI 已无 total_quizzes 死显示消费（死显示卡移除+死声明键清零）
+        ui = _src("admin-ui/app/learn/page.tsx")
+        assert "total_quizzes" not in ui
+        # 残留「测验题」字样只许在章节测验独立面（空态/生成提示），统计卡死显示禁复发
+        assert "测验题</div>" not in ui
+
     def test_every_drift_has_ui_symptom_anchor(self, artifact):
         rows = self._rows(artifact)
         for key in self.DRIFT_KEYS:

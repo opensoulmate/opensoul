@@ -49,7 +49,6 @@ interface LearnStats {
   total_courses: number;
   total_chapters: number;
   completed_chapters: number;
-  total_quizzes: number;
 }
 
 export default function LearnPage() {
@@ -594,7 +593,7 @@ export default function LearnPage() {
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="text-2xl font-bold">{stats?.total_courses ?? courses.length}</div>
           <div className="text-xs text-muted-foreground">课程总数</div>
@@ -606,10 +605,6 @@ export default function LearnPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="text-2xl font-bold text-emerald-600">{stats?.completed_chapters ?? 0}</div>
           <div className="text-xs text-muted-foreground">已完成</div>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-violet-500">{stats?.total_quizzes ?? 0}</div>
-          <div className="text-xs text-muted-foreground">测验题</div>
         </div>
       </div>
 

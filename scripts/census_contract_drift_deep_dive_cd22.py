@@ -593,14 +593,19 @@ SHAPE_VERDICTS = {
     },
     ("learn.learn_stats:425", "total_quizzes"): {
         "verdict": _D,
-        "repair_candidate": "learn 测验统计卡收编/真源补现（total_quizzes 真源零产出恒假 0）",
+        "repair_candidate": "已收口：CD-㉙ learn 测验统计卡死显示移除（2026-10-19）",
+        "repair_status": "landed@CD-㉙",
         "evidence": "engine.stats 返回键恰 total_courses/total_chapters/completed_chapters/"
         "pending_chapters/reviewing_courses/by_status（src/learn/course_engine.py:578-588）无 "
         "total_quizzes（quiz 无统计轴，仅 get_quiz 逐课口）——UI stats?.total_quizzes ?? 0"
-        "（learn/page.tsx:611）恒回落 0=假 0 遮蔽（「测验题」卡恒 0，CD-⑱ 回落假 0 同型）",
+        "（learn/page.tsx:611）恒回落 0=假 0 遮蔽（「测验题」卡恒 0，CD-⑱ 回落假 0 同型）"
+        "——CD-㉙ 已收口（死显示卡移除+死声明键 total_quizzes 清零+grid 收 3 列，恢复显示="
+        "真源补现候选 pending-decisions ㉙ 不自决，2026-10-19）；当前 learn/page.tsx 已无 "
+        "total_quizzes 消费=修复真落地（残留「测验题」字样为章节测验空态/生成提示独立面"
+        "不动）；锚点按 CD-⑮ 先例只留真源锚点（死显示移除无修复后消费点可锁，UI 假 0 消费"
+        "复发由 test_cd29_repair 源码面锁死）",
         "anchors": [
             (CE, 584, '"by_status": {'),
-            (U_LP, 611, "stats?.total_quizzes"),
         ],
     },
     # ── link test_connector：send_webhook 全分支含 success ──
