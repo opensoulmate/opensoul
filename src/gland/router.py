@@ -842,6 +842,9 @@ class ModelRouter:
             prompt_tokens=usage.get("prompt_tokens", 0),
             completion_tokens=usage.get("completion_tokens", 0),
             user_id=user_id,
+            # DEC-㉖B2-①：调用点带 task 语义（role 路由=resolve_task 派生、
+            # 缺省=chat，此处 task 恒为已解析 TaskType）。
+            task=task.value,
         )
         return result
 
@@ -895,6 +898,7 @@ class ModelRouter:
             prompt_tokens=est_tokens,
             completion_tokens=0,
             user_id=user_id,
+            task=TaskType.EMBEDDING.value,
         )
         return result
 

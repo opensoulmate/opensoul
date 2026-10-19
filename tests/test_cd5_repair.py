@@ -31,6 +31,11 @@ by_provider 元素升 {prompt,completion,total,requests} 对象）→「入: x /
 拆分行与 by_provider 入/出/请求拆分行随真源恢复（㉕ 同款正向恢复非新增发明；
 裁决勘误：修前「真源不产出」现为「DEC-㉖-① 已补现」，历史裁决文本不改写）。
 task 列仍缺真源（B2=task 轴跨 gland 调用点大件待拍）→ 锁维持禁渲染。
+契约随更新（2026-10-20 DEC-㉖B2-① 真源补现取 B2）：UsageRecord 加 task 轴
+（record() 调用点带 task 语义=chat 解析 TaskType/embed=embedding）+recent_records
+元素补 task 键→task 列随真源恢复（㉕ 同款正向恢复）；「task 禁渲染」锁随真源补现
+翻转为「task 真消费」（勘误：修前「真源不产出」现为「DEC-㉖B2-① 已补现」，历史
+裁决文本不改写）。
 
 断言三层（禁自嗨恒真断言）：
 ①源码消费面：真源键真在场 + 漂移键零残留（消费形）；
@@ -73,7 +78,10 @@ DRIFT_SUMMARY_KEYS = (
     "total_requests",
     "budget_used_pct",
 )
-DRIFT_RECORD_KEYS = ("input_tokens", "output_tokens", "task")
+DRIFT_RECORD_KEYS = ("input_tokens", "output_tokens")
+# 勘误（DEC-㉖B2-①）："task" 随 recent_records 元素补 task 轴成为真源键
+# （UsageRecord.task 真产出），从漂移残留名单移出；input/output 仍非真源键
+# 维持零残留锁（历史裁决文本不改写）。
 DRIFT_KEY_FIELDS = ("active",)
 
 # 真源键（行为桥对账基准）
@@ -154,10 +162,13 @@ def test_by_provider_element_is_object_consumption():
 
 
 def test_usage_record_consumes_true_keys():
-    """UsageRecord 收编真源 recent_records 元素形（prompt/completion_tokens）。"""
+    """UsageRecord 收编真源 recent_records 元素形（prompt/completion_tokens）+
+    task 列随真源补现恢复（契约随更新 DEC-㉖B2-①：修前「task 零残留」锁翻转为
+    「task 真消费」——真源已产出 task，历史裁决文本不改写）。"""
     code = _code()
     for expr in ("r.prompt_tokens", "r.completion_tokens", "formatTime(r.timestamp)"):
         assert expr in code, f"真源 record 键未被消费: {expr}"
+    assert "{r.task}" in code, "task 列未随真源补现恢复（DEC-㉖B2-①）"
     for key in DRIFT_RECORD_KEYS:
         assert re.search(rf"\br\.{key}\b", code) is None, f"record 漂移键残留: {key}"
 
@@ -175,13 +186,14 @@ def test_keys_panel_consumes_true_shape():
 
 
 def test_dead_display_faces_removed():
-    """显示面契约（随 DEC-㉖-① 更新）：入/出拆分行与 by_provider 请求计数已随真源
-    补现恢复（㉕ 同款正向恢复）；task 列仍缺真源（B2 task 轴待拍）禁假渲染。"""
+    """显示面契约（随 DEC-㉖-①/㉖B2-① 更新）：入/出拆分行、by_provider 请求计数、
+    task 列均已随真源补现恢复（㉕ 同款正向恢复）；契约随更新勘误：「task 列禁假
+    渲染」锁随真源补 task 轴翻转为「task 列真消费真源键」，历史裁决文本不改写。"""
     code = _code()
     # 恢复面真在场（真源补现=消费真源键非假渲染）
     assert "入: " in code, "入/出拆分行未随真源补现恢复"
     assert "请求</span>" in code, "by_provider 请求计数未随真源补现恢复"
-    assert "{r.task}" not in code, "task 列残留（真源不产出，B2 待拍）"
+    assert "{r.task}" in code, "task 列未随真源补现恢复（DEC-㉖B2-①）"
 
 
 def test_timestamp_epoch_seconds_conversion():
@@ -273,6 +285,7 @@ def test_record_consumed_keys_subset_of_true_source():
         "completion_tokens",
         "total_tokens",
         "user_id",
+        "task",
         "timestamp",
     } | set(DRIFT_RECORD_KEYS)
     consumed = set(re.findall(r"\br\.([A-Za-z_$][\w$]*)", _code())) & universe

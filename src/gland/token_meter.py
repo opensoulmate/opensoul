@@ -16,6 +16,7 @@ class UsageRecord:
     completion_tokens: int
     total_tokens: int
     user_id: str | None = None
+    task: str | None = None
     timestamp: float = field(default_factory=time.time)
 
 
@@ -51,6 +52,7 @@ class TokenMeter:
         prompt_tokens: int,
         completion_tokens: int,
         user_id: str | None = None,
+        task: str | None = None,
     ) -> UsageRecord:
         """Record a single API call's token usage. Raises if budget exhausted."""
         total = prompt_tokens + completion_tokens
@@ -63,6 +65,7 @@ class TokenMeter:
             completion_tokens=completion_tokens,
             total_tokens=total,
             user_id=user_id,
+            task=task,
         )
         self._records.append(rec)
 
@@ -144,6 +147,8 @@ class TokenMeter:
         }
 
     def recent_records(self, limit: int = 50) -> list[dict]:
+        # 元素形含 task 轴（DEC-㉖B2-① 真源补现：调用点带 task 语义；未提供=None
+        # 如实，键恒在场禁静默缺席）。
         return [
             {
                 "provider": r.provider,
@@ -152,6 +157,7 @@ class TokenMeter:
                 "completion_tokens": r.completion_tokens,
                 "total_tokens": r.total_tokens,
                 "user_id": r.user_id,
+                "task": r.task,
                 "timestamp": r.timestamp,
             }
             for r in self._records[-limit:]

@@ -48,7 +48,8 @@ interface UsageSummary {
 }
 
 // 真源 GET /api/gland/usage/recent records 元素形（timestamp=epoch 秒 float；
-// task/input_tokens/output_tokens 键真源不产出）。
+// task=DEC-㉖B2-① 真源补现（调用点带 task 语义，未提供=None 如实）；
+// input_tokens/output_tokens 键真源不产出）。
 interface UsageRecord {
   provider: string;
   model: string;
@@ -56,6 +57,7 @@ interface UsageRecord {
   completion_tokens: number;
   total_tokens: number;
   user_id: string | null;
+  task: string | null;
   timestamp: number;
 }
 
@@ -606,6 +608,7 @@ k.is_valid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foregro
                 <span className="text-muted-foreground shrink-0 w-24">{formatTime(r.timestamp)}</span>
                 <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">{r.provider}</span>
                 <span className="font-mono text-muted-foreground truncate flex-1">{r.model}</span>
+                <span className="text-muted-foreground shrink-0">{r.task}</span>
                 <span className="text-muted-foreground shrink-0 text-[10px]">
                   {formatNumber(r.prompt_tokens)}→{formatNumber(r.completion_tokens)}
                 </span>

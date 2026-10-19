@@ -30,7 +30,7 @@
 | ㉓ | gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许） | GLAND-② 诚实边界③「PATCH 就地改（不触钥）另拍」 | 取 A（持钥改道 409 原子拒；无钥/同值照常；不触钥）——**已按建议默认 A 先行执行 2026-10-18（GLAND-③）** | ~~"㉓取A"~~ 已落，异议回「㉓改B」（持钥也允许显式改道）/「㉓改C」（revert 撤 PATCH 面） |
 | ㉔ | sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db） | GLAND-④ 留档候选首件 | 取 D→B（先 `hermes doctor`/`hermes update` 防复发，再归档+sqlite3 .recover 抽取+对账+原子替换；对账不过落 C）——**本拍=决策材料件先落（SESS-①，零处置），处置涉 ~/opensoul 外数据需拍板** | "㉔取D→B" / "㉔取C" / "㉔维持" |
 | ㉕ | dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type） | CD-④ 诚实边界留档 | 取 B（真源补现：元素 item 补真列+UI 恢复时间行/类型徽章）——**已按建议默认 B 先行执行 2026-10-19（DEC-㉕-①/DEDUP-①）** | ~~"㉕取B"~~ 已落，异议回「㉕改A」（revert 回不显示时间/类型）即改道 |
-| ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉖-①）** | ~~"㉖取B1"~~ 已落，异议回「㉖改A」即 revert；B2（task 轴）仍待拍，回「㉖B2」即下拍执行 |
+| ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉖-①）；B2（task 轴）已按「别停工等批」+DEC 自决先例先行执行 2026-10-20（DEC-㉖B2-①）** | ~~"㉖取B1"~~/~~"㉖B2"~~ 均已落，异议回「㉖改A」（revert B1）/「㉖B2改A」（revert B2）即改道 |
 | ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）——**㉗a 已按建议默认 B1 先行执行 2026-10-20（DEC-㉗a-①）**；㉗b 取 B（问题类闭集）——**已按建议默认 B 先行执行 2026-10-20（DEC-㉗b-①）** | ~~"㉗a取B1"~~/~~"㉗b取B"~~ 已落，异议回「㉗a改A」（revert 回无卡）/「㉗a改B2」（改缓冲计数）/「㉗b改A」（revert 回精确查询形）即改道 |
 | ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉘a-①）**；㉘b 取 B（语义随拍）——**已按建议默认 B 先行执行 2026-10-20（DEC-㉘b-①）** | ~~"㉘a取B1"~~/~~"㉘b取B"~~ 已落，异议回「㉘a改A」（revert 回不显示）/「㉘a改B2」（改主机 uptime）/「㉘b改A」（revert 回不显示）即改道 |
 | ㉙ | timeline/proactive e2e 探针残留 194+2 行删除（TR-② 闸门回归清单） | TR-② 闸门复跑（2026-10-19） | 取 B（清单精确删+备份+回读，TL-④ 纪律）——**清点已落（TR-②，零删除），删除待拍板** | "㉙删"（cron 代跑）/ "㉙维持" |
@@ -317,7 +317,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 ## ㉖ gland 用量显示拆分恢复（真源补现 入/出 token 拆分、by_provider 请求计数、record task 列）
 
-**状态：已按建议默认 B1 先行执行（2026-10-20 DEC-㉖-①）**——依据：DEC-㉕-① 自决先例（pending-decisions ㉕「真源补现同款 DEC 自决先例可续」）+ 用户「权限/审批阻塞时别停工等批」铁律。实现=**真源补现取 B1（入/出两轴，token_meter 内部改）**：TokenMeter 聚合加 prompt/completion 两轴（summary() 加 total_prompt_tokens/total_completion_tokens、by_provider 元素升 {prompt,completion,total,requests} 对象）+ UI「入: x / 出: y」拆分行与 by_provider 入/出/请求拆分行随真源恢复（CD-⑤ 移除件复原语义，㉕ 同款正向恢复非新增发明）+ 证据锁契约随更新（test_cd5_repair/test_contract_drift_deep_dive，勘误「元素=int」→「元素=对象」，历史裁决文本不改写）。**B2=recent_records 元素补 task 轴（record() 调用点带 task 语义=跨 gland 调用点大件）仍待拍**（task 列维持禁渲染）。**若拍板改判回一句即改道：「㉖改A」=revert 本拍（回只显示总量）**。
+**状态：已按建议默认 B1 先行执行（2026-10-20 DEC-㉖-①）；B2 已先行执行（2026-10-20 DEC-㉖B2-①）**——依据：DEC-㉕-① 自决先例（pending-decisions ㉕「真源补现同款 DEC 自决先例可续」）+ 用户「权限/审批阻塞时别停工等批」铁律。实现=**真源补现取 B1（入/出两轴，token_meter 内部改）**：TokenMeter 聚合加 prompt/completion 两轴（summary() 加 total_prompt_tokens/total_completion_tokens、by_provider 元素升 {prompt,completion,total,requests} 对象）+ UI「入: x / 出: y」拆分行与 by_provider 入/出/请求拆分行随真源恢复（CD-⑤ 移除件复原语义，㉕ 同款正向恢复非新增发明）+ 证据锁契约随更新（test_cd5_repair/test_contract_drift_deep_dive，勘误「元素=int」→「元素=对象」，历史裁决文本不改写）。**B2=recent_records 元素补 task 轴（record() 调用点带 task 语义）已落（DEC-㉖B2-①）**：UsageRecord.task + record(task=) + 元素补 task 键（键恒在场、未提供=None 如实）+ 调用点带 task 语义（chat=解析后 TaskType——role 路由 resolve_task 派生单一源、缺省 chat；embed=embedding）+ UI task 列随真源恢复（CD-⑤ 移除件复原语义逐字一致 {r.task}）+ 证据锁契约随更新（test_cd5/test_gland_usage_split_restore task 锁翻转「禁渲染」→「真消费」+cd22 锚点随位移同步）。**若拍板改判回一句即改道：「㉖改A」=revert B1（回只显示总量）/「㉖B2改A」=revert B2（回 task 列不显示）**。
 
 **现状**：`token_meter.summary()` 只聚合 `total_tokens`（入/出未拆）；`by_provider` 元素=int（该 provider 累计 token 总数）；`recent_records` 元素有 `prompt_tokens/completion_tokens/total_tokens/user_id` 无 `task`。CD-⑤ 后 gland 页=总请求数/总Token数/预算条/Provider 用量/最近记录全真源键，**「入: x / 出: y」拆分行、by_provider 入/出/请求拆分行、task 列已移除**（修前恒 0/undefined 假渲染=死显示面）。
 
@@ -325,7 +325,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - **A 维持收口**（现状）：只显示总量。零契约变更。
 - **B 真源补现（建议）**：`TokenMeter` 聚合加 prompt/completion 两轴（`summary()` 加 `total_prompt_tokens/total_completion_tokens`、`by_provider` 元素升 `{prompt,completion,total,requests}`=加性/元素形状变更需 UI 同步）+ `recent_records` 元素补 `task` 需 UsageRecord 加 task 轴（record() 调用点带 task 语义=跨模块接线）。
 - **权衡**：入/出拆分对调优（prompt 膨胀 vs 生成膨胀）是核心语义；task 列价值最低（调用点 task 语义未贯通）。若拍 B 建议拆两件：B1=入/出两轴（token_meter 内部改）、B2=task 轴（跨 gland 调用点，大件）。
-- **拍板方式**：~~回「**㉖取B1**」/「**㉖取B**」（cron 代跑下拍执行）/「㉖取A」/「㉖维持」~~ 已按建议默认 B1 先行执行（DEC-㉖-①）；异议回「㉖改A」（revert）即改道；B2（task 轴）仍待拍，回「㉖B2」即下拍执行。
+- **拍板方式**：~~回「**㉖取B1**」/「**㉖取B**」（cron 代跑下拍执行）/「㉖取A」/「㉖维持」~~ 已按建议默认 B1 先行执行（DEC-㉖-①）；~~B2（task 轴）仍待拍，回「㉖B2」即下拍执行~~ B2 已按「别停工等批」+自决先例先行执行（DEC-㉖B2-①）；异议回「㉖改A」（revert B1）/「㉖B2改A」（revert B2）即改道。
 
 **诚实边界**：①A 收口=有意的能力取舍非 bug（真源无产出禁假渲染）②by_provider 元素升对象=既有 UI 消费面再收编（CD-⑤ 已收 int 形，B 拍须同步 UI+契约测试随更新）③record() 签名加 task=全调用点（chat/embed/llm 直通等）接线面，非 token_meter 内改。
 

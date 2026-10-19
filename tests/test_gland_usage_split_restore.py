@@ -10,6 +10,10 @@ total_tokens（入/出未拆）、by_provider 元素=int，CD-⑤ 按 wire 权�
 
 范围诚实边界：B2=recent_records 元素补 task 轴（record() 调用点带 task 语义=
 跨 gland 调用点大件）仍待拍——task 列维持禁渲染（test_cd5 锁维持）。
+契约随更新（2026-10-20 DEC-㉖B2-①）：B2 已落——UsageRecord.task 真源补现+
+调用点带 task 语义+task 列随真源恢复；本文件「task 列禁渲染」锁随之退场
+（正向锁收编 tests/test_gland_task_axis_restore.py），input/output 非真源键
+零残留锁维持（历史裁决文本不改写）。
 
 断言三层（禁自嗨恒真断言）：
 ①真源形状：summary() 两轴真产出、by_provider 元素恰 {prompt,completion,total,
@@ -129,11 +133,11 @@ def test_ui_restores_by_provider_split_lines():
 
 
 def test_ui_no_fabricated_keys():
-    """非真源键零残留：input/output（元素旧漂移形）、task 列（B2 待拍）。"""
+    """非真源键零残留：input/output（元素旧漂移形）。（契约随更新 DEC-㉖B2-①：
+    task 列锁随真源补 task 轴退场，正向锁见 tests/test_gland_task_axis_restore.py）"""
     code = _code()
     for pat in (r"\bdata\.input\b", r"\bdata\.output\b", r"\bd\.input\b", r"\bd\.output\b"):
         assert re.search(pat, code) is None, f"非真源元素键残留: {pat}"
-    assert "{r.task}" not in code, "task 列残留（真源不产出，B2 待拍）"
     # 顶层旧漂移键不复活（㉕/CD-⑤ 纪律）
     for key in ("total_input_tokens", "total_output_tokens", "total_requests", "budget_used_pct"):
         assert re.search(rf"\busage\??\.{key}\b", code) is None, f"summary 旧漂移键复活: {key}"
