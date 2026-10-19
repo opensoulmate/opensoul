@@ -31,7 +31,7 @@
 | ㉔ | sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db） | GLAND-④ 留档候选首件 | 取 D→B（先 `hermes doctor`/`hermes update` 防复发，再归档+sqlite3 .recover 抽取+对账+原子替换；对账不过落 C）——**本拍=决策材料件先落（SESS-①，零处置），处置涉 ~/opensoul 外数据需拍板** | "㉔取D→B" / "㉔取C" / "㉔维持" |
 | ㉕ | dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type） | CD-④ 诚实边界留档 | 取 B（真源补现：元素 item 补真列+UI 恢复时间行/类型徽章）——**已按建议默认 B 先行执行 2026-10-19（DEC-㉕-①/DEDUP-①）** | ~~"㉕取B"~~ 已落，异议回「㉕改A」（revert 回不显示时间/类型）即改道 |
 | ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉖-①）** | ~~"㉖取B1"~~ 已落，异议回「㉖改A」即 revert；B2（task 轴）仍待拍，回「㉖B2」即下拍执行 |
-| ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）——**㉗a 已按建议默认 B1 先行执行 2026-10-20（DEC-㉗a-①）**；㉗b 取 B（问题类闭集）仍待拍 | ~~"㉗a取B1"~~ 已落，异议回「㉗a改A」（revert 回无卡）/「㉗a改B2」（改缓冲计数）即改道；㉗b 回「㉗b取B」 |
+| ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）——**㉗a 已按建议默认 B1 先行执行 2026-10-20（DEC-㉗a-①）**；㉗b 取 B（问题类闭集）——**已按建议默认 B 先行执行 2026-10-20（DEC-㉗b-①）** | ~~"㉗a取B1"~~/~~"㉗b取B"~~ 已落，异议回「㉗a改A」（revert 回无卡）/「㉗a改B2」（改缓冲计数）/「㉗b改A」（revert 回精确查询形）即改道 |
 | ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉘a-①）**；㉘b 取 B（语义随拍）仍待拍 | ~~"㉘a取B1"~~ 已落，异议回「㉘a改A」（revert 回不显示）/「㉘a改B2」（改主机 uptime）即改道；㉘b 回「㉘b取B」 |
 | ㉙ | timeline/proactive e2e 探针残留 194+2 行删除（TR-② 闸门回归清单） | TR-② 闸门复跑（2026-10-19） | 取 B（清单精确删+备份+回读，TL-④ 纪律）——**清点已落（TR-②，零删除），删除待拍板** | "㉙删"（cron 代跑）/ "㉙维持" |
 
@@ -346,6 +346,8 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - **拍板方式**：回「**㉗a取B1**」/「**㉗a取B2**」（cron 代跑下拍执行）/「㉗a取A」/「㉗a维持」。
 
 ### ㉗b 错误/告警卡事件词表对齐（by_type.error/alert 精确查询 vs 生产词表错位）
+
+**状态：已按建议默认 B 先行执行（2026-10-20 DEC-㉗b-①）**——依据：DEC-㉘a-① 周期日志候选队列首件「㉗b（词表对齐）」+「别停工等批」铁律 + DEC-①~㉘a 自决先例。实现=**UI 收编生产词表闭集取 B**：错误/告警卡→「问题类事件」卡，计数=PROBLEM_TYPE_KEYS 闭集单一源（security 族+失败/告警族，含 ip_blacklisted（生产词表实证在场，比本节建议清单多收一键如实记））∪ 预留语义类 error/alert（A 裁决「生产面启用即自动生效」语义保留=B 的严格超集非字面替换）∪ 后缀族 *_rejected；未列 key 一律不计（宁窄勿滥）；真源零改动（by_type 开放 dict 不变）；test_cd15 词表锚点随更新（查询形锁→词表计数形锁，勘误记档）。**若拍板改判回一句即改道：「㉗b改A」=revert 本拍（回 by_type?.error/.alert 精确查询形）/「㉗b改C」=生产者词表归一（46+ 调用点大件需另拍）**。
 
 **现状**：错误/告警卡按 `by_type.error + by_type.alert` 精确键计数。深挖全量枚举生产 type 词表（event_stream 探针 26 字面量+push_event 45 字面量+_audit 动态词表 12 类+event_bridge emit 2 调用面）**零 'error'/'alert' 精确键**→卡恒 0；而真实问题类事件用异名词表（`health_alert`/`security`/`intrusion_detected`/`brute_force`/`ip_blocked`/`permission_denied`/`content_blocked`/`request_blocked`/`component_error`/`pipeline_blocked`/`webhook_failed`/*_rejected 等，live 实证 by_type 有 `health_alert: 1` 而卡显示 0=读者语义漏计）。但 by_type 是开放 dict（Record<string,number>），查询形合法、未来生产者产出 'error'/'alert' 即生效（src/nerve/event_bridge.py:162 严重度映射即按 `("error","alert","failure")` 预留语义类设计）→**真 0 非假 0、非死显示键**（CD-⑮ 裁决与 recent_count 分野，测试锁死卡面维持现状不许误删/误改）。
 

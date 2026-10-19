@@ -385,20 +385,20 @@ SHAPE_VERDICTS = {
     ("event_stream.get_summary:822", "total_events"): {
         "verdict": _V,
         "evidence": "alias 端点 get_summary 委托 get_stream_summary（src/api/event_stream.py:"
-        "839），返回键 total_events 真产出（:816）；UI 消费（logs/page.tsx:210）可达"
+        "839），返回键 total_events 真产出（:816）；UI 消费（logs/page.tsx:250）可达"
         "（勘误：修前记「返回恰 5 键（:801-805）」，DEC-㉗a-① 补现后 6 键、行号位移）",
         "anchors": [(ES, 816, '"total_events": len(events),')],
     },
     ("event_stream.get_summary:822", "by_organ"): {
         "verdict": _V,
         "evidence": "返回键 by_organ 真产出（src/api/event_stream.py:817）；UI 消费"
-        "（logs/page.tsx:224）可达",
+        "（logs/page.tsx:271）可达",
         "anchors": [(ES, 817, '"by_organ": by_organ,')],
     },
     ("event_stream.get_summary:822", "by_type"): {
         "verdict": _V,
         "evidence": "返回键 by_type 真产出（src/api/event_stream.py:818）；UI 消费"
-        "（logs/page.tsx:217）可达",
+        "（logs/page.tsx:264，DEC-㉗b-① 起过 problemEventCount 词表计数）可达",
         "anchors": [(ES, 818, '"by_type": by_type,')],
     },
     ("event_stream.get_summary:822", "recent_count"): {
@@ -415,7 +415,7 @@ SHAPE_VERDICTS = {
         "anchors": [
             (ES, 820, '"recent_count": recent_count,'),
             (ES, 716, "RECENT_WINDOW_S = 24 * 3600"),
-            ("admin-ui/app/logs/page.tsx", 218, "summary?.recent_count"),
+            ("admin-ui/app/logs/page.tsx", 257, "summary?.recent_count"),
         ],
     },
     # ── gland test_connection：test_provider 成功形 4 键（错误形 handler 已升 502 不出线）──

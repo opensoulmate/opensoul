@@ -38,6 +38,15 @@
 （加性键）+ 最近事件卡恢复（CD-⑮ 移除件复原语义）+ grid 回 5 列。本文件
 ①②④ 断言面随契约翻转（recent_count 恒不产出→真产出、死卡移除→卡恢复），
 ㉗b 词表裁决面（③）零变化锁死不动。「全仓零产出点」勘误为「修前零产出」。
+
+2026-10-20 勘误二（DEC-㉗b-① 词表对齐取 B 后契约随更新，历史裁决文本不改写）：
+㉗b 已按建议默认 B（UI 收编生产词表闭集）先行执行（pending-decisions 自决先例，
+异议回「㉗b改A」即 revert 回精确查询形）——错误/告警卡改「问题类事件」卡，计数
+= 问题类闭集（PROBLEM_TYPE_KEYS 单一源）∪ 预留语义类 error/alert（A 裁决「生产面
+启用即自动生效」语义保留）∪ 后缀族 *_rejected。本文件 ① 中原「查询形维持现状
+锁死」例随契约翻转为「词表计数形锁死」（修前 by_type?.error/.alert 直查形清零）；
+③ 词表锚点锁（生产词表零 error/alert 精确键、health_alert 异名、event_bridge
+预留词表）继续有效=闭集扩展/词表漂移仍先炸。
 """
 
 from __future__ import annotations
@@ -127,11 +136,23 @@ def test_stat_grid_fills_five_columns():
     assert "grid grid-cols-2 md:grid-cols-5" in _src(), "统计卡组 grid 未随卡数收编"
 
 
-def test_by_type_error_alert_query_kept_pending_decision():
-    """㉗b 拍板前错误/告警卡查询形维持现状锁死（禁误删/误改=拍板改道须先改本锁）。"""
+def test_by_type_problem_vocab_counting_landed():
+    """DEC-㉗b-① 取 B 后错误/告警卡=问题类事件词表计数形锁死（契约随更新，勘误二见模块 docstring）。
+
+    修前（CD-⑮ 锁死面）：`by_type?.error + by_type?.alert` 精确键直查（拍板前维持
+    现状锁死）；㉗b 按建议默认 B（UI 收编生产词表闭集）先行执行后查询形改为
+    problemEventCount(summary?.by_type) 词表计数——修前直查形清零（回归先炸）、
+    计数 helper+闭集单一源在场（拆散/回退先炸）。
+    """
     code = _code()
     for key in QUERIED_TYPE_KEYS:
-        assert re.search(rf"by_type\??\.{key}\b", code), f"错误/告警卡查询键被改动: {key}"
+        assert not re.search(rf"by_type\??\.{key}\b", code), (
+            f"修前精确键直查形回潮（㉗b 取 B 已收口）: by_type.{key}"
+        )
+    assert re.search(r"problemEventCount\(summary\??\.by_type\)", code), (
+        "问题类词表计数未被卡真消费（㉗b 恢复件被误删）"
+    )
+    assert "PROBLEM_TYPE_KEYS" in code, "问题类闭集单一源常量缺席"
 
 
 # ── ② 行为桥（真源实跑；勘误：CD-⑮ 拍为「真源零改动」，DEC-㉗a-① 起真源已补现 recent_count） ──

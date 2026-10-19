@@ -34,6 +34,45 @@ interface StreamSummary {
   sse_subscribers: number;
 }
 
+// ── ㉗b 问题类事件词表（单一源，禁各消费点手抄）────────────────────────────
+// 证据：pending-decisions ㉗b（生产 type 词表全量枚举零 'error'/'alert' 精确键、
+// 真实问题类事件用异名词表）＋ tests/test_dec27b_vocab_alignment.py 词表锚点锁。
+// 扩展闭集须同步词表锚点测试；未列 key 一律不计（宁窄勿滥）。
+const PROBLEM_TYPE_KEYS = new Set<string>([
+  // 协议预留语义类（event_bridge 严重度映射 ("error","alert","failure") 词表）：
+  // 生产面启用即自动计入（A 裁决「自动生效」语义保留）
+  'error',
+  'alert',
+  // security 族
+  'security',
+  'intrusion_detected',
+  'brute_force',
+  'ip_blocked',
+  'ip_blacklisted',
+  'permission_denied',
+  'content_blocked',
+  'request_blocked',
+  // 失败/告警族
+  'health_alert',
+  'component_error',
+  'pipeline_blocked',
+  'webhook_failed',
+]);
+// 后缀族：*_rejected（terminal_ws_rejected/ws_chat_rejected/link_sse_rejected 等）
+const PROBLEM_TYPE_SUFFIX = '_rejected';
+
+function problemEventCount(byType?: Record<string, number> | null): number {
+  if (!byType) return 0;
+  let n = 0;
+  for (const [k, v] of Object.entries(byType)) {
+    if (PROBLEM_TYPE_KEYS.has(k) || k.endsWith(PROBLEM_TYPE_SUFFIX)) {
+      n += typeof v === 'number' && Number.isFinite(v) ? v : 0;
+    }
+  }
+  return n;
+}
+
+
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [summary, setSummary] = useState<EventSummary | null>(null);
@@ -220,9 +259,9 @@ export default function LogsPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-red-500" />
-            <span className="text-xs text-muted-foreground">错误/告警</span>
+            <span className="text-xs text-muted-foreground">问题类事件</span>
           </div>
-          <div className="text-2xl font-bold text-red-500 mt-1">{(summary?.by_type?.error || 0) + (summary?.by_type?.alert || 0)}</div>
+          <div className="text-2xl font-bold text-red-500 mt-1">{problemEventCount(summary?.by_type)}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
