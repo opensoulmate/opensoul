@@ -34,7 +34,7 @@ interface GraphData {
 interface EntityDetail {
   id: string;
   name: string;
-  type: string;
+  entity_type: string;
   description: string;
   properties: Record<string, unknown>;
   relations?: Array<{
@@ -419,10 +419,10 @@ export default function KnowledgeGraphPage() {
   };
 
   const filteredEntities = entities.filter((e) => {
-    if (typeFilter !== 'all' && e.type !== typeFilter) return false;
+    if (typeFilter !== 'all' && e.entity_type !== typeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
-      return e.name.toLowerCase().includes(q) || e.type.toLowerCase().includes(q);
+      return e.name.toLowerCase().includes(q) || e.entity_type.toLowerCase().includes(q);
     }
     return true;
   });
@@ -547,13 +547,13 @@ export default function KnowledgeGraphPage() {
                   <tr key={entity.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-2 lg:px-4 py-2.5 font-medium">
                       <span className="inline-flex items-center gap-1.5">
-                        <CircleDot className="w-3 h-3" style={{ color: getColor(entity.type) }} />
+                        <CircleDot className="w-3 h-3" style={{ color: getColor(entity.entity_type) }} />
                         {entity.name}
                       </span>
                     </td>
                     <td className="px-2 lg:px-4 py-2.5">
-                      <Badge style={{ backgroundColor: `${getColor(entity.type)}20`, color: getColor(entity.type) }} variant="default">
-                        {entity.type}
+                      <Badge style={{ backgroundColor: `${getColor(entity.entity_type)}20`, color: getColor(entity.entity_type) }} variant="default">
+                        {entity.entity_type}
                       </Badge>
                     </td>
                     <td className="px-2 lg:px-4 py-2.5 text-muted-foreground max-w-xs truncate">{entity.description || '-'}</td>
@@ -588,10 +588,10 @@ export default function KnowledgeGraphPage() {
           <div className="bg-card rounded-lg border border-border w-full max-w-lg mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-2">
-                <CircleDot className="w-5 h-5" style={{ color: getColor(selectedEntity.type) }} />
+                <CircleDot className="w-5 h-5" style={{ color: getColor(selectedEntity.entity_type) }} />
                 <h2 className="text-base font-medium">{selectedEntity.name}</h2>
-                <Badge style={{ backgroundColor: `${getColor(selectedEntity.type)}20`, color: getColor(selectedEntity.type) }} variant="default">
-                  {selectedEntity.type}
+                <Badge style={{ backgroundColor: `${getColor(selectedEntity.entity_type)}20`, color: getColor(selectedEntity.entity_type) }} variant="default">
+                  {selectedEntity.entity_type}
                 </Badge>
               </div>
               <Button onClick={() => setShowDetail(false)} variant="icon-sm" className="hover:bg-muted">
@@ -661,7 +661,7 @@ export default function KnowledgeGraphPage() {
                 >
                   <option value="">选择实体...</option>
                   {entities.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name} ({e.type})</option>
+                    <option key={e.id} value={e.id}>{e.name} ({e.entity_type})</option>
                   ))}
                 </select>
               </div>
@@ -674,7 +674,7 @@ export default function KnowledgeGraphPage() {
                 >
                   <option value="">选择实体...</option>
                   {entities.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name} ({e.type})</option>
+                    <option key={e.id} value={e.id}>{e.name} ({e.entity_type})</option>
                   ))}
                 </select>
               </div>

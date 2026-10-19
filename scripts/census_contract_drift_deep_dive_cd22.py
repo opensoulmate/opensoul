@@ -491,14 +491,19 @@ SHAPE_VERDICTS = {
     },
     ("graph.get_entity_detail:71", "type"): {
         "verdict": _D,
-        "repair_candidate": "knowledge-graph 实体类型收编真源（type↔entity_type 漂移）",
+        "repair_candidate": "已收口：CD-㉘ knowledge-graph 实体类型收编真源（2026-10-19）",
+        "repair_status": "landed@CD-㉘",
         "evidence": "_row_to_entity 把行键 type 重命名为 entity_type（src/services/entity.py:13 "
         "d[\"entity_type\"] = d.pop(\"type\", \"\"))——响应面无 type 键；UI selectedEntity.type"
         "（knowledge-graph/page.tsx:592/:594/:595 三处）恒 undefined=类型徽章/着色恒空"
-        "（显示行为损失）",
+        "（显示行为损失）——CD-㉘ 已收口（UI EntityDetail 接口 type→entity_type 收编真源键+"
+        "12 消费点（列表过滤/搜索/列表渲染×3/详情图标/详情徽章×2/关系表单选项×2/接口声明）"
+        "收编真源键，2026-10-19）；同根 e.type 列表/选项面以 EXPANDED_FINDINGS 登记——当前 "
+        "knowledge-graph/page.tsx 已无 selectedEntity.type/entity.type/e.type 消费=修复真落地；"
+        "锚点改锁修复后状态（selectedEntity.type 漂移复发先炸）",
         "anchors": [
             (EN, 13, 'd["entity_type"] = d.pop("type", "")'),
-            (U_KG, 591, "selectedEntity.type"),
+            (U_KG, 591, "selectedEntity.entity_type"),
         ],
     },
     # ── hermes_bridge list_sessions：_list_sessions_sync 返回 {sessions,total} ──
@@ -847,6 +852,17 @@ SHAPE_VERDICTS = {
 
 # 深挖扩面发现（普查未列、随裁决同根登记，不进 findings join）
 EXPANDED_FINDINGS = [
+    {
+        "page": "knowledge-graph/page.tsx",
+        "keys": ["type"],
+        "verdict": _D,
+        "repair_candidate": "已收口：CD-㉘ knowledge-graph 实体类型收编真源（2026-10-19）",
+        "note": "与 graph.get_entity_detail type 同根（entities 行键 type 被 _row_to_entity 重命名"
+        "为 entity_type，src/services/entity.py:13，列表 GET /api/graph/entities 同走该口）：UI "
+        "e.type 列表过滤/搜索（knowledge-graph/page.tsx:422/:425——e.type.toLowerCase() 对 "
+        "undefined 调 toLowerCase=搜索即页崩 TypeError 崩坏面）/列表渲染（:550/:555/:556）/"
+        "关系表单选项（:664/:677）恒 undefined——CD-㉘ 随主件同拍收口",
+    },
     {
         "page": "knowledge-graph/page.tsx",
         "keys": ["relation_type", "target_entity_id"],
