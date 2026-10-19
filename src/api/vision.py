@@ -208,6 +208,10 @@ def _chart_json_payload(result: ChartResult, output_file: str) -> dict:
 @router.post("/chart/bar/json")
 async def bar_chart_json(req: BarChartRequest):
     """Generate bar chart, return metadata only."""
+    if not req.labels or not req.values:
+        raise HTTPException(400, "Labels and values required")
+    if len(req.labels) != len(req.values):
+        raise HTTPException(400, "Labels and values must have same length")
     result = charts.bar_chart(
         labels=req.labels,
         values=req.values,
