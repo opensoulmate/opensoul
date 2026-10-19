@@ -57,28 +57,39 @@ interface LatestBenchmarkRow {
   timestamp: number;
 }
 
-interface BenchmarkRun {
+// 运行/快速基准响应（真源 run_benchmark 返回：目标名在 results[].organ，
+// organs_benchmarked 是计数非数组——真源无 organs 数组）
+interface BenchmarkRunResult {
   run_id: string;
-  organs: string[];
+  organs_benchmarked: number;
+  iterations: number;
+  concurrency: number;
+  results: BenchmarkResultItem[];
+}
+
+// 历史运行行（真源 get_runs -> benchmark_runs 行 dict：organs 列是 JSON 串非数组、
+// 完成时间真源键 completed_at 非 finished_at）
+interface BenchmarkRunRow {
+  run_id: string;
+  organs: string;
   iterations: number;
   concurrency: number;
   started_at: number;
-  finished_at: number | null;
+  completed_at: number | null;
   status: string;
-  results: BenchmarkResultItem[];
 }
 
 export default function BenchmarkPage() {
   const [targets, setTargets] = useState<BenchmarkTarget[]>([]);
   const [latest, setLatest] = useState<Record<string, LatestBenchmarkRow>>({});
-  const [runs, setRuns] = useState<BenchmarkRun[]>([]);
+  const [runs, setRuns] = useState<BenchmarkRunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [running, setRunning] = useState(false);
   const [selectedOrgans, setSelectedOrgans] = useState<Set<string>>(new Set());
   const [iterations, setIterations] = useState(20);
   const [concurrency, setConcurrency] = useState(5);
-  const [lastResult, setLastResult] = useState<BenchmarkRun | null>(null);
+  const [lastResult, setLastResult] = useState<BenchmarkRunResult | null>(null);
   const [tab, setTab] = useState<'latest' | 'history' | 'run'>('latest');
 
   const fetchTargets = useCallback(async () => {
@@ -169,6 +180,8 @@ export default function BenchmarkPage() {
   // 成功率=真源键派生（success 计数 / iterations；真源无 success_rate 键——CD-⑤ 预算使用率同款派生）
   const successRate = (success: number, iterations: number) => success / iterations;
   const formatTs = (ts: number) => { try { return new Date(ts * 1000).toLocaleString('zh-CN'); } catch { return '-'; } };
+  // 历史运行目标列表（真源 benchmark_runs.organs 列=json.dumps(targets) 串非数组）
+  const runOrgansLabel = (raw: string) => (JSON.parse(raw) as string[]).join(', ') || '-';
 
   const latestEntries = Object.entries(latest).sort((a, b) => (a[1].avg_ms || 0) - (b[1].avg_ms || 0));
   const bestAvg = latestEntries.length > 0 ? Math.min(...latestEntries.map(([, r]) => r.avg_ms)) : 1;
@@ -265,7 +278,7 @@ export default function BenchmarkPage() {
           {lastResult && lastResult.results && lastResult.results.length > 0 && (
             <div className="rounded-lg border border-border overflow-hidden">
               <div className="px-4 py-2 text-xs font-medium text-muted-foreground bg-muted/30 border-b border-border">
-                运行结果 — {lastResult.organs?.join(', ')} · {lastResult.iterations}次 · {lastResult.concurrency}并发
+                运行结果 — {lastResult.results.map((r) => r.organ).join(', ')} · {lastResult.iterations}次 · {lastResult.concurrency}并发
               </div>
               <div className="grid grid-cols-[1fr_80px_80px_80px_80px_80px_80px] gap-2 px-4 py-2 text-[10px] font-medium text-muted-foreground bg-muted/20 border-b border-border">
                 <span>目标</span><span>平均</span><span>P50</span><span>P95</span><span>P99</span><span>最小</span><span>成功率</span>
@@ -343,7 +356,7 @@ export default function BenchmarkPage() {
               </div>
               {runs.map((run) => (
                 <div key={run.run_id} className="grid grid-cols-[1fr_80px_80px_100px_80px] gap-2 items-center px-4 py-2.5 border-b border-border last:border-b-0 hover:bg-muted/20 text-xs">
-                  <span className="truncate">{run.organs?.join(', ') || '全部'}</span>
+                  <span className="truncate">{runOrgansLabel(run.organs)}</span>
                   <span>{run.iterations}</span>
                   <span>{run.concurrency}</span>
                   <span className="text-muted-foreground">{formatTs(run.started_at)}</span>

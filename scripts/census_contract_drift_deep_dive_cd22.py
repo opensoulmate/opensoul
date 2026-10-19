@@ -110,15 +110,20 @@ def _bench_shape() -> dict:
         },
         "organs": {
             "verdict": _D,
-            "repair_candidate": "benchmark 运行结果目标列表收编真源（organs↔organs_benchmarked/"
-            "results[].organ 漂移）",
+            "repair_candidate": "已收口：CD-㉕ benchmark 运行结果目标列表收编真源（2026-10-19）",
+            "repair_status": "landed@CD-㉕",
             "evidence": "真源顶层键是 organs_benchmarked（计数非数组，src/benchmark/"
-            "engine.py:168）无 organs 数组——UI lastResult.organs?.join(', ')"
-            "（benchmark/page.tsx:238）恒 undefined→目标列表段恒空渲染=显示行为损失"
-            "（真源 results[].organ 可得目标名无人拼）",
+            "engine.py:168）无 organs 数组——UI lastResult.organs?.join(', ')（benchmark/"
+            "page.tsx:238）恒 undefined→目标列表段恒空渲染=显示行为损失（真源 results[].organ "
+            "可得目标名无人拼）；同根扩面：历史行 run.organs 是 JSON 串（benchmark_runs.organs "
+            "列 json.dumps(targets)）被当 string[] 调 .join=渲染必炸 TypeError——CD-㉕ 已收口"
+            "（UI 目标列表改从真源 results[].organ 派生拼接、BenchmarkRun 按两真源形拆分"
+            "BenchmarkRunResult/BenchmarkRunRow，历史行 organs JSON 串收编 runOrgansLabel，"
+            "2026-10-19），当前 benchmark/page.tsx 已无 lastResult.organs/.organs?.join 消费="
+            "修复真落地；锚点改锁修复后状态（lastResult.organs 漂移复发先炸）",
             "anchors": [
                 (BE, 168, '"organs_benchmarked": len(results),'),
-                (U_BP, 268, "lastResult.organs?.join"),
+                (U_BP, 281, "lastResult.results.map((r) => r.organ)"),
             ],
         },
         "results.avg_ms": {
@@ -137,7 +142,7 @@ def _bench_shape() -> dict:
             "anchors": [
                 (BE, 363, '"latency": {'),
                 (BE, 366, '"avg_ms": r.avg_ms,'),
-                (U_BP, 276, "r.latency.avg_ms"),
+                (U_BP, 289, "r.latency.avg_ms"),
             ],
         },
         "results.organ": {

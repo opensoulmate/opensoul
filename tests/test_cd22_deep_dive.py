@@ -5,7 +5,7 @@
    +confirmed_drift 必带 repair_candidate+工件真落盘回读+109 条 join 精确对账。
 2. TestSourceAnchors：全行 anchors 逐条程序化核验（锚点行真含声明子串）+坏锚点拒出
    工件（防无据断言）+AST 级「说在场的键真在场、说缺席的键真缺席」硬反证。
-3. TestKnownDrifts：15 条 confirmed_drift 与 3 条 ruled_false_positive 逐条定型锁死（已收口件 landed 锚点随 CD-15/23/24 落地翻转）。
+3. TestKnownDrifts：15 条 confirmed_drift 与 3 条 ruled_false_positive 逐条定型锁死（已收口件 landed 锚点随 CD-15/23/24/25 落地翻转）。
 4. TestExpandedFindings：4 条同根扩面登记的 UI 消费字面量在场（已收口件翻转清零）+repair_candidate 强制。
 """
 
@@ -309,6 +309,18 @@ class TestKnownDrifts:
         ui = _src("admin-ui/app/benchmark/page.tsx")
         assert "r.success_rate" not in ui
         assert "r.latency.avg_ms" in ui
+
+    def test_benchmark_organs_repair_landed(self, artifact):
+        rows = self._rows(artifact)
+        for handler in ("benchmark.run_benchmark:81", "benchmark.quick_benchmark:100"):
+            r = rows[(handler, "organs")]
+            assert r["verdict"] == _D
+            assert r.get("repair_status") == "landed@CD-㉕"
+            assert "已收口" in r["repair_candidate"]
+        # 修复真落地：当前 UI 已无修前死键消费、真源 results[].organ 派生已收编
+        ui = _src("admin-ui/app/benchmark/page.tsx")
+        assert "lastResult.organs" not in ui
+        assert "lastResult.results.map((r) => r.organ)" in ui
 
     def test_every_drift_has_ui_symptom_anchor(self, artifact):
         rows = self._rows(artifact)
