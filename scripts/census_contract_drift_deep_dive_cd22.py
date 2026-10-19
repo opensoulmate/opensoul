@@ -674,13 +674,13 @@ SHAPE_VERDICTS = {
     ("pulse.get_stats:160", "total_signals"): {
         "verdict": _V,
         "evidence": "PulseEngine.get_stats 返回含 total_signals（src/pulse/timer.py:198），handler "
-        "透传（api/pulse.py:163）；UI stats?.total_signals 消费（pulse/page.tsx:194）可达",
+        "透传（api/pulse.py:163）；UI stats?.total_signals 消费（pulse/page.tsx:198）可达",
         "anchors": [(PT, 198, '"total_signals": len(signals),')],
     },
     ("pulse.get_stats:160", "total_ticks"): {
         "verdict": _V,
         "evidence": "返回键 total_ticks 真产出（src/pulse/timer.py:197）；UI 消费（pulse/page.tsx:"
-        "202）可达",
+        "206）可达",
         "anchors": [(PT, 197, '"total_ticks": self._total_ticks,')],
     },
     ("pulse.get_stats:160", "active_signals"): {
@@ -688,23 +688,28 @@ SHAPE_VERDICTS = {
         "evidence": "真源不产出 active_signals（get_stats 键恰 uptime_seconds/total_ticks/"
         "total_signals/by_type/by_status/precision，src/pulse/timer.py:195-206）但 UI 是本地构造"
         "回落：stats?.active_signals ?? signals.filter(s => s.status==='active').length"
-        "（pulse/page.tsx:198）——回落从页面自身信号列表真算活跃数，无显示行为损失"
+        "（pulse/page.tsx:202）——回落从页面自身信号列表真算活跃数，无显示行为损失"
         "（消费点非缺陷：容错分支+本地构造形）",
         "anchors": [
             (PT, 198, '"total_signals": len(signals),'),
-            (U_PP, 198, "stats?.active_signals ?? signals.filter"),
+            (U_PP, 202, "stats?.active_signals ?? signals.filter"),
         ],
     },
     ("pulse.get_stats:160", "avg_drift_ms"): {
         "verdict": _D,
-        "repair_candidate": "pulse 平均漂移收编真源（avg_drift_ms↔precision.avg_drift_ms 漂移）",
+        "repair_candidate": "已收口：CD-㉚ pulse 平均漂移收编真源（2026-10-19）",
+        "repair_status": "landed@CD-㉚",
         "evidence": "真源 avg_drift_ms 在 precision 嵌套内（src/pulse/timer.py:201-205 "
         "precision{avg_drift_ms,max_drift_ms,sample_size}）无平铺 avg_drift_ms——UI "
-        "stats?.avg_drift_ms ? ... : '—'（pulse/page.tsx:206）恒回落 '—'=回落遮蔽真值"
-        "（真值 precision.avg_drift_ms 无人读，CD-⑳ elapsed 同型）",
+        "stats?.avg_drift_ms ? ... : '—'（修前 pulse/page.tsx:206）恒回落 '—'=回落遮蔽真值"
+        "（真值 precision.avg_drift_ms 无人读，CD-⑳ elapsed 同型；live 实证真值 "
+        "59943.918 被 '—' 遮蔽）——CD-㉚ 已收口（UI 收编 stats.precision.avg_drift_ms "
+        "嵌套键+typeof number 判法真 0 显示禁回落遮蔽，2026-10-19），当前 pulse/page.tsx "
+        "已无 stats?.avg_drift_ms 平铺消费=修复真落地；锚点改锁修复后状态"
+        "（平铺漂移复发先炸）",
         "anchors": [
             (PT, 201, '"precision": {'),
-            (U_PP, 206, "stats?.avg_drift_ms"),
+            (U_PP, 210, "stats?.precision?.avg_drift_ms"),
         ],
     },
     # ── soma_discovery database tables：_do_tables→scan() 恒 list 形 ──
@@ -906,6 +911,19 @@ EXPANDED_FINDINGS = [
         "note": "与 results 同根（真源 rag_query 返回恰 {answer,sources}，src/services/rag.py:53）"
         "：UI recallResults.query（agent-nodes/page.tsx:515）真源不产出=查询回显行恒空、answer"
         "真源产出无人读（检索面板只读 results=整面契约漂移）",
+    },
+    {
+        "page": "pulse/page.tsx",
+        "keys": ["last_fired_at", "next_fire_at", "created_at", "timestamp"],
+        "verdict": _D,
+        "repair_candidate": "已收口：CD-㉚ pulse 时间戳 epoch 秒单位收编（2026-10-19）",
+        "note": "CD-㉚ 修复深挖扩面（普查未列、非 CD-㉒ 裁决同根——单位漂移非键漂移，"
+        "随 CD-㉚ 修复同拍收口=CD-⑤ gland timestamp 同款先例）：真源时间戳=epoch 秒"
+        "float（time.time()，live 实证 created_at=1792406287.12），UI new Date(x) 按毫秒"
+        "解析→渲染 1970-01-22（node 实证）——信号卡下次（pulse/page.tsx:260）/详情"
+        "最后触发·下次触发·创建时间（:305-307）/触发历史行（:376）5 消费点全 1970 假渲染；"
+        "接口 PulseSignal/TickRecord 时间戳声明 string 对真源 float number 同根声明漂移"
+        "（LSP 逼出）——CD-㉚ 随主件同拍收口（fmtTs 单一源 ×1000+接口收编 number）",
     },
 ]
 

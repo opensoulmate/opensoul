@@ -18,16 +18,16 @@ interface PulseSignal {
   status: string;
   fire_count: number;
   max_fires: number;
-  last_fired_at: string | null;
-  next_fire_at: string | null;
+  last_fired_at: number | null;
+  next_fire_at: number | null;
   drift_correction: number;
-  created_at: string;
+  created_at: number;
 }
 
 interface TickRecord {
   tick_id: string;
   signal_id: string;
-  timestamp: string;
+  timestamp: number;
   drift_ms: number;
   latency_ms?: number;
 }
@@ -177,6 +177,10 @@ export default function PulsePage() {
     return `${ms}ms`;
   };
 
+  // 真源时间戳=epoch 秒（src/pulse/timer.py time.time()），new Date 需毫秒=×1000（CD-⑤ 同款；
+  // 消费点统一走本口禁手抄 ×1000）
+  const fmtTs = (epochSec: number) => new Date(epochSec * 1000).toLocaleString();
+
   if (loading) return <div className="text-sm text-muted-foreground p-4">加载中...</div>;
 
   return (
@@ -203,7 +207,7 @@ export default function PulsePage() {
           <div className="text-xs text-muted-foreground">总触发次数</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-2xl font-bold text-violet-500">{stats?.avg_drift_ms ? `${stats.avg_drift_ms.toFixed(1)}ms` : '—'}</div>
+          <div className="text-2xl font-bold text-violet-500">{typeof stats?.precision?.avg_drift_ms === 'number' ? `${stats.precision.avg_drift_ms.toFixed(1)}ms` : '—'}</div>
           <div className="text-xs text-muted-foreground">平均漂移</div>
         </div>
       </div>
@@ -253,7 +257,7 @@ export default function PulsePage() {
               <div>漂移: <span className="font-medium text-foreground">{s.drift_correction}ms</span></div>
             </div>
             {s.next_fire_at && (
-              <div className="text-[10px] text-muted-foreground mt-2">下次: {new Date(s.next_fire_at).toLocaleString()}</div>
+              <div className="text-[10px] text-muted-foreground mt-2">下次: {fmtTs(s.next_fire_at)}</div>
             )}
             <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
               {s.status === 'active' ? (
@@ -298,9 +302,9 @@ export default function PulsePage() {
                 <div><span className="text-muted-foreground">触发次数: </span>{selected.fire_count}{selected.max_fires > 0 ? `/${selected.max_fires}` : ''}</div>
                 <div><span className="text-muted-foreground">漂移修正: </span>{selected.drift_correction}ms</div>
               </div>
-              {selected.last_fired_at && <div className="text-xs text-muted-foreground">最后触发: {new Date(selected.last_fired_at).toLocaleString()}</div>}
-              {selected.next_fire_at && <div className="text-xs text-muted-foreground">下次触发: {new Date(selected.next_fire_at).toLocaleString()}</div>}
-              <div className="text-xs text-muted-foreground">创建时间: {new Date(selected.created_at).toLocaleString()}</div>
+              {selected.last_fired_at && <div className="text-xs text-muted-foreground">最后触发: {fmtTs(selected.last_fired_at)}</div>}
+              {selected.next_fire_at && <div className="text-xs text-muted-foreground">下次触发: {fmtTs(selected.next_fire_at)}</div>}
+              <div className="text-xs text-muted-foreground">创建时间: {fmtTs(selected.created_at)}</div>
             </div>
           </div>
         </div>
@@ -369,7 +373,7 @@ export default function PulsePage() {
                   <div key={t.tick_id || i} className="flex items-center gap-3 px-3 py-2 rounded bg-muted/30 text-xs">
                     <Zap className="w-3 h-3 text-primary" />
                     <span className="font-mono">{t.signal_id}</span>
-                    <span className="text-muted-foreground">{new Date(t.timestamp).toLocaleString()}</span>
+                    <span className="text-muted-foreground">{fmtTs(t.timestamp)}</span>
                     <span className="ml-auto">漂移: {t.drift_ms?.toFixed(2) ?? '—'}ms</span>
                   </div>
                 ))}

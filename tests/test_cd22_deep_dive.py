@@ -5,8 +5,8 @@
    +confirmed_drift 必带 repair_candidate+工件真落盘回读+109 条 join 精确对账。
 2. TestSourceAnchors：全行 anchors 逐条程序化核验（锚点行真含声明子串）+坏锚点拒出
    工件（防无据断言）+AST 级「说在场的键真在场、说缺席的键真缺席」硬反证。
-3. TestKnownDrifts：15 条 confirmed_drift 与 3 条 ruled_false_positive 逐条定型锁死（已收口件 landed 锚点随 CD-15/23/24/25/26/27/28 落地翻转）。
-4. TestExpandedFindings：5 条同根扩面登记的 UI 消费字面量在场（已收口件翻转清零）+repair_candidate 强制。
+3. TestKnownDrifts：15 条 confirmed_drift 与 3 条 ruled_false_positive 逐条定型锁死（已收口件 landed 锚点随 CD-15/23/24/25/26/27/28/29/30 落地翻转）。
+4. TestExpandedFindings：6 条扩面登记的 UI 消费字面量在场（已收口件翻转清零）+repair_candidate 强制。
 """
 
 from __future__ import annotations
@@ -371,6 +371,17 @@ class TestKnownDrifts:
         # 残留「测验题」字样只许在章节测验独立面（空态/生成提示），统计卡死显示禁复发
         assert "测验题</div>" not in ui
 
+    def test_pulse_avg_drift_repair_landed(self, artifact):
+        rows = self._rows(artifact)
+        r = rows[("pulse.get_stats:160", "avg_drift_ms")]
+        assert r["verdict"] == _D
+        assert r.get("repair_status") == "landed@CD-㉚"
+        assert "已收口" in r["repair_candidate"]
+        # 修复真落地：当前 UI 已无平铺漂移键消费、真源 precision 嵌套键已收编
+        ui = _src("admin-ui/app/pulse/page.tsx")
+        assert "stats?.avg_drift_ms" not in ui
+        assert "stats?.precision?.avg_drift_ms" in ui
+
     def test_every_drift_has_ui_symptom_anchor(self, artifact):
         rows = self._rows(artifact)
         for key in self.DRIFT_KEYS:
@@ -396,11 +407,15 @@ class TestExpandedFindings:
         ("admin-ui/app/knowledge-graph/page.tsx", "rel.target_entity_id"),
         ("admin-ui/app/knowledge-graph/page.tsx", "selectedEntity.type"),
         ("admin-ui/app/knowledge-graph/page.tsx", "e.type"),
+        # CD-㉚ 时间戳 epoch 秒单位收口：修前裸 epoch new Date 消费清零
+        ("admin-ui/app/pulse/page.tsx", "new Date(s."),
+        ("admin-ui/app/pulse/page.tsx", "new Date(selected."),
+        ("admin-ui/app/pulse/page.tsx", "new Date(t."),
     ]
 
     def test_expanded_all_confirmed_with_candidate(self, artifact):
         exp = artifact["expanded_findings"]
-        assert len(exp) == 5
+        assert len(exp) == 6
         for e in exp:
             assert e["verdict"] == _D
             assert e["repair_candidate"]
