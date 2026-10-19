@@ -712,6 +712,28 @@ _PROBES = [
 ]
 
 
+# recent_count 时间窗（DEC-㉗a-① 拍板取 B1=近 24h 窗口计数，窗口单一源）
+RECENT_WINDOW_S = 24 * 3600
+
+
+def _event_ts(e: dict) -> float:
+    """事件时刻单一源解释（排序与 recent_count 窗口计数共用，禁两套解释漂移）。
+
+    显式 timestamp（探针透传的源记录时刻）优先，否则 collected_at（采集时刻）；
+    ISO 串按 fromisoformat 解析，解析失败/空值=0.0（与既有排序语义逐字一致：
+    无法定位时刻的事件视为最旧，不入 recent 窗口）。
+    """
+    ts = e.get("timestamp") or e.get("collected_at", 0)
+    if isinstance(ts, str):
+        try:
+            from datetime import datetime
+
+            return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+        except (ValueError, AttributeError):
+            return 0.0
+    return float(ts) if ts else 0.0
+
+
 async def _collect_all_events() -> list[dict]:
     """Run all probes in parallel and collect events."""
     async with httpx.AsyncClient() as client:
@@ -727,18 +749,7 @@ async def _collect_all_events() -> list[dict]:
                 events.append(ev)
 
     # Sort by timestamp (most recent first)
-    def _sort_key(e: dict) -> float:
-        ts = e.get("timestamp") or e.get("collected_at", 0)
-        if isinstance(ts, str):
-            try:
-                from datetime import datetime
-
-                return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
-            except (ValueError, AttributeError):
-                return 0.0
-        return float(ts) if ts else 0.0
-
-    events.sort(key=_sort_key, reverse=True)
+    events.sort(key=_event_ts, reverse=True)
     return events
 
 
@@ -797,11 +808,16 @@ async def get_stream_summary():
         etype = ev.get("type", "unknown")
         by_type[etype] = by_type.get(etype, 0) + 1
 
+    # DEC-㉗a-① recent_count（B1 近 24h 窗口计数）：事件时刻解释走 _event_ts 单一源
+    recent_cutoff = time.time() - RECENT_WINDOW_S
+    recent_count = sum(1 for ev in events if _event_ts(ev) >= recent_cutoff)
+
     return {
         "total_events": len(events),
         "by_organ": by_organ,
         "by_type": by_type,
         "most_active_organ": max(by_organ, key=by_organ.get) if by_organ else None,
+        "recent_count": recent_count,
         "collected_at": time.time(),
     }
 

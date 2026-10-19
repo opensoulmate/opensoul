@@ -380,35 +380,43 @@ SHAPE_VERDICTS = {
         "UI 消费（dedup/page.tsx:304）可达",
         "anchors": [(DP, 60, '"similarity": round(sim, 2),')],
     },
-    # ── event_stream get_summary：恰 5 键（CD-⑮ 已裁决 recent_count 同根）──
+    # ── event_stream get_summary：修前恰 5 键（DEC-㉗a-① 补现 recent_count 后 6 键，
+    #    CD-⑮ 已裁决 recent_count 同根；行号锚点随补现位移同步=断言意图零丢失）──
     ("event_stream.get_summary:822", "total_events"): {
         "verdict": _V,
         "evidence": "alias 端点 get_summary 委托 get_stream_summary（src/api/event_stream.py:"
-        "825），返回恰 5 键 total_events/by_organ/by_type/most_active_organ/collected_at"
-        "（:801-805），total_events 真产出（:801）；UI 消费（logs/page.tsx:210）可达",
-        "anchors": [(ES, 801, '"total_events": len(events),')],
+        "839），返回键 total_events 真产出（:816）；UI 消费（logs/page.tsx:210）可达"
+        "（勘误：修前记「返回恰 5 键（:801-805）」，DEC-㉗a-① 补现后 6 键、行号位移）",
+        "anchors": [(ES, 816, '"total_events": len(events),')],
     },
     ("event_stream.get_summary:822", "by_organ"): {
         "verdict": _V,
-        "evidence": "返回键 by_organ 真产出（src/api/event_stream.py:802）；UI 消费"
+        "evidence": "返回键 by_organ 真产出（src/api/event_stream.py:817）；UI 消费"
         "（logs/page.tsx:224）可达",
-        "anchors": [(ES, 802, '"by_organ": by_organ,')],
+        "anchors": [(ES, 817, '"by_organ": by_organ,')],
     },
     ("event_stream.get_summary:822", "by_type"): {
         "verdict": _V,
-        "evidence": "返回键 by_type 真产出（src/api/event_stream.py:803）；UI 消费"
+        "evidence": "返回键 by_type 真产出（src/api/event_stream.py:818）；UI 消费"
         "（logs/page.tsx:217）可达",
-        "anchors": [(ES, 803, '"by_type": by_type,')],
+        "anchors": [(ES, 818, '"by_type": by_type,')],
     },
     ("event_stream.get_summary:822", "recent_count"): {
         "verdict": _D,
-        "repair_candidate": "已收口：CD-⑮ 最近事件卡死显示移除（2026-10-19，commit 049af5b5）",
-        "repair_status": "landed@CD-⑮",
-        "evidence": "真源恰 5 键零 recent_count 产出（src/api/event_stream.py:801-805）——census "
-        "时点 UI 最近事件卡恒假 0；CD-⑮ 已裁决 confirmed_drift 并收口（死显示卡移除+死声明键"
-        "清零+grid 收 4 列，commit 049af5b5），当前 logs/page.tsx 已无 recent_count 消费=修复"
-        "真落地。本条=CD-⑨ 未裁决层同根登记，裁决与 CD-⑮ 一致（两处裁决不矛盾）",
-        "anchors": [(ES, 805, '"collected_at": time.time(),')],
+        "repair_candidate": "已收口：DEC-㉗a-① 真源补现 recent_count（B1 近 24h 窗口计数）+"
+        "最近事件卡恢复（2026-10-20）；此前 CD-⑮ 收口=死显示卡移除（2026-10-19，commit "
+        "049af5b5）已按拍板改道（异议回「㉗a改A/改B2」即 revert/改道）",
+        "repair_status": "landed@DEC-㉗a-①",
+        "evidence": "修前真源恰 5 键零 recent_count 产出——census 时点 UI 最近事件卡恒假 0；"
+        "CD-⑮ 已裁决 confirmed_drift 并按死显示面收口（卡移除，commit 049af5b5）；"
+        "DEC-㉗a-① 按 pending-decisions 自决先例取 B1 真源补现（get_stream_summary 加性键 "
+        "recent_count=近 24h 窗口计数，事件时刻解释 _event_ts 单一源）+UI 卡恢复。"
+        "本条=CD-⑨ 未裁决层同根登记，confirmed_drift 定性（修前形态）不翻。",
+        "anchors": [
+            (ES, 820, '"recent_count": recent_count,'),
+            (ES, 716, "RECENT_WINDOW_S = 24 * 3600"),
+            ("admin-ui/app/logs/page.tsx", 218, "summary?.recent_count"),
+        ],
     },
     # ── gland test_connection：test_provider 成功形 4 键（错误形 handler 已升 502 不出线）──
     ("gland.test_connection:175", "status"): {

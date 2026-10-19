@@ -200,16 +200,18 @@ class TestSourceAnchors:
         assert {"total_ticks", "total_signals", "precision"} <= keys
         assert "avg_drift_ms" not in keys and "active_signals" not in keys
 
-    def test_stream_summary_exact_five_keys(self):
+    def test_stream_summary_exact_six_keys(self):
+        """真源形状锚点：恰 6 键含 recent_count（DEC-㉗a-① 补现后；勘误：修前恰 5 键）。"""
         keys = _all_return_dict_keys("src/api/event_stream.py", "get_stream_summary")
         assert keys == {
             "total_events",
             "by_organ",
             "by_type",
             "most_active_organ",
+            "recent_count",
             "collected_at",
         }
-        assert "recent_count" not in keys
+        assert "recent_count" in keys
 
     def test_organs_config_element_has_no_status(self):
         seg = _func_src("src/api/config_api.py", "list_organs_config")
@@ -282,10 +284,12 @@ class TestKnownDrifts:
         rows = self._rows(artifact)
         r = rows[("event_stream.get_summary:822", "recent_count")]
         assert r["verdict"] == _D
-        assert r.get("repair_status") == "landed@CD-⑮"
+        assert r.get("repair_status") == "landed@DEC-㉗a-①"
         assert "已收口" in r["repair_candidate"]
-        # 修复真落地：当前 UI 已无 recent_count 消费
-        assert "recent_count" not in _src("admin-ui/app/logs/page.tsx")
+        # 修复真落地（DEC-㉗a-① 真源补现+卡恢复；勘误：CD-⑮ 时为「UI 无 recent_count 消费」）
+        ui = _src("admin-ui/app/logs/page.tsx")
+        assert "summary?.recent_count" in ui
+        assert "最近事件" in ui
 
     def test_agent_recall_repair_landed(self, artifact):
         rows = self._rows(artifact)

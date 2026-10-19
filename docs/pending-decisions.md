@@ -30,8 +30,8 @@
 | ㉓ | gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许） | GLAND-② 诚实边界③「PATCH 就地改（不触钥）另拍」 | 取 A（持钥改道 409 原子拒；无钥/同值照常；不触钥）——**已按建议默认 A 先行执行 2026-10-18（GLAND-③）** | ~~"㉓取A"~~ 已落，异议回「㉓改B」（持钥也允许显式改道）/「㉓改C」（revert 撤 PATCH 面） |
 | ㉔ | sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db） | GLAND-④ 留档候选首件 | 取 D→B（先 `hermes doctor`/`hermes update` 防复发，再归档+sqlite3 .recover 抽取+对账+原子替换；对账不过落 C）——**本拍=决策材料件先落（SESS-①，零处置），处置涉 ~/opensoul 外数据需拍板** | "㉔取D→B" / "㉔取C" / "㉔维持" |
 | ㉕ | dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type） | CD-④ 诚实边界留档 | 取 B（真源补现：元素 item 补真列+UI 恢复时间行/类型徽章）——**已按建议默认 B 先行执行 2026-10-19（DEC-㉕-①/DEDUP-①）** | ~~"㉕取B"~~ 已落，异议回「㉕改A」（revert 回不显示时间/类型）即改道 |
-| ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口） | "㉖取B1" / "㉖取B" / "㉖取A" / "㉖维持" |
-| ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）；㉗b 取 B（问题类闭集） | "㉗a取B1" / "㉗a取B2" / "㉗b取B" / "㉗a维持 ㉗b维持" |
+| ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉖-①）** | ~~"㉖取B1"~~ 已落，异议回「㉖改A」即 revert；B2（task 轴）仍待拍，回「㉖B2」即下拍执行 |
+| ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）——**㉗a 已按建议默认 B1 先行执行 2026-10-20（DEC-㉗a-①）**；㉗b 取 B（问题类闭集）仍待拍 | ~~"㉗a取B1"~~ 已落，异议回「㉗a改A」（revert 回无卡）/「㉗a改B2」（改缓冲计数）即改道；㉗b 回「㉗b取B」 |
 | ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）；㉘b 取 B（语义随拍） | "㉘a取B1" / "㉘a取B2" / "㉘b取B" / "㉘a维持 ㉘b维持" |
 | ㉙ | timeline/proactive e2e 探针残留 194+2 行删除（TR-② 闸门回归清单） | TR-② 闸门复跑（2026-10-19） | 取 B（清单精确删+备份+回读，TL-④ 纪律）——**清点已落（TR-②，零删除），删除待拍板** | "㉙删"（cron 代跑）/ "㉙维持" |
 
@@ -334,6 +334,8 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 **状态：待拍板（CD-⑮ 已按 CD 系列 wire 权威纪律收口=recent_count 死显示卡移除禁假 0；恢复显示与词表映射均涉语义设计/真源形状变更，不自决另拍）**——依据：CD-⑭ 留档候选首件「最近事件卡 recent_count 深挖」深挖裁决（CD-⑮，行为实证补 census unresolved_shape 工具边界）。
 
 ### ㉗a 最近事件显示恢复（真源补现 recent_count 窗口计数）
+
+**状态：已按建议默认 B1 先行执行（2026-10-20 DEC-㉗a-①）**——依据：DEC-㉖-① 周期日志候选队列「㉗a 真源补现同款 DEC 自决先例可续」+ 用户「权限/审批阻塞时别停工等批」铁律 + DEC-㉕-①/㉖-① 自决先例。实现=**真源补现取 B1（近 24h 窗口计数）**：get_stream_summary 加性键 `recent_count`（事件时刻解释 `_event_ts` 单一源——显式 timestamp 优先、collected_at 兜底、坏串=最旧不计，与既有排序语义逐字一致；边界闭区间；RECENT_WINDOW_S 单一源常量）+ UI 最近事件卡恢复（CD-⑮ 移除件复原语义逐字一致：卡文本/Zap 图标/`summary?.recent_count` 消费）+ grid 回 5 列 + 证据锁契约随更新（test_cd15 形状锁/test_cd22 真源锚点+repair_status=landed@DEC-㉗a-①+工件重生成，勘误「全仓零产出点」→「修前零产出」，历史裁决文本不改写）。**B2（缓冲计数 len(_event_buffer)，与页脚「缓冲」同值）未取**（语义与既有显示重复）。**若拍板改判回一句即改道：「㉗a改A」=revert 本拍（回无卡）/「㉗a改B2」=改缓冲计数**。
 
 **现状**：`get_stream_summary()`（GET /api/events/summary 别名同形）恰 5 键 `total_events/by_organ/by_type/most_active_organ/collected_at`（源码+live 双实证），全仓零 recent_count 产出点；修前 UI 最近事件卡 `{summary?.recent_count || 0}` 恒 undefined 恒假 0（死显示键）。CD-⑮ 后卡已移除（CD-④ 死显示面收口先例）、EventSummary 死声明键清零、grid 收 4 列；tests/test_cd15_repair.py 形状锁死（真源补现 recent_count 会先炸锁=改道须先改锁）。
 

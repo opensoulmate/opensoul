@@ -6,7 +6,7 @@ import {
   Search, ScrollText, RefreshCw, X, Filter, Download,
   Loader2, AlertCircle, Info, AlertTriangle, CheckCircle,
   ChevronDown, ChevronUp, Terminal, Wifi, WifiOff, Radio,
-  Eye, BarChart3,
+  Zap, Eye, BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge, TONES } from '@/components/ui/badge';
@@ -25,6 +25,7 @@ interface EventSummary {
   total_events: number;
   by_type: Record<string, number>;
   by_organ: Record<string, number>;
+  recent_count: number;
 }
 
 interface StreamSummary {
@@ -201,13 +202,20 @@ export default function LogsPage() {
   return (
     <div className="space-y-4">
       {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
             <ScrollText className="w-4 h-4 text-primary" />
             <span className="text-xs text-muted-foreground">总事件</span>
           </div>
           <div className="text-2xl font-bold mt-1">{summary?.total_events || displayLogs.length}</div>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-3">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-blue-500" />
+            <span className="text-xs text-muted-foreground">最近事件</span>
+          </div>
+          <div className="text-2xl font-bold text-blue-500 mt-1">{summary?.recent_count || 0}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">

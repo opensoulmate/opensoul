@@ -190,13 +190,19 @@ class TestKeyShapeEvidence:
                     return
         raise AssertionError("immune findings element dict literal {type,label,risk} not found")
 
-    def test_stream_summary_produces_exactly_five_keys(self):
+    def test_stream_summary_produces_exactly_six_keys(self):
+        """真源形状锚点：恰 6 键含 recent_count（DEC-㉗a-① 补现后；勘误：修前恰 5 键）。
+
+        证据锁原意（CD-⑪）不变：logs 页三键 buffer_size/organ_probes/sse_clients
+        恒不在 get_stream_summary 产出面（错打面修复锚点）。
+        """
         keys = _return_dict_keys("src/api/event_stream.py", "get_stream_summary")
         assert keys == {
             "total_events",
             "by_organ",
             "by_type",
             "most_active_organ",
+            "recent_count",
             "collected_at",
         }
         assert not {"buffer_size", "organ_probes", "sse_clients"} & keys

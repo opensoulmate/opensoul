@@ -31,6 +31,13 @@
 ③深挖裁决证据锁：生产 type 词表零 'error'/'alert' 精确键 + health_alert 异名在场
    + event_bridge 预留语义类词表在场（任一变化=㉗b 裁决失效须复挖）；
 ④census 真跑真仓：recent_count findings 全消失 + summary 调用点消费键收窄到真源键。
+
+2026-10-20 勘误（DEC-㉗a-① 真源补现后契约随更新，历史裁决文本不改写）：
+㉗a 已按建议默认 B1（近 24h 窗口计数）先行执行（pending-decisions 自决先例，
+异议回「㉗a改A/改B2」即 revert/改道）——get_stream_summary 补现 recent_count
+（加性键）+ 最近事件卡恢复（CD-⑮ 移除件复原语义）+ grid 回 5 列。本文件
+①②④ 断言面随契约翻转（recent_count 恒不产出→真产出、死卡移除→卡恢复），
+㉗b 词表裁决面（③）零变化锁死不动。「全仓零产出点」勘误为「修前零产出」。
 """
 
 from __future__ import annotations
@@ -53,8 +60,16 @@ cdc = importlib.util.module_from_spec(_spec)
 sys.modules["cdc_cd15_repair"] = cdc
 _spec.loader.exec_module(cdc)
 
-# 真源 get_stream_summary 产出键（event_stream.py，live 实证一致）
-TRUE_SOURCE_KEYS = ("total_events", "by_organ", "by_type", "most_active_organ", "collected_at")
+# 真源 get_stream_summary 产出键（event_stream.py，live 实证一致；DEC-㉗a-① 补现
+# recent_count 后 6 键——勘误：修前恰 5 键）
+TRUE_SOURCE_KEYS = (
+    "total_events",
+    "by_organ",
+    "by_type",
+    "most_active_organ",
+    "recent_count",
+    "collected_at",
+)
 # ㉗b 词表裁决的两造：UI 精确查询键 vs 生产词表
 QUERIED_TYPE_KEYS = ("error", "alert")
 
@@ -76,16 +91,22 @@ def _summary_consumed_keys() -> set[str]:
 # ── ① 源码消费面 ───────────────────────────────────────────────
 
 
-def test_recent_count_zero_residue():
-    """recent_count 死显示键声明/消费双清零（CD-⑦ 纪律）。"""
-    assert "recent_count" not in _code(), "recent_count 死显示键残留（消费形或接口声明）"
+def test_recent_count_restored_as_true_source_key():
+    """DEC-㉗a-① 真源补现后 recent_count 声明/消费双在场（契约随更新，勘误见模块 docstring）。
 
-
-def test_dead_recent_card_removed():
-    """最近事件卡（假 0 载体）整体移除禁假渲染。"""
+    修前（CD-⑮）断言双清零；真源已补现 recent_count（get_stream_summary 加性键），
+    UI 接口声明+消费随之恢复——键真源不产出的禁令翻转为「键必须真消费真产出」。
+    """
     code = _code()
-    assert "最近事件" not in code, "死显示卡「最近事件」残留"
-    assert not re.search(r"(?<![.\w])Zap\b", code), "死卡图标 Zap 残留（import/消费）"
+    assert "recent_count" in code, "recent_count 真源键消费/声明缺席（㉗a 恢复件被误删）"
+    assert re.search(r"summary\??\.recent_count", code), "recent_count 未被 summary 真消费"
+
+
+def test_recent_card_restored():
+    """最近事件卡随真源补现恢复（CD-⑮ 移除件复原语义，卡文本/图标逐字一致）。"""
+    code = _code()
+    assert "最近事件" in code, "最近事件卡缺席（㉗a 恢复件被误删）"
+    assert re.search(r"(?<![.\w])Zap\b", code), "卡图标 Zap 缺席（复原语义不完整）"
 
 
 def test_event_summary_interface_subset_of_true_source():
@@ -101,9 +122,9 @@ def test_event_summary_interface_subset_of_true_source():
         assert k in resp, f"接口声明键真源不产出: {k}"
 
 
-def test_stat_grid_fills_four_columns():
-    """死卡移除后统计卡组 4 卡填 4 列（不留空洞列）。"""
-    assert "grid grid-cols-2 md:grid-cols-4" in _src(), "统计卡组 grid 未随卡数收编"
+def test_stat_grid_fills_five_columns():
+    """卡恢复后统计卡组 5 卡填 5 列（不留空洞列；勘误：CD-⑮ 收口后曾 4 列）。"""
+    assert "grid grid-cols-2 md:grid-cols-5" in _src(), "统计卡组 grid 未随卡数收编"
 
 
 def test_by_type_error_alert_query_kept_pending_decision():
@@ -113,20 +134,24 @@ def test_by_type_error_alert_query_kept_pending_decision():
         assert re.search(rf"by_type\??\.{key}\b", code), f"错误/告警卡查询键被改动: {key}"
 
 
-# ── ② 行为桥（真源实跑，真源零改动） ────────────────────────────
+# ── ② 行为桥（真源实跑；勘误：CD-⑮ 拍为「真源零改动」，DEC-㉗a-① 起真源已补现 recent_count） ──
 
 
-def test_summary_shape_lock_never_produces_recent_count():
-    """get_stream_summary 真跑形状锁死：恰 5 键、恒不产出 recent_count。
+def test_summary_shape_lock_six_keys_with_recent_count():
+    """get_stream_summary 真跑形状锁死：恰 6 键含 recent_count（DEC-㉗a-① 补现后）。
 
-    未来真源形状变了（如补现 recent_count）此桥先炸=CD-③「真源形状变了→
-    裁决失效须复挖」证据锁；㉗a 拍板取 B 时须显式改本锁。
+    勘误（历史裁决文本不改写）：CD-⑮ 时锁「恰 5 键、恒不产出 recent_count」
+    （真源形状变了→裁决失效须复挖）；㉗a 已按建议默认 B1 取 B 补现，本锁按
+    证据锁纪律显式改锁为补现后形状——再变（键集漂移/recent_count 消失）仍先炸。
     """
     from src.api import event_stream
 
     resp = asyncio.run(event_stream.get_stream_summary())
     assert set(resp) == set(TRUE_SOURCE_KEYS), f"真源形状变了须复挖: {sorted(resp)}"
-    assert "recent_count" not in resp, "recent_count 出现=真源形状变了须复挖"
+    assert isinstance(resp["recent_count"], int), "recent_count 须为整数计数"
+    assert 0 <= resp["recent_count"] <= resp["total_events"], (
+        "recent_count 须落在窗口计数语义内（0 <= recent <= total）"
+    )
 
 
 def test_alias_face_same_shape_as_true_source():
@@ -139,7 +164,7 @@ def test_alias_face_same_shape_as_true_source():
 
 
 def test_consumed_summary_keys_subset_of_true_source():
-    """UI summary 消费键 ⊆ 真源产出键（修后=total_events/by_type/by_organ）。
+    """UI summary 消费键 ⊆ 真源产出键（修后=total_events/by_type/by_organ/recent_count）。
 
     提取=summary.<key> 首跳点访问全集；未来 UI 又发明键此桥先炸。
     """
@@ -235,16 +260,26 @@ def census_report() -> dict:
     return cdc.compare(REPO / "admin-ui" / "app", REPO / "src")
 
 
-def test_census_recent_count_findings_gone(census_report):
-    """修后 findings：recent_count 从 logs 页 findings 全消失。"""
+def test_census_recent_count_finding_alongside_siblings(census_report):
+    """DEC-㉗a-① 后 recent_count 与兄弟键同列（alias 形状提取失败层，非漂移复燃）。
+
+    勘误（历史裁决文本不改写）：CD-⑮ 修后断言 findings 全消失（死键移除）；真源补现+
+    卡恢复后消费键回 findings——与 total_events/by_type/by_organ 同层同因（/api/events/
+    summary 为委托别名，census 形状提取不了键级），无 recent_count 专属漂移判。
+    """
     findings = [f for f in census_report["findings"] if f["page"].endswith("logs/page.tsx")]
     assert findings, "logs 页 findings 为空（工具失效=断言空转）"
-    bad = [f for f in findings if "recent_count" in f["key"]]
-    assert not bad, f"recent_count 仍在 findings: {bad}"
+    summary_hits = [f for f in findings if f["path"] == "/api/events/summary"]
+    assert summary_hits, "summary 调用点未被 census 提取（提取失效=断言空转）"
+    keys = {k for f in summary_hits for k in f["key"]}
+    assert "recent_count" in keys, "recent_count 未随消费恢复进 findings（提取面漂移）"
+    assert all(f.get("note", "").find("形状提取失败") >= 0 for f in summary_hits), (
+        f"summary findings 层级漂移（应全为形状提取失败层）: {[f.get('note') for f in summary_hits]}"
+    )
 
 
-def test_census_summary_callsite_keys_shrunk_to_true_source(census_report):
-    """summary 调用点消费键收窄到真源键（修前含 recent_count 4 键→修后 3 键）。"""
+def test_census_summary_callsite_keys_restored_to_true_source(census_report):
+    """summary 调用点消费键=真源键集（修前 4 键→CD-⑮ 收窄 3 键→DEC-㉗a-① 回 4 键）。"""
     hits = [
         f
         for f in census_report["findings"]
@@ -252,4 +287,6 @@ def test_census_summary_callsite_keys_shrunk_to_true_source(census_report):
     ]
     assert hits, "summary 调用点未被 census 提取（提取失效=断言空转）"
     consumed = {k for f in hits for k in f["key"]}
-    assert consumed == {"total_events", "by_type", "by_organ"}, f"消费键集漂移: {consumed}"
+    assert consumed == {"total_events", "by_type", "by_organ", "recent_count"}, (
+        f"消费键集漂移: {consumed}"
+    )
