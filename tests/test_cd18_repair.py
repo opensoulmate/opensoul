@@ -86,12 +86,15 @@ TRUE_QUICK_KEYS = ("status", "db", "version", "timestamp")
 # 修前死显示/死声明键（/api/system/quick 恒不产出的统计键 + SystemInfo/QuickOverview 死键）
 # 【DEC-㉘a-① 契约随更新】uptime/formatUptime 退出死键锁（真源补现 overview.uptime_seconds
 # 后复活为真消费/真 helper）；QuickOverview 与活跃Agent/recent_sessions 等 ㉘b 待拍死键维持。
+# 【DEC-㉘b-① 契约随更新】active_agents/recent_sessions 退出死键锁（真源补现 overview
+# 加性键后复活为真消费——现经 stats.active_agents/stats.recent_sessions 消费非 quick
+# 旧形；「/api/system/quick 恒不产出统计键」裁决语义不变，quick 打错面回归由
+# test_fetch_wiring_only_true_sources 锁承接）；QuickOverview 死声明维持（统计仍走
+# OverviewStats，死 helper/死声明回潮由本锁承接）。
 DEAD_KEYS = (
     "organs_healthy",
     "organs_total",
     "knowledge_entries",
-    "active_agents",
-    "recent_sessions",
     "memory_mb",
     "disk_usage",
     "QuickOverview",
@@ -103,6 +106,9 @@ _ALLOWED_STATS_ACCESS = (
     "knowledge.total_entries",
     "metrics.cpu_percent",
     "metrics.memory.used_mb",
+    # 【DEC-㉘b-① 契约随更新】真源补现加性键（活跃Agent/近期会话复原消费面）
+    "active_agents",
+    "recent_sessions",
 )
 
 
@@ -130,10 +136,14 @@ def test_dead_display_labels_removed():
 
     【DEC-㉘a-① 契约随更新】「运行时间」行与 banner「运行」span 随真源补现复活
     （修复面锚点=回归先炸）；活跃Agent/近期会话仍死（㉘b 待拍）锁维持。
+    【DEC-㉘b-① 契约随更新】活跃Agent/活跃 Agent/近期会话卡与行随真源补现复活
+    （消费 stats.active_agents/stats.recent_sessions 非 quick 旧形，修复面锚点=
+    回归先炸）；修前死显示语义（假 0/undefined 载体禁假渲染）改由「缺席='—'
+    占位」行为桥锁承接（test_dec28b）。
     """
     code = _code()
     for label in ("活跃Agent", "活跃 Agent", "近期会话"):
-        assert label not in code, f"死显示行/卡残留: {label}"
+        assert label in code, f"显示卡/行未复活（㉘b 复原面回退先炸）: {label}"
     # ㉘a 修复面锚点：banner「运行」span + 运行时信息「运行时间」行复活（真消费）
     assert re.search(r"运行 \{formatUptime\(info\?\.uptime_seconds\)\}", code), (
         "banner 运行 span 未复活（㉘a 恢复面回退先炸）"
@@ -148,9 +158,12 @@ def test_dead_icon_imports_cleared():
 
     【DEC-㉘a-① 契约随更新】Clock 随 banner「运行」span 复活为真消费（修复面锚点）；
     Globe 仍死（近期会话卡 ㉘b 待拍）锁维持。
+    【DEC-㉘b-① 契约随更新】Globe 随「近期会话」卡复活为真消费（修复面锚点=回归
+    先炸）；死 import 语义（import 在场零消费）由消费锚点承接。
     """
     code = _code()
-    assert not re.search(r"\bGlobe\b", code), "死 import Globe 残留"
+    assert re.search(r"\bGlobe\b", code), "Globe import 未复活（㉘b 近期会话卡修复面回退先炸）"
+    assert "icon: <Globe" in code, "Globe 消费缺席（死 import 回潮=只 import 不消费先炸）"
     assert re.search(r"\bClock\b", code), "Clock import 未复活（㉘a banner 修复面回退先炸）"
 
 
@@ -265,12 +278,22 @@ def test_overview_consumed_keys_subset_of_produced():
 
 
 def test_overview_interface_subset_of_produced():
-    """OverviewStats/SystemInfo 声明键 ⊆ 真源产出键（禁声明假键）。"""
+    """OverviewStats/SystemInfo 声明键 ⊆ 真源产出键（禁声明假键）。
+
+    【DEC-㉘b-① 契约随更新】提取正则收 `?:` 可选形（真源补现加性键类型如实可选）；
+    active_agents/recent_sessions=逐键收集加性键（收集失败=键缺席是真语义非形状
+    漂移），此锁对恒产出键强断言、成功面真产出+缺席真语义锁在 test_dec28b。
+    """
     src = _src()
-    ov = re.search(r"interface OverviewStats \{([^}]*(?:\{[^}]*\}[^}]*)*)\}", src)
+    # 【DEC-㉘b-① 契约随更新】提取改整接口体（修前正则在嵌套首个 `}` 截断=只提取
+    # organs 内层两键，锁覆盖面不足如实记；接口闭括号独占一行按 `\n}` 取全量键）
+    ov = re.search(r"interface OverviewStats \{(.*?)\n\}", src, re.S)
     assert ov, "OverviewStats 接口未找到（提取失效=断言空转）"
-    declared = set(re.findall(r"([A-Za-z_$][\w$]*):", ov.group(1)))
+    body = re.sub(r"//.*$", "", ov.group(1), flags=re.M)
+    declared = set(re.findall(r"([A-Za-z_$][\w$]*)\??:", body))
     assert declared, "接口键提取为空（提取失效=断言空转）"
+    conditional = {"active_agents", "recent_sessions"}
+    assert conditional <= declared, "㉘b 加性键声明缺席（复原面回退先炸）"
 
     from src.api import system_overview
 
@@ -285,6 +308,8 @@ def test_overview_interface_subset_of_produced():
 
     produced = _flatten(resp, set())
     for k in declared:
+        if k in conditional:
+            continue  # 键缺席=收集失败真语义（test_dec28b 成功面锁承接）
         assert k in produced, f"OverviewStats 声明键真源不产出: {k}"
 
     si = re.search(r"interface SystemInfo \{([^}]*)\}", src)

@@ -32,7 +32,7 @@
 | ㉕ | dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type） | CD-④ 诚实边界留档 | 取 B（真源补现：元素 item 补真列+UI 恢复时间行/类型徽章）——**已按建议默认 B 先行执行 2026-10-19（DEC-㉕-①/DEDUP-①）** | ~~"㉕取B"~~ 已落，异议回「㉕改A」（revert 回不显示时间/类型）即改道 |
 | ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉖-①）** | ~~"㉖取B1"~~ 已落，异议回「㉖改A」即 revert；B2（task 轴）仍待拍，回「㉖B2」即下拍执行 |
 | ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）——**㉗a 已按建议默认 B1 先行执行 2026-10-20（DEC-㉗a-①）**；㉗b 取 B（问题类闭集）——**已按建议默认 B 先行执行 2026-10-20（DEC-㉗b-①）** | ~~"㉗a取B1"~~/~~"㉗b取B"~~ 已落，异议回「㉗a改A」（revert 回无卡）/「㉗a改B2」（改缓冲计数）/「㉗b改A」（revert 回精确查询形）即改道 |
-| ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉘a-①）**；㉘b 取 B（语义随拍）仍待拍 | ~~"㉘a取B1"~~ 已落，异议回「㉘a改A」（revert 回不显示）/「㉘a改B2」（改主机 uptime）即改道；㉘b 回「㉘b取B」 |
+| ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉘a-①）**；㉘b 取 B（语义随拍）——**已按建议默认 B 先行执行 2026-10-20（DEC-㉘b-①）** | ~~"㉘a取B1"~~/~~"㉘b取B"~~ 已落，异议回「㉘a改A」（revert 回不显示）/「㉘a改B2」（改主机 uptime）/「㉘b改A」（revert 回不显示）即改道 |
 | ㉙ | timeline/proactive e2e 探针残留 194+2 行删除（TR-② 闸门回归清单） | TR-② 闸门复跑（2026-10-19） | 取 B（清单精确删+备份+回读，TL-④ 纪律）——**清点已落（TR-②，零删除），删除待拍板** | "㉙删"（cron 代跑）/ "㉙维持" |
 
 ---
@@ -377,6 +377,8 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - **拍板方式**：回「**㉘a取B1**」/「**㉘a取B2**」（cron 代跑下拍执行）/「㉘a取A」/「㉘a维持」。
 
 ### ㉘b 活跃Agent/近期会话显示恢复（真源补现 两统计语义）
+
+**状态：B 已按建议默认先行执行 2026-10-20（DEC-㉘b-①，语义随拍定案）**——按「别停工等批」铁律＋DEC-①~㉘a 自决先例自决取 B：活跃Agent=多智能体协调器 get_active_agents（5 分钟心跳活跃窗）行数 system_view 系统视图口径（「活跃」=心跳活跃窗；acp_agent_registry 探测注册是存量注册轴非活跃轴——生产实证 4 行注册 2 行、last_probe_at 停在 2026-10-11/14，按探测时刻计活跃恒 0=语义不符；G1-⑤ 注册桥/WS 心跳/看门狗保活真接线面）、近期会话=会话登记面（agent_sessions，acp-proxy ws_chat 写入）近 24h 活动计数（窗口闭区间，与 ㉗a recent_count 同窗；trajectory_sessions=任务轨迹面、hippo SessionManager=内存执行面，均非会话登记本体）。真源=GET /api/system/overview 加性键 active_agents/recent_sessions（逐键收集失败=键缺席禁 fabricate 0）＋UI 复原（统计条两卡＋数据统计面板两行，CD-⑱ 移除件复原语义）＋test_cd18 形状锁随契约更新。异议回「㉘b改A」（revert 回不显示）即改道。
 
 **现状**：两统计在 /api/system/quick（真源恰 4 键 status/db/version/timestamp）与 /api/system/overview（9 键）均无产出面；修前 UI quick.active_agents/quick.recent_sessions 恒 undefined（「活跃Agent undefined」「近期会话 undefined」假渲染）。CD-⑱ 后统计条两卡+数据统计面板两行已移除、QuickOverview 死声明整体清零、/api/system/quick 死消费面收口（4 键零显示消费，端点真源零改动保留）。真源候选=语义需拍板（非形状问题）：活跃Agent=多智能体协调器 get_active_agents（GET /api/brain/agents，协调器注册活跃 agent）还是 agent_registry 行（GET /api/agents/registry，探测注册 5 分钟活跃窗语义）；近期会话=哪个会话面（hippo sessions？trajectory sessions？）+「近期」窗口定义。
 

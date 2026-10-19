@@ -237,6 +237,37 @@ async def _get_gland_usage() -> dict:
         return {"total_tokens": 0, "call_count": 0, "error": str(exc)}
 
 
+async def _get_agent_session_stats() -> dict:
+    """DEC-㉘b-① 真源补现（㉘b 取 B 语义随拍）：活跃Agent/近期会话两统计。
+
+    - 活跃Agent=多智能体协调器 5 分钟心跳活跃窗行数（get_active_agents 单一源
+      本体调用禁另写 SQL；system_view=True=系统页全局统计口径与 organs/knowledge
+      同轴，GET /api/brain/agents 租户口径零变化）。
+    - 近期会话=会话登记面（agent_sessions）近 24h 活动计数
+      （session_importer.count_recent_sessions 单一源，㉗a recent_count 同窗）。
+
+    逐键独立收集（_get_plugin_stats 家族 C2 模式）：单轴故障=该键缺席
+    （logger.warning 失败可见，UI 缺席='—' 占位）禁 fabricate 0，也不吞另一轴真值。
+    """
+    from src.cortex.multi_agent_coord import MultiAgentCoordinator
+    from src.database.postgres import db_pool
+    from src.hippo.session_importer import count_recent_sessions
+
+    out: dict = {}
+    try:
+        # system_view=True 时 tenant 轴不消费，占位 "default"（系统视图口径见上）
+        coord = MultiAgentCoordinator(db_pool, "default")
+        active = await coord.get_active_agents(system_view=True)
+        out["active_agents"] = len(active)
+    except Exception as exc:
+        logger.warning("active_agents unavailable: %s", exc)
+    try:
+        out["recent_sessions"] = count_recent_sessions()
+    except Exception as exc:
+        logger.warning("recent_sessions unavailable: %s", exc)
+    return out
+
+
 # ── Endpoints ─────────────────────────────────────────────────
 
 
@@ -260,12 +291,13 @@ async def system_overview():
     start = time.time()
 
     # Run all checks in parallel
-    organs, metrics, knowledge, plugins, gland = await asyncio.gather(
+    organs, metrics, knowledge, plugins, gland, agent_stats = await asyncio.gather(
         _check_organs(),
         _get_system_metrics(),
         _get_knowledge_stats(),
         _get_plugin_stats(),
         _get_gland_usage(),
+        _get_agent_session_stats(),
         return_exceptions=True,
     )
 
@@ -283,7 +315,7 @@ async def system_overview():
 
     elapsed = round((time.time() - start) * 1000)
 
-    return {
+    result = {
         "timestamp": time.time(),
         "elapsed_ms": elapsed,
         "version": "2.0.0",
@@ -297,6 +329,13 @@ async def system_overview():
         "plugins": plugins,
         "gland": gland,
     }
+    # DEC-㉘b-① 真源补现（㉘b 取 B 语义随拍）加性键：active_agents/recent_sessions，
+    # 收集失败=键缺席非假 0（UI 缺席='—' 占位；C2 失败可见 logger.warning 禁静默）
+    if isinstance(agent_stats, dict):
+        result.update(agent_stats)
+    else:
+        logger.warning("agent/session stats unavailable: %s", agent_stats)
+    return result
 
 
 from pydantic import BaseModel

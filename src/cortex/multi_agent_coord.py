@@ -159,21 +159,28 @@ class MultiAgentCoordinator:
             (self.tenant_id, agent_id),
         )
 
-    async def get_active_agents(self) -> list[dict]:
-        """获取活跃Agent列表"""
+    async def get_active_agents(self, system_view: bool = False) -> list[dict]:
+        """获取活跃Agent列表（5 分钟心跳活跃窗）。
+
+        system_view=True=系统视图（DEC-㉘b-① system 页全局统计口径，与
+        organs/knowledge 全局统计同轴，跨租户全量活跃行）；缺省 False=本实例
+        租户命名空间口径（GET /api/brain/agents 既有契约零变化）。
+        """
         await self._ensure_table()
         if not self.db:
             return []
         cutoff = time.time() - 300  # 5分钟内心跳
-        rows = await self.db.fetch(
-            """
-            SELECT agent_id, agent_type, status, current_task, current_files, last_heartbeat
-            FROM agent_registry
-            WHERE tenant_id = ? AND last_heartbeat > ?
-            ORDER BY last_heartbeat DESC
-        """,
-            (self.tenant_id, cutoff),
+        # SELECT 面单一（WHERE 租户过滤按口径可选，禁两套查询判法）
+        sql = (
+            "SELECT agent_id, agent_type, status, current_task, current_files, last_heartbeat "
+            "FROM agent_registry WHERE last_heartbeat > ?"
         )
+        params: tuple = (cutoff,)
+        if not system_view:
+            sql += " AND tenant_id = ?"
+            params = (cutoff, self.tenant_id)  # 参数序随 WHERE 序（cutoff 在前）
+        sql += " ORDER BY last_heartbeat DESC"
+        rows = await self.db.fetch(sql, params)
         return [dict(row) for row in rows]
 
     async def check_file_conflict(self, agent_id: str, target_files: list[str]) -> list[dict]:

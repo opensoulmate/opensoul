@@ -27,6 +27,51 @@ OPENSOUL_DB = os.environ.get(
 # 噪声会话前缀：测试/系统生成的会话不值得进记忆
 DEFAULT_EXCLUDE_PREFIXES = ("evo-test-", "stress_test", "systemic-test")
 
+# ── 会话登记面读口（DEC-㉘b-① 真源补现）────────────────────────────────
+# 「近期会话」统计读口：数据面=agent_sessions（会话本体登记面：title/
+# message_count/last_activity_at，acp-proxy ws_chat 写入）——㉘b 语义随拍取
+# 会话登记本体面（trajectory_sessions=任务轨迹面、hippo SessionManager=内存
+# 执行面，均非会话本体）。
+
+# 活动窗口=24h，与 ㉗a recent_count RECENT_WINDOW_S 同窗语义（tests 契约锁
+# 两常量相等防漂移）。
+RECENT_SESSIONS_WINDOW_S = 24 * 3600
+
+
+def _sessions_db_path() -> str:
+    """call-time 读 OPENSOUL_DB env（PROACT-③ 数据面隔离纪律，禁 import 时冻结）。"""
+    env = os.environ.get("OPENSOUL_DB")
+    if env:
+        return env
+    return os.path.join(
+        os.environ.get("OPENSOUL_ROOT", "/home/climbing/opensoul"), "data", "opensoul.db"
+    )
+
+
+def count_recent_sessions(
+    window_s: float = RECENT_SESSIONS_WINDOW_S, db_path: str | None = None
+) -> int:
+    """近 window_s 秒内有活动的会话登记行计数（窗口闭区间 last_activity_at >= now-window_s）。
+
+    库/表缺席=空存储如实 0；其余错误如实抛（禁静默吞造 0，C2 失败可见）。
+    归档轴刻意不过滤（活动口径与归档状态正交，归档会话 24h 后自然出窗）。
+    """
+    path = db_path or _sessions_db_path()
+    if not Path(path).exists():
+        return 0
+    cutoff = time.time() - window_s
+    with sqlite3.connect(path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM agent_sessions WHERE last_activity_at >= ?",
+                (cutoff,),
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc):
+                return 0  # 空库如实零
+            raise
+    return int(row[0])
+
 
 class SessionImporter:
     """历史会话→海马记忆导入器"""

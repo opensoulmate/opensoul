@@ -6,7 +6,7 @@ import {
   Settings, Database, HardDrive, Cpu, RefreshCw, ToggleLeft, ToggleRight,
   Server, Clock, Shield, X, Save, Activity, CheckCircle, XCircle,
   AlertTriangle, Loader2, Play, Zap, ChevronDown, ChevronRight,
-  BarChart3, Terminal, Info
+  BarChart3, Terminal, Globe, Info
 } from 'lucide-react';
 import { Badge, TONES } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,11 +45,18 @@ interface OrganHealth {
 // =打错面（CD-⑥/CD-⑪「改指真源」先例）：器官 undefined/undefined、活跃Agent/
 // 近期会话 undefined、CPU/内存 ||0 假 0 大面积假渲染；统计改从本页已取的
 // /api/system/overview 真源键收编。活跃Agent/近期会话/运行时间真源不产出→死显示
-// 清零（CD-④ 纪律）+恢复显示=真源补现候选 pending-decisions ㉘a/㉘b，不自决。
+// 清零（CD-④ 纪律）+恢复显示=真源补现候选 pending-decisions ㉘a/㉘b——两件已按
+// 「别停工等批」自决取 B 先行执行（DEC-㉘a-① uptime/DEC-㉘b-① 活跃Agent·近期会话），
+// 两显示复原消费 overview 加性键（CD-⑱ 移除件复原语义）。
 interface OverviewStats {
   organs: { healthy_count: number; total_count: number };
   metrics: { cpu_percent: number; memory: { used_mb: number } };
   knowledge: { total_entries: number };
+  // DEC-㉘b-① 真源补现加性键（㉘b 取 B 语义随拍，CD-⑱ 移除件复原语义）：
+  // 活跃Agent=协调器 5 分钟心跳活跃窗、近期会话=会话登记面 24h 活动计数；
+  // 逐键收集失败=键缺席非假 0（类型如实可选，UI 缺席='—' 占位）
+  active_agents?: number;
+  recent_sessions?: number;
 }
 
 interface BootstrapStatus {
@@ -246,10 +253,12 @@ export default function SystemPage() {
 
       {/* ── Quick Stats ── */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           {[
             { label: '器官', value: `${stats.organs.healthy_count}/${stats.organs.total_count}`, icon: <Cpu className="w-3.5 h-3.5 text-blue-500" /> },
             { label: '知识条目', value: stats.knowledge.total_entries, icon: <Database className="w-3.5 h-3.5 text-violet-500" /> },
+            { label: '活跃Agent', value: stats.active_agents != null ? stats.active_agents : '—', icon: <Activity className="w-3.5 h-3.5 text-emerald-500" /> },
+            { label: '近期会话', value: stats.recent_sessions != null ? stats.recent_sessions : '—', icon: <Globe className="w-3.5 h-3.5 text-amber-500" /> },
             { label: 'CPU', value: stats.metrics.cpu_percent != null ? `${stats.metrics.cpu_percent.toFixed(1)}%` : '—', icon: <Cpu className="w-3.5 h-3.5 text-cyan-500" /> },
             { label: '内存', value: stats.metrics.memory?.used_mb != null ? `${stats.metrics.memory.used_mb} MB` : '—', icon: <HardDrive className="w-3.5 h-3.5 text-pink-500" /> },
             { label: '已启用', value: `${enabledCount}/${organs.length}`, icon: <ToggleRight className="w-3.5 h-3.5 text-emerald-500" /> },
@@ -371,6 +380,8 @@ export default function SystemPage() {
                 <div className="space-y-2 text-xs">
                   {[
                     { label: '知识条目', value: stats.knowledge.total_entries },
+                    { label: '活跃 Agent', value: stats.active_agents != null ? stats.active_agents : '—' },
+                    { label: '近期会话', value: stats.recent_sessions != null ? stats.recent_sessions : '—' },
                     { label: '已启用器官', value: `${enabledCount} / ${organs.length}` },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center justify-between py-1 border-b border-border/50 last:border-0">
