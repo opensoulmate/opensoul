@@ -783,30 +783,37 @@ SHAPE_VERDICTS = {
     },
     ("soma_discovery.api_full_scan:1472", "services.host"): {
         "verdict": _D,
-        "repair_candidate": "connectors 扫描服务面收编真源（name/host/port→process_name/"
-        "local_address/local_port）",
+        "repair_candidate": "已收口：CD-31 connectors 扫描服务面收编真源（name/host/port→"
+        "process_name/local_address/local_port）（2026-10-19）",
+        "repair_status": "landed@CD-31",
         "evidence": "ServiceInfo 字段恰 protocol/local_address/local_port/state/process_name/pid/"
         "description（src/api/soma_discovery.py:182-189）无 host（真源 local_address :184）——UI "
-        "s.host（connectors/page.tsx:462 s.name||s.host、:463 {s.host}:{s.port}）恒 undefined="
-        "地址段恒空/裸冒号（显示行为损失）",
-        "anchors": [(SD, 184, "    local_address: str"), (U_CX, 463, "{s.host}:{s.port}")],
+        "s.host（修前 connectors/page.tsx:462 s.name||s.host、:463 {s.host}:{s.port}）恒 undefined="
+        "地址段恒空/裸冒号（显示行为损失）——CD-31 已收口（UI 两消费点收编真源键 s.local_address/"
+        "s.local_port，2026-10-19），锚点改锁修复后状态（host/port 漂移复发先炸）",
+        "anchors": [(SD, 184, "    local_address: str"), (U_CX, 463, "{s.local_address}:{s.local_port}")],
     },
     ("soma_discovery.api_full_scan:1472", "services.name"): {
         "verdict": _D,
-        "repair_candidate": "connectors 扫描服务面收编真源（name/host/port→process_name/"
-        "local_address/local_port）",
+        "repair_candidate": "已收口：CD-31 connectors 扫描服务面收编真源（name/host/port→"
+        "process_name/local_address/local_port）（2026-10-19）",
+        "repair_status": "landed@CD-31",
         "evidence": "ServiceInfo 无 name（真源 process_name，src/api/soma_discovery.py:187）——UI "
-        "s.name||s.host（connectors/page.tsx:462）双回落全 undefined=服务名恒空渲染"
-        "（显示行为损失）",
-        "anchors": [(SD, 187, "    process_name: str | None = None"), (U_CX, 462, "s.name || s.host")],
+        "s.name||s.host（修前 connectors/page.tsx:462）双回落全 undefined=服务名恒空渲染"
+        "（显示行为损失）——CD-31 已收口（UI 收编 s.process_name||s.local_address（process_name "
+        "缺省回落地址，回落语义保留），2026-10-19），锚点改锁修复后状态（name/host 漂移复发先炸）",
+        "anchors": [(SD, 187, "    process_name: str | None = None"), (U_CX, 462, "s.process_name || s.local_address")],
     },
     ("soma_discovery.api_full_scan:1472", "services.port"): {
         "verdict": _D,
-        "repair_candidate": "connectors 扫描服务面收编真源（name/host/port→process_name/"
-        "local_address/local_port）",
+        "repair_candidate": "已收口：CD-31 connectors 扫描服务面收编真源（name/host/port→"
+        "process_name/local_address/local_port）（2026-10-19）",
+        "repair_status": "landed@CD-31",
         "evidence": "ServiceInfo 无 port（真源 local_port，src/api/soma_discovery.py:185）——UI "
-        "{s.host}:{s.port}（connectors/page.tsx:463）端口段恒 undefined（显示行为损失）",
-        "anchors": [(SD, 185, "    local_port: int"), (U_CX, 463, "{s.host}:{s.port}")],
+        "{s.host}:{s.port}（修前 connectors/page.tsx:463）端口段恒 undefined（显示行为损失）"
+        "——CD-31 已收口（UI 收编 {s.local_address}:{s.local_port}，2026-10-19），锚点改锁"
+        "修复后状态（port 漂移复发先炸）",
+        "anchors": [(SD, 185, "    local_port: int"), (U_CX, 463, "{s.local_address}:{s.local_port}")],
     },
     # ── topology：handler 内联构造 ──
     ("topology.get_topology_graph:313", "nodes.id"): {

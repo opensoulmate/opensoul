@@ -35,9 +35,9 @@ interface CLITool {
 }
 
 interface ServiceInfo {
-  name: string;
-  host: string;
-  port: number;
+  process_name: string | null;
+  local_address: string;
+  local_port: number;
   protocol: string;
 }
 
@@ -459,8 +459,8 @@ export default function ConnectorsPage() {
                 <div className="max-h-[200px] overflow-auto space-y-1">
                   {scanResult.services.map((s, i) => (
                     <div key={i} className="flex items-center gap-2 text-[10px] py-1 border-b border-border last:border-0">
-                      <span className="font-medium flex-1 truncate">{s.name || s.host}</span>
-                      <span className="font-mono text-muted-foreground">{s.host}:{s.port}</span>
+                      <span className="font-medium flex-1 truncate">{s.process_name || s.local_address}</span>
+                      <span className="font-mono text-muted-foreground">{s.local_address}:{s.local_port}</span>
                       <Badge variant="muted">{s.protocol}</Badge>
                     </div>
                   ))}
