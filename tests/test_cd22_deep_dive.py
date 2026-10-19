@@ -5,7 +5,7 @@
    +confirmed_drift 必带 repair_candidate+工件真落盘回读+109 条 join 精确对账。
 2. TestSourceAnchors：全行 anchors 逐条程序化核验（锚点行真含声明子串）+坏锚点拒出
    工件（防无据断言）+AST 级「说在场的键真在场、说缺席的键真缺席」硬反证。
-3. TestKnownDrifts：15 条 confirmed_drift 与 3 条 ruled_false_positive 逐条定型锁死（已收口件 landed 锚点随 CD-15/23/24/25/26 落地翻转）。
+3. TestKnownDrifts：15 条 confirmed_drift 与 3 条 ruled_false_positive 逐条定型锁死（已收口件 landed 锚点随 CD-15/23/24/25/26/27 落地翻转）。
 4. TestExpandedFindings：4 条同根扩面登记的 UI 消费字面量在场（已收口件翻转清零）+repair_candidate 强制。
 """
 
@@ -333,6 +333,20 @@ class TestKnownDrifts:
         assert "reasoning_steps" not in ui
         assert "thinkResult.reasoning" in ui
 
+    def test_kg_relations_repair_landed(self, artifact):
+        rows = self._rows(artifact)
+        r = rows[("graph.get_entity_detail:71", "relations.source_entity_id")]
+        assert r["verdict"] == _D
+        assert r.get("repair_status") == "landed@CD-㉗"
+        assert "已收口" in r["repair_candidate"]
+        # 修复真落地：当前 UI 已无修前漂移键消费、真源行键 source_id/type 已收编
+        ui = _src("admin-ui/app/knowledge-graph/page.tsx")
+        assert "rel.source_entity_id" not in ui
+        assert "rel.target_entity_id" not in ui
+        assert "rel.relation_type" not in ui
+        assert "rel.source_id === selectedEntity.id" in ui
+        assert "{rel.type}" in ui
+
     def test_every_drift_has_ui_symptom_anchor(self, artifact):
         rows = self._rows(artifact)
         for key in self.DRIFT_KEYS:
@@ -348,14 +362,14 @@ class TestKnownDrifts:
 
 class TestExpandedFindings:
     UI_LITERALS = [
-        ("admin-ui/app/knowledge-graph/page.tsx", "rel.relation_type"),
-        ("admin-ui/app/knowledge-graph/page.tsx", "rel.target_entity_id"),
         ("admin-ui/app/connectors/page.tsx", "p.memory.toFixed"),
         ("admin-ui/app/agent-nodes/page.tsx", "recallResults.sources"),
     ]
-    # 已收口件（CD-㉔）：修前消费字面量「在场」证据锁按 CD-17 先例翻转「清零」
+    # 已收口件（CD-㉔/CD-㉗）：修前消费字面量「在场」证据锁按 CD-17 先例翻转「清零」
     LANDED_ABSENT_LITERALS = [
         ("admin-ui/app/benchmark/page.tsx", "r.success_rate"),
+        ("admin-ui/app/knowledge-graph/page.tsx", "rel.relation_type"),
+        ("admin-ui/app/knowledge-graph/page.tsx", "rel.target_entity_id"),
     ]
 
     def test_expanded_all_confirmed_with_candidate(self, artifact):

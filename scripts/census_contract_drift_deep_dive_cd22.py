@@ -473,16 +473,20 @@ SHAPE_VERDICTS = {
     },
     ("graph.get_entity_detail:71", "relations.source_entity_id"): {
         "verdict": _D,
-        "repair_candidate": "knowledge-graph relations 元素键收编（source_entity_id/"
-        "target_entity_id/relation_type→source_id/target_id/type）",
+        "repair_candidate": "已收口：CD-㉗ knowledge-graph relations 元素键收编（2026-10-19）",
+        "repair_status": "landed@CD-㉗",
         "evidence": "relations 行键恰 id/source_id/target_id/type/properties/created_at+JOIN 别名 "
         "source_name/target_name（DDL src/main.py:297-299+SELECT r.* src/services/entity.py:60-68）"
         "无 source_entity_id——UI rel.source_entity_id（knowledge-graph/page.tsx:618 isSource 判定"
         "恒 false、:626 rel.source_entity_id.slice(0,8) 对 undefined 调 slice=TypeError 渲染崩坏"
-        "面）；同根 target_entity_id/relation_type 以 EXPANDED_FINDINGS 登记",
+        "面）；同根 target_entity_id/relation_type 以 EXPANDED_FINDINGS 登记——CD-㉗ 已收口（UI "
+        "元素接口收编真源行键形 {id,source_id,target_id,type}+isSource/徽章/切片三消费点收编真源"
+        "键，2026-10-19），当前 knowledge-graph/page.tsx 已无 rel.source_entity_id/"
+        "rel.target_entity_id/rel.relation_type 消费=修复真落地；锚点改锁修复后状态（rel.source_id "
+        "漂移复发先炸）",
         "anchors": [
             (MN, 297, "id TEXT PRIMARY KEY, source_id TEXT NOT NULL,"),
-            (U_KG, 618, "rel.source_entity_id"),
+            (U_KG, 617, "rel.source_id === selectedEntity.id"),
         ],
     },
     ("graph.get_entity_detail:71", "type"): {
@@ -494,7 +498,7 @@ SHAPE_VERDICTS = {
         "（显示行为损失）",
         "anchors": [
             (EN, 13, 'd["entity_type"] = d.pop("type", "")'),
-            (U_KG, 592, "selectedEntity.type"),
+            (U_KG, 591, "selectedEntity.type"),
         ],
     },
     # ── hermes_bridge list_sessions：_list_sessions_sync 返回 {sessions,total} ──
@@ -847,8 +851,7 @@ EXPANDED_FINDINGS = [
         "page": "knowledge-graph/page.tsx",
         "keys": ["relation_type", "target_entity_id"],
         "verdict": _D,
-        "repair_candidate": "knowledge-graph relations 元素键收编（source_entity_id/"
-        "target_entity_id/relation_type→source_id/target_id/type）",
+        "repair_candidate": "已收口：CD-㉗ knowledge-graph relations 元素键收编（2026-10-19）",
         "note": "与 relations.source_entity_id 同根（真源 relations 行键 id/source_id/target_id/"
         "type/properties/created_at+source_name/target_name，src/main.py:297-299+src/services/"
         "entity.py:60-68）：UI rel.relation_type（knowledge-graph/page.tsx:623）恒 undefined="

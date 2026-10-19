@@ -39,10 +39,9 @@ interface EntityDetail {
   properties: Record<string, unknown>;
   relations?: Array<{
     id: string;
-    source_entity_id: string;
-    target_entity_id: string;
-    relation_type: string;
-    properties: Record<string, unknown>;
+    source_id: string;
+    target_id: string;
+    type: string;
   }>;
 }
 
@@ -615,15 +614,15 @@ export default function KnowledgeGraphPage() {
                   <div className="text-xs text-muted-foreground mb-2">关系 ({selectedEntity.relations.length})</div>
                   <div className="space-y-1.5">
                     {selectedEntity.relations.map((rel) => {
-                      const isSource = rel.source_entity_id === selectedEntity.id;
+                      const isSource = rel.source_id === selectedEntity.id;
                       return (
                         <div key={rel.id} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/50">
                           <GitBranch className="w-3 h-3 text-muted-foreground shrink-0" />
                           <Badge variant="bare" className="font-mono bg-primary/10 text-primary">
-                            {rel.relation_type}
+                            {rel.type}
                           </Badge>
                           <span className="text-muted-foreground">
-                            {isSource ? '→' : '←'} {isSource ? rel.target_entity_id.slice(0, 8) : rel.source_entity_id.slice(0, 8)}...
+                            {isSource ? '→' : '←'} {isSource ? rel.target_id.slice(0, 8) : rel.source_id.slice(0, 8)}...
                           </span>
                         </div>
                       );
