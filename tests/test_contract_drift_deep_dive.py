@@ -168,20 +168,29 @@ class TestDedupShapeEvidence:
 
 
 class TestGlandShapeEvidence:
-    """候选②裁决依据：by_provider 元素=int（非对象）；test_provider 无 message 键。"""
+    """候选②裁决依据：by_provider 元素=int（非对象）；test_provider 无 message 键。
 
-    def test_by_provider_values_are_int_not_object(self):
+    契约随更新（2026-10-20 DEC-㉖-① 真源补现取 B1）：TokenMeter 聚合加
+    prompt/completion 两轴，by_provider 元素升 {prompt,completion,total,requests}
+    对象——裁决勘误：修前"元素=int 非对象"现为"元素=对象"（CD-③ 裁决所依据的
+    真源形状已变更，历史裁决文本不改写）。test_provider 无 message 键裁决主轴
+    零变化。
+    """
+
+    def test_by_provider_values_are_object_with_split_axes(self):
         from src.gland.token_meter import TokenMeter
 
         tm = TokenMeter()
         tm.record("prov-x", "m", 10, 5)
         tm.record("prov-x", "m", 3, 2)
         by = tm.summary()["by_provider"]
-        assert by["prov-x"] == 20
-        assert isinstance(by["prov-x"], int), (
-            "元素是 int→UI data.input/output/requests 恒 undefined"
-        )
-        assert not isinstance(by["prov-x"], dict)
+        assert by["prov-x"] == {
+            "prompt": 13,
+            "completion": 7,
+            "total": 20,
+            "requests": 2,
+        }
+        assert isinstance(by["prov-x"], dict)
 
     def test_test_provider_has_no_message_key(self):
         from src.gland.router import ModelRouter

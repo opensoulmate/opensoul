@@ -31,17 +31,20 @@ interface KeySlot {
   last_checked: number;
 }
 
-// 真源 GET /api/gland/usage = token_meter.summary() 形（by_provider 元素=int 累计
-// token 总数；total_input_tokens/total_output_tokens/total_requests/budget_used_pct
-// 等键真源不产出，禁编造）。
+// 真源 GET /api/gland/usage = token_meter.summary() 形（DEC-㉖-① 真源补现：入/出
+// 两轴 total_prompt_tokens/total_completion_tokens + by_provider 元素升
+// {prompt,completion,total,requests} 对象；total_input_tokens/total_output_tokens/
+// total_requests/budget_used_pct 等键真源不产出，禁编造）。
 interface UsageSummary {
   total_tokens: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
   budget_limit: number | null;
   remaining_budget: number | null;
   call_count: number;
   by_model: Record<string, number>;
   by_user: Record<string, number>;
-  by_provider: Record<string, number>;
+  by_provider: Record<string, { prompt: number; completion: number; total: number; requests: number }>;
 }
 
 // 真源 GET /api/gland/usage/recent records 元素形（timestamp=epoch 秒 float；
@@ -356,6 +359,9 @@ export default function GlandPage() {
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="text-2xl font-bold">{formatNumber(usage?.total_tokens || 0)}</div>
           <div className="text-xs text-muted-foreground">总Token数</div>
+          <div className="text-[10px] text-muted-foreground">
+            入: {formatNumber(usage?.total_prompt_tokens || 0)} / 出: {formatNumber(usage?.total_completion_tokens || 0)}
+          </div>
         </div>
       </div>
 
@@ -559,19 +565,24 @@ k.is_valid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foregro
                 <p className="text-xs">暂无用量数据</p>
               </div>
             ) : (
-              Object.entries(usage?.by_provider || {}).map(([name, tokens]) => {
-                // 真源 by_provider 元素=int（该 provider 累计 token 总数），
-                // 入/出/请求拆分真源不产出不渲染（修前三键恒 undefined 恒 0）
-                const total = tokens || 0;
-                const maxTotal = Math.max(...Object.values(usage?.by_provider || {}), 1);
+              Object.entries(usage?.by_provider || {}).map(([name, data]) => {
+                // DEC-㉖-① 真源补现：by_provider 元素={prompt,completion,total,requests}
+                // 对象，入/出/请求拆分行随真源恢复（CD-⑤ 移除件复原语义）。
+                const total = data.total || 0;
+                const maxTotal = Math.max(...Object.values(usage?.by_provider || {}).map(d => d.total || 0), 1);
                 return (
                   <div key={name} className="p-3 hover:bg-muted/30">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{name}</span>
-                      <span className="text-[10px] text-muted-foreground">合计: {formatNumber(total)} tokens</span>
+                      <span className="text-[10px] text-muted-foreground">{formatNumber(data.requests || 0)} 请求</span>
                     </div>
-                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden mb-1">
                       <div className="h-full bg-primary rounded-full" style={{ width: `${(total / maxTotal) * 100}%` }} />
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                      <span>入: {formatNumber(data.prompt || 0)}</span>
+                      <span>出: {formatNumber(data.completion || 0)}</span>
+                      <span>合计: {formatNumber(total)}</span>
                     </div>
                   </div>
                 );

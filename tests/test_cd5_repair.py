@@ -25,6 +25,13 @@ gland/page.tsx 四组消费键对真源漂移——
 - timestamp=epoch 秒 ×1000；task 列/入出拆分行死显示面收口（恢复=真源补现
   候选 pending-decisions ㉕ 同族）。
 
+契约随更新（2026-10-20 DEC-㉖-① 真源补现取 B1）：TokenMeter 聚合加
+prompt/completion 两轴（summary() 加 total_prompt_tokens/total_completion_tokens、
+by_provider 元素升 {prompt,completion,total,requests} 对象）→「入: x / 出: y」
+拆分行与 by_provider 入/出/请求拆分行随真源恢复（㉕ 同款正向恢复非新增发明；
+裁决勘误：修前「真源不产出」现为「DEC-㉖-① 已补现」，历史裁决文本不改写）。
+task 列仍缺真源（B2=task 轴跨 gland 调用点大件待拍）→ 锁维持禁渲染。
+
 断言三层（禁自嗨恒真断言）：
 ①源码消费面：真源键真在场 + 漂移键零残留（消费形）；
 ②census 工具真跑真仓（scripts/census_contract_drift.py）：4 个漂移键
@@ -57,7 +64,9 @@ _spec.loader.exec_module(cdc)
 
 # CD-③ 裁决+深挖扩面的漂移键（消费形，注释里的历史记述不算）
 DRIFT_RECEIPT_KEYS = ("message",)
-DRIFT_USAGE_KEYS = ("input", "output", "requests")
+# 勘误（DEC-㉖-①）："requests" 现为真源 by_provider 元素键（{prompt,completion,
+# total,requests}），从漂移残留名单移出；input/output 仍非真源键维持零残留锁。
+DRIFT_USAGE_KEYS = ("input", "output")
 DRIFT_SUMMARY_KEYS = (
     "total_input_tokens",
     "total_output_tokens",
@@ -69,6 +78,8 @@ DRIFT_KEY_FIELDS = ("active",)
 
 # 真源键（行为桥对账基准）
 TEST_RESULT_KEYS = {"status", "provider", "model", "reply"}
+# DEC-㉖-① 真源补现：by_provider 元素键（census unresolved_shape 允许集）
+BY_PROVIDER_ELEMENT_KEYS = {"prompt", "completion", "total", "requests"}
 
 
 def _src() -> str:
@@ -100,7 +111,8 @@ def test_receipt_drift_key_absent():
 
 
 def test_usage_summary_consumes_true_keys():
-    """UsageSummary 收编真源 summary() 形：total_tokens/call_count/budget_limit。"""
+    """UsageSummary 收编真源 summary() 形：total_tokens/call_count/budget_limit
+    + DEC-㉖-① 两轴 total_prompt_tokens/total_completion_tokens。"""
     code = _code()
     for expr in (
         "usage?.call_count",
@@ -108,6 +120,8 @@ def test_usage_summary_consumes_true_keys():
         "usage.total_tokens",
         "usage.budget_limit",
         "usage?.by_provider",
+        "usage?.total_prompt_tokens",
+        "usage?.total_completion_tokens",
     ):
         assert expr in code, f"真源 summary 键未被消费: {expr}"
     # 预算使用率=真源键派生（total_tokens/budget_limit），非 budget_used_pct
@@ -123,12 +137,17 @@ def test_usage_summary_drift_keys_absent():
             assert re.search(pat, code, re.M) is None, f"summary 漂移键残留: {key} ({pat})"
 
 
-def test_by_provider_element_is_int_consumption():
-    """by_provider 元素=int 直接消费（修前按 {input,output,requests} 对象消费恒 undefined）。"""
+def test_by_provider_element_is_object_consumption():
+    """by_provider 元素={prompt,completion,total,requests} 对象消费（契约随更新：
+    DEC-㉖-① 真源补现元素升对象，CD-⑤「元素=int 直接消费」裁决随真源形状变更失效，
+    勘误记档=修前 int 形、修后对象形；input/output 非真源键维持零残留锁）。"""
     code = _code()
-    assert "Object.entries(usage?.by_provider || {}).map(([name, tokens])" in code
-    assert "const total = tokens || 0;" in code
-    # 三键消费形零残留
+    assert "Object.entries(usage?.by_provider || {}).map(([name, data])" in code
+    assert "const total = data.total || 0;" in code
+    # 拆分行消费真源元素键
+    for expr in ("data.prompt", "data.completion", "data.requests"):
+        assert expr in code, f"by_provider 元素真源键未被消费: {expr}"
+    # 非真源元素键零残留
     for key in DRIFT_USAGE_KEYS:
         for pat in (rf"\bdata\.{key}\b", rf"\bd\.{key}\b"):
             assert re.search(pat, code) is None, f"by_provider 元素漂移键残留: {key} ({pat})"
@@ -156,11 +175,13 @@ def test_keys_panel_consumes_true_shape():
 
 
 def test_dead_display_faces_removed():
-    """真源不产出的显示面死面清零：入/出拆分行、请求计数、task 列禁假渲染。"""
+    """显示面契约（随 DEC-㉖-① 更新）：入/出拆分行与 by_provider 请求计数已随真源
+    补现恢复（㉕ 同款正向恢复）；task 列仍缺真源（B2 task 轴待拍）禁假渲染。"""
     code = _code()
-    assert "入: " not in code, "入/出拆分行残留（真源 summary 无拆分）"
-    assert "请求</span>" not in code, "by_provider 请求计数残留（真源不产出）"
-    assert "{r.task}" not in code, "task 列残留（真源不产出）"
+    # 恢复面真在场（真源补现=消费真源键非假渲染）
+    assert "入: " in code, "入/出拆分行未随真源补现恢复"
+    assert "请求</span>" in code, "by_provider 请求计数未随真源补现恢复"
+    assert "{r.task}" not in code, "task 列残留（真源不产出，B2 待拍）"
 
 
 def test_timestamp_epoch_seconds_conversion():
@@ -179,10 +200,12 @@ def census_report() -> dict:
 
 
 def test_census_drift_keys_gone(census_report):
-    """修后 findings：4 个漂移键（message/input/output/requests）全部消失。
+    """修后 findings：漂移键（message/input/output）全部消失。
 
     修前实证（CD-③ 工件+本拍 --pre 复跑）：gland findings=message:149 +
     input/output/requests（挂 /api/gland/test=工具归属漂移 CD-③ 已记）共 4 条。
+    勘误（DEC-㉖-①）："requests" 随 by_provider 元素升对象成为真源键（消费形
+    data.requests 与真源产出同名），退出漂移名单；input/output 仍非真源键。
     """
     keys = {
         tuple(f["key"]) for f in census_report["findings"] if f["page"].endswith("gland/page.tsx")
@@ -192,11 +215,13 @@ def test_census_drift_keys_gone(census_report):
 
 
 def test_census_residual_findings_subset_of_true_source(census_report):
-    """残留 findings 键 ⊆ 真源 test_provider 键（census 形状提取盲区如实记）。
+    """残留 findings 键 ⊆ 真源键集（census 形状提取盲区如实记）。
 
-    test_connection 返回变量 result（dynamic=True 形状提取失败），消费键被标
-    unresolved_shape——真产出与否由行为桥（test_provider 实跑）判定，此断言锁
-    「残留不超出真源键集」（未来 UI 又发明键必炸）。
+    test_connection 返回变量 result 与 by_provider 元素（token_meter.summary()
+    变量返回 handler）均 dynamic=True 形状提取失败，消费键被标 unresolved_shape
+    ——真产出与否由行为桥（test_provider/TokenMeter 实跑）判定，此断言锁
+    「残留不超出真源键集」（未来 UI 又发明键必炸）。契约随更新（DEC-㉖-①）：
+    真源键集=回执键 + by_provider 元素键 {prompt,completion,total,requests}。
     """
     keys = {
         k
@@ -205,14 +230,17 @@ def test_census_residual_findings_subset_of_true_source(census_report):
         for k in f["key"]
     }
     assert keys, "gland findings 为空=提取失效断言空转（修前有 4 条）"
-    assert keys <= TEST_RESULT_KEYS, f"findings 出现真源外键: {keys - TEST_RESULT_KEYS}"
+    assert keys <= TEST_RESULT_KEYS | BY_PROVIDER_ELEMENT_KEYS, (
+        f"findings 出现真源外键: {keys - TEST_RESULT_KEYS - BY_PROVIDER_ELEMENT_KEYS}"
+    )
 
 
 # ── ③ 行为桥（真源实跑）─────────────────────────────────────────
 
 
 def test_summary_consumed_keys_subset_of_true_source():
-    """行为桥：UI 消费的每个 summary 键 TokenMeter.summary() 真产出；by_provider 元素=int。"""
+    """行为桥：UI 消费的每个 summary 键 TokenMeter.summary() 真产出；
+    by_provider 元素={prompt,completion,total,requests} 对象（DEC-㉖-①）。"""
     from src.gland.token_meter import TokenMeter
 
     tm = TokenMeter(budget_limit=1000)
@@ -223,8 +251,11 @@ def test_summary_consumed_keys_subset_of_true_source():
     for k in consumed:
         assert k in summary, f"UI 消费 summary 键真源不产出: {k}"
     for v in summary["by_provider"].values():
-        assert isinstance(v, int), f"by_provider 元素非 int: {v!r}"
+        assert isinstance(v, dict), f"by_provider 元素非对象: {v!r}"
+        assert set(v) == {"prompt", "completion", "total", "requests"}
     assert isinstance(summary["total_tokens"], int)
+    assert isinstance(summary["total_prompt_tokens"], int)
+    assert isinstance(summary["total_completion_tokens"], int)
     assert isinstance(summary["call_count"], int)
 
 

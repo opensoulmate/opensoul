@@ -32,11 +32,15 @@ class TokenMeter:
         self._alert_threshold = alert_threshold
         self._records: list[UsageRecord] = []
 
-        # Aggregated counters
+        # Aggregated counters（DEC-㉖-①：prompt/completion 两轴真源补现）
         self._by_user: dict[str, int] = defaultdict(int)
         self._by_model: dict[str, int] = defaultdict(int)
-        self._by_provider: dict[str, int] = defaultdict(int)
+        self._by_provider: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"prompt": 0, "completion": 0, "total": 0, "requests": 0}
+        )
         self._total: int = 0
+        self._total_prompt: int = 0
+        self._total_completion: int = 0
 
     # ── recording ────────────────────────────────────────────────
 
@@ -63,8 +67,14 @@ class TokenMeter:
         self._records.append(rec)
 
         self._total += total
+        self._total_prompt += prompt_tokens
+        self._total_completion += completion_tokens
         self._by_model[model] += total
-        self._by_provider[provider] += total
+        prov = self._by_provider[provider]
+        prov["prompt"] += prompt_tokens
+        prov["completion"] += completion_tokens
+        prov["total"] += total
+        prov["requests"] += 1
         if user_id:
             self._by_user[user_id] += total
 
@@ -115,12 +125,16 @@ class TokenMeter:
     def usage_by_user(self) -> dict[str, int]:
         return dict(self._by_user)
 
-    def usage_by_provider(self) -> dict[str, int]:
-        return dict(self._by_provider)
+    def usage_by_provider(self) -> dict[str, dict[str, int]]:
+        """Per-provider breakdown. Element shape (DEC-㉖-① 真源补现):
+        {prompt, completion, total, requests}."""
+        return {name: dict(counts) for name, counts in self._by_provider.items()}
 
     def summary(self) -> dict:
         return {
             "total_tokens": self._total,
+            "total_prompt_tokens": self._total_prompt,
+            "total_completion_tokens": self._total_completion,
             "budget_limit": self._budget_limit or None,
             "remaining_budget": self.remaining_budget,
             "call_count": len(self._records),

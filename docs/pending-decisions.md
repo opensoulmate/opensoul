@@ -317,7 +317,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 ## ㉖ gland 用量显示拆分恢复（真源补现 入/出 token 拆分、by_provider 请求计数、record task 列）
 
-**状态：待拍板（CD-⑤ 已按 CD 系列 wire 权威纪律收口=UI 收编真源键+死显示面清零；恢复拆分显示需真源形状变更（token_meter 记录聚合加轴），不自决另拍）**——依据：CD-③ 裁决候选②「by_provider 元素=int 非对象」+ CD-⑤ 深挖扩面「summary 无入/出拆分、recent_records 元素无 task 键」+ CD-⑤ 诚实边界②。
+**状态：已按建议默认 B1 先行执行（2026-10-20 DEC-㉖-①）**——依据：DEC-㉕-① 自决先例（pending-decisions ㉕「真源补现同款 DEC 自决先例可续」）+ 用户「权限/审批阻塞时别停工等批」铁律。实现=**真源补现取 B1（入/出两轴，token_meter 内部改）**：TokenMeter 聚合加 prompt/completion 两轴（summary() 加 total_prompt_tokens/total_completion_tokens、by_provider 元素升 {prompt,completion,total,requests} 对象）+ UI「入: x / 出: y」拆分行与 by_provider 入/出/请求拆分行随真源恢复（CD-⑤ 移除件复原语义，㉕ 同款正向恢复非新增发明）+ 证据锁契约随更新（test_cd5_repair/test_contract_drift_deep_dive，勘误「元素=int」→「元素=对象」，历史裁决文本不改写）。**B2=recent_records 元素补 task 轴（record() 调用点带 task 语义=跨 gland 调用点大件）仍待拍**（task 列维持禁渲染）。**若拍板改判回一句即改道：「㉖改A」=revert 本拍（回只显示总量）**。
 
 **现状**：`token_meter.summary()` 只聚合 `total_tokens`（入/出未拆）；`by_provider` 元素=int（该 provider 累计 token 总数）；`recent_records` 元素有 `prompt_tokens/completion_tokens/total_tokens/user_id` 无 `task`。CD-⑤ 后 gland 页=总请求数/总Token数/预算条/Provider 用量/最近记录全真源键，**「入: x / 出: y」拆分行、by_provider 入/出/请求拆分行、task 列已移除**（修前恒 0/undefined 假渲染=死显示面）。
 
@@ -325,7 +325,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - **A 维持收口**（现状）：只显示总量。零契约变更。
 - **B 真源补现（建议）**：`TokenMeter` 聚合加 prompt/completion 两轴（`summary()` 加 `total_prompt_tokens/total_completion_tokens`、`by_provider` 元素升 `{prompt,completion,total,requests}`=加性/元素形状变更需 UI 同步）+ `recent_records` 元素补 `task` 需 UsageRecord 加 task 轴（record() 调用点带 task 语义=跨模块接线）。
 - **权衡**：入/出拆分对调优（prompt 膨胀 vs 生成膨胀）是核心语义；task 列价值最低（调用点 task 语义未贯通）。若拍 B 建议拆两件：B1=入/出两轴（token_meter 内部改）、B2=task 轴（跨 gland 调用点，大件）。
-- **拍板方式**：回「**㉖取B1**」/「**㉖取B**」（cron 代跑下拍执行）/「㉖取A」/「㉖维持」。
+- **拍板方式**：~~回「**㉖取B1**」/「**㉖取B**」（cron 代跑下拍执行）/「㉖取A」/「㉖维持」~~ 已按建议默认 B1 先行执行（DEC-㉖-①）；异议回「㉖改A」（revert）即改道；B2（task 轴）仍待拍，回「㉖B2」即下拍执行。
 
 **诚实边界**：①A 收口=有意的能力取舍非 bug（真源无产出禁假渲染）②by_provider 元素升对象=既有 UI 消费面再收编（CD-⑤ 已收 int 形，B 拍须同步 UI+契约测试随更新）③record() 签名加 task=全调用点（chat/embed/llm 直通等）接线面，非 token_meter 内改。
 
