@@ -115,12 +115,12 @@ def test_consumed_access_subset_true_source():
 
 
 def test_process_face_scope_lock():
-    """范围纪律：ProcessInfo 面（repair_candidate 第 10 件 p.name/p.memory）未动，
-    本拍只收服务面——禁误扩也禁漏修（进程面仍留漂移待拍）。"""
-    assert "p.name" in ui_src, "进程面被误扩（第 10 件未拍）"
-    assert "p.memory.toFixed" in ui_src
+    """范围纪律（随 CD-32 翻转）：进程面（repair_candidate 第 10 件 p.name/p.memory）
+    已由 CD-32 收口——本锁改锁收口后状态（进程面漂移复发先炸，与 test_cd32 双锁）。"""
+    assert "p.name" not in ui_src, "进程面漂移复发（CD-32 已收口）"
+    assert "p.memory.toFixed" not in ui_src
     block = re.search(r"interface ProcessInfo \{([^}]*)\}", ui_src)
-    assert block and "name" in block.group(1), "ProcessInfo 面被改动=超出本拍范围"
+    assert block and "command" in block.group(1), "ProcessInfo 面真源键被改走=漂移复发"
 
 
 # ── ② 行为桥：真 ServiceInfo 模型真跑 + 真 UI 表达式 node 真执行 ──

@@ -22,10 +22,10 @@ interface ScanResult {
 
 interface ProcessInfo {
   pid: number;
-  name: string;
-  cmd: string;
+  command: string;
+  executable: string | null;
   cpu: number;
-  memory: number;
+  mem: number;
 }
 
 interface CLITool {
@@ -428,9 +428,9 @@ export default function ConnectorsPage() {
                   {scanResult.processes.slice(0, 30).map((p) => (
                     <div key={p.pid} className="flex items-center gap-2 text-[10px] py-1 border-b border-border last:border-0">
                       <span className="text-muted-foreground w-12 shrink-0">PID {p.pid}</span>
-                      <span className="font-medium flex-1 truncate">{p.name}</span>
+                      <span className="font-medium flex-1 truncate">{p.command || p.executable}</span>
                       <span className="text-muted-foreground">CPU {p.cpu.toFixed(1)}%</span>
-                      <span className="text-muted-foreground">MEM {p.memory.toFixed(1)}%</span>
+                      <span className="text-muted-foreground">MEM {p.mem.toFixed(1)}%</span>
                     </div>
                   ))}
                 </div>

@@ -395,8 +395,21 @@ class TestKnownDrifts:
         assert "{s.host}:{s.port}" not in ui
         assert "s.process_name || s.local_address" in ui
         assert "{s.local_address}:{s.local_port}" in ui
-        # 范围纪律：进程名面（repair_candidate ⑩）未动——p.name/p.memory 漂移仍待拍
-        assert "p.name" in ui and "p.memory.toFixed" in ui
+        # 范围纪律（随 CD-32 翻转）：进程名面已由 CD-32 收口（第 10 件），改锁收口后状态
+        assert "p.name" not in ui and "p.memory.toFixed" not in ui
+
+    def test_connectors_processes_repair_landed(self, artifact):
+        rows = self._rows(artifact)
+        r = rows[("soma_discovery.api_full_scan:1472", "processes.name")]
+        assert r["verdict"] == _D
+        assert r.get("repair_status") == "landed@CD-32"
+        assert "已收口" in r["repair_candidate"]
+        # 修复真落地：当前 UI 已无修前漂移键消费、真源键已收编
+        ui = _src("admin-ui/app/connectors/page.tsx")
+        assert "p.name" not in ui
+        assert "p.memory" not in ui
+        assert "p.command || p.executable" in ui
+        assert "p.mem.toFixed" in ui
 
     def test_every_drift_has_ui_symptom_anchor(self, artifact):
         rows = self._rows(artifact)
@@ -413,12 +426,13 @@ class TestKnownDrifts:
 
 class TestExpandedFindings:
     UI_LITERALS = [
-        ("admin-ui/app/connectors/page.tsx", "p.memory.toFixed"),
         ("admin-ui/app/agent-nodes/page.tsx", "recallResults.sources"),
     ]
     # 已收口件（CD-㉔/CD-㉗/CD-㉘）：修前消费字面量「在场」证据锁按 CD-17 先例翻转「清零」
     LANDED_ABSENT_LITERALS = [
         ("admin-ui/app/benchmark/page.tsx", "r.success_rate"),
+        # CD-32 进程面收编：修前 p.memory.toFixed TypeError 崩坏面清零
+        ("admin-ui/app/connectors/page.tsx", "p.memory.toFixed"),
         ("admin-ui/app/knowledge-graph/page.tsx", "rel.relation_type"),
         ("admin-ui/app/knowledge-graph/page.tsx", "rel.target_entity_id"),
         ("admin-ui/app/knowledge-graph/page.tsx", "selectedEntity.type"),

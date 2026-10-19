@@ -736,7 +736,7 @@ SHAPE_VERDICTS = {
     ("soma_discovery.api_full_scan:1472", "processes.mem"): {
         "verdict": _V,
         "evidence": "ProcessInfo 字段 mem 真在场（src/api/soma_discovery.py:169）；UI p.mem 消费"
-        "（soma/page.tsx:83）可达（connectors 页读 p.memory=同根漂移，EXPANDED_FINDINGS）",
+        "（soma/page.tsx:83、connectors/page.tsx:433——CD-32 收编）可达",
         "anchors": [(SD, 169, "    mem: float")],
     },
     ("soma_discovery.api_full_scan:1472", "processes.pid"): {
@@ -747,14 +747,18 @@ SHAPE_VERDICTS = {
     },
     ("soma_discovery.api_full_scan:1472", "processes.name"): {
         "verdict": _D,
-        "repair_candidate": "connectors 扫描进程名收编真源（name→command/executable）",
+        "repair_candidate": "已收口：CD-32 connectors 扫描进程面收编真源（name→command/executable）"
+        "（2026-10-19）",
+        "repair_status": "landed@CD-32",
         "evidence": "ProcessInfo 字段恰 pid/user/cpu/mem/command/executable/description"
-        "（src/api/soma_discovery.py:165-172）无 name——UI p.name（connectors/page.tsx:431）恒 "
-        "undefined=进程名列恒空渲染（显示行为损失）；同根 p.memory（真源 mem，:433 "
-        "p.memory.toFixed 对 undefined 调 toFixed=TypeError 渲染崩坏面）以 EXPANDED_FINDINGS 登记",
+        "（src/api/soma_discovery.py:165-172）无 name——UI p.name（修前 connectors/page.tsx:"
+        "431）恒 undefined=进程名列恒空渲染（显示行为损失）；同根 p.memory（真源 mem，修前 "
+        ":433 p.memory.toFixed 对 undefined 调 toFixed=TypeError 渲染崩坏面）以 EXPANDED_FINDINGS "
+        "登记——CD-32 已收口（UI 收编 p.command||p.executable+p.mem.toFixed，同根 p.memory "
+        "崩坏面随主件同拍清零，2026-10-19），锚点改锁修复后状态（name/memory 漂移复发先炸）",
         "anchors": [
-            (SD, 165, "class ProcessInfo(BaseModel):"),
-            (U_CX, 431, "p.name"),
+            (SD, 170, "    command: str"),
+            (U_CX, 431, "p.command || p.executable"),
         ],
     },
     ("soma_discovery.api_full_scan:1472", "cli_tools.name"): {
@@ -895,10 +899,12 @@ EXPANDED_FINDINGS = [
         "page": "connectors/page.tsx",
         "keys": ["memory"],
         "verdict": _D,
-        "repair_candidate": "connectors 扫描进程名收编真源（name→command/executable）",
+        "repair_candidate": "已收口：CD-32 connectors 扫描进程面收编真源（name→command/executable）"
+        "（2026-10-19）",
         "note": "与 processes.name 同根（ProcessInfo 字段 mem 非 memory，src/api/soma_discovery.py:"
-        "169）：UI p.memory.toFixed(1)（connectors/page.tsx:433）对 undefined 调 toFixed="
-        "TypeError 渲染崩坏面（扫描结果进程列表一渲染即炸，比 name 恒空更重）",
+        "169）：UI p.memory.toFixed(1)（修前 connectors/page.tsx:433）对 undefined 调 toFixed="
+        "TypeError 渲染崩坏面（扫描结果进程列表一渲染即炸，比 name 恒空更重）——CD-32 随主件"
+        "同拍收口（p.mem.toFixed 崩坏面清零，2026-10-19）",
     },
     {
         "page": "benchmark/page.tsx",
