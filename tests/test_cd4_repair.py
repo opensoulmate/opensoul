@@ -18,6 +18,13 @@ undefined 必炸（输入即页崩）、content_type 徽章恒 'unknown' 假渲�
   候选 pending-decisions ㉕（knowledge 真列在场，涉证据锁"真源形状变了→裁决
   失效须复挖"，需拍板）。
 
+契约随更新（2026-10-19 DEDUP-①/DEC-㉕-① 自决取 B 先行执行）：㉕ 已按建议 B
+真源补现落地——get_duplicate_report 元素 item 内补 created_at/content_type
+（真列直出），UI 时间行/类型徽章按嵌套键恢复；裁决勘误「真源根本不产出」→
+「报告字面量不产出、DB 真列在场」（历史裁决文本不改写）。本文件两锁随更新：
+平铺形零容忍意图不变（收窄到平铺容器作用域）、'unknown' fabrication 零容忍
+不变（formatTime/created_at 消费合法回潮）。
+
 断言两层（禁自嗨恒真断言）：
 ①源码消费面：嵌套真源键真在场 + 平铺漂移键零残留 + 死显示面零残留；
 ②census 工具真跑真仓（scripts/census_contract_drift.py）：7 个平铺漂移键
@@ -82,17 +89,30 @@ def test_ui_consumes_nested_element_keys():
 
 
 def test_flat_drift_keys_absent_from_ui():
-    """平铺漂移键消费形零残留（注释里的历史记述不算消费形）。"""
+    """平铺漂移键消费形零残留（注释里的历史记述不算消费形）。
+
+    契约随更新（2026-10-19 DEDUP-①/DEC-㉕-①）：content_type/created_at 以嵌套
+    元素键（item_a/item_b 内）恢复显示=修复后真源键非漂移；本锁断言意图=
+    平铺形（pair.X/p.X/data.X 与 DuplicatePair 容器接口字段）零容忍，收窄到
+    平铺容器作用域（DuplicateItem 元素接口的同名字段是真源键禁误伤）。
+    """
     src = _src()
     for key in FLAT_DRIFT_KEYS:
-        # 消费形=点访问（pair./p./data. 前缀）或接口字段声明
+        # 消费形=点访问（pair./p./data. 前缀）
         for pat in (
             rf"\bpair\.{key}\b",
             rf"\bp\.{key}\b",
             rf"\bdata\.{key}\b",
-            rf"^\s+{key}: string;",
         ):
             assert re.search(pat, src, re.M) is None, f"平铺漂移键残留: {key} ({pat})"
+    # 平铺容器接口（DuplicatePair）字段声明仍零容忍
+    pair_iface = src.split("interface DuplicatePair {", 1)[1].split("}", 1)[0]
+    for key in FLAT_DRIFT_KEYS:
+        assert not re.search(rf"^\s+{key}\s*:", pair_iface, re.M), f"平铺容器接口字段残留: {key}"
+    # 嵌套元素接口=修复后真源键（DEC-㉕-① 补现）正向在场
+    item_iface = src.split("interface DuplicateItem {", 1)[1].split("}", 1)[0]
+    for key in ("created_at", "content_type"):
+        assert re.search(rf"^\s+{key}\s*:", item_iface, re.M), f"嵌套元素真源键未声明: {key}"
 
 
 def test_delete_buttons_pass_real_ids():
@@ -113,13 +133,25 @@ def test_search_filter_consumes_real_keys_with_guards():
     assert "(p.item_b.id || '')" in src
 
 
-def test_dead_display_faces_removed():
-    """真源不产出的显示面死面清零：时间行/formatTime/'unknown' 徽章禁假渲染。"""
-    # 断言只看消费代码（行注释里的历史记述不算消费形）
+def test_display_faces_restored_on_nested_keys():
+    """契约随更新（2026-10-19 DEDUP-①/DEC-㉕-① 真源补现取 B）：时间行/类型徽章
+    按嵌套真源键恢复（CD-④ 死显示移除件复原）。
+
+    断言意图沿革（零意图丢失）：CD-④ 锁=「真源不产出禁假渲染」——'unknown'
+    假徽章 fabrication 纪律**不变**（继续零容忍）；formatTime/created_at 消费
+    随真源补现合法回潮（消费的是 item_a/item_b 嵌套键非平铺漂移键，平铺形由
+    test_flat_drift_keys_absent_from_ui 继续锁死）。
+    """
     code = re.sub(r"//.*$", "", _src(), flags=re.M)
-    assert "formatTime" not in code, "formatTime 死助手残留（时间显示真源无产出）"
-    assert "created_at" not in code, "时间显示消费残留"
-    assert "'unknown'" not in code and '"unknown"' not in code, "content_type 假徽章残留"
+    assert "formatTime" in code, "formatTime 未随时间显示恢复回潮（DEC-㉕-①）"
+    # 时间/类型消费形=嵌套键（平铺形禁回潮由上一锁保证）
+    assert "pair.item_a.created_at" in code
+    assert "pair.item_b.created_at" in code
+    assert "pair.item_a.content_type" in code
+    assert "pair.item_b.content_type" in code
+    assert "'unknown'" not in code and '"unknown"' not in code, (
+        "content_type 假徽章 fabrication 纪律不变：缺失如实略禁 'unknown'"
+    )
 
 
 # ── ② census 工具真跑真仓 ─────────────────────────────────────

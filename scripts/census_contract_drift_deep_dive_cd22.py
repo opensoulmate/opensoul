@@ -322,12 +322,15 @@ SHAPE_VERDICTS = {
         ],
     },
     # ── dedup：get_duplicate_report 元素 + deduplicate_knowledge 返回面 ──
+    # 契约随更新（2026-10-19 DEC-㉕-①/DEDUP-① 真源补现取 B）：元素 item 内补
+    # created_at/content_type（真列直出），元素字面量随 +18 行位移 133-139→136-155、
+    # similarity 锚点 137→151 同步（断言意图零丢失：similarity 真产出锁不变）。
     ("dedup.list_duplicates:27", "duplicates.similarity"): {
         "verdict": _V,
         "evidence": "report 元素恰 {item_a,item_b,similarity}（src/services/deduplication.py:"
-        "133-139），similarity 真产出（:137）；handler 包装 {total_pairs,duplicates}"
-        "（api/dedup.py:34）后 UI 消费（dedup/page.tsx:205）可达",
-        "anchors": [(DP, 137, '"similarity": round(sim, 2),')],
+        "136-155），similarity 真产出（:151）；handler 包装 {total_pairs,duplicates}"
+        "（api/dedup.py:34）后 UI 消费（dedup/page.tsx）可达",
+        "anchors": [(DP, 151, '"similarity": round(sim, 2),')],
     },
     ("dedup.run_deduplication:17", "total"): {
         "verdict": _V,

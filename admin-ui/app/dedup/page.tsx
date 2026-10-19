@@ -17,9 +17,14 @@ import { Badge, tone } from '@/components/ui/badge';
 // 修前平铺 8 键形（平铺 id/title/内容类型/创建时间 四对键）对真源恒
 // undefined：标题/ID 全空渲染、删除按钮 id 失效、搜索过滤对缺失 id 调
 // toLowerCase 必炸（页崩）。
+// DEDUP-①（DEC-㉕-① 真源补现取 B）：元素 item 内补 created_at/content_type
+// （knowledge 真列直出），时间行/类型徽章按嵌套键恢复显示（缺失如实略禁
+// fabricate——'unknown' 假徽章不再回潮）。
 interface DuplicateItem {
   id: string;
   title: string;
+  created_at: string | null;
+  content_type: string | null;
 }
 
 interface DuplicatePair {
@@ -50,8 +55,16 @@ interface DedupResult {
 
 // ── Helpers ─────────────────────────────────────────────────
 
-// （formatTime 已随 created_at_* 死显示面收口移除——真源元素无时间产出，
-//  时间显示恢复=真源补现候选，见 pending-decisions ㉕。）
+// DEDUP-①（DEC-㉕-①）：formatTime 随时间显示恢复回潮（CD-④ 移除件复原）——
+// 语义与 CD-④ 移除前逐字一致（空串如实 '-'、解析失败原样透传不 fabricate）。
+function formatTime(ts: string | null) {
+  if (!ts) return '-';
+  try {
+    return new Date(ts).toLocaleString('zh-CN', {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return ts; }
+}
 
 function SimilarityBar({ value }: { value: number }) {
   const pct = Math.min(100, Math.round(value * 100));
@@ -115,17 +128,25 @@ function DuplicatePairCard({ pair, expanded, onToggle, onRemove }: {
               <div className="flex items-center gap-1.5 mb-1">
                 <Database className="w-3 h-3 text-blue-500" />
                 <span className="text-[10px] font-medium text-blue-500">条目 A</span>
+                {pair.item_a.content_type ? (
+                  <Badge variant="muted">{pair.item_a.content_type}</Badge>
+                ) : null}
               </div>
               <p className="text-xs font-medium">{pair.item_a.title || '无标题'}</p>
               <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{pair.item_a.id}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{formatTime(pair.item_a.created_at)}</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex items-center gap-1.5 mb-1">
                 <Database className="w-3 h-3 text-violet-500" />
                 <span className="text-[10px] font-medium text-violet-500">条目 B</span>
+                {pair.item_b.content_type ? (
+                  <Badge variant="muted">{pair.item_b.content_type}</Badge>
+                ) : null}
               </div>
               <p className="text-xs font-medium">{pair.item_b.title || '无标题'}</p>
               <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{pair.item_b.id}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{formatTime(pair.item_b.created_at)}</p>
             </div>
           </div>
 
@@ -209,11 +230,13 @@ export default function DedupPage() {
     if (search) {
       const q = search.toLowerCase();
       // 收编真源键（修前平铺 id 键恒 undefined 调 toLowerCase 必炸=搜索即页崩；
-      // content_type 真源不产出，过滤面一并收口禁搜不存在的字段）
+      // DEDUP-①（DEC-㉕-①）content_type 随真源补现回潮进过滤面——CD-④ 移除前语义复原）
       return (p.item_a.title || '').toLowerCase().includes(q) ||
         (p.item_b.title || '').toLowerCase().includes(q) ||
         (p.item_a.id || '').toLowerCase().includes(q) ||
-        (p.item_b.id || '').toLowerCase().includes(q);
+        (p.item_b.id || '').toLowerCase().includes(q) ||
+        (p.item_a.content_type || '').toLowerCase().includes(q) ||
+        (p.item_b.content_type || '').toLowerCase().includes(q);
     }
     return true;
   });

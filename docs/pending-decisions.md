@@ -29,6 +29,10 @@
 | ㉒ | add_provider 同名覆盖注册面清钥语义（同名再注册复用旧钥残留面） | ㉑ 诚实边界③留档件 | 取 A（同名 409 拒零副作用，替换=DELETE+POST）——**已按建议默认 A 先行执行 2026-10-18（GLAND-②）** | ~~"㉒取A"~~ 已落，异议回「㉒改B」（同名覆盖先清钥）/「㉒改C」（revert 静默覆盖）即改道 |
 | ㉓ | gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许） | GLAND-② 诚实边界③「PATCH 就地改（不触钥）另拍」 | 取 A（持钥改道 409 原子拒；无钥/同值照常；不触钥）——**已按建议默认 A 先行执行 2026-10-18（GLAND-③）** | ~~"㉓取A"~~ 已落，异议回「㉓改B」（持钥也允许显式改道）/「㉓改C」（revert 撤 PATCH 面） |
 | ㉔ | sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db） | GLAND-④ 留档候选首件 | 取 D→B（先 `hermes doctor`/`hermes update` 防复发，再归档+sqlite3 .recover 抽取+对账+原子替换；对账不过落 C）——**本拍=决策材料件先落（SESS-①，零处置），处置涉 ~/opensoul 外数据需拍板** | "㉔取D→B" / "㉔取C" / "㉔维持" |
+| ㉕ | dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type） | CD-④ 诚实边界留档 | 取 B（真源补现：元素 item 补真列+UI 恢复时间行/类型徽章）——**已按建议默认 B 先行执行 2026-10-19（DEC-㉕-①/DEDUP-①）** | ~~"㉕取B"~~ 已落，异议回「㉕改A」（revert 回不显示时间/类型）即改道 |
+| ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口） | "㉖取B1" / "㉖取B" / "㉖取A" / "㉖维持" |
+| ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）；㉗b 取 B（问题类闭集） | "㉗a取B1" / "㉗a取B2" / "㉗b取B" / "㉗a维持 ㉗b维持" |
+| ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）；㉘b 取 B（语义随拍） | "㉘a取B1" / "㉘a取B2" / "㉘b取B" / "㉘a维持 ㉘b维持" |
 | ㉙ | timeline/proactive e2e 探针残留 194+2 行删除（TR-② 闸门回归清单） | TR-② 闸门复跑（2026-10-19） | 取 B（清单精确删+备份+回读，TL-④ 纪律）——**清点已落（TR-②，零删除），删除待拍板** | "㉙删"（cron 代跑）/ "㉙维持" |
 
 ---
@@ -299,7 +303,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 ## ㉕ dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type）
 
-**状态：待拍板（CD-④ 已按 CD 系列 wire 权威纪律收口=UI 收编真源嵌套键+死显示面清零；恢复时间/类型显示需真源形状变更→CD-③ 证据锁「真源形状变了→①裁决失效须复挖」，不自决另拍）**——依据：CD-③ 深挖裁决候选①证据原文「created_at_* 与 content_type 真源根本不产出=时间显示全部失效」+ CD-④ 诚实边界留档。
+**状态：已按建议默认 B 先行执行（2026-10-19 DEC-㉕-①/DEDUP-①）**——依据：CD-34 周期日志候选队列仅剩拍板件（㉗a㉗b㉔㉕㉖㉘㉙ 全数标注需拍板、无无需拍板可执行件）+ 用户「权限/审批阻塞时别停工等批」铁律 + ①~㉓ DEC 自决先例（GLAND-① 同款：登记「需拍板」的仓内可 revert 代码件仍按自决先例先行执行）。原状态「不自决另拍」判读勘误：证据锁「真源形状变了→裁决失效须复挖」是**程序要求**（显式改锁+勘误记档）非拍板阻塞，与 ⑤/⑦/㉑ 自决件同性质。实现=**真源补现取 B**：get_duplicate_report 元素 item 内补 created_at/content_type（knowledge 真列直出零 fabrication，SELECT 补 content_type 列；平铺形 created_at_a/created_at_b/content_type 顶层仍不产出=CD-④ 裁决主轴零变化）+ UI 时间行/formatTime（CD-④ 移除件复原，语义逐字一致）与类型徽章消费嵌套新键（缺失如实略禁 'unknown' fabrication 回潮）+ 搜索过滤 content_type 随复原（CD-④ 移除前语义）+ 证据锁契约随更新（tests/test_contract_drift_deep_dive.py + tests/test_cd4_repair.py，勘误「真源根本不产出」→「报告字面量不产出、DB 真列在场」，历史裁决文本不改写）。**若拍板改判回一句即改道：「㉕改A」=revert 本拍（回不显示时间/类型）**。
 
 **现状**：`get_duplicate_report` 元素=`{item_a:{id,title},item_b:{id,title},similarity}`（services/deduplication.py 字面量，tests/test_contract_drift_deep_dive.py 证据锁把守）；CD-④ 后 dedup 卡片=标题/ID/相似度/删除按钮全真源键，**时间行与 content_type 徽章已移除**（修前恒 `'-'`/`'unknown'` 假渲染=死显示面）。但 knowledge 表 **`created_at`/`content_type` 真列在场**（且 SELECT 行已载入内存、content_type 仅差 SELECT 列清单一项）——数据在场、仅报告字面量不产出。
 
@@ -307,7 +311,7 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 - **A 维持收口**：卡片不显示时间/类型（现状）。零契约变更，但用户裁决"删 A 还是删 B"时看不到哪条新。
 - **B 真源补现（建议）**：`get_duplicate_report` 元素 item 内补 `created_at`/`content_type`（真列直出零 fabrication，SELECT 补 content_type 列）+ UI 恢复时间行/类型徽章消费嵌套新键 + `tests/test_contract_drift_deep_dive.py` 证据锁随契约更新（裁决重挖=「真源根本不产出」勘误为「报告字面量不产出、DB 真列在场」，历史裁决文本不改写）。
 - **权衡**：dedup 卡片的用途=人工逐对裁决删哪条（保留策略按时间保早/保新），时间是核心语义非装饰；B 是加性契约（既有消费键零变化）。
-- **拍板方式**：回「**㉕取B**」（cron 代跑下拍执行）/「㉕取A」/「㉕维持」。
+- **拍板方式**：~~回「**㉕取B**」（cron 代跑下拍执行）/「㉕取A」/「㉕维持」~~ 已按建议默认 B 先行执行（DEC-㉕-①）；异议回「㉕改A」（revert）即改道。
 
 **诚实边界**：①A 收口=有意的能力取舍非 bug（真源无产出禁假渲染）②B 涉真源形状变更=CD-③ 证据锁触发复挖，须显式改锁+勘误记档③DedupResult 面另有未裁决漂移（UI `merged` 键真源不产出、`details` 元素=dict 渲染 `[object Object]`）——CD-③ 普查未列，另拍复核。
 

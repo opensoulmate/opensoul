@@ -82,7 +82,13 @@ class TestVerdictCoverage:
 
 
 class TestDedupShapeEvidence:
-    """候选①裁决依据：get_duplicate_report 元素=嵌套形，UI 平铺键全缺席。"""
+    """候选①裁决依据：get_duplicate_report 元素=嵌套形，UI 平铺键全缺席。
+
+    契约随更新（2026-10-19 DEDUP-①/DEC-㉕-① 真源补现取 B）：元素 item 内补
+    created_at/content_type（knowledge 真列直出）——裁决勘误：修前"真源根本不
+    产出"实为"报告字面量不产出、DB 真列在场"（CD-④ 记述沿用裁决原文不改写）。
+    平铺形（created_at_a/created_at_b/content_type 顶层）仍不产出=裁决主轴零变化。
+    """
 
     @pytest.mark.asyncio
     async def test_report_element_is_nested_not_flat(self, monkeypatch):
@@ -95,6 +101,7 @@ class TestDedupShapeEvidence:
                 "title": "同一标题",
                 "content": "同一内容",
                 "created_at": "t1",
+                "content_type": "text",
             },
             {
                 "id": "b2",
@@ -102,6 +109,7 @@ class TestDedupShapeEvidence:
                 "title": "同一标题",
                 "content": "同一内容",
                 "created_at": "t2",
+                "content_type": "text",
             },
         ]
 
@@ -113,9 +121,10 @@ class TestDedupShapeEvidence:
         assert len(report) == 1
         el = report[0]
         assert set(el.keys()) == {"item_a", "item_b", "similarity"}
-        assert set(el["item_a"].keys()) == {"id", "title"}
-        assert set(el["item_b"].keys()) == {"id", "title"}
-        # UI 平铺消费键（DuplicatePair 接口 8 键中 7 键）对真源元素恒缺席=裁决锁死
+        # DEDUP-①（DEC-㉕-①）后元素键集={id,title,created_at,content_type}（真列直出）
+        assert set(el["item_a"].keys()) == {"id", "title", "created_at", "content_type"}
+        assert set(el["item_b"].keys()) == {"id", "title", "created_at", "content_type"}
+        # UI 平铺消费键对真源元素恒缺席=裁决主轴锁死（真源形状变了→①裁决失效须复挖）
         for flat_key in (
             "id_a",
             "id_b",
@@ -132,8 +141,22 @@ class TestDedupShapeEvidence:
         from src.services import deduplication
 
         rows = [
-            {"id": "a1", "user_id": "u1", "title": "T", "content": "C", "created_at": "t1"},
-            {"id": "b2", "user_id": "u1", "title": "T", "content": "C", "created_at": "t2"},
+            {
+                "id": "a1",
+                "user_id": "u1",
+                "title": "T",
+                "content": "C",
+                "created_at": "t1",
+                "content_type": "text",
+            },
+            {
+                "id": "b2",
+                "user_id": "u1",
+                "title": "T",
+                "content": "C",
+                "created_at": "t2",
+                "content_type": "text",
+            },
         ]
 
         async def fake_fetch(sql, *args):

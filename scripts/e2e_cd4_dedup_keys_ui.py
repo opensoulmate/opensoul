@@ -174,15 +174,16 @@ def main() -> int:
             ids.append(str(row["id"]))
     check(len(ids) == 4 and all(ids), "setup: 4 knowledge rows created (2 pairs)", ",".join(ids))
 
-    # 真源形状取证（修后元素=嵌套形，UI 收编同形）
+    # 真源形状取证（修后元素=嵌套形，UI 收编同形；契约随更新 DEC-㉕-①：
+    # 元素 item 内补 created_at/content_type 真列直出，顶层/平铺形零变化）
     report = call("GET", "/api/dedup/duplicates", token=token)
     pairs = [p for p in report.get("duplicates", [])
              if p["item_a"]["id"] in ids or p["item_b"]["id"] in ids]
     check(len(pairs) == 2, "setup: 2 independent duplicate pairs from true source", f"{len(pairs)} pairs")
     shape_ok = all(
         set(p.keys()) == {"item_a", "item_b", "similarity"}
-        and set(p["item_a"].keys()) == {"id", "title"}
-        and set(p["item_b"].keys()) == {"id", "title"}
+        and set(p["item_a"].keys()) == {"id", "title", "created_at", "content_type"}
+        and set(p["item_b"].keys()) == {"id", "title", "created_at", "content_type"}
         for p in pairs
     )
     check(shape_ok, "setup: true-source elements nested {item_a:{id,title},item_b:{id,title},similarity}",

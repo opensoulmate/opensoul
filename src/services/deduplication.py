@@ -105,12 +105,12 @@ async def get_duplicate_report(user_id: str | None = None) -> list[dict]:
     """获取重复报告（不删除，仅报告）"""
     if user_id:
         rows = await db_pool.fetch(
-            "SELECT id, user_id, title, content, created_at FROM knowledge WHERE user_id = ? ORDER BY created_at ASC",
+            "SELECT id, user_id, title, content, created_at, content_type FROM knowledge WHERE user_id = ? ORDER BY created_at ASC",
             user_id,
         )
     else:
         rows = await db_pool.fetch(
-            "SELECT id, user_id, title, content, created_at FROM knowledge ORDER BY created_at ASC"
+            "SELECT id, user_id, title, content, created_at, content_type FROM knowledge ORDER BY created_at ASC"
         )
 
     items = [dict(r) for r in rows]
@@ -130,10 +130,24 @@ async def get_duplicate_report(user_id: str | None = None) -> list[dict]:
             for j in range(i + 1, len(group)):
                 sim = _similarity(group[i], group[j])
                 if sim >= 0.85:
+                    # DEDUP-①（DEC-㉕-① 真源补现）：元素 item 补 created_at/content_type
+                    # （knowledge 真列直出零 fabrication——裁决"删 A 还是删 B"按时间保早/
+                    # 保新的核心语义；CD-④ 勘误：修前"真源根本不产出"实为"报告字面量不产出、
+                    # DB 真列在场"）。平铺形（created_at_a/content_type 等）仍不产出。
                     report.append(
                         {
-                            "item_a": {"id": group[i]["id"], "title": group[i]["title"]},
-                            "item_b": {"id": group[j]["id"], "title": group[j]["title"]},
+                            "item_a": {
+                                "id": group[i]["id"],
+                                "title": group[i]["title"],
+                                "created_at": group[i]["created_at"],
+                                "content_type": group[i]["content_type"],
+                            },
+                            "item_b": {
+                                "id": group[j]["id"],
+                                "title": group[j]["title"],
+                                "created_at": group[j]["created_at"],
+                                "content_type": group[j]["content_type"],
+                            },
                             "similarity": round(sim, 2),
                         }
                     )

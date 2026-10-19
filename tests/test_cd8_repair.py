@@ -131,6 +131,8 @@ ROWS = [
         "title": "同一标题",
         "content": "同一内容",
         "created_at": "t1",
+        # 契约随更新（DEC-㉕-①）：SELECT 行形含 content_type 真列（元素直出）
+        "content_type": "text",
     },
     {
         "id": "dup-y2",
@@ -138,6 +140,7 @@ ROWS = [
         "title": "同一标题",
         "content": "同一内容",
         "created_at": "t2",
+        "content_type": "text",
     },
 ]
 
