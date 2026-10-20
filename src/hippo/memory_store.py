@@ -111,8 +111,14 @@ class MemoryStore:
         min_retention: float | None = None,
         include_archived: bool = False,
         limit: int = 50,
+        query: str | None = None,
     ) -> list[Memory]:
-        """Search memories with filters."""
+        """Search memories with filters.
+
+        query=关键词过滤（字面子串匹配 content，大小写不敏感；None/空=零过滤
+        契约零变化）。只匹配 content——tags 已有独立过滤轴，两轴刻意分开。
+        """
+        needle = query.lower() if query else None
         results = []
         with self._lock:
             for mem in self._memories.values():
@@ -121,6 +127,8 @@ class MemoryStore:
                 if not include_archived and mem.archived:
                     continue
                 if tags and not any(t in mem.tags for t in tags):
+                    continue
+                if needle is not None and needle not in mem.content.lower():
                     continue
                 if min_retention is not None:
                     decay = self.decay_engine.calculate(

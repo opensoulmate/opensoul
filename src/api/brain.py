@@ -638,16 +638,23 @@ async def recall(
     自报只可确认绑定（矛盾=403 冒读面收口），匿名=保留自报契约零变化；显式
     session_id=by-ID 引用走父会话归属闸（越权=与缺行同契约 404 禁存在性探测）。
     修前缺省=全量泄露（任意人看全部记忆）收口为只看自己归属的记忆。
+
+    F3b-㉜ query 真消费（修前声明了却零消费=静默忽略客户端检索词，F4b-②
+    stream 参数同型收口）：字面子串匹配 content（大小写不敏感，store.search
+    单一过滤源），空 query=零过滤契约零变化；过滤先于截断保 limit top-N。
     """
     identity = bind_identity(authorization, "", user_id)
+    q = query.strip() or None
     if session_id:
         _gate_session_owner(session_id, identity.user_id)
-        memories = store.search(session_id=session_id, limit=limit)
+        memories = store.search(session_id=session_id, limit=limit, query=q)
     else:
         # 过滤先于截断：limit 的 top-N 语义在可见集上取（search 内部截断在
         # 归属过滤之前会把可见行挤出窗口）
         memories = [
-            m for m in store.search(limit=store.max_entries) if _memory_owner(m) == identity.user_id
+            m
+            for m in store.search(limit=store.max_entries, query=q)
+            if _memory_owner(m) == identity.user_id
         ][:limit]
     return {
         "memories": [
