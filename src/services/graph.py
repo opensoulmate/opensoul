@@ -32,8 +32,26 @@ def _row_to_relation(row) -> dict:
     return d
 
 
-async def create_relation(data: RelationCreate) -> dict:
+async def create_relation(data: RelationCreate, user_id: UUID) -> dict | None:
+    """Create a relation with ownership gate（写面归属闸）。
+
+    H1-②b-⑦a-⑤ 诚实边界②留档件收口：修前零归属检查——任意人可给任意实体 id
+    挂关系（含他人实体=跨用户边污染受害方关系列表、不存在实体=悬挂关系行）。
+    现两端实体必须真存在且同属 user_id（行归属 WHERE id AND user_id 单一判法）；
+    任一端缺失/不属 user_id → 返回 None（缺/跨用户同形=无存在性探测面，API 层
+    映射 404 "Entity not found" 与 entity detail/paths 同契约）。
+    """
     import uuid as _uuid
+
+    # 写面归属闸：两端实体须属 user_id（先闸后写，禁先写后补检）。
+    for eid in (data.source_entity_id, data.target_entity_id):
+        owner_ok = await db_pool.fetchval(
+            "SELECT id FROM entities WHERE id = $1 AND user_id = $2",
+            str(eid),
+            str(user_id),
+        )
+        if not owner_ok:
+            return None
 
     rel_id = str(_uuid.uuid4())
     await db_pool.execute(

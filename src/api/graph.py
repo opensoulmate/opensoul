@@ -142,8 +142,25 @@ async def get_paths(
 
 
 @router.post("/relations", response_model=RelationResponse)
-async def add_relation(data: RelationCreate):
-    return await create_relation(data)
+async def add_relation(
+    data: RelationCreate,
+    user_id: str = Query("default", description="User ID (UUID or username)"),
+    authorization: str | None = Header(None),
+):
+    """Relation create（身份轴 + 写面归属闸）。
+
+    H1-②b-⑦a-⑤ 诚实边界②留档件收口：修前无身份轴无归属检查——任意人可给
+    任意实体 id（含他人实体/不存在实体）挂关系。现：user_id 从认证派生
+    （bind_identity 同轴收口，匿名保留自报=既有本地多档案语义），两端实体须
+    真属派生档案键，缺/跨用户同形=404 "Entity not found"（无存在性探测面，
+    entity detail/paths 同契约）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
+    rel = await create_relation(data, uid)
+    if rel is None:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    return rel
 
 
 @router.get("/relations")

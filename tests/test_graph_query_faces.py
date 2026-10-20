@@ -405,6 +405,9 @@ class TestFaceRootFixes:
         b = _seed_entity(db, "user-a", "B")
         resp = graph_client.post(
             "/api/graph/relations",
+            # 写面归属闸（H1-②b-⑦a-⑤ 边界②收口）：user_id 与读面同轴（契约随
+            # 更新——修前写面零身份轴零归属检查，两端实体现须属该档案键）。
+            params={"user_id": "user-a"},
             json={
                 "source_entity_id": a,
                 "target_entity_id": b,

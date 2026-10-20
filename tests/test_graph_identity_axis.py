@@ -100,8 +100,8 @@ def env(tmp_path, monkeypatch):
         calls["get_graph"].append({"uid": uid, "entity_id": entity_id})
         return {"nodes": [], "edges": []}
 
-    async def _create_relation(data):
-        calls["create_relation"].append({"data": data})
+    async def _create_relation(data, uid):
+        calls["create_relation"].append({"data": data, "uid": uid})
         return {
             "id": uuid.uuid4(),
             "source_entity_id": data.source_entity_id,
@@ -272,8 +272,61 @@ class TestContractUnchanged:
         assert resp.status_code == 404
         assert env["calls"]["find_path"] == []
 
-    def test_post_relations_no_auth_axis_unchanged(self, env):
-        """POST /relations 无 user_id 自报轴（写面归属闸=另拍件，边界锁死）。"""
+    def test_post_relations_derived_uid_flows(self, env):
+        """POST /relations 写面身份轴收口（H1-②b-⑦a-⑤ 边界②执行件）：派生键流入
+        归属闸（修前无身份轴无归属检查，边界锁死断言契约随更新）。"""
+        resp = env["client"].post(
+            "/api/graph/relations",
+            json={
+                "source_entity_id": ENT_ID,
+                "target_entity_id": ENT2_ID,
+                "relation_type": "related",
+            },
+            headers=_token(env["user_a"]),
+        )
+        assert resp.status_code == 200
+        assert len(env["calls"]["create_relation"]) == 1
+        assert env["calls"]["create_relation"][0]["uid"] == uuid.UUID(env["user_a"])
+
+    def test_post_relations_anon_self_report_preserved(self, env):
+        """匿名保留自报（既有本地多档案语义契约零变化）。"""
+        resp = env["client"].post(
+            "/api/graph/relations",
+            params={"user_id": "alice"},
+            json={
+                "source_entity_id": ENT_ID,
+                "target_entity_id": ENT2_ID,
+                "relation_type": "related",
+            },
+        )
+        assert resp.status_code == 200
+        assert env["calls"]["create_relation"][0]["uid"] == _md5_uuid("alice")
+
+    def test_post_relations_conflict_403_zero_side_effect(self, env):
+        """认证请求自报他人档案=403（写面冒写面收口），服务函数零调用硬反证。"""
+        resp = env["client"].post(
+            "/api/graph/relations",
+            params={"user_id": env["user_b"]},
+            json={
+                "source_entity_id": ENT_ID,
+                "target_entity_id": ENT2_ID,
+                "relation_type": "related",
+            },
+            headers=_token(env["user_a"]),
+        )
+        assert resp.status_code == 403
+        assert "user mismatch" in resp.json()["detail"]
+        assert env["calls"]["create_relation"] == []
+
+    def test_post_relations_gate_404_mapping(self, env, monkeypatch):
+        """归属闸拒（create_relation 回 None）→404 'Entity not found'（缺/跨用户
+        同形，entity detail/paths 同契约）。"""
+        import src.api.graph as graph_api
+
+        async def _reject(data, uid):
+            return None
+
+        monkeypatch.setattr(graph_api, "create_relation", _reject)
         resp = env["client"].post(
             "/api/graph/relations",
             json={
@@ -282,8 +335,8 @@ class TestContractUnchanged:
                 "relation_type": "related",
             },
         )
-        assert resp.status_code == 200
-        assert len(env["calls"]["create_relation"]) == 1
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Entity not found"
 
     def test_health_stats_no_auth_axis(self, env):
         """health/stats 系统视图无身份轴（既有契约零变化）。"""
@@ -294,15 +347,16 @@ class TestContractUnchanged:
 
 class TestStaticWiring:
     def test_seven_endpoints_bind_identity(self):
-        """静态接线：7 端点恰 7 处 bind_identity 真调用+Header 形参（禁漏收口）。"""
+        """静态接线：8 端点恰 8 处 bind_identity 真调用+Header 形参（禁漏收口；
+        POST /relations 写面随 H1-②b-⑦a-⑤ 边界②收口入列）。"""
         import ast
         from pathlib import Path
 
         src = (Path(__file__).resolve().parent.parent / "src" / "api" / "graph.py").read_text(
             encoding="utf-8"
         )
-        assert src.count("bind_identity(authorization") == 7
-        assert src.count("authorization: str " + chr(124) + " None = Header(None)") == 7
+        assert src.count("bind_identity(authorization") == 8
+        assert src.count("authorization: str " + chr(124) + " None = Header(None)") == 8
         tree = ast.parse(src)
         funcs = {
             n.name: n
@@ -317,6 +371,7 @@ class TestStaticWiring:
             "get_relations",
             "get_full_graph",
             "get_graph_data",
+            "add_relation",
         ):
             arg_names = [a.arg for a in funcs[name].args.args]
             assert "authorization" in arg_names, f"{name} 缺 authorization 形参"
