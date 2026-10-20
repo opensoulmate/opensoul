@@ -6,6 +6,9 @@ Three advanced intelligence features for the knowledge platform:
 - Quality: multi-dimensional quality scoring of knowledge entries
 """
 
+import hashlib
+from uuid import UUID
+
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
@@ -22,6 +25,18 @@ router = APIRouter()
 graphrag = GraphRAGEngine()
 recommender = RecommendationEngine()
 scorer = QualityScorer()
+
+
+# ── 身份派生 ─────────────────────────────────────────────────────────
+
+
+def _resolve_user_id(user_id: str) -> UUID:
+    """Convert user_id to UUID — accept both UUID strings and plain usernames."""
+    try:
+        return UUID(user_id)
+    except ValueError:
+        h = hashlib.md5(user_id.encode()).hexdigest()
+        return UUID(f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}")
 
 
 # ── Request Schemas ────────────────────────────────────────────────
@@ -41,9 +56,16 @@ async def build_graph(
     authorization: str | None = Header(None),
 ):
     """Scan all knowledge entries and auto-extract entities + relations
-    into the knowledge graph."""
-    identity = bind_identity(authorization)
-    result = await graphrag.build_graph_from_knowledge(db_pool, user_id)
+    into the knowledge graph.
+
+    身份轴收口（F3b-⑥ 已裁决语义同族既有面延伸，F3b-④b 先例）：
+    user_id 从认证派生（bind_identity），自报值只可确认派生绑定——
+    认证请求自报他人档案=403（冒写面收口）；'default'/空=未声明→取派生；
+    匿名保留自报（既有本地多档案语义，F3b-⑥ 同款）；坏 token=401 零副作用。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
+    result = await graphrag.build_graph_from_knowledge(db_pool, uid)
 
     push_event(
         {
@@ -60,9 +82,17 @@ async def build_graph(
 
 
 @router.post("/graphrag/query")
-async def query_graph(req: GraphQueryRequest, user_id: str = Query(default="default")):
-    """Query the knowledge graph: BFS from an entity up to *depth* hops."""
-    result = await graphrag.query_graph(db_pool, user_id, req.entity_name, req.depth)
+async def query_graph(
+    req: GraphQueryRequest,
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Query the knowledge graph: BFS from an entity up to *depth* hops.
+
+    身份轴同 build（F3b-⑥ 同族语义，禁自报冒读）。"""
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
+    result = await graphrag.query_graph(db_pool, uid, req.entity_name, req.depth)
     if "error" in result:
         raise HTTPException(404, result["error"])
     return result
@@ -90,18 +120,24 @@ async def extract_from_text(
 async def trending(
     user_id: str = Query(default="default"),
     limit: int = Query(default=10, ge=1, le=50),
+    authorization: str | None = Header(None),
 ):
-    """Get trending (newest) knowledge entries."""
-    return {"entries": await recommender.get_trending(db_pool, user_id, limit)}
+    """Get trending (newest) knowledge entries. 身份轴同 build（禁自报冒读）。"""
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
+    return {"entries": await recommender.get_trending(db_pool, uid, limit)}
 
 
 @router.get("/recommend/recent")
 async def recent(
     user_id: str = Query(default="default"),
     limit: int = Query(default=10, ge=1, le=50),
+    authorization: str | None = Header(None),
 ):
-    """Get most recent knowledge entries."""
-    return {"entries": await recommender.get_recent(db_pool, user_id, limit)}
+    """Get most recent knowledge entries. 身份轴同 build（禁自报冒读）。"""
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
+    return {"entries": await recommender.get_recent(db_pool, uid, limit)}
 
 
 @router.get("/recommend/{knowledge_id}")
@@ -109,9 +145,14 @@ async def recommend_related(
     knowledge_id: str,
     user_id: str = Query(default="default"),
     limit: int = Query(default=5, ge=1, le=20),
+    authorization: str | None = Header(None),
 ):
-    """Get recommended knowledge entries related to *knowledge_id*."""
-    results = await recommender.recommend(db_pool, user_id, knowledge_id, limit)
+    """Get recommended knowledge entries related to *knowledge_id*.
+
+    身份轴同 build（禁自报冒读）。"""
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
+    results = await recommender.recommend(db_pool, uid, knowledge_id, limit)
     return {
         "knowledge_id": knowledge_id,
         "recommendations": results,
@@ -123,18 +164,28 @@ async def recommend_related(
 
 
 @router.get("/quality/report")
-async def quality_report(user_id: str = Query(default="default")):
-    """Aggregate quality report: distribution, dimension averages, top/bottom."""
-    return await scorer.get_quality_report(db_pool, user_id)
+async def quality_report(
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Aggregate quality report: distribution, dimension averages, top/bottom.
+
+    身份轴同 build（禁自报冒读）。"""
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
+    return await scorer.get_quality_report(db_pool, uid)
 
 
 @router.get("/quality/batch")
 async def score_batch(
     user_id: str = Query(default="default"),
     limit: int = Query(default=100, ge=1, le=1000),
+    authorization: str | None = Header(None),
 ):
-    """Batch score knowledge entries, sorted by quality."""
-    results = await scorer.score_all(db_pool, user_id, limit)
+    """Batch score knowledge entries, sorted by quality. 身份轴同 build（禁自报冒读）。"""
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
+    results = await scorer.score_all(db_pool, uid, limit)
     return {
         "scores": results,
         "count": len(results),
@@ -145,9 +196,14 @@ async def score_batch(
 async def score_knowledge(
     knowledge_id: str,
     user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
 ):
-    """Score a single knowledge entry on multiple quality dimensions."""
-    result = await scorer.score_knowledge(db_pool, user_id, knowledge_id)
+    """Score a single knowledge entry on multiple quality dimensions.
+
+    身份轴同 build（禁自报冒读）。"""
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
+    result = await scorer.score_knowledge(db_pool, uid, knowledge_id)
     if "error" in result:
         raise HTTPException(404, result["error"])
     return result

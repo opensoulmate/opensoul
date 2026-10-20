@@ -332,14 +332,19 @@ def test_static_census():
         return (ROOT / path).read_text(encoding="utf-8").count(needle)
 
     pipe_sig = "authorization: str " + chr(124) + " None = Header(None)"
+    single_arg = "identity = bind_identity(authorization)"
+    # F3b-⑧ cortex 身份轴收口（契约随更新）：cortex_enhanced 8 端点 user_id
+    # 自报轴改派生，identity 调用带声明参数（自报值只可确认绑定）——普查
+    # 判法不变（sig 与 identity 派生点逐点配对），needle 随形更新。
+    declared_arg = "identity = bind_identity(authorization, " + chr(34) * 2 + ", user_id)"
     expect = {
-        "src/api/link.py": (3, 3),
-        "src/api/system_overview.py": (1, 1),
-        "src/api/cortex_enhanced.py": (1, 1),
+        "src/api/link.py": (3, 3, single_arg),
+        "src/api/system_overview.py": (1, 1, single_arg),
+        "src/api/cortex_enhanced.py": (8, 1, declared_arg),
     }
-    for path, (n_sig, n_inject) in expect.items():
+    for path, (n_sig, n_inject, ident_call) in expect.items():
         assert count(path, pipe_sig) == n_sig, path
-        assert count(path, "identity = bind_identity(authorization)") == n_sig, path
+        assert count(path, ident_call) == n_sig, path
         assert count(path, "tenant_id=identity.tenant_id") == n_inject, path
     for path in (
         "src/api/soma_connector.py",

@@ -1,8 +1,10 @@
 """Shared test fixtures for OpenSoul integration tests."""
 
 import copy
+import hashlib
 from contextlib import asynccontextmanager
 from pathlib import Path
+from uuid import UUID
 
 import httpx
 import pytest
@@ -899,6 +901,12 @@ def immune_client(tmp_path, monkeypatch):
 # 生产表历史建表，tmp 库开局补齐。relations 真源列=type 无 user_id（main.py
 # DDL 同形）——曾按 API 契约键 relation_type+user_id 手抄漂移，把 graphrag 列
 # 漂移 bug 锁死在测试 schema（H1-②b-⑦c 随真源收口，禁再手抄契约键当列名）。
+def _md5_uuid_str(name: str) -> str:
+    """default 档案正典键（家族 _resolve_user_id 同形：str(md5_uuid(name))）。"""
+    h = hashlib.md5(name.encode()).hexdigest()
+    return str(UUID(f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"))
+
+
 _CORTEX_DDL = (
     _PIPELINE_KNOWLEDGE_DDL
     + """CREATE TABLE IF NOT EXISTS entities (
@@ -947,11 +955,16 @@ def cortex_client(tmp_path, monkeypatch):
     tmp_os_db = tmp_path / "cortex_opensoul.db"
     with _sqlite3.connect(tmp_os_db) as _c:
         _c.executescript(_CORTEX_DDL)
+        # 种子知识行 user_id=default 档案正典键（F3b-⑥ 家族 _resolve_user_id
+        # 同形：str(md5_uuid('default'))）。cortex-enhanced 身份轴收口后档案键
+        # 与 entity/graph/search 家族同源，种子随契约更新为正典键形——
+        # 「default 档案可见 2 条种子知识」的可见性语义不变。
+        _archive_key = _md5_uuid_str("default")
         _c.execute(
             "INSERT INTO knowledge (id, user_id, title, content) VALUES (?,?,?,?)",
             (
                 "k-cortex-a",
-                "default",
+                _archive_key,
                 "华为交换机选型指南",
                 "华为技术有限公司生产华为交换机。北京研发中心使用Python。",
             ),
@@ -960,7 +973,7 @@ def cortex_client(tmp_path, monkeypatch):
             "INSERT INTO knowledge (id, user_id, title, content) VALUES (?,?,?,?)",
             (
                 "k-cortex-b",
-                "default",
+                _archive_key,
                 "数据中心存储方案",
                 "星辰科技公司提供存储服务器。建议采用分布式数据库。",
             ),
