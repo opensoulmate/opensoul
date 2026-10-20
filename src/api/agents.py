@@ -994,16 +994,51 @@ class UpdateRequest(BaseModel):
     agent_id: str
 
 
+def _upgrade_cmd(cmd: str | None) -> str | None:
+    """安装命令 → 真升级命令（语义正确，禁把重装冒充升级）。
+
+    - pip 不带 --upgrade 重装只报 "Requirement already satisfied" 原地不动 → 必加 --upgrade
+    - npm install -g 重装即解析最新版 → 显式 @latest 锁死升级语义
+    - brew install → brew upgrade 子命令
+    - go install …@latest / curl 安装器本身就是"最新版"语义 → 原样跑
+    - 官网下载页、docker run、gh extension 这类无干净命令行升级面 → 诚实回 None，
+      禁假跑一遍安装命令冒充升级成功
+    """
+    if not cmd:
+        return None
+    c = cmd.strip()
+    if c.startswith(("http://", "https://")) or c.startswith(("docker ", "gh extension ")):
+        return None
+    if "pip install" in c:
+        return c.replace("pip install", "pip install --upgrade", 1)
+    if "npm install" in c:
+        tokens = c.split()
+        for i in range(len(tokens) - 1, -1, -1):
+            tok = tokens[i]
+            if tok.startswith("-") or tok.startswith("http"):
+                continue
+            base = tok.rsplit("@", 1)[0] if "@" in tok[1:] else tok
+            tokens[i] = base + "@latest"
+            break
+        return " ".join(tokens)
+    if c.startswith("brew install"):
+        return c.replace("brew install", "brew upgrade", 1)
+    return c
+
+
 @router.post("/update")
 async def update_agent(req: UpdateRequest, user_id: UUID = Depends(get_current_user)):
-    """Update an agent"""
+    """升级已安装 agent 到最新版（升级命令≠安装命令：pip 需 --upgrade 等，见 _upgrade_cmd）"""
     if req.agent_id not in AGENT_REGISTRY:
         return {"success": False, "error": f"Unknown agent: {req.agent_id}"}
     agent = AGENT_REGISTRY[req.agent_id]
     os_name = _get_os()
-    cmd = agent["install"].get(os_name)
-    if not cmd:
+    install_cmd = agent["install"].get(os_name)
+    if not install_cmd:
         return {"success": False, "error": f"No update command for {os_name}"}
+    cmd = _upgrade_cmd(install_cmd)
+    if not cmd:
+        return {"success": False, "error": "此 Agent 无命令行升级方式，请到官网手动升级"}
     if req.agent_id in _install_tasks and _install_tasks[req.agent_id]["status"] == "running":
         return {"success": True, "task_id": req.agent_id, "status": "already_running"}
     _install_tasks[req.agent_id] = {"status": "running", "progress": 0, "output": [], "error": None}
