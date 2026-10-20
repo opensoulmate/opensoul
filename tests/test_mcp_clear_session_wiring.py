@@ -105,7 +105,7 @@ class TestSessionDeleteWiring:
         gate.grant(sid, "mcp-memory", "recall")
         gate.grant("other-sess", "mcp-github", "*")
 
-        resp = client.delete(f"/api/hippo/sessions/{sid}")
+        resp = client.delete(f"/api/hippo/sessions/{sid}", params={"user_id": "w"})
         assert resp.status_code == 200
         assert resp.json() == {"deleted": True}  # 响应契约逐键不变
 
@@ -135,7 +135,7 @@ class TestSessionDeleteWiring:
             raise RuntimeError("gate down")
 
         monkeypatch.setattr(gate, "clear_session", _boom)
-        resp = client.delete(f"/api/hippo/sessions/{sid}")
+        resp = client.delete(f"/api/hippo/sessions/{sid}", params={"user_id": "w"})
         assert resp.status_code == 200
         assert resp.json() == {"deleted": True}  # 删除主路径存活
         assert calls == [sid]  # 清理真被调用（修前零消费=空列表）
@@ -145,7 +145,7 @@ class TestSessionDeleteWiring:
         client, _ = hippo_env
         sid = client.post("/api/hippo/sessions", json={"user_id": "w"}).json()["session_id"]
         gate.grant(sid, "mcp-github", "*")
-        client.delete(f"/api/hippo/sessions/{sid}")
+        client.delete(f"/api/hippo/sessions/{sid}", params={"user_id": "w"})
         gate.grant(sid, "mcp-memory", "*")
         assert [g["server_id"] for g in gate.list_grants(sid)] == ["mcp-memory"]
 

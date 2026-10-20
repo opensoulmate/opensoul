@@ -117,7 +117,9 @@ async def create_memory(req: MemoryCreateRequest):
     # Auto-create session if needed
     session = sessions.get(req.session_id)
     if not session:
-        session = sessions.create(user_id="", title=f"Auto: {req.session_id}")
+        # 无身份轴写点行归属 'default' 兜底（F3b-⑱ 行归属三权威，③b-2 旁路
+        # 纪律：无键绝不吃掉落库；修前 user_id="" 无主行任何身份不可达）
+        session = sessions.create(user_id="default", title=f"Auto: {req.session_id}")
         # Use the provided session_id
         session.session_id = req.session_id
 
@@ -290,11 +292,22 @@ async def simulate_decay(
 
 
 @router.post("/sessions")
-async def create_session(req: SessionCreateRequest):
-    """Create a new session."""
-    session = sessions.create(user_id=req.user_id, title=req.title, metadata=req.metadata)
+async def create_session(
+    req: SessionCreateRequest,
+    authorization: str | None = Header(None),
+):
+    """Create a new session.
+
+    F3b-⑱ 身份轴收口（F3b-⑥ 同族语义；会话登记另轴——行键=identity.user_id
+    原值，刻意不经档案键家族正典 _resolve_user_id）：user_id 从认证派生，
+    自报只可确认派生绑定（矛盾=403 冒写面收口），'default'/空/占位零
+    UUID=未声明→取派生，匿名=保留自报契约零变化，坏 token=401 零副作用。
+    """
+    identity = bind_identity(authorization, "", req.user_id)
+    session = sessions.create(user_id=identity.user_id, title=req.title, metadata=req.metadata)
     return {
         "session_id": session.session_id,
+        "user_id": session.user_id,
         "title": session.title,
         "status": session.status.value,
         "created_at": session.created_at,
@@ -303,18 +316,28 @@ async def create_session(req: SessionCreateRequest):
 
 @router.get("/sessions")
 async def list_sessions(
-    user_id: str = Query(default=None),
+    user_id: str = Query(default="default"),
     status: str = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
+    authorization: str | None = Header(None),
 ):
-    """List sessions."""
+    """List sessions.
+
+    F3b-⑱ 身份轴收口（F3b-⑥ 同族语义；会话登记另轴）：「用户看自己的」——
+    过滤键从认证派生，自报只可确认绑定（矛盾=403 冒读面收口），
+    'default'/空/占位零 UUID=未声明→取派生，匿名=保留自报；修前缺省=
+    全量泄露（任意人看全部会话）收口为缺省='default' 桶。
+    """
+    identity = bind_identity(authorization, "", user_id)
     session_status = None
     if status:
         try:
             session_status = SessionStatus(status)
         except ValueError:
             raise HTTPException(400, f"Invalid status. Valid: {[s.value for s in SessionStatus]}")
-    session_list = sessions.list_sessions(user_id=user_id, status=session_status, limit=limit)
+    session_list = sessions.list_sessions(
+        user_id=identity.user_id, status=session_status, limit=limit
+    )
     return {
         "sessions": [
             {
@@ -333,8 +356,21 @@ async def list_sessions(
 
 
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str):
-    """Get session details."""
+async def get_session(
+    session_id: str,
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Get session details.
+
+    F3b-⑱ 归属闸：by-ID 越权=与缺行同契约 404（禁存在性探测）；闸读走
+    peek 零副作用（被拒请求行零改写），过闸后 get() 保留既有"读取即活动"
+    语义。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    owned = sessions.peek(session_id)
+    if not owned or owned.user_id != identity.user_id:
+        raise HTTPException(404, "Session not found")
     session = sessions.get(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
@@ -352,8 +388,19 @@ async def get_session(session_id: str):
 
 
 @router.post("/sessions/{session_id}/archive")
-async def archive_session(session_id: str):
-    """Archive a session."""
+async def archive_session(
+    session_id: str,
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Archive a session.
+
+    F3b-⑱ 归属闸（闸先于写：跨用户恒 404 行零改写，与缺行同契约禁存在性探测）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    owned = sessions.peek(session_id)
+    if not owned or owned.user_id != identity.user_id:
+        raise HTTPException(404, "Session not found")
     if not sessions.archive(session_id):
         raise HTTPException(404, "Session not found")
     return {"archived": True}
@@ -376,8 +423,20 @@ def _clear_mcp_grants(session_id: str) -> None:
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
-    """Delete a session."""
+async def delete_session(
+    session_id: str,
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Delete a session.
+
+    F3b-⑱ 归属闸（闸先于副作用：跨用户恒 404 且行存活、mcp 授权清理绝不
+    越权执行，与缺行同契约禁存在性探测）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    owned = sessions.peek(session_id)
+    if not owned or owned.user_id != identity.user_id:
+        raise HTTPException(404, "Session not found")
     if not sessions.delete(session_id):
         raise HTTPException(404, "Session not found")
     _clear_mcp_grants(session_id)

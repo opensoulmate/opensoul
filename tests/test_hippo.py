@@ -60,7 +60,7 @@ class TestHippoMemories:
         assert resp.status_code == 200
 
         # Cleanup session
-        client.delete(f"/api/hippo/sessions/{session_id}")
+        client.delete(f"/api/hippo/sessions/{session_id}", params={"user_id": "test_user"})
 
 
 class TestHippoDecay:

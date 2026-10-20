@@ -146,7 +146,7 @@ class TestSessionActivityAPI:
         )
         assert resp.status_code == 200
 
-        sess = client.get(f"/api/hippo/sessions/{sid}").json()
+        sess = client.get(f"/api/hippo/sessions/{sid}", params={"user_id": "touch_user"}).json()
         assert sess["status"] == "active"
         assert sess["last_active_at"] > old + 50
 
@@ -165,14 +165,19 @@ class TestSessionActivityAPI:
         resp = client.get(f"/api/hippo/memories/{mid}")
         assert resp.status_code == 200
 
-        sess = client.get(f"/api/hippo/sessions/{sid}").json()
+        sess = client.get(f"/api/hippo/sessions/{sid}", params={"user_id": "touch_user"}).json()
         assert sess["status"] == "active"
         assert sess["last_active_at"] > old + 50
 
     def test_archived_session_activity_keeps_status_fresh_timestamp(self, env):
         client, hippo_api = env
         sid = self._create_session(client)
-        assert client.post(f"/api/hippo/sessions/{sid}/archive").status_code == 200
+        assert (
+            client.post(
+                f"/api/hippo/sessions/{sid}/archive", params={"user_id": "touch_user"}
+            ).status_code
+            == 200
+        )
 
         old = _age(hippo_api.sessions._sessions[sid])
         resp = client.post(
@@ -181,7 +186,7 @@ class TestSessionActivityAPI:
         )
         assert resp.status_code == 200
 
-        sess = client.get(f"/api/hippo/sessions/{sid}").json()
+        sess = client.get(f"/api/hippo/sessions/{sid}", params={"user_id": "touch_user"}).json()
         assert sess["status"] == "archived"
         assert sess["last_active_at"] > old + 50
 
@@ -194,7 +199,7 @@ class TestSessionActivityAPI:
                 json={"content": f"计数记忆{i}", "session_id": sid},
             )
             assert resp.status_code == 200
-        sess = client.get(f"/api/hippo/sessions/{sid}").json()
+        sess = client.get(f"/api/hippo/sessions/{sid}", params={"user_id": "touch_user"}).json()
         assert sess["memory_count"] == 2
 
     def test_get_memory_404_contract(self, env):
@@ -205,6 +210,6 @@ class TestSessionActivityAPI:
     def test_create_session_active_contract(self, env):
         client, _ = env
         sid = self._create_session(client)
-        sess = client.get(f"/api/hippo/sessions/{sid}").json()
+        sess = client.get(f"/api/hippo/sessions/{sid}", params={"user_id": "touch_user"}).json()
         assert sess["status"] == "active"
         assert sess["last_active_at"] >= sess["created_at"]

@@ -72,10 +72,10 @@ def cleanup() -> int:
             for _, server_id, tool_name in rows:
                 call("DELETE", f"/api/mcp/sessions/{sid}/grants/{server_id}", params={"tool_name": tool_name})
     # hippo 探针会话兜底清（正常路径已删）
-    _, sess_body = call("GET", "/api/hippo/sessions", params={"limit": 200})
+    _, sess_body = call("GET", "/api/hippo/sessions", params={"limit": 200, "user_id": MARK})
     for s in sess_body.get("sessions", []):
         if MARK in (s.get("user_id") or "") or MARK in (s.get("session_id") or ""):
-            call("DELETE", f"/api/hippo/sessions/{s['session_id']}")
+            call("DELETE", f"/api/hippo/sessions/{s['session_id']}", params={"user_id": MARK})
     with sqlite3.connect(DB) as conn:
         remaining = conn.execute(
             "SELECT COUNT(*) FROM mcp_session_grants WHERE session_id LIKE ?", (f"%{MARK}%",)
@@ -122,7 +122,7 @@ def main() -> int:
     call("POST", f"/api/mcp/sessions/{MARK}-keep/grants", body={"server_id": "mcp-github", "tool_name": "*"})
     check(len(grant_rows(hid)) == 2, "会话授权 2 行就位")
 
-    status, body = call("DELETE", f"/api/hippo/sessions/{hid}")
+    status, body = call("DELETE", f"/api/hippo/sessions/{hid}", params={"user_id": MARK})
     check(status == 200 and body == {"deleted": True}, "会话删除契约逐键不变", str(body))
     if pre:
         check(len(grant_rows(hid)) == 2, "--pre 授权行永不清（会话已删授权残留=缺口实证）", f"got {len(grant_rows(hid))}")

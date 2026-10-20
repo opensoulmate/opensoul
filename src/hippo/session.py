@@ -70,6 +70,15 @@ class SessionManager:
                 session.last_active_at = time.time()
             return session
 
+    def peek(self, session_id: str) -> Session | None:
+        """Read-only lookup（零副作用）：不刷新 last_active_at 不改状态。
+
+        归属闸专用（F3b-⑱）：闸门读取绝不可改写行（被拒请求"行零改写"），
+        与 get() 的"读取即活动"语义刻意分开——闸读走 peek，过闸后才 get()。
+        """
+        with self._lock:
+            return self._sessions.get(session_id)
+
     def _note_activity_locked(self, session: Session) -> None:
         """Record session activity (must hold self._lock).
 
