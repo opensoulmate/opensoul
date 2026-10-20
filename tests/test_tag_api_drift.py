@@ -179,12 +179,18 @@ def test_patch_delete_roundtrip(tag_client):
     assert tag_client.get(f"/api/tags/?user_id={_USER}").json() == []
 
 
-# ── ③ user_id 契约：缺参=422（前端调用面必须带），带参=按 user 过滤 ──
+# ── ③ user_id 契约（F3b-⑮ 身份轴收口契约随更新，历史裁决文本不改写）─────
+# 勘误（2026-10-20 F3b-⑮）：C3-⑪ 时代契约「缺参=422」已随身份轴收口更新——
+# 缺参=未声明→默认桶 200（F3b-⑭ knowledge 面同款既有行为变更），带参=按
+# user 过滤（匿名保留自报）语义零变化。修前契约由控制组（worktree 旧码）锁证。
 
 
-def test_list_requires_user_id_query(tag_client):
+def test_user_id_query_contract_and_filter(tag_client):
     tag_client.post(f"/api/tags/?user_id={_USER}", json={"name": "mine", "color": "#22c55e"})
-    assert tag_client.get("/api/tags/").status_code == 422
+    # 缺参=未声明默认桶（修前 422）：UID 档案行不进默认桶
+    missing = tag_client.get("/api/tags/")
+    assert missing.status_code == 200
+    assert missing.json() == []
 
     tag_client.post(
         f"/api/tags/?user_id={_OTHER_USER}", json={"name": "theirs", "color": "#22c55e"}

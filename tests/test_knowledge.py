@@ -23,10 +23,13 @@ class TestKnowledgeStats:
 
 
 class TestKnowledgeCRUD:
-    def test_list_knowledge_requires_user_id(self, client):
+    def test_list_knowledge_missing_user_id_contract(self, client):
         resp = client.get("/api/knowledge/")
-        # Missing user_id query param — should fail validation
-        assert resp.status_code in (400, 401, 403, 422)
+        # 契约随更新（2026-10-20 F3b-⑮ 复核发现本锁未随 F3b-⑭ 身份轴收口更新——
+        # F3b-⑭ 全量「0 failed」被 live 服务时序掩护：跑测时 :8090 仍载旧码，收口后
+        # 未复跑本锁）：缺参=未声明→默认桶 200（F3b-⑭ 既有行为变更），4xx 契约退场。
+        # 修前契约（缺参 4xx）由 F3b-⑭ 控制组/test_knowledge_identity_axis 锁证。
+        assert resp.status_code == 200
 
     def test_list_knowledge_with_user_id(self, client):
         import uuid
