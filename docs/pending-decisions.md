@@ -337,6 +337,8 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 
 **状态：已按建议默认 B1 先行执行（2026-10-20 DEC-㉗a-①）**——依据：DEC-㉖-① 周期日志候选队列「㉗a 真源补现同款 DEC 自决先例可续」+ 用户「权限/审批阻塞时别停工等批」铁律 + DEC-㉕-①/㉖-① 自决先例。实现=**真源补现取 B1（近 24h 窗口计数）**：get_stream_summary 加性键 `recent_count`（事件时刻解释 `_event_ts` 单一源——显式 timestamp 优先、collected_at 兜底、坏串=最旧不计，与既有排序语义逐字一致；边界闭区间；RECENT_WINDOW_S 单一源常量）+ UI 最近事件卡恢复（CD-⑮ 移除件复原语义逐字一致：卡文本/Zap 图标/`summary?.recent_count` 消费）+ grid 回 5 列 + 证据锁契约随更新（test_cd15 形状锁/test_cd22 真源锚点+repair_status=landed@DEC-㉗a-①+工件重生成，勘误「全仓零产出点」→「修前零产出」，历史裁决文本不改写）。**B2（缓冲计数 len(_event_buffer)，与页脚「缓冲」同值）未取**（语义与既有显示重复）。**若拍板改判回一句即改道：「㉗a改A」=revert 本拍（回无卡）/「㉗a改B2」=改缓冲计数**。
 
+**㉗a回落（GATE-① 观察件）：已按 DEC 自决先例先行执行（2026-10-20 DEC-㉗a-②）**——依据：GATE-① 周期日志明示「下拍候选」+ 用户「权限/审批阻塞时别停工等批」铁律 + DEC-①~㉖B2 自决先例（仓内可 revert 代码件、语义与 CD-⑳/㉚/㉘b「缺席禁 fabricate 0、真 0 禁遮蔽」既定纪律一致）。实现=logs/page.tsx:257 值表达式 `{summary?.recent_count || 0}`→typeof number 判法：真 0='0' 如实（禁遮蔽）、真值照显、summary 缺席='—' 占位（修前回落 0=fabricate 0）；范围纪律仅 257 一处（总事件卡 `summary?.total_events || displayLogs.length` 回落=本地真计数非假 0 不动）。**异议回「㉗a回落改撤」=revert 本拍回修前回落形**。
+
 **现状**：`get_stream_summary()`（GET /api/events/summary 别名同形）恰 5 键 `total_events/by_organ/by_type/most_active_organ/collected_at`（源码+live 双实证），全仓零 recent_count 产出点；修前 UI 最近事件卡 `{summary?.recent_count || 0}` 恒 undefined 恒假 0（死显示键）。CD-⑮ 后卡已移除（CD-④ 死显示面收口先例）、EventSummary 死声明键清零、grid 收 4 列；tests/test_cd15_repair.py 形状锁死（真源补现 recent_count 会先炸锁=改道须先改锁）。
 
 **选项**：

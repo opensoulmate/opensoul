@@ -254,7 +254,7 @@ export default function LogsPage() {
             <Zap className="w-4 h-4 text-blue-500" />
             <span className="text-xs text-muted-foreground">最近事件</span>
           </div>
-          <div className="text-2xl font-bold text-blue-500 mt-1">{summary?.recent_count || 0}</div>
+          <div className="text-2xl font-bold text-blue-500 mt-1">{typeof summary?.recent_count === 'number' ? summary.recent_count : '—'}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2">
