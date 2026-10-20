@@ -108,10 +108,62 @@ class PreferenceUpdateRequest(BaseModel):
 # ── 模块级单例（和hippo/api.py一样的模式）──────────────
 
 from src.hippo.memory_store import MemoryStore
+from src.hippo.ownership import memory_owner as _derive_memory_owner
+from src.hippo.ownership import session_owner as _derive_session_owner
 from src.hippo.session import SessionManager
 
 store = MemoryStore()
 sessions = SessionManager()
+
+
+# ── F3b-㉛ brain 记忆面身份轴：行归属判定单一源 + 写点收口 + 归属闸 ──────
+
+
+def _memory_owner(mem) -> str:
+    """记忆行归属=父会话行继承（判定单一源=src/hippo/ownership，F3b-⑳ 判法
+    收编共用禁两套判定漂移；孤儿记忆/归属空白→'default' 兜底 ③b-2 旁路纪律）。"""
+    return _derive_memory_owner(sessions, mem)
+
+
+def _gate_session_owner(session_id: str, user_id: str) -> None:
+    """记忆桶（父会话）归属闸（F3b-⑳ 逐字）：闸先于副作用，越权=与缺行同契约
+    404 行零改写（闸读走 peek 零副作用）。"""
+    owned = _derive_session_owner(sessions, session_id)
+    if owned is None or owned != user_id:
+        raise HTTPException(404, "Session not found")
+
+
+def _memory_write(
+    session_id: str,
+    user_id: str,
+    *,
+    content: str,
+    importance: float = 0.5,
+    tags: list | None = None,
+):
+    """记忆写点单一收口（/remember 与 think/verify/feedback 写点共用禁判定漂移）：
+    先登记父会话（行归属=派生身份，F3b-⑳ ④ 逐字）再落行；写入既有会话须会话
+    归属==派生身份，越权=不写禁冒写（端点面映射 404，内部写点跳过+日志不阻断
+    主流程）。登记故障绝不吃掉落库（③b-2 旁路纪律：孤儿记忆 'default' 兜底照写）。
+    """
+    held = sessions.peek(session_id)
+    if held is not None:
+        if _derive_session_owner(sessions, session_id) != user_id:
+            return None
+    else:
+        try:
+            sessions.create(user_id=user_id, title=f"Auto: {session_id}", session_id=session_id)
+        except Exception:
+            # 并发登记/注册故障：以真源回读判定
+            if (
+                sessions.peek(session_id) is not None
+                and _derive_session_owner(sessions, session_id) != user_id
+            ):
+                return None
+            logger.warning("记忆父会话登记失败（行归属 'default' 兜底）: %r", session_id)
+    mem = store.add(session_id=session_id, content=content, importance=importance, tags=tags or [])
+    sessions.increment_memory_count(session_id)
+    return mem
 
 
 @router.post("/think")
@@ -318,14 +370,20 @@ async def think(req: ThinkRequest, authorization: str | None = Header(None)):
         experience_error = str(e)
         logger.warning("相关经验读取失败（不阻断思考）: %s", e)
 
-    # 6. 存入短期记忆（hippo模块）
+    # 6. 存入短期记忆（hippo模块）——F3b-㉛ 写点行归属=派生身份（父会话登记，
+    # _memory_write 单一收口）；越权会话=跳过写入禁冒写（logger 可见不阻断思考）
     if req.session_id:
-        store.add(
-            session_id=req.session_id,
-            content=f"[think] goal={goal}, risk={risk.overall_level}, files={target_files}",
-            importance=0.6,
-            tags=["think", goal],
-        )
+        if (
+            _memory_write(
+                req.session_id,
+                identity.user_id,
+                content=f"[think] goal={goal}, risk={risk.overall_level}, files={target_files}",
+                importance=0.6,
+                tags=["think", goal],
+            )
+            is None
+        ):
+            logger.warning("think 记忆写入跳过：会话 %s 归属他人（禁冒写）", req.session_id)
 
     # 7. 发布事件（nerve模块）
     try:
@@ -395,13 +453,19 @@ async def verify(req: VerifyRequest, authorization: str | None = Header(None)):
     """执行验证：反思+记忆+事件"""
     # F3b-② 身份派生收口（同 think：声明面收口，本端点不消费 tenant）
     identity = bind_identity(authorization, req.tenant_id)
-    # 1. 存入短期记忆
-    store.add(
-        session_id=req.task_id,
-        content=f"[verify] action={req.action[:200]}, success={req.result.get('success', False)}",
-        importance=0.7 if req.result.get("success") else 0.9,  # 失败记忆更重要
-        tags=["verify", "success" if req.result.get("success") else "failure"],
-    )
+    # 1. 存入短期记忆——F3b-㉛ 写点行归属=派生身份（_memory_write 单一收口）；
+    # 越权会话=跳过写入禁冒写（logger 可见不阻断验证主流程）
+    if (
+        _memory_write(
+            req.task_id,
+            identity.user_id,
+            content=f"[verify] action={req.action[:200]}, success={req.result.get('success', False)}",
+            importance=0.7 if req.result.get("success") else 0.9,  # 失败记忆更重要
+            tags=["verify", "success" if req.result.get("success") else "failure"],
+        )
+        is None
+    ):
+        logger.warning("verify 记忆写入跳过：会话 %s 归属他人（禁冒写）", req.task_id)
 
     # 2. 发布事件
     try:
@@ -530,21 +594,61 @@ async def execution_result(req: ExecutionResultRequest, authorization: str | Non
 
 @router.post("/remember")
 async def remember(
-    session_id: str = "", content: str = "", importance: float = 0.5, tags: str = ""
+    session_id: str = "",
+    content: str = "",
+    importance: float = 0.5,
+    tags: str = "",
+    user_id: str = "default",
+    authorization: str | None = Header(None),
 ):
-    """主动记忆：存入hippo"""
+    """主动记忆：存入hippo。
+
+    F3b-㉛ 身份轴收口（F3b-⑳ create 语义逐字）：user_id 从认证派生，自报只可
+    确认派生绑定（矛盾=403 冒写面收口），'default'/空/占位零 UUID=未声明→取
+    派生，匿名=保留自报契约零变化，坏 token=401 零副作用。归属=父会话行继承：
+    写入既有会话须会话归属==派生身份（越权=与缺行同契约 404 且行零改写），
+    缺失→自动建会话行归属=派生身份（修前零登记恒无主）。
+    """
+    identity = bind_identity(authorization, "", user_id)
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-    mem = store.add(session_id=session_id, content=content, importance=importance, tags=tag_list)
+    mem = _memory_write(
+        session_id,
+        identity.user_id,
+        content=content,
+        importance=importance,
+        tags=tag_list,
+    )
+    if mem is None:
+        # 越权=与缺行同契约 404（F3b-⑳ create 逐字）
+        raise HTTPException(404, "Session not found")
     return {"memory_id": mem.memory_id, "stored": True}
 
 
 @router.get("/recall")
-async def recall(session_id: str = "", query: str = "", limit: int = 10):
-    """回忆：从hippo检索记忆"""
+async def recall(
+    session_id: str = "",
+    query: str = "",
+    limit: int = 10,
+    user_id: str = "default",
+    authorization: str | None = Header(None),
+):
+    """回忆：从hippo检索记忆。
+
+    F3b-㉛ 身份轴收口（F3b-⑳ list「用户看自己的」同款）：过滤键从认证派生，
+    自报只可确认绑定（矛盾=403 冒读面收口），匿名=保留自报契约零变化；显式
+    session_id=by-ID 引用走父会话归属闸（越权=与缺行同契约 404 禁存在性探测）。
+    修前缺省=全量泄露（任意人看全部记忆）收口为只看自己归属的记忆。
+    """
+    identity = bind_identity(authorization, "", user_id)
     if session_id:
+        _gate_session_owner(session_id, identity.user_id)
         memories = store.search(session_id=session_id, limit=limit)
     else:
-        memories = store.search(limit=limit)
+        # 过滤先于截断：limit 的 top-N 语义在可见集上取（search 内部截断在
+        # 归属过滤之前会把可见行挤出窗口）
+        memories = [
+            m for m in store.search(limit=store.max_entries) if _memory_owner(m) == identity.user_id
+        ][:limit]
     return {
         "memories": [
             {
@@ -670,8 +774,10 @@ async def feedback(req: FeedbackRequest, authorization: str | None = Header(None
     if req.rating is None or not (1 <= int(req.rating) <= 5):
         raise HTTPException(status_code=400, detail="rating is required and must be an integer 1-5")
 
-    store.add(
-        session_id=f"user:{user_id}",
+    # F3b-㉛ 写点行归属=派生身份（_memory_write 单一收口，桶键 user:{身份} 同源）
+    _memory_write(
+        f"user:{user_id}",
+        user_id,
         content=f"[feedback] {req.action}: {req.feedback} (rating={req.rating})",
         importance=0.8,
         tags=["feedback", str(req.rating)],

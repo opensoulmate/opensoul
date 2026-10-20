@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from src.hippo import memory_model as _memory_model
 from src.hippo.decay import DecayStrategy
 from src.hippo.memory_store import MemoryStore
+from src.hippo.ownership import memory_owner as _derive_memory_owner
+from src.hippo.ownership import session_owner as _derive_session_owner
 from src.hippo.session import SessionManager, SessionStatus
 from src.mcp.session_grants import default_gate
 from src.services.tenant_binding import bind_identity
@@ -116,11 +118,10 @@ def _memory_owner(mem) -> str:
 
     归属唯一来源=父会话行 user_id；父会话缺失（孤儿记忆）或归属空白→
     'default' 兜底（键派生故障绝不吃掉落库，③b-2 旁路纪律）。
+    判定单一源=src/hippo/ownership（F3b-㉛ 收编共用，禁两套判定漂移）；
+    sessions 按模块单例取（调用时真源随面生效）。
     """
-    parent = sessions.peek(mem.session_id)
-    if parent is None:
-        return "default"
-    return parent.user_id or "default"
+    return _derive_memory_owner(sessions, mem)
 
 
 def _gate_memory(memory_id: str, user_id: str):
@@ -137,8 +138,8 @@ def _gate_memory(memory_id: str, user_id: str):
 
 def _gate_session_owner(session_id: str, user_id: str) -> None:
     """父会话归属闸（闸先于副作用）：越权=与缺行同契约 404 行零改写。"""
-    owned = sessions.peek(session_id)
-    if owned is None or (owned.user_id or "default") != user_id:
+    owned = _derive_session_owner(sessions, session_id)
+    if owned is None or owned != user_id:
         raise HTTPException(404, "Session not found")
 
 
