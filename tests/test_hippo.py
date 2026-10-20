@@ -25,8 +25,11 @@ class TestHippoMemories:
         session_id = sess_resp.json()["session_id"]
 
         # Create memory (requires session_id)
+        # F3b-⑳ 记忆面身份轴：写入既有会话须派生/自报身份==会话归属（本例
+        # 匿名自报 'test_user' 保留本地多档案语义），越权=404。
         resp = client.post(
             "/api/hippo/memories",
+            params={"user_id": "test_user"},
             json={
                 "content": "Test memory for integration testing",
                 "importance": 0.8,
@@ -39,16 +42,17 @@ class TestHippoMemories:
         mid = data["memory_id"]
 
         # List
-        resp = client.get("/api/hippo/memories")
+        resp = client.get("/api/hippo/memories", params={"user_id": "test_user"})
         assert resp.status_code == 200
 
         # Get specific
-        resp = client.get(f"/api/hippo/memories/{mid}")
+        resp = client.get(f"/api/hippo/memories/{mid}", params={"user_id": "test_user"})
         assert resp.status_code == 200
 
         # Update
         resp = client.patch(
             f"/api/hippo/memories/{mid}",
+            params={"user_id": "test_user"},
             json={
                 "importance": 0.9,
             },
@@ -56,7 +60,7 @@ class TestHippoMemories:
         assert resp.status_code == 200
 
         # Delete
-        resp = client.delete(f"/api/hippo/memories/{mid}")
+        resp = client.delete(f"/api/hippo/memories/{mid}", params={"user_id": "test_user"})
         assert resp.status_code == 200
 
         # Cleanup session

@@ -142,6 +142,7 @@ class TestSessionActivityAPI:
 
         resp = client.post(
             "/api/hippo/memories",
+            params={"user_id": "touch_user"},
             json={"content": "活动接线记忆", "session_id": sid},
         )
         assert resp.status_code == 200
@@ -155,6 +156,7 @@ class TestSessionActivityAPI:
         sid = self._create_session(client)
         mid = client.post(
             "/api/hippo/memories",
+            params={"user_id": "touch_user"},
             json={"content": "被访问的记忆", "session_id": sid},
         ).json()["memory_id"]
 
@@ -162,7 +164,7 @@ class TestSessionActivityAPI:
         sm._sessions[sid].status = SessionStatus.IDLE
         old = _age(sm._sessions[sid])
 
-        resp = client.get(f"/api/hippo/memories/{mid}")
+        resp = client.get(f"/api/hippo/memories/{mid}", params={"user_id": "touch_user"})
         assert resp.status_code == 200
 
         sess = client.get(f"/api/hippo/sessions/{sid}", params={"user_id": "touch_user"}).json()
@@ -182,6 +184,7 @@ class TestSessionActivityAPI:
         old = _age(hippo_api.sessions._sessions[sid])
         resp = client.post(
             "/api/hippo/memories",
+            params={"user_id": "touch_user"},
             json={"content": "归档会话收到的记忆", "session_id": sid},
         )
         assert resp.status_code == 200
@@ -196,6 +199,7 @@ class TestSessionActivityAPI:
         for i in range(2):
             resp = client.post(
                 "/api/hippo/memories",
+                params={"user_id": "touch_user"},
                 json={"content": f"计数记忆{i}", "session_id": sid},
             )
             assert resp.status_code == 200

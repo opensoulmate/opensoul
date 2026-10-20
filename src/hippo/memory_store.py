@@ -94,6 +94,16 @@ class MemoryStore:
                 mem.access_count += 1
             return mem
 
+    def peek(self, memory_id: str):
+        """Read-only lookup（零副作用）：不刷 last_accessed_at 不增 access_count。
+
+        归属闸专用（F3b-⑳）：闸门读取绝不可改写行（被拒请求"行零改写"），
+        与 get() 的"读取即活动"语义刻意分开——闸读走 peek，过闸后才 get()。
+        （SessionManager.peek F3b-⑱ 同款纪律。）
+        """
+        with self._lock:
+            return self._memories.get(memory_id)
+
     def search(
         self,
         session_id: str | None = None,

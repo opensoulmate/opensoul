@@ -111,19 +111,64 @@ async def health():
 # ── Memory CRUD ────────────────────────────────────────────
 
 
+def _memory_owner(mem) -> str:
+    """记忆行归属=父会话行继承（③b-2 _task_tenant 同权威；记忆行无 user 轴）。
+
+    归属唯一来源=父会话行 user_id；父会话缺失（孤儿记忆）或归属空白→
+    'default' 兜底（键派生故障绝不吃掉落库，③b-2 旁路纪律）。
+    """
+    parent = sessions.peek(mem.session_id)
+    if parent is None:
+        return "default"
+    return parent.user_id or "default"
+
+
+def _gate_memory(memory_id: str, user_id: str):
+    """记忆归属闸（F3b-⑱ 同款：越权=与缺行同契约 404 禁存在性探测）。
+
+    闸读走 store.peek 零副作用——被拒读取绝不刷 access_count/
+    last_accessed_at（get() 的"读取即活动"必须发生在过闸之后）。
+    """
+    held = store.peek(memory_id)
+    if held is None or _memory_owner(held) != user_id:
+        raise HTTPException(404, "Memory not found")
+    return held
+
+
+def _gate_session_owner(session_id: str, user_id: str) -> None:
+    """父会话归属闸（闸先于副作用）：越权=与缺行同契约 404 行零改写。"""
+    owned = sessions.peek(session_id)
+    if owned is None or (owned.user_id or "default") != user_id:
+        raise HTTPException(404, "Session not found")
+
+
 @router.post("/memories")
-async def create_memory(req: MemoryCreateRequest):
-    """Create a new short-term memory."""
-    # Auto-create session if needed
-    session = sessions.get(req.session_id)
+async def create_memory(
+    req: MemoryCreateRequest,
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Create a new short-term memory.
+
+    F3b-⑳ 身份轴收口（F3b-⑱ 同族语义逐字）：user_id 从认证派生，自报只可
+    确认派生绑定（矛盾=403 冒写面收口），'default'/空/占位零 UUID=未声明→
+    取派生，匿名=保留自报契约零变化，坏 token=401 零副作用。归属闸=父会话
+    行（记忆行无 user 轴，F3b-⑱ 留档）：写入既有会话须会话归属==派生身份，
+    越权=与缺行同契约 404 且行零改写。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    session = sessions.peek(req.session_id)
+    if session:
+        # 归属判法单一源（_gate_session_owner，禁两套判定漂移）
+        _gate_session_owner(req.session_id, identity.user_id)
     if not session:
-        # 无身份轴写点行归属 'default' 兜底（F3b-⑱ 行归属三权威，③b-2 旁路
-        # 纪律：无键绝不吃掉落库；修前 user_id="" 无主行任何身份不可达）。
+        # 自动建会话行归属=派生身份（修前恒 "default" 无主于写入者；匿名
+        # identity.user_id='default' 契约零变化）。
         # 注册键=req.session_id 单一源（F3b-⑲）：修前 create() 后改
         # .session_id 不改 dict 键=同 session_id 逐条记忆各建一孤儿会话，
         # increment_memory_count/touch 按 req.session_id 恒查不到。
         session = sessions.create(
-            user_id="default", title=f"Auto: {req.session_id}", session_id=req.session_id
+            user_id=identity.user_id, title=f"Auto: {req.session_id}", session_id=req.session_id
         )
 
     mem = store.add(
@@ -149,16 +194,34 @@ async def list_memories(
     min_retention: float = Query(default=None),
     include_archived: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=200),
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
 ):
-    """List/search memories."""
+    """List/search memories.
+
+    F3b-⑳ 身份轴收口（F3b-⑱ list「用户看自己的」同款）：过滤键从认证派生，
+    自报只可确认绑定（矛盾=403 冒读面收口），匿名=保留自报；显式
+    session_id=by-ID 引用走父会话归属闸（越权=与缺行同契约 404）。修前
+    缺省=全量泄露（任意人看全部记忆）收口为只看自己归属的记忆。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    if session_id:
+        _gate_session_owner(session_id, identity.user_id)
+        scan_limit = limit
+    else:
+        # 过滤先于截断：limit 的 top-N 语义在可见集上取（search 内部截断
+        # 在归属过滤之前会把可见行挤出窗口）。
+        scan_limit = store.max_entries
     tags = [tag] if tag else None
     memories = store.search(
         session_id=session_id,
         tags=tags,
         min_retention=min_retention,
         include_archived=include_archived,
-        limit=limit,
+        limit=scan_limit,
     )
+    if not session_id:
+        memories = [m for m in memories if _memory_owner(m) == identity.user_id][:limit]
     return {
         "memories": [
             {
@@ -180,8 +243,18 @@ async def list_memories(
 
 
 @router.get("/memories/{memory_id}")
-async def get_memory(memory_id: str):
-    """Get a single memory (refreshes access)."""
+async def get_memory(
+    memory_id: str,
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Get a single memory (refreshes access).
+
+    F3b-⑳ 归属闸：越权=与缺行同契约 404 禁存在性探测；闸读走 peek 零副
+    作用（被拒读取行零改写），过闸后 store.get 保留既有"读取即活动"语义。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    _gate_memory(memory_id, identity.user_id)
     mem = store.get(memory_id)
     if not mem:
         raise HTTPException(404, "Memory not found")
@@ -208,8 +281,19 @@ async def get_memory(memory_id: str):
 
 
 @router.patch("/memories/{memory_id}")
-async def update_memory(memory_id: str, req: MemoryUpdateRequest):
-    """Update a memory's content, importance, or tags."""
+async def update_memory(
+    memory_id: str,
+    req: MemoryUpdateRequest,
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Update a memory's content, importance, or tags.
+
+    F3b-⑳ 归属闸（闸先于写：跨用户恒 404 行零改写，与缺行同契约禁存在性
+    探测）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    _gate_memory(memory_id, identity.user_id)
     kwargs = {}
     if req.content is not None:
         kwargs["content"] = req.content
@@ -224,8 +308,18 @@ async def update_memory(memory_id: str, req: MemoryUpdateRequest):
 
 
 @router.delete("/memories/{memory_id}")
-async def delete_memory(memory_id: str):
-    """Delete a memory."""
+async def delete_memory(
+    memory_id: str,
+    user_id: str = Query(default="default"),
+    authorization: str | None = Header(None),
+):
+    """Delete a memory.
+
+    F3b-⑳ 归属闸（闸先于副作用：跨用户恒 404 且行存活，与缺行同契约禁
+    存在性探测）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    _gate_memory(memory_id, identity.user_id)
     if not store.delete(memory_id):
         raise HTTPException(404, "Memory not found")
     return {"deleted": True}
