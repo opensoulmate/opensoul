@@ -48,15 +48,30 @@ class SessionManager:
         self.expire_timeout = expire_timeout_seconds
         self.max_sessions = max_sessions
 
-    def create(self, user_id: str = "", title: str = "", metadata: dict | None = None) -> Session:
-        """Create a new session."""
+    def create(
+        self,
+        user_id: str = "",
+        title: str = "",
+        metadata: dict | None = None,
+        session_id: str | None = None,
+    ) -> Session:
+        """Create a new session.
+
+        注册键=行身份单一源（F3b-⑲）：session_id 显式给定时同时作为 Session
+        身份与 _sessions 注册键；缺省生成 uuid4（键==身份恒同源）。修前调用方
+        create() 后改 .session_id 不改 dict 键=键/身份错位孤儿行（同 id 逐条
+        记忆各建一孤儿会话、increment_memory_count/touch 按 id 恒查不到）。
+        注册键已存在=如实 ValueError，禁静默覆盖既有会话。
+        """
         session = Session(
-            session_id=str(uuid.uuid4()),
+            session_id=session_id if session_id is not None else str(uuid.uuid4()),
             user_id=user_id,
             title=title or f"Session {int(time.time())}",
             metadata=metadata or {},
         )
         with self._lock:
+            if session.session_id in self._sessions:
+                raise ValueError(f"session already exists: {session.session_id}")
             if len(self._sessions) >= self.max_sessions:
                 self._evict_oldest()
             self._sessions[session.session_id] = session

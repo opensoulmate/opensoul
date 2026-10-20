@@ -118,10 +118,13 @@ async def create_memory(req: MemoryCreateRequest):
     session = sessions.get(req.session_id)
     if not session:
         # 无身份轴写点行归属 'default' 兜底（F3b-⑱ 行归属三权威，③b-2 旁路
-        # 纪律：无键绝不吃掉落库；修前 user_id="" 无主行任何身份不可达）
-        session = sessions.create(user_id="default", title=f"Auto: {req.session_id}")
-        # Use the provided session_id
-        session.session_id = req.session_id
+        # 纪律：无键绝不吃掉落库；修前 user_id="" 无主行任何身份不可达）。
+        # 注册键=req.session_id 单一源（F3b-⑲）：修前 create() 后改
+        # .session_id 不改 dict 键=同 session_id 逐条记忆各建一孤儿会话，
+        # increment_memory_count/touch 按 req.session_id 恒查不到。
+        session = sessions.create(
+            user_id="default", title=f"Auto: {req.session_id}", session_id=req.session_id
+        )
 
     mem = store.add(
         session_id=req.session_id,
