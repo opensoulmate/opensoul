@@ -8,15 +8,29 @@ import hashlib
 import json
 import logging
 import time
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.database.postgres import db_pool
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# ─── 身份派生（F3b-⑥ 家族 _resolve_user_id 同形，档案键家族正典） ─────
+
+
+def _resolve_user_id(user_id: str) -> UUID:
+    """Convert user_id to UUID — accept both UUID strings and plain usernames."""
+    try:
+        return UUID(user_id)
+    except ValueError:
+        h = hashlib.md5(user_id.encode()).hexdigest()
+        return UUID(f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}")
 
 
 # ─── Pydantic models ──────────────────────────────────────────────
@@ -442,8 +456,24 @@ async def delete_capture(capture_id: int):
 
 
 @router.post("/{capture_id}/promote")
-async def promote_to_knowledge(capture_id: int, user_id: str = "default"):
-    """Promote a capture to the knowledge base."""
+async def promote_to_knowledge(
+    capture_id: int,
+    user_id: str = "default",
+    authorization: str | None = Header(None),
+):
+    """Promote a capture to the knowledge base.
+
+    身份轴收口（F3b-⑥ 已裁决语义同族既有面延伸，F3b-⑦/⑩ 先例）：
+    user_id 从认证派生（bind_identity），自报值只可确认派生绑定——
+    认证请求自报他人档案=403（冒写面收口）；'default'/空=未声明→取派生；
+    匿名保留自报（既有本地多档案语义，F3b-⑥ 同款）；坏 token=401 零副作用。
+    写键=档案键家族正典 str(_resolve_user_id(identity.user_id))（与
+    search/cortex/graph/entity 家族同源）——修前裸串写键（缺省 'default'）与
+    知识/标签读写面 str(UUID) 键形不匹配=promoted 行对家族读面不可见
+    （生产 knowledge 0 行无存量影响），语义收口如实记。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = str(_resolve_user_id(identity.user_id))
     await _ensure_table()
     row = await db_pool.fetchrow("SELECT * FROM captures WHERE id = $1", capture_id)
     if not row:
@@ -461,7 +491,7 @@ async def promote_to_knowledge(capture_id: int, user_id: str = "default"):
             """INSERT INTO knowledge (id, user_id, title, content, source, content_type, metadata, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
             knowledge_id,
-            user_id,
+            uid,
             capture["title"] or f"Captured from {capture['url']}",
             capture["content"],
             f"capture://{capture_id}",
@@ -487,10 +517,10 @@ async def promote_to_knowledge(capture_id: int, user_id: str = "default"):
                 "INSERT INTO tags (id, name, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
                 tag_id,
                 tag_name,
-                user_id,
+                uid,
             )
             tag_row = await db_pool.fetchrow(
-                "SELECT id FROM tags WHERE name = $1 AND user_id = $2", tag_name, user_id
+                "SELECT id FROM tags WHERE name = $1 AND user_id = $2", tag_name, uid
             )
             if tag_row:
                 await db_pool.execute(
@@ -506,4 +536,4 @@ async def promote_to_knowledge(capture_id: int, user_id: str = "default"):
     # Update capture status
     await db_pool.execute("UPDATE captures SET status = 'promoted' WHERE id = $1", capture_id)
 
-    return {"promoted": True, "id": capture_id, "user_id": user_id}
+    return {"promoted": True, "id": capture_id, "user_id": uid}
