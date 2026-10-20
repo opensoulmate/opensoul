@@ -190,7 +190,10 @@ def main():
         )
         ok = (
             st == 200
-            and set(pr.keys()) == {"source_id", "target_id", "max_depth", "paths", "count"}
+            # 契约随更新（留档④ 收口）：truncated 加性键进契约（修前恰 5 键）。
+            and set(pr.keys())
+            == {"source_id", "target_id", "max_depth", "paths", "count", "truncated"}
+            and pr.get("truncated") is False
             and (a, b, c) in seqs
             and step_keys_ok
         )
@@ -231,7 +234,14 @@ def main():
         # A→C 已有本地路（A-B-C / A-C），改查 A→X 终点已 404；穿越语义由
         # neighbors 跨用户不暴露 + find_path 用户边界（单测锁死）覆盖，live 侧
         # 以 A→X 404 与 probeX 不出现在 neighbors 为证（上面 6/11 项）。
-        check("paths 结构键集恰 5 键", set(pr.keys()) == {"source_id", "target_id", "max_depth", "paths", "count"}, pr)
+        # 契约随更新（留档④ 收口）：truncated 加性键进契约（修前恰 5 键）。
+        check(
+            "paths 结构键集恰 6 键（含 truncated）",
+            set(pr.keys())
+            == {"source_id", "target_id", "max_depth", "paths", "count", "truncated"}
+            and pr.get("truncated") is False,
+            pr,
+        )
 
     # 清痕：探针实体/关系全删（按 _resolve_user_id 派生键删——字面串删不到，
     # 探针自伤坑；连接对象命名 conn 禁与实体 id c 遮蔽）

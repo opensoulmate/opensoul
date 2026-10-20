@@ -268,16 +268,32 @@ async def get_entity_neighbors(user_id: UUID, entity_id: UUID) -> dict:
     }
 
 
+# 路径搜索护栏常量（H1-②b-⑦a 留档④「paths 路径爆炸防护（dense 图）」收口）：
+# PATH_RESULT_CAP=返回上限单一源（修前魔数 10）；PATH_EXPLORE_BUDGET=探索预算
+# =单次 find_path 数据面查询数上限（起点 SELECT + 每次扩展 relations + 每个候选
+# 邻居 entities 各计 1），把最坏工作量钉在常数级——修前无界枚举 source 到
+# target 全部简单路径，dense 图指数爆炸（K8 无路场景即 1.7 万级查询无上限）。
+PATH_RESULT_CAP: int = 10
+PATH_EXPLORE_BUDGET: int = 2000
+
+
 async def find_path(
     user_id: UUID, source_id: UUID, target_id: UUID, max_depth: int = 5
-) -> list[list[dict]]:
-    """Find all paths between two entities using BFS (up to max_depth).
+) -> tuple[list[list[dict]], bool]:
+    """Find paths between two entities using BFS (up to max_depth).
 
     语义如实标注：关系按无向遍历（既有实现语义，source/target 双向可达）；
     max_depth=路径节点数上限（含起终点，实现既有语义）；
-    返回最多 10 条路径；起点/终点同实体无环路径=空（禁硬造自环）。
+    返回最多 PATH_RESULT_CAP 条路径；起点/终点同实体无环路径=空（禁硬造自环）。
+    返回 (paths, truncated)：truncated=False 恒保证「搜索已完成」，True=如实报告
+    「搜索未完成」（预算耗尽）——paths=已发现部分不丢弃，空 paths 须结合
+    truncated 读：False=确证无路，True=预算内未发现禁当无路断言。
+    ①输出满 PATH_RESULT_CAP 即止（返回契约恒最多 N 条，BFS 发现序前 N 条与修前
+    全量枚举后取前 N 逐条一致=精确语义非近似，truncated=False=输出完整非截断）
+    ②查询数超 PATH_EXPLORE_BUDGET 即止（dense 图路径爆炸防护，修前无界枚举）。
     """
     paths: list[list[dict]] = []
+    queries = 1  # 已用数据面查询数（起点 SELECT 计入）——探索预算单一消费点
     source = await db_pool.fetchrow(
         # 用户边界：起点必须是查询者自己的实体（接线前定形）。
         "SELECT id, name, type FROM entities WHERE id = $1 AND user_id = $2",
@@ -303,10 +319,20 @@ async def find_path(
 
         if current_id == str(target_id) and len(path) > 1:
             paths.append(path)
+            if len(paths) >= PATH_RESULT_CAP:
+                # 输出已满：返回契约恒最多 PATH_RESULT_CAP 条，BFS 发现序前 N 条
+                # 与修前「全量枚举后取前 N」逐条一致——后续枚举零可观测收益即止
+                # （精确语义，truncated=False=输出完整非截断）。
+                return paths, False
             continue
 
         visited_in_path = {str(step["entity_id"]) for step in path}
 
+        queries += 1  # 本次扩展 relations 查询
+        if queries > PATH_EXPLORE_BUDGET:
+            # 探索预算耗尽（dense 图路径爆炸防护）：如实截断——已发现路径保留
+            # 不丢弃，禁再枚举（修前无界枚举全部简单路径=指数爆炸）。
+            return paths, True
         relations = await db_pool.fetch(
             "SELECT * FROM relations WHERE source_id = $1 OR target_id = $1", str(current_id)
         )
@@ -316,6 +342,9 @@ async def find_path(
                 rel["target_id"] if str(rel["source_id"]) == str(current_id) else rel["source_id"]
             )
             if str(neighbor_id) not in visited_in_path:
+                queries += 1  # 候选邻居 entities 查询
+                if queries > PATH_EXPLORE_BUDGET:
+                    return paths, True
                 neighbor = await db_pool.fetchrow(
                     # 用户边界：只在查询者自己的实体间找路（接线前定形）。
                     "SELECT id, name, type FROM entities WHERE id = $1 AND user_id = $2",
@@ -331,4 +360,4 @@ async def find_path(
                     }
                     queue.append((str(neighbor_id), path + [new_step]))
 
-    return paths[:10]  # Cap at 10 paths
+    return paths, False

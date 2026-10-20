@@ -104,19 +104,23 @@ async def get_paths(
     """All paths between two entities (BFS). H1-②b-⑦a 查询面出口（find_path 首个
     API 消费点，修前零出口）。两端实体都须可见，否则 404（缺/跨用户同形=无存在性
     探测面）；无路可走=空 paths 如实回，不谎报错误。
+    路径爆炸防护（H1-②b-⑦a 留档④）：truncated 加性键如实报告搜索是否完成——
+    False=搜索已完成（空 paths=确证无路）、True=探索预算耗尽（paths=已发现部分
+    如实回，空 paths=预算内未发现禁当无路断言）；返回上限 10 条既有语义不变。
     """
     uid = _resolve_user_id(user_id)
     if (await get_entity_with_relations(source_id, uid)) is None or (
         await get_entity_with_relations(target_id, uid)
     ) is None:
         raise HTTPException(status_code=404, detail="Entity not found")
-    paths = await find_path(uid, source_id, target_id, max_depth)
+    paths, truncated = await find_path(uid, source_id, target_id, max_depth)
     return {
         "source_id": source_id,
         "target_id": target_id,
         "max_depth": max_depth,
         "paths": paths,
         "count": len(paths),
+        "truncated": truncated,
     }
 
 

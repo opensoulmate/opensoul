@@ -205,7 +205,16 @@ class TestPathsExit:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert set(data.keys()) == {"source_id", "target_id", "max_depth", "paths", "count"}
+        # 契约随更新（H1-②b-⑦a 留档④ 收口）：truncated 加性键进契约（修前恰 5 键）。
+        assert set(data.keys()) == {
+            "source_id",
+            "target_id",
+            "max_depth",
+            "paths",
+            "count",
+            "truncated",
+        }
+        assert data["truncated"] is False  # 小图直连=搜索已完成
         assert data["count"] == 1
         assert data["max_depth"] == 5
         path = data["paths"][0]
@@ -244,7 +253,16 @@ class TestPathsExit:
         data = resp.json()
         assert data["count"] == 0
         assert data["paths"] == []
-        assert set(data.keys()) == {"source_id", "target_id", "max_depth", "paths", "count"}
+        # 契约随更新（H1-②b-⑦a 留档④ 收口）：truncated 加性键（修前恰 5 键）。
+        assert set(data.keys()) == {
+            "source_id",
+            "target_id",
+            "max_depth",
+            "paths",
+            "count",
+            "truncated",
+        }
+        assert data["truncated"] is False  # 小图无路=确证无路（搜索已完成）
 
     def test_max_depth_is_node_cap(self, graph_client):
         """max_depth=路径节点数上限（含起终点，实现既有语义如实锁定）。"""
@@ -351,9 +369,20 @@ class TestPathsExit:
 
         async def fake_find_path(user_id, source_id, target_id, max_depth=5):
             calls.append((str(user_id), str(source_id), str(target_id), max_depth))
-            return [
-                [{"entity_id": str(source_id), "name": "A", "type": "person", "via_relation": None}]
-            ]
+            # 契约随更新（留档④ 收口）：find_path 返回 (paths, truncated) 二元组。
+            return (
+                [
+                    [
+                        {
+                            "entity_id": str(source_id),
+                            "name": "A",
+                            "type": "person",
+                            "via_relation": None,
+                        }
+                    ]
+                ],
+                False,
+            )
 
         monkeypatch.setattr(graph_api, "find_path", fake_find_path)
         resp = graph_client.get(
@@ -363,6 +392,8 @@ class TestPathsExit:
         assert resp.status_code == 200
         assert calls == [(str(_uid("user-a")), a, b, 3)]
         assert resp.json()["count"] == 1
+        # 端点真解包二元组（find_path 回裸 list 形=此键 缺席/错值先炸）。
+        assert resp.json()["truncated"] is False
 
 
 class TestFaceRootFixes:
