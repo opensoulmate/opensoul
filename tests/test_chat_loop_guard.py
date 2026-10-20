@@ -110,8 +110,11 @@ class TestCallSiteWiring:
 
     def test_call_sites_pass_session_key(self):
         text = self._src()
-        # 非流式：user_id作为session_key
-        assert "_check_loop(answer, session_key=str(user_id))" in text
+        # 非流式：档案键作session_key（契约随更新：F3b-⑬ 身份轴收口后档案键=
+        # _resolve_user_id(identity.user_id) 派生 uid，断言意图零丢失——调用点仍以
+        # 归一档案键作 session_key，修前 str(user_id) 自报裸键形不再回潮）
+        assert "_check_loop(answer, session_key=str(uid))" in text
+        assert "_check_loop(answer, session_key=str(user_id))" not in text
         # 两条流式路径（RAG降级路径 + 正常路径）都接了guard
         assert text.count('_check_loop("".join(answer_parts)') == 2
 

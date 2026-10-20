@@ -1,10 +1,11 @@
 import asyncio
+import hashlib
 import json
 import logging
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -21,10 +22,21 @@ from src.cortex.token_attribution import (
     get_attributor,
 )
 from src.services.search import semantic_search
+from src.services.tenant_binding import bind_identity
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _resolve_user_id(user_id: str) -> UUID:
+    """F3b-⑥ 家族 _resolve_user_id 同形（档案键家族正典）：UUID 串原样、
+    普通用户名/数字 id 按 md5 归一为档案 UUID。"""
+    try:
+        return UUID(user_id)
+    except ValueError:
+        h = hashlib.md5(user_id.encode()).hexdigest()
+        return UUID(f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}")
 
 
 def _llm_headers(api_key: str) -> dict:
@@ -681,11 +693,24 @@ Answer:"""
 
 
 @router.post("/")
-async def chat(req: ChatRequest, user_id: UUID):
-    """Chat with RAG. Supports SSE streaming."""
+async def chat(
+    req: ChatRequest,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
+):
+    """Chat with RAG. Supports SSE streaming.
+
+    身份轴收口（F3b-⑥ 已裁决语义同族既有面延伸，chat·export·feedback 必填
+    自报面执行件）：user_id 从认证派生（bind_identity），自报值只可确认派生
+    绑定——认证请求自报他人档案=403（冒读面收口）；'default'/空/占位零 UUID
+    =未声明→取派生；匿名保留自报（既有本地多档案语义契约零变化）；坏 token=401
+    零副作用。档案键经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
     if req.stream:
         return StreamingResponse(
-            rag_stream(req.question, user_id, req.top_k),
+            rag_stream(req.question, uid, req.top_k),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -697,7 +722,7 @@ async def chat(req: ChatRequest, user_id: UUID):
     # Non-streaming fallback
     try:
         results = await asyncio.wait_for(
-            semantic_search(req.question, user_id, limit=req.top_k), timeout=8
+            semantic_search(req.question, uid, limit=req.top_k), timeout=8
         )
     except (TimeoutError, Exception) as _rag_exc:
         logger.warning("RAG semantic_search unavailable (non-stream), degrading: %s", _rag_exc)
@@ -787,7 +812,7 @@ Answer:"""
         model=(used_target or {}).get("model") or (attempts[0].get("model") if attempts else None),
         provider=(used_target or {}).get("provider", "")
         or (attempts[0].get("provider", "") if attempts else ""),
-        session_key=str(user_id),
+        session_key=str(uid),
         actual_prompt_tokens=nonstream_usage,
         advisory=advisory,
         episodic=episodic,
@@ -801,7 +826,7 @@ Answer:"""
         }
 
     # 循环检测guard
-    loop_warning = _check_loop(answer, session_key=str(user_id))
+    loop_warning = _check_loop(answer, session_key=str(uid))
     result = {
         "answer": answer,
         "sources": sources,

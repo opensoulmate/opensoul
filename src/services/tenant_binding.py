@@ -39,6 +39,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TENANT = "default"
 DEFAULT_USER = "default"
+# 占位零 UUID（admin-ui/调用方「未指定档案」占位形，如 feedback/export 面硬编码
+# 00000000-0000-0000-0000-000000000000）：与 'default'/空 同义=未声明占位，
+# 不是真实身份 claim——认证确认检查按未声明处理（取派生）；匿名保留自报语义
+# 零变化（占位值原样保留，既有本地多档案语义）。
+NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 _REPO_ROOT = Path(__file__).parent.parent.parent
 
@@ -127,9 +132,14 @@ def bind_identity(
 
     - 匿名：tenant 钉 'default'，自报非 default→403；user_id 保留自报。
     - 认证：tenant/user 取 users 行（token 身份），自报非 default 且与派生
-      不一致→403；自报 "default"/空=未声明→取派生（不误伤不传参的调用方）。
+      不一致→403；自报 "default"/空/占位零 UUID=未声明→取派生（不误伤不传参
+      或传占位符的调用方）。
     """
     declared_tenant = (declared_tenant or "").strip() or DEFAULT_TENANT
+    # 自报值非 str（进程内直调带 UUID/int 形）按 _bearer_token 容缺纪律 str() 归一
+    # 再判（FastAPI HTTP 面恒 str；直调面真实调用形态，禁 .strip() 炸掉集成）
+    if declared_user is not None and not isinstance(declared_user, str):
+        declared_user = str(declared_user)
     declared_user = (declared_user or "").strip() or None
 
     token = _bearer_token(authorization)
@@ -178,7 +188,12 @@ def bind_identity(
                 f"declared '{declared_tenant}'"
             ),
         )
-    if declared_user and declared_user != DEFAULT_USER and declared_user != derived_user:
+    if (
+        declared_user
+        and declared_user != DEFAULT_USER
+        and declared_user != NIL_UUID
+        and declared_user != derived_user
+    ):
         raise HTTPException(
             status_code=403,
             detail=(
