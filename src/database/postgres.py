@@ -229,6 +229,22 @@ class SQLitePool:
                 "token_count",
                 "ALTER TABLE knowledge_chunks ADD COLUMN token_count INT DEFAULT 0",
             ),
+            # F3b-⑭（2026-10-20）：knowledge 生产表（实测 PRAGMA+main.py DDL）无
+            # starred/pinned 列，而 services/knowledge.py toggle_star/toggle_pin
+            # UPDATE knowledge SET starred|pinned 必 "no such column"——
+            # POST /{id}/star|/pin 修前生产必 500（wired-but-not-functional，
+            # Gate3 逼出真断点根因修：DDL+ALTER 双轨，③a 先例）。DEFAULT 0
+            # 存量行=未收藏/未置顶如实。
+            (
+                "knowledge",
+                "starred",
+                "ALTER TABLE knowledge ADD COLUMN starred INTEGER DEFAULT 0",
+            ),
+            (
+                "knowledge",
+                "pinned",
+                "ALTER TABLE knowledge ADD COLUMN pinned INTEGER DEFAULT 0",
+            ),
             # ── C1 2026-10-11 全库漂移审计登记（生产实测DDL vs 真实调用点列集）──
             # agents：生产是logo_url形状（type列非agent_type、无token），而
             # api/agent.py:81/103/139与middleware/auth.py:46（require_agent鉴权）

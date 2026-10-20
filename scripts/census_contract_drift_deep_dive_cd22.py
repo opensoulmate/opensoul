@@ -450,27 +450,27 @@ SHAPE_VERDICTS = {
     ("graph.get_entity_detail:71", "id"): {
         "verdict": _V,
         "evidence": "实体行 dict(row) 直出（src/services/entity.py:12 _row_to_entity），"
-        "entities 表列 id 真在场（DDL src/main.py:292）；UI selectedEntity.id 消费"
+        "entities 表列 id 真在场（DDL src/main.py:293）；UI selectedEntity.id 消费"
         "（knowledge-graph/page.tsx:530/:611）可达",
         "anchors": [(EN, 12, "d = dict(row)")],
     },
     ("graph.get_entity_detail:71", "name"): {
         "verdict": _V,
         "evidence": "实体行直出（src/services/entity.py:12），表列 name 真在场（DDL src/main.py:"
-        "293）；UI selectedEntity.name 消费（knowledge-graph/page.tsx:593）可达",
-        "anchors": [(EN, 12, "d = dict(row)"), (MN, 293, "name TEXT NOT NULL, type TEXT DEFAULT '',")],
+        "294）；UI selectedEntity.name 消费（knowledge-graph/page.tsx:593）可达",
+        "anchors": [(EN, 12, "d = dict(row)"), (MN, 294, "name TEXT NOT NULL, type TEXT DEFAULT '',")],
     },
     ("graph.get_entity_detail:71", "description"): {
         "verdict": _V,
         "evidence": "实体行直出（src/services/entity.py:12），表列 description 真在场（DDL "
-        "src/main.py:294）；UI 消费（knowledge-graph/page.tsx:603/:606）可达",
-        "anchors": [(MN, 294, "description TEXT DEFAULT '', properties TEXT DEFAULT '{}',")],
+        "src/main.py:295）；UI 消费（knowledge-graph/page.tsx:603/:606）可达",
+        "anchors": [(MN, 295, "description TEXT DEFAULT '', properties TEXT DEFAULT '{}',")],
     },
     ("graph.get_entity_detail:71", "properties"): {
         "verdict": _V,
         "evidence": "实体行直出+properties 归一为 dict（src/services/entity.py:17-24），表列 "
-        "properties 真在场（DDL src/main.py:294）；UI 消费（knowledge-graph/page.tsx:634）可达",
-        "anchors": [(MN, 294, "description TEXT DEFAULT '', properties TEXT DEFAULT '{}',")],
+        "properties 真在场（DDL src/main.py:295）；UI 消费（knowledge-graph/page.tsx:634）可达",
+        "anchors": [(MN, 295, "description TEXT DEFAULT '', properties TEXT DEFAULT '{}',")],
     },
     ("graph.get_entity_detail:71", "relations"): {
         "verdict": _V,
@@ -481,15 +481,15 @@ SHAPE_VERDICTS = {
     ("graph.get_entity_detail:71", "relations.id"): {
         "verdict": _V,
         "evidence": "relations 元素=dict(r)（r.* 行直出，src/services/entity.py:68），relations "
-        "表列 id 真在场（DDL src/main.py:297）；UI rel.id 消费（knowledge-graph/page.tsx:620）可达",
-        "anchors": [(MN, 297, "id TEXT PRIMARY KEY, source_id TEXT NOT NULL,")],
+        "表列 id 真在场（DDL src/main.py:298）；UI rel.id 消费（knowledge-graph/page.tsx:620）可达",
+        "anchors": [(MN, 298, "id TEXT PRIMARY KEY, source_id TEXT NOT NULL,")],
     },
     ("graph.get_entity_detail:71", "relations.source_entity_id"): {
         "verdict": _D,
         "repair_candidate": "已收口：CD-㉗ knowledge-graph relations 元素键收编（2026-10-19）",
         "repair_status": "landed@CD-㉗",
         "evidence": "relations 行键恰 id/source_id/target_id/type/properties/created_at+JOIN 别名 "
-        "source_name/target_name（DDL src/main.py:297-299+SELECT r.* src/services/entity.py:60-68）"
+        "source_name/target_name（DDL src/main.py:298-300+SELECT r.* src/services/entity.py:60-68）"
         "无 source_entity_id——UI rel.source_entity_id（knowledge-graph/page.tsx:618 isSource 判定"
         "恒 false、:626 rel.source_entity_id.slice(0,8) 对 undefined 调 slice=TypeError 渲染崩坏"
         "面）；同根 target_entity_id/relation_type 以 EXPANDED_FINDINGS 登记——CD-㉗ 已收口（UI "
@@ -498,7 +498,7 @@ SHAPE_VERDICTS = {
         "rel.target_entity_id/rel.relation_type 消费=修复真落地；锚点改锁修复后状态（rel.source_id "
         "漂移复发先炸）",
         "anchors": [
-            (MN, 297, "id TEXT PRIMARY KEY, source_id TEXT NOT NULL,"),
+            (MN, 298, "id TEXT PRIMARY KEY, source_id TEXT NOT NULL,"),
             (U_KG, 617, "rel.source_id === selectedEntity.id"),
         ],
     },

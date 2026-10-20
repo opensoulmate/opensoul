@@ -1,16 +1,28 @@
+import hashlib
 import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile
 
 from src.api._errors import stats_error
 from src.database.postgres import db_pool
 from src.models.knowledge import KnowledgeCreate, KnowledgeResponse, KnowledgeUpdate
 from src.services import knowledge as knowledge_service
 from src.services.extraction import extract_text_from_file
+from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
+
+
+def _resolve_user_id(user_id: str) -> UUID:
+    """F3b-⑥ 家族 _resolve_user_id 同形（档案键家族正典）：UUID 串原样、
+    普通用户名/数字 id 按 md5 归一为档案 UUID。"""
+    try:
+        return UUID(user_id)
+    except ValueError:
+        h = hashlib.md5(user_id.encode()).hexdigest()
+        return UUID(f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}")
 
 
 @router.get("/health")
@@ -130,16 +142,25 @@ def _guess_tags(filename: str, content_type: str) -> list[str]:
 
 @router.get("/", response_model=list[KnowledgeResponse])
 async def list_knowledge(
-    user_id: UUID,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     content_type: str | None = None,
     domain: str | None = None,
     tag: str | None = None,
 ):
-    """List knowledge items with pagination and filters."""
+    """List knowledge items with pagination and filters.
+
+    身份轴收口（F3b-⑥ 同族语义）：user_id 从认证派生，自报只可确认派生绑定
+    （矛盾=403 冒读面收口）；'default'/空/占位零 UUID=未声明→取派生；匿名
+    保留自报（既有本地多档案语义契约零变化）；坏 token=401 零副作用。读键=
+    档案键家族正典 _resolve_user_id（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
     return await knowledge_service.list_knowledge(
-        user_id,
+        uid,
         offset=offset,
         limit=limit,
         content_type=content_type,
@@ -149,9 +170,19 @@ async def list_knowledge(
 
 
 @router.post("/", response_model=KnowledgeResponse)
-async def create_knowledge(data: KnowledgeCreate, user_id: UUID):
-    """Create a new knowledge item."""
-    row = await knowledge_service.create_knowledge(data, user_id)
+async def create_knowledge(
+    data: KnowledgeCreate,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
+):
+    """Create a new knowledge item.
+
+    身份轴收口（F3b-⑥ 同族语义）：写键=认证派生档案键（自报只可确认绑定，
+    矛盾=403 冒写面收口），经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
+    row = await knowledge_service.create_knowledge(data, uid)
     return row
 
 
@@ -160,7 +191,8 @@ async def create_knowledge(data: KnowledgeCreate, user_id: UUID):
 
 @router.post("/upload", response_model=KnowledgeResponse)
 async def upload_file(
-    user_id: UUID,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
     file: UploadFile = File(...),
     title: str = Form(""),
     tags: str = Form(""),
@@ -170,7 +202,12 @@ async def upload_file(
     Supports: PDF, DOCX, TXT, MD, HTML, CSV, JSON, and common code files.
     The file is parsed, text is extracted, and stored as a knowledge item
     with automatic chunking and embedding for RAG search.
+
+    身份轴收口（F3b-⑥ 同族语义）：写键=认证派生档案键（自报只可确认绑定，
+    矛盾=403 冒写面收口），经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
     """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
     if not file.filename:
         raise HTTPException(status_code=400, detail="File must have a filename")
 
@@ -208,16 +245,23 @@ async def upload_file(
         },
     )
 
-    return await knowledge_service.create_knowledge(create_data, user_id)
+    return await knowledge_service.create_knowledge(create_data, uid)
 
 
 @router.post("/upload/bulk")
 async def upload_files_bulk(
-    user_id: UUID,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
     files: list[UploadFile] = File(...),
     tags: str = Form(""),
 ):
-    """Upload multiple files at once and create knowledge items for each."""
+    """Upload multiple files at once and create knowledge items for each.
+
+    身份轴收口（F3b-⑥ 同族语义）：写键=认证派生档案键（自报只可确认绑定，
+    矛盾=403 冒写面收口），经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
     results = {"created": [], "failed": []}
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
 
@@ -259,7 +303,7 @@ async def upload_files_bulk(
                     "char_count": len(extracted_text),
                 },
             )
-            row = await knowledge_service.create_knowledge(create_data, user_id)
+            row = await knowledge_service.create_knowledge(create_data, uid)
             results["created"].append(
                 {
                     "id": str(row["id"]),
@@ -283,45 +327,96 @@ async def upload_files_bulk(
 
 
 @router.get("/{knowledge_id}", response_model=KnowledgeResponse)
-async def get_knowledge(knowledge_id: UUID, user_id: UUID):
-    """Get a single knowledge item by ID."""
-    row = await knowledge_service.get_knowledge(knowledge_id, user_id)
+async def get_knowledge(
+    knowledge_id: UUID,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
+):
+    """Get a single knowledge item by ID.
+
+    身份轴收口（F3b-⑥ 同族语义）：读键=认证派生档案键（自报只可确认绑定，
+    矛盾=403 冒读面收口），经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
+    row = await knowledge_service.get_knowledge(knowledge_id, uid)
     if not row:
         raise HTTPException(status_code=404, detail="Knowledge not found")
     return row
 
 
 @router.put("/{knowledge_id}", response_model=KnowledgeResponse)
-async def update_knowledge(knowledge_id: UUID, data: KnowledgeUpdate, user_id: UUID):
-    """Update an existing knowledge item."""
-    row = await knowledge_service.update_knowledge(knowledge_id, data, user_id)
+async def update_knowledge(
+    knowledge_id: UUID,
+    data: KnowledgeUpdate,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
+):
+    """Update an existing knowledge item.
+
+    身份轴收口（F3b-⑥ 同族语义）：写键=认证派生档案键（自报只可确认绑定，
+    矛盾=403 冒写面收口），经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
+    row = await knowledge_service.update_knowledge(knowledge_id, data, uid)
     if not row:
         raise HTTPException(status_code=404, detail="Knowledge not found")
     return row
 
 
 @router.delete("/{knowledge_id}")
-async def delete_knowledge(knowledge_id: UUID, user_id: UUID):
-    """Delete a knowledge item."""
-    deleted = await knowledge_service.delete_knowledge(knowledge_id, user_id)
+async def delete_knowledge(
+    knowledge_id: UUID,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
+):
+    """Delete a knowledge item.
+
+    身份轴收口（F3b-⑥ 同族语义）：写键=认证派生档案键（自报只可确认绑定，
+    矛盾=403 冒删面收口），经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
+    deleted = await knowledge_service.delete_knowledge(knowledge_id, uid)
     if not deleted:
         raise HTTPException(status_code=404, detail="Knowledge not found")
     return {"deleted": True}
 
 
 @router.post("/{knowledge_id}/star")
-async def star_knowledge(knowledge_id: UUID, user_id: UUID):
-    """Toggle star (favorite) on a knowledge item."""
-    result = await knowledge_service.toggle_star(knowledge_id, user_id)
+async def star_knowledge(
+    knowledge_id: UUID,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
+):
+    """Toggle star (favorite) on a knowledge item.
+
+    身份轴收口（F3b-⑥ 同族语义）：写键=认证派生档案键（自报只可确认绑定，
+    矛盾=403 冒写面收口），经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
+    result = await knowledge_service.toggle_star(knowledge_id, uid)
     if not result:
         raise HTTPException(status_code=404, detail="Knowledge not found")
     return {"id": knowledge_id, "starred": result["starred"]}
 
 
 @router.post("/{knowledge_id}/pin")
-async def pin_knowledge(knowledge_id: UUID, user_id: UUID):
-    """Toggle pin on a knowledge item."""
-    result = await knowledge_service.toggle_pin(knowledge_id, user_id)
+async def pin_knowledge(
+    knowledge_id: UUID,
+    user_id: str = Query("default"),
+    authorization: str | None = Header(None),
+):
+    """Toggle pin on a knowledge item.
+
+    身份轴收口（F3b-⑥ 同族语义）：写键=认证派生档案键（自报只可确认绑定，
+    矛盾=403 冒写面收口），经 _resolve_user_id 家族正典归一（F3b-⑫ 同源）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    uid = _resolve_user_id(identity.user_id)
+    result = await knowledge_service.toggle_pin(knowledge_id, uid)
     if not result:
         raise HTTPException(status_code=404, detail="Knowledge not found")
     return {"id": knowledge_id, "pinned": result["pinned"]}

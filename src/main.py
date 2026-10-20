@@ -282,6 +282,7 @@ async def lifespan(app: FastAPI):
         title TEXT NOT NULL, content TEXT DEFAULT '',
         tags TEXT DEFAULT '[]', source TEXT DEFAULT '',
         content_type TEXT DEFAULT '', metadata TEXT DEFAULT '{}',
+        starred INTEGER DEFAULT 0, pinned INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')))""")
     await db_pool.execute("""CREATE TABLE IF NOT EXISTS knowledge_chunks (
         id TEXT PRIMARY KEY, knowledge_id TEXT NOT NULL,
