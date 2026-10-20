@@ -5,8 +5,10 @@ One upload, automatic multi-organ processing.
 """
 
 import asyncio
+import hashlib
 import logging
 import time
+from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel
@@ -20,6 +22,18 @@ logger = logging.getLogger(__name__)
 # 知识入库步骤的墙钟上限：embedding降级预算12s+DB操作留余量；
 # 超时→步骤标记error并返回，上传请求永不挂死（此前embedding挂起≈3分钟→客户端ReadTimeout）
 KNOWLEDGE_STEP_TIMEOUT = 20.0
+
+
+# ─── 身份派生（F3b-⑥ 家族 _resolve_user_id 同形，档案键家族正典） ─────
+
+
+def _resolve_user_id(user_id: str) -> UUID:
+    """Convert user_id to UUID — accept both UUID strings and plain usernames."""
+    try:
+        return UUID(user_id)
+    except ValueError:
+        h = hashlib.md5(user_id.encode()).hexdigest()
+        return UUID(f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}")
 
 
 # ── Request Schemas ────────────────────────────────────────
@@ -183,10 +197,12 @@ async def _step_sense_extract(
 
 
 async def _step_knowledge_import(title: str, content: str, tags: list[str], user_id: str) -> dict:
-    """Import extracted content into the knowledge base."""
-    try:
-        import uuid
+    """Import extracted content into the knowledge base.
 
+    user_id=端点层身份派生后的档案名（identity.user_id，F3b-⑫ 身份轴收口）；
+    写键在此以 _resolve_user_id 归一为档案键家族正典（单一源）。
+    """
+    try:
         from src.database.postgres import db_pool
         from src.models.knowledge import KnowledgeCreate
         from src.services.auth import register_user
@@ -195,37 +211,34 @@ async def _step_knowledge_import(title: str, content: str, tags: list[str], user
         if not content or len(content.strip()) < 10:
             return {"step": "knowledge", "status": "skipped", "reason": "Content too short"}
 
-        # Normalize user_id to UUID format
-        try:
-            uid = uuid.UUID(user_id)
-        except ValueError:
-            uid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+        # 写键=档案键家族正典单一源（F3b-⑫ 身份轴收口）：修前此处 uuid5 归一
+        # +按用户名反查/注册回填 users.id 两路派生，与家族 md5 正典键形
+        # （search/cortex/graph/entity/capture 同源）分裂=pipeline 入库行对
+        # 家族读面不可见（孤儿行），且写键真值随 users 表同名行有无漂移。
+        uid = _resolve_user_id(user_id)
 
-        # Ensure the user exists in the database
+        # Ensure the user exists in the database（用户开通面保留既有契约：导入
+        # 用户名在 users 真源有行可查；自此不再回填写键——开通与写键派生两权
+        # 分离，修前回填是第二路键派生）
         existing = await db_pool.fetchrow("SELECT id FROM users WHERE id = $1", str(uid))
         if not existing:
             # Try to find by username
             by_name = await db_pool.fetchrow("SELECT id FROM users WHERE username = $1", user_id)
-            if by_name:
-                uid = uuid.UUID(by_name["id"])
-            else:
+            if not by_name:
                 # Create a system user for pipeline imports
                 try:
-                    sys_user = await register_user(
+                    await register_user(
                         username=user_id,
                         email=f"{user_id}@pipeline.local",
                         password="pipeline-system-no-login",
                         role="user",
                     )
-                    uid = uuid.UUID(sys_user["id"])
                 except Exception as reg_err:
                     # User might already exist
                     by_name = await db_pool.fetchrow(
                         "SELECT id FROM users WHERE username = $1", user_id
                     )
-                    if by_name:
-                        uid = uuid.UUID(by_name["id"])
-                    else:
+                    if not by_name:
                         return {
                             "step": "knowledge",
                             "status": "error",
@@ -250,6 +263,7 @@ async def _step_knowledge_import(title: str, content: str, tags: list[str], user
             "title": title,
             "content_length": len(content),
             "tags": tags,
+            "user_id": str(uid),  # 真写入键如实报（F3b-⑫ 行归属可观测）
         }
     except Exception as e:
         logger.warning(f"Knowledge import failed: {e}")
@@ -278,8 +292,11 @@ async def pipeline_upload(
     4. Soul: Import to knowledge base
 
     Set pipeline="auto" for auto-detection, or specify: ocr, asr, text, video.
+
+    user_id 身份轴（F3b-⑫）：写键从认证派生，自报只可确认绑定（矛盾=403）；
+    'default'/空=未声明→取派生、匿名=保留自报（既有本地多档案语义）、坏 token=401。
     """
-    identity = bind_identity(authorization)
+    identity = bind_identity(authorization, "", user_id)
     pipeline_id = f"pipe_{int(time.time() * 1000)}"
     started_at = time.time()
     steps = []
@@ -375,7 +392,7 @@ async def pipeline_upload(
                     title=f"[Pipeline] {filename}",
                     content=extracted_text,
                     tags=knowledge_tags,
-                    user_id=user_id,
+                    user_id=identity.user_id,
                 ),
                 timeout=KNOWLEDGE_STEP_TIMEOUT,
             )
@@ -431,8 +448,12 @@ async def pipeline_run(
     req: PipelineRunRequest,
     authorization: str | None = Header(None),
 ):
-    """Run a pipeline on an existing Vein file by file_id."""
-    identity = bind_identity(authorization)
+    """Run a pipeline on an existing Vein file by file_id.
+
+    user_id 身份轴（F3b-⑫）：写键从认证派生，自报只可确认绑定（矛盾=403）；
+    'default'/空=未声明→取派生、匿名=保留自报（既有本地多档案语义）、坏 token=401。
+    """
+    identity = bind_identity(authorization, "", req.user_id)
     pipeline_id = f"pipe_{int(time.time() * 1000)}"
     started_at = time.time()
     steps = []
@@ -486,7 +507,7 @@ async def pipeline_run(
                     title=f"[Pipeline] {meta.name}",
                     content=extracted_text,
                     tags=tags,
-                    user_id=req.user_id,
+                    user_id=identity.user_id,
                 ),
                 timeout=KNOWLEDGE_STEP_TIMEOUT,
             )

@@ -348,12 +348,18 @@ class TestPipelineEmitTenantInvariants:
         租户（+1 落行键），emit 面 3 处零变化，总数 4。
         契约随更新（DEC-⑦-⑩）：pipeline_run retrieve 读点带派生租户键（by-ID
         读面归属闸，+1），总数 5。
+        契约随更新（F3b-⑫ user_id 轴收口）：bind_identity 从单参改声明式
+        （user_id 自报只可确认绑定），needle 随形更新——2 handler 各 1 处
+        派生点（upload Form user_id / run req.user_id），判法不变（派生点
+        与身份形参逐点配对）。
         """
         pipe = chr(124)
         src = (Path(__file__).parent.parent / "src" / "api" / "pipeline.py").read_text(
             encoding="utf-8"
         )
-        assert src.count("identity = bind_identity(authorization)") == 2
+        assert src.count('bind_identity(authorization, "", user_id)') == 1
+        assert src.count('bind_identity(authorization, "", req.user_id)') == 1
+        assert "bind_identity(authorization)" not in src
         assert src.count("tenant_id=identity.tenant_id") == 5
         assert src.count("push_event(") == 3
         assert src.count("authorization: str " + pipe + " None = Header(None)") == 2  # 竖线完好探针
