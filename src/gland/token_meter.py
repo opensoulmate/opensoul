@@ -5,6 +5,8 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from src.gland.usage_persist import UsagePersistence
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,11 +25,18 @@ class UsageRecord:
 class TokenMeter:
     """Tracks per-call token consumption, per-user/model aggregation, and budget enforcement."""
 
-    def __init__(self, budget_limit: int = 0, alert_threshold: float = 0.8) -> None:
+    def __init__(
+        self,
+        budget_limit: int = 0,
+        alert_threshold: float = 0.8,
+        persist: UsagePersistence | None = None,
+    ) -> None:
         """
         Args:
             budget_limit: Maximum total tokens allowed. 0 = unlimited.
             alert_threshold: Fraction of budget at which to log a warning (0.0–1.0).
+            persist: RV-①b-① 用量行持久化真源（缺省 None=纯内存，既有语义零变化）。
+                给定即 record() 写穿 + 构造期回载（重启用量不丢）。
         """
         self._budget_limit = budget_limit
         self._alert_threshold = alert_threshold
@@ -42,6 +51,10 @@ class TokenMeter:
         self._total: int = 0
         self._total_prompt: int = 0
         self._total_completion: int = 0
+
+        self._persist = persist
+        if persist is not None:
+            self._reload_from_persist()
 
     # ── recording ────────────────────────────────────────────────
 
@@ -68,21 +81,67 @@ class TokenMeter:
             task=task,
         )
         self._records.append(rec)
+        self._fold(rec)
 
-        self._total += total
-        self._total_prompt += prompt_tokens
-        self._total_completion += completion_tokens
-        self._by_model[model] += total
-        prov = self._by_provider[provider]
-        prov["prompt"] += prompt_tokens
-        prov["completion"] += completion_tokens
-        prov["total"] += total
-        prov["requests"] += 1
-        if user_id:
-            self._by_user[user_id] += total
+        # RV-①b-① 写穿：记账落盘失败不阻断已完成的 LLM 调用，但 logger.error
+        # 可见（F4b-㉕ 记账写点先例）——故障窗口内该行只活内存，如实记非谎报 durable。
+        if self._persist is not None:
+            try:
+                self._persist.insert(
+                    provider=rec.provider,
+                    model=rec.model,
+                    prompt_tokens=rec.prompt_tokens,
+                    completion_tokens=rec.completion_tokens,
+                    total_tokens=rec.total_tokens,
+                    user_id=rec.user_id,
+                    task=rec.task,
+                    timestamp=rec.timestamp,
+                )
+            except Exception as exc:  # noqa: BLE001 — 记账旁路纪律（失败可见不阻断）
+                logger.error("token usage persist failed (in-memory accounting intact): %s", exc)
 
         self._maybe_alert()
         return rec
+
+    def _fold(self, rec: UsageRecord) -> None:
+        """聚合折叠（单一源：record() 写入与持久化回载共用，禁两套聚合逻辑）。"""
+        self._total += rec.total_tokens
+        self._total_prompt += rec.prompt_tokens
+        self._total_completion += rec.completion_tokens
+        self._by_model[rec.model] += rec.total_tokens
+        prov = self._by_provider[rec.provider]
+        prov["prompt"] += rec.prompt_tokens
+        prov["completion"] += rec.completion_tokens
+        prov["total"] += rec.total_tokens
+        prov["requests"] += 1
+        if rec.user_id:
+            self._by_user[rec.user_id] += rec.total_tokens
+
+    def _reload_from_persist(self) -> None:
+        """启动回载：用量行真源回载 + 聚合折叠重算（聚合是行的派生值，MEM-⑥ 纪律：
+        禁第二套聚合列真源）。回载失败不阻断构造（记账旁路纪律同写穿口：记账面
+        故障绝不吃掉 gateway import/service 启动），logger.error 可见+空账起步，
+        行真源仍在库下次启动重试。"""
+        if self._persist is None:
+            return
+        try:
+            rows = self._persist.load_all()
+        except Exception as exc:  # noqa: BLE001 — 记账旁路纪律（失败可见不阻断）
+            logger.error("token usage reload failed (starting with empty accounting): %s", exc)
+            return
+        for row in rows:
+            rec = UsageRecord(
+                provider=row["provider"],
+                model=row["model"],
+                prompt_tokens=row["prompt_tokens"],
+                completion_tokens=row["completion_tokens"],
+                total_tokens=row["total_tokens"],
+                user_id=row["user_id"],
+                task=row["task"],
+                timestamp=row["timestamp"],
+            )
+            self._records.append(rec)
+            self._fold(rec)
 
     # ── budget ───────────────────────────────────────────────────
 

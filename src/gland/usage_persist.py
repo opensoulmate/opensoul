@@ -1,0 +1,129 @@
+"""SQLite persistence for gland TokenMeter 用量记录（RV-①b-①）——用量 UI 真源唯一落盘口。
+
+修前（RV-① A 组定性）：TokenMeter._records/_by_model/_by_provider/_by_user 全在
+进程内存，record() 只 append——gland 用量 UI 真源（DEC-㉖-①/㉖B2-① 建的显示面消费
+recent_records/summary）随 service 重启归零=用量面显示空。本模块把用量行落
+SQLite：record() 随写随落盘，进程启动回载，重启用量不丢。
+
+铁律（本仓 SQLite 约定）：user_id/task 显式 str()、纯 sqlite3 语法（migrations 是
+PG 语法禁直接跑）、无 dict/list 列（UsageRecord 各字段均标量，无需 json.dumps）。
+
+聚合不落盘（MEM-⑥「计数对账真源化」纪律）：_by_model/_by_provider/_by_user/_
+total 是用量行的派生值——回载时从行真源折叠重算，禁第二套聚合列（两套真源=漂移
+复发面）。
+
+测试隔离：GLAND_USAGE_DB 环境变量覆盖库路径（BRAIN_MEMORY_DB/NEST_DB 同款先例），
+缺省 <repo>/data/gland_usage.db；库路径每次连接按 env 解析（模块级 gateway 单例
+跨用例存活，测试面每用例 tmp 真源）。
+
+诚实边界：
+①写失败不阻断调用方但 logger.error 可见（F4b-㉕ 记账写点先例）——token_meter.
+  record() 在 LLM 调用路径尾部，为记账落盘失败炸掉已完成的 LLM 回复不成比例；
+  代价是故障窗口内该行只活内存、重启丢（如实记，非谎报 durable）。
+②无老化/裁剪面：表只增不减（生产用量行=审计性质，与 metacognition_log 同轴）。
+"""
+
+from __future__ import annotations
+
+import os
+import sqlite3
+import threading
+from pathlib import Path
+
+_TABLE = "gland_usage"
+
+_COLUMNS = (
+    "provider",
+    "model",
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "user_id",
+    "task",
+    "timestamp",
+)
+
+
+def default_db_path() -> str:
+    """库路径：GLAND_USAGE_DB 环境变量优先（测试隔离），缺省 <repo>/data/gland_usage.db。"""
+    env = os.environ.get("GLAND_USAGE_DB")
+    if env:
+        return env
+    return str(Path(__file__).resolve().parents[2] / "data" / "gland_usage.db")
+
+
+class UsagePersistence:
+    """用量行持久化真源（单表 gland_usage：insert 写穿 + load_all 启动回载）。"""
+
+    def __init__(self, db_path: str | None = None):
+        # 显式路径（测试/多实例）优先；缺省路径每次连接按 env 解析（缺省
+        # default_db_path）——模块级 gateway 单例跨用例存活，测试面每用例 tmp 真源。
+        self.explicit_path = db_path
+        self._lock = threading.Lock()
+
+    def _connect(self) -> sqlite3.Connection:
+        path = self.explicit_path or default_db_path()
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(path, timeout=30)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS gland_usage ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "provider TEXT NOT NULL, "
+            "model TEXT NOT NULL, "
+            "prompt_tokens INTEGER NOT NULL, "
+            "completion_tokens INTEGER NOT NULL, "
+            "total_tokens INTEGER NOT NULL, "
+            "user_id TEXT, "
+            "task TEXT, "
+            "timestamp REAL NOT NULL)"
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gland_usage_ts ON gland_usage(timestamp)")
+        return conn
+
+    def insert(
+        self,
+        *,
+        provider: str,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        total_tokens: int,
+        user_id: str | None = None,
+        task: str | None = None,
+        timestamp: float,
+    ) -> None:
+        """写穿一行用量记录。失败如实抛（禁静默丢写），是否阻断调用方归消费方裁决。"""
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    "INSERT INTO gland_usage ("
+                    + ", ".join(_COLUMNS)
+                    + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        provider,
+                        model,
+                        int(prompt_tokens),
+                        int(completion_tokens),
+                        int(total_tokens),
+                        str(user_id) if user_id is not None else None,
+                        str(task) if task is not None else None,
+                        float(timestamp),
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def load_all(self) -> list[dict]:
+        """回载全部用量行（按落盘序=时间序，与 recent_records 尾切语义对齐）。"""
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT " + ", ".join(_COLUMNS) + " FROM gland_usage ORDER BY id"
+                ).fetchall()
+            finally:
+                conn.close()
+        keys = _COLUMNS
+        return [dict(zip(keys, row)) for row in rows]

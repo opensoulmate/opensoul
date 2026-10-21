@@ -71,6 +71,16 @@ def _isolate_hippo_memory_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_gland_usage_db(tmp_path, monkeypatch):
+    """GLAND_USAGE_DB 全测试隔离（RV-①b-① 增补）：TokenMeter 用量行持久化落盘口
+    UsagePersistence——src.api.gland 模块级 gateway 单例 import 即构造
+    （ModelRouter(persist_usage=True)：构造期回载+record() 写穿），测试绝不写生产
+    data/gland_usage.db。库路径每次连接按 env 解析（memory_persist 同纪律），env
+    每用例指向 tmp；显式 db_path/GLAND_USAGE_DB 的测试按其覆盖为准。"""
+    monkeypatch.setenv("GLAND_USAGE_DB", str(tmp_path / "gland_usage.db"))
+
+
+@pytest.fixture(autouse=True)
 def _isolate_learn_db(tmp_path, monkeypatch):
     """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
     单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试

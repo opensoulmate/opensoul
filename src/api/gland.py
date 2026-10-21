@@ -19,7 +19,9 @@ router = APIRouter()
 
 # ── singleton gateway ───────────────────────────────────────────
 # Bootstraps with env-based config; providers can be added/removed at runtime.
-gateway = ModelRouter()
+# persist_usage=True（RV-①b-①）：用量 UI 真源（/usage /usage/recent /stats 消费的
+# token_meter）随写落盘、启动回载，service 重启用量不丢。
+gateway = ModelRouter(persist_usage=True)
 
 
 def _register_local_backup() -> None:

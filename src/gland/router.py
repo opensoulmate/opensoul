@@ -17,6 +17,7 @@ from src.gland.harness_profiles import (
 )
 from src.gland.key_manager import KeyManager
 from src.gland.token_meter import TokenMeter
+from src.gland.usage_persist import UsagePersistence
 
 logger = logging.getLogger(__name__)
 
@@ -333,10 +334,12 @@ class ModelRouter:
     COOLDOWN_SECONDS = 60  # disable a provider for this long after repeated failures
     MAX_FAILURES = 3
 
-    def __init__(self) -> None:
+    def __init__(self, *, persist_usage: bool = False) -> None:
         self.providers: dict[str, ProviderConfig] = {}
         self.key_manager = KeyManager()
-        self.token_meter = TokenMeter()
+        # RV-①b-①：persist_usage=True 的路由实例（生产 gateway 单例）用量行落盘
+        # 回载，重启不丢；缺省 False=纯内存（一次性/测试用路由实例既有语义零变化）。
+        self.token_meter = TokenMeter(persist=UsagePersistence() if persist_usage else None)
         self._http_client: httpx.AsyncClient | None = None
         # CowAgent chain trace: ordered {provider, model, pass, outcome/error}
         # log of the most recent chat()/embed() failover walk. Exposed via

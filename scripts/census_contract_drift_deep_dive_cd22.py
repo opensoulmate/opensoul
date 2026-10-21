@@ -421,30 +421,32 @@ SHAPE_VERDICTS = {
     # ── gland test_connection：test_provider 成功形 4 键（错误形 handler 已升 502 不出线）──
     # 锚点随位移同步（DEC-㉖B2-①：router.py +4 行（chat/embed record 调用点带 task）、
     # gland/page.tsx +3 行（接口 task 声明+task 列）——断言意图零丢失，历史裁决文本不改写）。
+    # 锚点随位移同步（DEC-㉖B2-① 先例；RV-①b-①：router.py +5 行（usage_persist
+    # import + persist_usage 接线）——断言意图零丢失，历史裁决文本不改写）。
     ("gland.test_connection:175", "status"): {
         "verdict": _V,
         "evidence": "gateway.test_provider 成功返回含 status（src/gland/router.py:1009）；错误形"
         "（:987/:992/:1016）被 handler 升 502（api/gland.py:188-189）不出线；UI 消费"
         "（gland/page.tsx:185）可达",
-        "anchors": [(GR, 1009, '"status": "ok",')],
+        "anchors": [(GR, 1014, '"status": "ok",')],
     },
     ("gland.test_connection:175", "provider"): {
         "verdict": _V,
         "evidence": "成功返回键 provider 真产出（src/gland/router.py:1010）；UI 消费"
         "（gland/page.tsx:184）可达",
-        "anchors": [(GR, 1010, '"provider": provider_name,')],
+        "anchors": [(GR, 1015, '"provider": provider_name,')],
     },
     ("gland.test_connection:175", "model"): {
         "verdict": _V,
         "evidence": "成功返回键 model 真产出（src/gland/router.py:1011）；UI 消费"
         "（gland/page.tsx:186）可达",
-        "anchors": [(GR, 1011, '"model": model,')],
+        "anchors": [(GR, 1016, '"model": model,')],
     },
     ("gland.test_connection:175", "reply"): {
         "verdict": _V,
         "evidence": "成功返回键 reply 真产出（src/gland/router.py:1012）；UI 消费"
         "（gland/page.tsx:186）可达",
-        "anchors": [(GR, 1012, '"reply": reply.strip(),')],
+        "anchors": [(GR, 1017, '"reply": reply.strip(),')],
     },
     # ── graph get_entity_detail：entities 行直出 + relations 注入 ──
     ("graph.get_entity_detail:71", "id"): {
