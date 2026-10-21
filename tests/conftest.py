@@ -109,6 +109,23 @@ def _isolate_echo_history_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_a2a_tasks_db(tmp_path, monkeypatch):
+    """A2A_TASKS_DB 全测试隔离（RV-①b-⑤-1 增补）：TaskManager 任务行持久化落盘口
+    TaskPersistence——src.a2a.task_manager 模块级 task_manager 单例构造即接 persist
+    （TaskManager(persist=TaskPersistence())：写穿+首触懒回载），测试绝不写生产
+    data/a2a_tasks.db。库路径每次连接按 env 解析（memory_persist 同纪律），env
+    每用例指向 tmp+懒回载标记每用例复位（MEM-④/RV-①b-④ 同款）：每用例真源=本用例
+    tmp 库，禁跨用例陈旧回载。显式 db_path/A2A_TASKS_DB 的测试按其覆盖为准。
+    （内存 tasks 字典不强清：既有单例跨用例累积语义零变化。）"""
+    import src.a2a.task_manager as a2a_tm
+
+    monkeypatch.setenv("A2A_TASKS_DB", str(tmp_path / "a2a_tasks.db"))
+    inst = a2a_tm.task_manager
+    if getattr(inst, "_persist", None) is not None:
+        monkeypatch.setattr(inst, "_loaded", False)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_learn_db(tmp_path, monkeypatch):
     """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
     单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试

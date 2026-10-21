@@ -24,6 +24,7 @@ from src.a2a.models import (
     TaskStatus,
     part_text,
 )
+from src.a2a.task_persist import TaskPersistence
 
 logger = logging.getLogger(__name__)
 
@@ -454,6 +455,7 @@ class _ArtifactChunkStream:
             self._task.artifacts.append(self._artifact)
         else:
             self._artifact.parts.append(part)
+        self._manager._sync_task(self._task)  # RV-①b-⑤-1：artifact 变更写穿
         self._emitted += 1
         self._manager._emit_stream(
             self._task,
@@ -578,8 +580,12 @@ class TaskManager:
     # PROCESS_BUDGET_S 同款纪律：类属性供测试短缩，真实计时语义不动）。
     ACP_FALLBACK_BUDGET_S = 10.0
 
-    def __init__(self):
+    def __init__(self, persist: TaskPersistence | None = None):
         self.tasks: dict[str, Task] = {}
+        # 任务行持久化真源（RV-①b-⑤-1）：缺省 None=纯内存既有语义零变化（测试/
+        # 一次性实例）；接 persist=写穿+懒回载，重启任务不丢。构造零 IO（不建库）。
+        self._persist = persist
+        self._loaded = False
         self.agent_card: AgentCard = DEFAULT_AGENT_CARD
         # 扩展 Agent Card（§3.1.11）：None=未配置（能力位随之 False 不虚报）。
         self.extended_agent_card: AgentCard | None = None
@@ -593,6 +599,52 @@ class TaskManager:
         # events」）；队列元素=(StreamResponse 载荷 dict, 是否收尾帧)。与 tasks 同为
         # 进程内真源（重启即清，与既有 in-memory 任务边界一致）。
         self._stream_subs: dict[str, list[asyncio.Queue]] = {}
+
+    # === 任务行持久化（RV-①b-⑤-1）：写穿单一点 + 首触懒回载 ===
+
+    def _ensure_loaded(self) -> None:
+        """首触懒回载（MEM-④/RV-①b-④ 先例）：persist=None 或已回载=零操作。
+
+        回载失败不置 _loaded（下次触碰重试）+logger.error 可见，行真源仍在库
+        （RV-①b-②④ 语义）；只补缺不覆盖（self.tasks 内存真源优先，禁回载洗掉
+        进程内新态）。
+        """
+        if self._persist is None or self._loaded:
+            return
+        try:
+            rows = self._persist.load_all()
+        except Exception as e:
+            logger.error(f"a2a task 回载失败（下次触碰重试）: {e}")
+            return
+        for data in rows:
+            try:
+                task = Task(**data)
+            except Exception as e:
+                logger.error(f"a2a task 行不可解跳过: {e}")
+                continue
+            self.tasks.setdefault(task.id, task)
+        self._loaded = True
+
+    def _sync_task(self, task: Task) -> None:
+        """任务状态写穿单一点（RV-①b-② _sync_entry 纪律：禁散落写点漂移）。
+
+        全部任务变更点（建任务/入史/状态迁移/artifact 追加/metadata 变更）共用
+        本口落盘。写失败=记账旁路纪律（RV-①b-①）：logger.error 可见不阻断任务
+        本体（该态只活内存重启丢，非谎报 durable）。
+        """
+        if self._persist is None:
+            return
+        try:
+            d = task.model_dump()
+            self._persist.upsert(
+                task_id=str(task.id),
+                context_id=str(task.contextId),
+                state=str(task.status.state),
+                status_timestamp=str(task.status.timestamp),
+                payload=json.dumps(d, ensure_ascii=False),
+            )
+        except Exception as e:
+            logger.error(f"a2a task 写穿失败（该态只活内存）: {e}")
 
     def get_agent_card(self) -> AgentCard:
         return self.agent_card
@@ -719,6 +771,7 @@ class TaskManager:
         q: asyncio.Queue = asyncio.Queue()
         self._stream_subs.setdefault(task_id, []).append(q)
         if send_current:
+            self._ensure_loaded()
             task = self.tasks.get(task_id)
             if task is not None:
                 ends = first_frame_ends and task.status.state in _STREAM_END_STATES
@@ -786,6 +839,7 @@ class TaskManager:
             raise A2AError(ErrorCode.INVALID_PARAMS, f"Invalid pageSize: {page_size!r}")
 
         rows: list[tuple[Task, datetime]] = []
+        self._ensure_loaded()
         for task in self.tasks.values():
             if context_id is not None and task.contextId != context_id:
                 continue
@@ -827,7 +881,9 @@ class TaskManager:
         )
         if not message.contextId:
             message.contextId = task.contextId
+        self._ensure_loaded()
         self.tasks[task.id] = task
+        self._sync_task(task)  # RV-①b-⑤-1：建任务写穿
         logger.info(f"Task created: {task.id}")
         return task
 
@@ -852,6 +908,7 @@ class TaskManager:
         开流前校验纪律）。终态拒收后多轮正典=§6.3 input-required 续接 / §3.4.3
         contextId 新任务续上下文。
         """
+        self._ensure_loaded()
         task = self.tasks.get(task_id)
         if not task:
             raise A2AError(ErrorCode.TASK_NOT_FOUND, f"Task not found: {task_id}")
@@ -879,6 +936,7 @@ class TaskManager:
         走 process_task=本口+run_processing（契约不变）。agent 回复入史在
         run_processing；错误进 status.message 不入史（F4b-⑧）。
         """
+        self._ensure_loaded()
         task = self.tasks.get(task_id)
         if not task:
             # §5.4 TaskNotFoundError(-32001)：SendMessage 续接指向不存在任务
@@ -889,6 +947,7 @@ class TaskManager:
 
         # Add user message to history（每条消息恰入史一次，F4b-⑧）
         task.history.append(message)
+        self._sync_task(task)  # RV-①b-⑤-1：入史/metadata 变更写穿
         return task
 
     async def process_task(
@@ -921,6 +980,7 @@ class TaskManager:
         )
         task.history.append(agent_msg)
         task.status = TaskStatus(state="input-required", message=agent_msg)
+        self._sync_task(task)  # RV-①b-⑤-1：状态迁移写穿
         return task
 
     def cancel_by_user(self, task: Task, ack: str) -> Task:
@@ -940,6 +1000,7 @@ class TaskManager:
         )
         task.history.append(agent_msg)
         task.status = TaskStatus(state="canceled", message=agent_msg)
+        self._sync_task(task)  # RV-①b-⑤-1：状态迁移写穿
         return task
 
     async def run_processing(self, task: Task, message: Message) -> Task:
@@ -956,6 +1017,7 @@ class TaskManager:
         路径（推送+流式收束）。
         """
         task.status = TaskStatus(state="working")
+        self._sync_task(task)  # RV-①b-⑤-1：working 迁移写穿（处理期重启态不丢）
         await self._notify_push(task)  # 状态迁移即任务更新 → webhook（§4.3.3）
         self._emit_stream(task, _status_update_payload(task))  # 流式：working 迁移事件
 
@@ -1046,6 +1108,7 @@ class TaskManager:
                 ),
             )
 
+        self._sync_task(task)  # RV-①b-⑤-1：收尾态（completed/failed/中断/取消）写穿
         await self._notify_push(
             task
         )  # 终态（completed/failed）→ {"task"} 全量投递；input-required（中断态，非终态）→ {"statusUpdate"}
@@ -1054,15 +1117,18 @@ class TaskManager:
         return task
 
     async def get_task(self, task_id: str) -> Task | None:
+        self._ensure_loaded()
         return self.tasks.get(task_id)
 
     async def cancel_task(self, task_id: str) -> Task | None:
+        self._ensure_loaded()
         task = self.tasks.get(task_id)
         if not task:
             return None
         if task.status.state in ("completed", "failed", "canceled"):
             return None
         task.status = TaskStatus(state="canceled")
+        self._sync_task(task)  # RV-①b-⑤-1：状态迁移写穿
         await self._notify_push(task)  # 取消=终态迁移，同样走推送（§4.3.3）
         self._emit_stream(task, _status_update_payload(task))  # 流式：canceled 迁移事件
         self.emit_stream_end(task)  # 流式：取消即交互周期收束，订阅流收尾
@@ -1114,6 +1180,7 @@ class TaskManager:
           （修前 pending 回答「/cancel」被当查询参数、含触发词时还硬跑查询）。
         """
         pending = task.metadata.pop(_PENDING_SKILL_KEY, "")
+        self._sync_task(task)  # RV-①b-⑤-1：pending 路由记忆变更写穿
         if _explicit_cancel_command(text):
             raise TaskCancelled(_CANCEL_ACK)
         if pending:
@@ -1122,6 +1189,7 @@ class TaskManager:
             if _strip_fillers(text):
                 return await self._handle_skill(pending, text, task)
             task.metadata[_PENDING_SKILL_KEY] = pending
+            self._sync_task(task)  # RV-①b-⑤-1：pending 路由记忆变更写穿
             raise TaskInputRequired(self._skill_param_question(pending))
 
         # Default: echo back with skill routing
@@ -1130,6 +1198,7 @@ class TaskManager:
                 if tag.lower() in text.lower():
                     if skill.id in _SKILL_QUERY_PARAM and not _skill_residual(text, tag):
                         task.metadata[_PENDING_SKILL_KEY] = skill.id
+                        self._sync_task(task)  # RV-①b-⑤-1：pending 路由记忆变更写穿
                         raise TaskInputRequired(self._skill_param_question(skill.id))
                     return await self._handle_skill(skill.id, text, task)
 
@@ -1375,6 +1444,7 @@ class TaskManager:
                     # artifact 不静默丢（F4b-⑰，_materialize_extra_choices）
                     primary = data["choices"][0]["message"]["content"]
                     _materialize_extra_choices(task, data.get("choices") or [])
+                    self._sync_task(task)  # RV-①b-⑤-1：非主 choice artifact 写穿
                     return primary
                 else:
                     logger.warning(f"LLM API error {resp.status_code}, falling back to ACP")
@@ -1517,4 +1587,7 @@ class TaskManager:
 
 
 # Global task manager instance
-task_manager = TaskManager()
+# 生产单例：接任务行持久化（RV-①b-⑤-1）——写穿+懒回载，重启任务不丢。
+# TaskPersistence 构造零 IO（不建库），import 期安全；测试隔离=A2A_TASKS_DB
+# env 每用例指向 tmp（conftest 全测试隔离先例）。
+task_manager = TaskManager(persist=TaskPersistence())
