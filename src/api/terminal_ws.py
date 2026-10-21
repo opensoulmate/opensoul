@@ -313,7 +313,16 @@ async def terminal_ws(websocket: WebSocket):
         # 三泵退场收尾（唯一 await，置于全部关键动作之后=即便被宿主取消也不再吞
         # 任何关键动作；三泵均已 cancel，取消态自会退场，连接结束不留后台任务
         # DEC-⑭-③ 纪律延续）。
-        await asyncio.gather(t_pty, t_ws, watchdog, return_exceptions=True)
+        # 会话 teardown 的宿主取消恰落在本 join 上时吞掉取消后正常返回（实测 ~23%
+        # 假失败率的根因）：testclient/uvicorn 会话收尾即取消宿主任务，取消兑现于
+        # await 点；此刻关键收尾已全同步完成、三泵均已 cancel 自会退场，此 join 只是
+        # 卫生收尾——让 handler 以取消态收场只会把取消从 WebSocketTestSession 退出
+        # 路径（fut.result）冒充成连接失败（concurrent.futures.CancelledError），
+        # roundtrip 实际已成功（算术展开 marker 实测总在场）。
+        try:
+            await asyncio.gather(t_pty, t_ws, watchdog, return_exceptions=True)
+        except asyncio.CancelledError:
+            pass
 
 
 # ── DEC-⑯ terminal 路径对齐别名 ────────────────────────────────────────────

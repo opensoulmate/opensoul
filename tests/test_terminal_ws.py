@@ -1,5 +1,6 @@
 """Integration tests for Terminal WebSocket API."""
 
+import asyncio
 import json
 import sqlite3
 import threading
@@ -84,3 +85,54 @@ def test_terminal_spawns_real_bash_and_executes(tmp_path, monkeypatch):
     assert not error, f"roundtrip error: {error}"
     buf = collected[0] if collected else ""
     assert MARKER in buf, f"bash 未真执行命令（无算术展开）；实际收到: {buf!r}"
+
+
+def test_teardown_cancel_at_pump_join_absorbed(tmp_path, monkeypatch):
+    """回归锁（2026-10-21 flake 根因修）：会话 teardown 的宿主取消恰落在尾部泵
+    join（asyncio.gather）上时，handler 须吞掉取消后正常返回——修前 handler 以
+    取消态收场，取消从 WebSocketTestSession 退出路径（fut.result）冒充成连接失败
+    （roundtrip 实际成功仍报 roundtrip error: ['CancelledError()']，实测 ~23%
+    假失败率，全量轮亦复现 1 failed）。
+
+    确定性复现=把「取消恰落于 gather」这一触发态恒等放大：monkeypatch 让尾部
+    join 的精确调用形（3 任务 + return_exceptions）恒抛 CancelledError，断言
+    客户端退出路径零取消泄漏且 roundtrip 语义（bash 算术展开）完好。"""
+    users_db = tmp_path / "users.db"
+    monkeypatch.setenv("USERS_DB", str(users_db))
+    monkeypatch.setenv("ENTERPRISE_DB", str(tmp_path / "enterprise.db"))
+    with sqlite3.connect(users_db) as c:
+        c.execute(
+            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, "
+            "password_hash TEXT, is_active INTEGER NOT NULL DEFAULT 1, "
+            "tenant_id TEXT NOT NULL DEFAULT 'default')"
+        )
+        uid = str(uuid.uuid4())
+        c.execute(
+            "INSERT INTO users (id, username, password_hash, is_active, tenant_id) "
+            "VALUES (?, ?, 'x', 1, 'default')",
+            (uid, f"u-{uid[:8]}"),
+        )
+        c.commit()
+
+    token = create_access_token(user_id=uuid.UUID(uid), role="user")
+
+    real_gather = asyncio.gather
+
+    def _cancel_at_join(*args, **kwargs):
+        # 尾部泵 join 的精确调用形（t_pty/t_ws/watchdog 三任务 + return_exceptions）
+        if len(args) == 3 and kwargs.get("return_exceptions"):
+            raise asyncio.CancelledError()
+        return real_gather(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "gather", _cancel_at_join)
+
+    client = _ws_client()
+    collected, error = [], []
+    t = threading.Thread(target=_run_roundtrip, args=(client, collected, error, token), daemon=True)
+    t.start()
+    t.join(timeout=20)
+    assert not t.is_alive(), "terminal WS hung"
+    # 零取消泄漏：修前这里必炸 roundtrip error: ['CancelledError()']
+    assert not error, f"teardown cancellation leaked as failure: {error}"
+    buf = collected[0] if collected else ""
+    assert MARKER in buf, f"bash 未真执行命令；实际收到: {buf!r}"

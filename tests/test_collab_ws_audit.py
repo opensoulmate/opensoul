@@ -120,9 +120,21 @@ class _Conn:
         assert self.frame(timeout=timeout) == {"event": "pong"}
 
     def expect_close(self, timeout=8.0):
-        with pytest.raises(WebSocketDisconnect) as ei:
-            self.frame(timeout=timeout)
-        return ei.value
+        # 等到 close 帧为止（中间文本帧=残留 prompt 等噪声不判失败）：修前首帧判定
+        # 形在 bash prompt 残帧先行入队时误判 DID NOT RAISE（并发 flake 实测复现，
+        # 2026-10-21 flake 根因收口拍 family 同型收口）。
+        deadline = _time.time() + timeout
+        while True:
+            remaining = deadline - _time.time()
+            if remaining <= 0:
+                break
+            try:
+                self.frame(timeout=remaining)
+            except WebSocketDisconnect as ei:
+                return ei
+            except queue.Empty:
+                break
+        raise AssertionError(f"close frame not seen within {timeout}s")
 
     def close(self):
         try:

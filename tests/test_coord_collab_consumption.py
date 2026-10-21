@@ -104,6 +104,19 @@ def _wait_inbox(db, to_agent, n, timeout=5.0):
     return rows
 
 
+def _wait_inbox_read(db, to_agent, idx, timeout=5.0):
+    """轮询收件箱第 idx 行 read 标记到位（送达帧先于标 read 的 UPDATE 落库=竞态，
+    WS 写路径门户线程异步；超时如实返回仍由调用方断言必炸）。"""
+    deadline = time.time() + timeout
+    rows = _inbox_rows(db, to_agent)
+    while time.time() < deadline:
+        if len(rows) > idx and rows[idx]["read"] == 1:
+            return rows
+        time.sleep(0.05)
+        rows = _inbox_rows(db, to_agent)
+    return rows
+
+
 def _drain_pong(ws):
     """ping/pong 同步屏障：此前若有未取帧会先到（零噪音断言用）。"""
     ws.send_json({"event": "ping"})
@@ -443,9 +456,10 @@ class TestCoordInbox:
             assert frame["from_agent"] == "g15b-fb"
             assert frame["message_type"] == "conflict"
             assert json.loads(frame["content"])["files"] == ["f.py"]
-            # 接取即送达：read 已标
-            _wait_row(coord_env["coord_db"], "g15b-fa", lambda r: True)
-            rows = _inbox_rows(coord_env["coord_db"], "g15b-fa")
+            # 接取即送达：read 已标（送达帧先于标 read 的 UPDATE 落库=竞态；修前
+            # lambda r: True 恒真空等后即刻断言，并发下偶发 0==1 假失败=本文件
+            # 并发 flake 根因，2026-10-21 收口）——真谓词轮询到 read==1。
+            rows = _wait_inbox_read(coord_env["coord_db"], "g15b-fa", 0)
             assert rows[0]["read"] == 1
             # 无积压时连接零噪音
             assert _drain_pong(wa) == {"event": "pong"}
