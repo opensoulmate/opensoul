@@ -17,6 +17,14 @@ memory_id/session_id 显式 str()、纯 sqlite3 语法（migrations 是 PG 语�
 先例），缺省 <repo>/data/brain_memory.db；库路径每次连接按 env 解析（模块级
 MemoryStore/SessionManager 单例跨用例存活，测试面每用例 tmp 真源）。
 
+MEM-⑤ hippo 面复用（同一写穿/回载纪律，独立真源）：hippo /memories /sessions
+（F3b-⑱⑳ 独立实例）走同一落盘口，但独立库（data/hippo_memory.db，
+HIPPO_MEMORY_DB env 覆盖）+独立表（hippo_memories/hippo_sessions）——两面
+各自的 MemoryStore/SessionManager 是独立内存真源，共库共表会互相回载对方
+行=跨面串行（hippo 衰减遗忘能删掉 brain 面记忆）。故 resolve/table 参构造期
+给定：resolve=库路径解析函数（缺省 default_db_path=brain 面）、table=表名
+（缺省 brain_*，构造期正则校验禁 SQL 注入面）。
+
 诚实边界：
 ①embedding 行向量是查询期懒算缓存（Memory.embedding 注释），刻意不落盘——
   回载行 embedding=None，下次语义查询重新懒算（与 update 内容变更失效同语义）。
@@ -30,6 +38,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -76,18 +85,42 @@ def default_db_path() -> str:
     return str(Path(__file__).resolve().parents[2] / "data" / "brain_memory.db")
 
 
-class MemoryPersistence:
-    """brain 记忆面持久化真源（单表 brain_memories）。"""
+def hippo_db_path() -> str:
+    """hippo 面库路径（MEM-⑤）：HIPPO_MEMORY_DB 环境变量优先（测试隔离），
+    缺省 <repo>/data/hippo_memory.db——与 brain 面独立库（独立实例独立真源，
+    共库共表互相回载=跨面串行，见模块 docstring）。"""
+    env = os.environ.get("HIPPO_MEMORY_DB")
+    if env:
+        return env
+    return str(Path(__file__).resolve().parents[2] / "data" / "hippo_memory.db")
 
-    def __init__(self, db_path: str | None = None):
-        # 显式路径（测试/多实例）优先；缺省路径每次连接按 env 解析——模块级
-        # MemoryStore 单例跨用例存活，测试面每用例 tmp 真源（proactive db_path
-        # retarget 同族语义）。
+
+# 表名是 SQL 标识符（f-string 拼接，绑定参数塞不了标识符）——构造期白名单
+# 校验，非法形如实 ValueError 禁拼进 SQL。
+_TABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+class MemoryPersistence:
+    """记忆行持久化真源（单表，缺省 brain_memories；table 参=MEM-⑤ hippo 面独立表）。"""
+
+    def __init__(
+        self,
+        db_path: str | None = None,
+        resolve=None,
+        table: str = "brain_memories",
+    ):
+        # 显式路径（测试/多实例）优先；缺省路径每次连接按 resolve 解析（缺省
+        # default_db_path=brain 面）——模块级 MemoryStore 单例跨用例存活，测试面
+        # 每用例 tmp 真源（proactive db_path retarget 同族语义）。
         self.explicit_path = db_path
+        self._resolve = resolve or default_db_path
+        if not _TABLE_NAME_RE.match(table):
+            raise ValueError(f"invalid table name: {table!r}")
+        self._table = table
         self._lock = threading.Lock()
 
     def _path(self) -> str:
-        return self.explicit_path or default_db_path()
+        return self.explicit_path or self._resolve()
 
     def _connect(self) -> sqlite3.Connection:
         path = self._path()
@@ -97,9 +130,12 @@ class MemoryPersistence:
         return conn
 
     def _ensure_schema(self, conn: sqlite3.Connection) -> None:
+        # 表名拼接用 str concat 非 f-string：SQL 体含字面 '{}'（metadata 缺省），
+        # f-string 会当空表达式炸（MEM-⑤ 坑记档）。
         conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS brain_memories (
+            "CREATE TABLE IF NOT EXISTS "
+            + self._table
+            + """ (
                 memory_id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
                 content TEXT NOT NULL,
@@ -137,8 +173,9 @@ class MemoryPersistence:
             try:
                 self._ensure_schema(conn)
                 conn.executemany(
-                    """
-                    INSERT INTO brain_memories (
+                    "INSERT INTO "
+                    + self._table
+                    + """ (
                         memory_id, session_id, content, importance, tags, metadata,
                         created_at, last_accessed_at, access_count, archived, retention
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -179,7 +216,7 @@ class MemoryPersistence:
             try:
                 self._ensure_schema(conn)
                 cur = conn.execute(
-                    "DELETE FROM brain_memories WHERE memory_id = ?", (str(memory_id),)
+                    "DELETE FROM " + self._table + " WHERE memory_id = ?", (str(memory_id),)
                 )
                 conn.commit()
                 return cur.rowcount > 0
@@ -198,7 +235,9 @@ class MemoryPersistence:
             conn = self._connect()
             try:
                 self._ensure_schema(conn)
-                rows = conn.execute(f"SELECT {', '.join(_COLUMNS)} FROM brain_memories").fetchall()
+                rows = conn.execute(
+                    "SELECT " + ", ".join(_COLUMNS) + " FROM " + self._table
+                ).fetchall()
             except sqlite3.Error as e:
                 raise MemoryPersistError(f"brain memory load failed: {e}") from e
             finally:
@@ -217,19 +256,29 @@ class MemoryPersistence:
 
 
 class SessionPersistence:
-    """brain 记忆面父会话行持久化真源（单表 brain_sessions，与记忆行同库）。
+    """父会话行持久化真源（单表，缺省 brain_sessions 与记忆行同库；table 参=
+    MEM-⑤ hippo 面独立表）。
 
     记忆行归属=父会话行继承（F3b-㉛）——父会话行不落盘则重启后归属闸缺行 404，
     记忆「不丢但取不回」。SessionManager（src/hippo/session.py）duck-typed 消费
     upsert/upsert_many/delete/load_rows 四口（MemoryPersistence 同款纪律）。
     """
 
-    def __init__(self, db_path: str | None = None):
+    def __init__(
+        self,
+        db_path: str | None = None,
+        resolve=None,
+        table: str = "brain_sessions",
+    ):
         self.explicit_path = db_path
+        self._resolve = resolve or default_db_path
+        if not _TABLE_NAME_RE.match(table):
+            raise ValueError(f"invalid table name: {table!r}")
+        self._table = table
         self._lock = threading.Lock()
 
     def _path(self) -> str:
-        return self.explicit_path or default_db_path()
+        return self.explicit_path or self._resolve()
 
     def _connect(self) -> sqlite3.Connection:
         path = self._path()
@@ -239,9 +288,11 @@ class SessionPersistence:
         return conn
 
     def _ensure_schema(self, conn: sqlite3.Connection) -> None:
+        # 表名拼接 str concat 非 f-string（同 MemoryPersistence，SQL 体含字面 '{}'）。
         conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS brain_sessions (
+            "CREATE TABLE IF NOT EXISTS "
+            + self._table
+            + """ (
                 session_id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL DEFAULT '',
                 title TEXT NOT NULL DEFAULT '',
@@ -275,8 +326,9 @@ class SessionPersistence:
             try:
                 self._ensure_schema(conn)
                 conn.executemany(
-                    """
-                    INSERT INTO brain_sessions (
+                    "INSERT INTO "
+                    + self._table
+                    + """ (
                         session_id, user_id, title, status, created_at,
                         last_active_at, memory_count, total_tokens, metadata
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -312,7 +364,7 @@ class SessionPersistence:
             try:
                 self._ensure_schema(conn)
                 cur = conn.execute(
-                    "DELETE FROM brain_sessions WHERE session_id = ?", (str(session_id),)
+                    "DELETE FROM " + self._table + " WHERE session_id = ?", (str(session_id),)
                 )
                 conn.commit()
                 return cur.rowcount > 0
@@ -329,7 +381,7 @@ class SessionPersistence:
             try:
                 self._ensure_schema(conn)
                 rows = conn.execute(
-                    f"SELECT {', '.join(_SESSION_COLUMNS)} FROM brain_sessions"
+                    "SELECT " + ", ".join(_SESSION_COLUMNS) + " FROM " + self._table
                 ).fetchall()
             except sqlite3.Error as e:
                 raise MemoryPersistError(f"brain session load failed: {e}") from e

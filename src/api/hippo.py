@@ -20,8 +20,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ── Singletons ─────────────────────────────────────────────
-store = MemoryStore(strategy=DecayStrategy.ACCESS_REINFORCED, half_life_hours=24.0)
-sessions = SessionManager()
+
+# MEM-⑤ hippo 面持久化：store/sessions 落 SQLite（data/hippo_memory.db，
+# HIPPO_MEMORY_DB env 覆盖=测试隔离），重启记忆/会话不丢（MEM-④ 诚实边界③
+# 「hippo /sessions /memories 独立实例仍纯内存」收口）——独立库+独立表
+# （hippo_memories/hippo_sessions）：与 brain 面是独立内存真源，共库共表会
+# 互相回载对方行=跨面串行（hippo 衰减遗忘能删掉 brain 面记忆）。
+from src.hippo.memory_persist import (
+    MemoryPersistence,
+    SessionPersistence,
+    hippo_db_path,
+)
+
+store = MemoryStore(
+    strategy=DecayStrategy.ACCESS_REINFORCED,
+    half_life_hours=24.0,
+    persist=MemoryPersistence(resolve=hippo_db_path, table="hippo_memories"),
+)
+sessions = SessionManager(persist=SessionPersistence(resolve=hippo_db_path, table="hippo_sessions"))
 
 # Long-term memory singleton
 from src.hippo.long_term_memory import LongTermMemoryStore
