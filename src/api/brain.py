@@ -721,6 +721,37 @@ async def recall(
     }
 
 
+@router.delete("/memories/{memory_id}")
+async def forget_memory(
+    memory_id: str,
+    user_id: str = "default",
+    authorization: str | None = Header(None),
+):
+    """删除记忆：brain 记忆面删除口（MEM-② 边界①「进程内 MemoryStore 无删除口」收口）。
+
+    修前 store.delete() 在 brain 面零 API 消费点（wired-but-no-consumer）——记忆
+    只能进不能出（decay 遗忘之外用户无删除通道，hippo /memories CRUD 是独立
+    store 实例删不到 brain 面的行）。
+
+    F3b-㉛ 身份轴同轴：user_id 从认证派生（自报只可确认绑定、矛盾=403 冒删面
+    收口，'default'/空/占位零 UUID=未声明→取派生，匿名=保留自报契约零变化，
+    坏 token=401 零副作用）。by-ID 归属闸（F3b-⑳ 逐字）：越权=与缺行同契约
+    404 且行存活，禁存在性探测；闸读走 peek 零副作用（被拒请求行零改写），
+    过闸后才 store.delete。计数对称：_memory_write 写入 +1，删除真成功回退 -1
+    （父会话缺席如实 no-op，孤儿记忆无计数可退）。
+    """
+    identity = bind_identity(authorization, "", user_id)
+    mem = store.peek(memory_id)
+    if mem is None or _memory_owner(mem) != identity.user_id:
+        # 越权=与缺行同契约 404（禁存在性探测，行零改写）
+        raise HTTPException(404, "Memory not found")
+    if not store.delete(memory_id):
+        # 并发删除/遗忘竞态：与缺行同契约
+        raise HTTPException(404, "Memory not found")
+    sessions.increment_memory_count(mem.session_id, -1)
+    return {"memory_id": memory_id, "deleted": True}
+
+
 @router.get("/status")
 async def status():
     """大脑状态"""

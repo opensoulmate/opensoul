@@ -120,7 +120,10 @@ class SessionManager:
             return False
 
     def increment_memory_count(self, session_id: str, count: int = 1):
-        """Increment the memory count for a session.
+        """Adjust the memory count for a session (default +1, delete path passes -1).
+
+        计数对称（MEM-③）：_memory_write 写入 +1、brain 删除口删除成功 -1，
+        count 为有符号增量；会话行缺席如实 no-op（孤儿记忆无计数可退）。
 
         A memory write is session activity (H1-②b-②): the timestamp/status
         refresh goes through the same _note_activity_locked primitive as
