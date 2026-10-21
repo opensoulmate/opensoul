@@ -91,6 +91,24 @@ def _isolate_immune_access_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_echo_history_db(tmp_path, monkeypatch):
+    """ECHO_HISTORY_DB 全测试隔离（RV-①b-④ 增补）：MessageDispatcher 历史行持久化
+    落盘口 HistoryPersistence——src.api.echo 模块级 dispatcher 单例 import 即构造
+    （MessageDispatcher(persist=HistoryPersistence())：首读/首写懒回载+send() 写穿），
+    测试绝不写生产 data/echo_history.db。库路径每次连接按 env 解析（memory_persist
+    同纪律），env 每用例指向 tmp+懒回载标记/内存历史每用例复位（MEM-④ 同款）：
+    每用例真源=本用例 tmp 库，禁跨用例陈旧行残留。显式 db_path/ECHO_HISTORY_DB
+    的测试按其覆盖为准。"""
+    import src.api.echo as echo_api
+
+    monkeypatch.setenv("ECHO_HISTORY_DB", str(tmp_path / "echo_history.db"))
+    inst = echo_api.dispatcher
+    if getattr(inst, "_persist", None) is not None:
+        monkeypatch.setattr(inst, "_loaded", False)
+        inst._history.clear()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_learn_db(tmp_path, monkeypatch):
     """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
     单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试

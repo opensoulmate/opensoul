@@ -4,6 +4,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.echo.dispatcher import Channel, MessageDispatcher
+from src.echo.history_persist import HistoryPersistence
 from src.echo.templates import TemplateEngine, is_builtin, template_row_tenant
 from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
@@ -11,7 +12,9 @@ from src.services.tenant_binding import bind_identity
 router = APIRouter()
 
 # ── Singletons ─────────────────────────────────────────────
-dispatcher = MessageDispatcher()
+# persist=HistoryPersistence()（RV-①b-④）：消息历史（/history /stats 真源）
+# send() 写穿落盘+首读/首写懒回载，重启消息历史不丢。
+dispatcher = MessageDispatcher(persist=HistoryPersistence())
 template_engine = TemplateEngine()
 
 

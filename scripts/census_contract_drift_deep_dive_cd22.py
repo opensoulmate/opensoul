@@ -539,25 +539,25 @@ SHAPE_VERDICTS = {
         "verdict": _V,
         "evidence": "list_blacklist 元素含 ip（src/immune/access_control.py:72），handler 组装 "
         "{blacklist,whitelist}（api/immune.py:268-271）；UI 消费（immune/page.tsx:343）可达",
-        "anchors": [(AC, 142, '"ip": e.ip,')],
+        "anchors": [(AC, 141, '"ip": e.ip,')],
     },
     ("immune.list_ip_lists:265", "blacklist.reason"): {
         "verdict": _V,
         "evidence": "list_blacklist 元素含 reason（src/immune/access_control.py:73）；UI 消费"
         "（immune/page.tsx:343）可达",
-        "anchors": [(AC, 143, '"reason": e.reason,')],
+        "anchors": [(AC, 142, '"reason": e.reason,')],
     },
     ("immune.list_ip_lists:265", "whitelist.ip"): {
         "verdict": _V,
         "evidence": "list_whitelist 元素含 ip（src/immune/access_control.py:84）；UI 消费"
         "（immune/page.tsx:365）可达",
-        "anchors": [(AC, 154, '"ip": e.ip,')],
+        "anchors": [(AC, 153, '"ip": e.ip,')],
     },
     ("immune.list_ip_lists:265", "whitelist.reason"): {
         "verdict": _V,
         "evidence": "list_whitelist 元素含 reason（src/immune/access_control.py:84）；UI 消费"
         "（immune/page.tsx:365）可达",
-        "anchors": [(AC, 154, '"reason": e.reason,')],
+        "anchors": [(AC, 153, '"reason": e.reason,')],
     },
     ("immune.rate_limit_stats:169", "config"): {
         "verdict": _V,
