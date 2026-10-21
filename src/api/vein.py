@@ -11,6 +11,7 @@ from src.services.tenant_binding import bind_identity
 from src.vein.cache import CacheManager, cache_row_tenant
 from src.vein.chunked import ChunkedUploader
 from src.vein.file_store import FileStore, FileTenantDenied, file_row_tenant
+from src.vein.session_persist import UploadSessionPersistence
 
 logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ router = APIRouter()
 # ── Singletons ─────────────────────────────────────────────
 store = FileStore()
 cache = CacheManager(max_size_mb=256, default_ttl=3600)
-uploader = ChunkedUploader()
+uploader = ChunkedUploader(persist=UploadSessionPersistence())
 
 
 # ── Request Schemas ────────────────────────────────────────

@@ -158,6 +158,28 @@ def _isolate_a2a_push_log_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_vein_upload_db(tmp_path, monkeypatch):
+    """VEIN_UPLOAD_DB 全测试隔离（RV-①b-⑥-1 增补）：ChunkedUploader 上传会话行
+    持久化落盘口 UploadSessionPersistence——src.api.vein 模块级 uploader 单例构造
+    即接 persist（写穿+首触懒回载），测试绝不写生产 data/vein_upload_sessions.db。
+    库路径每次连接按 env 解析（memory_persist 同纪律），env 每用例指向 tmp+懒回载
+    标记每用例复位（_isolate_a2a_tasks_db 同款）：每用例真源=本用例 tmp 库，禁跨
+    用例陈旧回载。显式 db_path/VEIN_UPLOAD_DB 的测试按其覆盖为准。（内存 _sessions
+    字典不强清：既有单例跨用例累积语义零变化。）
+    刻意不 import src.api.vein（模块 import 有单例构造副作用——FileStore()/
+    ChunkedUploader() 缺省解析生产路径，vein_client 同纪律收集期禁 import）：
+    经 sys.modules 已在场才复位懒回载标记，未在场=后续首触天然懒回载。"""
+    import sys
+
+    monkeypatch.setenv("VEIN_UPLOAD_DB", str(tmp_path / "vein_upload_sessions.db"))
+    mod = sys.modules.get("src.api.vein")
+    if mod is not None:
+        inst = getattr(mod, "uploader", None)
+        if getattr(inst, "_persist", None) is not None:
+            monkeypatch.setattr(inst, "_loaded", False)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_learn_db(tmp_path, monkeypatch):
     """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
     单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试
