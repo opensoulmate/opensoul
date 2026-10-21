@@ -353,4 +353,6 @@ class TestWiring:
                     assert isinstance(call, ast.Call), f"{t.id} 不是构造调用"
                     wired[t.id] = {kw.arg for kw in call.keywords}
         assert wired.get("store") == {"strategy", "half_life_hours", "persist"}
-        assert wired.get("sessions") == {"persist"}
+        # MEM-⑥ 契约随更新：sessions 构造面新增 count_source（计数对账真源），
+        # persist 接线锁死意图零丢失，顺带锁死 count_source 防回退裸实例
+        assert wired.get("sessions") == {"persist", "count_source"}

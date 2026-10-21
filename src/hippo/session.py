@@ -4,12 +4,15 @@ Tracks conversation sessions, their metadata, and manages
 session-scoped memory grouping.
 """
 
+import logging
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class SessionStatus(StrEnum):
@@ -43,6 +46,7 @@ class SessionManager:
         expire_timeout_seconds: float = 86400,  # 24 hours
         max_sessions: int = 500,
         persist: Any | None = None,
+        count_source: Any | None = None,
     ):
         self._sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
@@ -54,6 +58,12 @@ class SessionManager:
         # upsert_many/delete/load_rows 四口（src/hippo/memory_persist.py）。
         self._persist = persist
         self._loaded = False
+        # MEM-⑥ 计数对账真源化（可选）：count_source=零参可调用，返回
+        # {session_id: 真实记忆行数}（真源单一口=MemoryStore.counts_by_session）。
+        # memory_count 只是行数的缓存视图：值读面（get/list_sessions/get_stats）
+        # 对账归真，decay 遗忘/容量驱逐/删除口造成的记账漂移不逐点补 -1（双记账
+        # 散落全仓=漂移复发面）。缺省 None=纯内存记账语义字节零变化（既有契约）。
+        self._count_source = count_source
 
     def _ensure_loaded(self) -> None:
         """持久化回载（仅 persist 实例）：首次访问把库中已有会话行并入内存真源。
@@ -84,6 +94,46 @@ class SessionManager:
         """写穿删行。"""
         if self._persist is not None:
             self._persist.delete(session_id)
+
+    def reconcile_memory_counts(self, counts: dict[str, int]) -> int:
+        """计数对账真源化（MEM-⑥）：各会话 memory_count 对齐真实记忆行数。
+
+        真源=记忆行本体（MemoryStore.counts_by_session 单一口）；计数器只是
+        行数的缓存视图。任何删除路径（decay 遗忘/容量驱逐/删除口/直删）造成
+        的漂移在此一处归真——刻意不在每个删除路径逐点补 -1（缓存与真源双记账
+        散落全仓=漂移复发面）。counts 缺席的会话=真实 0 行→置 0；真源里的
+        孤儿行（无会话行）不产生会话（「孤儿记忆无计数可退」同边界）。对账
+        修正随写穿落盘（重启回载取回修正值，禁库行留旧漂移值）。返回被修正
+        的会话数。
+        """
+        self._ensure_loaded()
+        with self._lock:
+            changed = []
+            for session in self._sessions.values():
+                true_count = int(counts.get(session.session_id, 0))
+                if session.memory_count != true_count:
+                    session.memory_count = true_count
+                    changed.append(session)
+            if changed and self._persist is not None:
+                self._persist.upsert_many(changed)
+        return len(changed)
+
+    def _reconcile_from_source(self) -> None:
+        """值读面真源对账（get/list_sessions/get_stats 进锁前调用）。
+
+        count_source 缺省 None=纯内存记账语义字节零变化；真源取数故障绝不
+        阻断读面（读回退增量计数缓存），logger.warning 可见禁静默（故障可见
+        不阻断，F2b-② 纪律）。真源取数在锁外调用（禁 sessions 锁内嵌套 store
+        锁）。
+        """
+        if self._count_source is None:
+            return
+        try:
+            counts = self._count_source()
+        except Exception as exc:
+            logger.warning("memory_count 真源取数失败（读面回退增量缓存）: %r", exc)
+            return
+        self.reconcile_memory_counts(counts)
 
     def create(
         self,
@@ -119,6 +169,7 @@ class SessionManager:
     def get(self, session_id: str) -> Session | None:
         """Get a session, refreshing its last_active_at if active."""
         self._ensure_loaded()
+        self._reconcile_from_source()
         with self._lock:
             session = self._sessions.get(session_id)
             if session and session.status == SessionStatus.ACTIVE:
@@ -190,6 +241,7 @@ class SessionManager:
     ) -> list[Session]:
         """List sessions with optional filters."""
         self._ensure_loaded()
+        self._reconcile_from_source()
         results = []
         with self._lock:
             for s in self._sessions.values():
@@ -262,6 +314,7 @@ class SessionManager:
     def get_stats(self) -> dict:
         """Get session statistics."""
         self._ensure_loaded()
+        self._reconcile_from_source()
         with self._lock:
             total = len(self._sessions)
             by_status = {}

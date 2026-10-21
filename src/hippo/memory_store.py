@@ -307,6 +307,20 @@ class MemoryStore:
             "forget_threshold": self.decay_engine.forget_threshold,
         }
 
+    def counts_by_session(self) -> dict[str, int]:
+        """记忆行按 session_id 归集计数（MEM-⑥ 计数对账真源单一口）。
+
+        真源=行本体：会话记忆数=该会话当前行数，含 archived 行（归档只改行
+        状态不删行，与写入 +1 的记账语义一致）；孤儿行（无父会话行）照常
+        归集，消费方无对应会话行即无处可挂（「孤儿记忆无计数可退」同边界）。
+        """
+        self._ensure_loaded()
+        with self._lock:
+            counts: dict[str, int] = {}
+            for mem in self._memories.values():
+                counts[mem.session_id] = counts.get(mem.session_id, 0) + 1
+        return counts
+
     def _evict_lowest_retention(self):
         """Evict the memory with lowest retention (must hold lock)."""
         lowest_id = None

@@ -119,7 +119,12 @@ from src.hippo.session import SessionManager
 # 重启即清」收口）——父会话行同落（记忆行归属=父会话行继承，父行不落盘则
 # 重启后 /recall 归属闸缺行 404「取不回」，Gate3 逼出的挡路真断点根因修）。
 store = MemoryStore(persist=MemoryPersistence())
-sessions = SessionManager(persist=SessionPersistence())
+# MEM-⑥ 计数对账真源化：memory_count 真源=记忆行（count_source 零参取数口，
+# lambda 延迟解析模块全局 store——测试面替换 store 实例后对账源自动跟随，
+# 禁绑定陈旧实例）。读面（get/list_sessions/get_stats）对账归真。
+sessions = SessionManager(
+    persist=SessionPersistence(), count_source=lambda: store.counts_by_session()
+)
 
 
 # ── F3b-㉛ brain 记忆面身份轴：行归属判定单一源 + 写点收口 + 归属闸 ──────

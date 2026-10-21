@@ -37,7 +37,12 @@ store = MemoryStore(
     half_life_hours=24.0,
     persist=MemoryPersistence(resolve=hippo_db_path, table="hippo_memories"),
 )
-sessions = SessionManager(persist=SessionPersistence(resolve=hippo_db_path, table="hippo_sessions"))
+sessions = SessionManager(
+    persist=SessionPersistence(resolve=hippo_db_path, table="hippo_sessions"),
+    # MEM-⑥ 计数对账真源化（brain 面同款）：memory_count 真源=记忆行，lambda
+    # 延迟解析模块全局 store（测试替换实例后对账源自动跟随）
+    count_source=lambda: store.counts_by_session(),
+)
 
 # Long-term memory singleton
 from src.hippo.long_term_memory import LongTermMemoryStore
