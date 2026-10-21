@@ -108,13 +108,18 @@ class PreferenceUpdateRequest(BaseModel):
 
 # ── 模块级单例（和hippo/api.py一样的模式）──────────────
 
+from src.hippo.memory_persist import MemoryPersistence, SessionPersistence
 from src.hippo.memory_store import MemoryStore
 from src.hippo.ownership import memory_owner as _derive_memory_owner
 from src.hippo.ownership import session_owner as _derive_session_owner
 from src.hippo.session import SessionManager
 
-store = MemoryStore()
-sessions = SessionManager()
+# MEM-④ brain 记忆面持久化：store/sessions 落 SQLite（data/brain_memory.db，
+# BRAIN_MEMORY_DB env 覆盖），重启记忆不丢（MEM-② 边界①「进程内 MemoryStore
+# 重启即清」收口）——父会话行同落（记忆行归属=父会话行继承，父行不落盘则
+# 重启后 /recall 归属闸缺行 404「取不回」，Gate3 逼出的挡路真断点根因修）。
+store = MemoryStore(persist=MemoryPersistence())
+sessions = SessionManager(persist=SessionPersistence())
 
 
 # ── F3b-㉛ brain 记忆面身份轴：行归属判定单一源 + 写点收口 + 归属闸 ──────

@@ -39,6 +39,23 @@ def _isolate_nest_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_brain_memory_db(tmp_path, monkeypatch):
+    """BRAIN_MEMORY_DB 全测试隔离（MEM-④ 增补）：brain 记忆面持久化落盘口
+    MemoryPersistence——测试绝不写生产 data/brain_memory.db。env 每用例指向
+    tmp + 懒回载标记每用例复位（proactive _db_ready 同款）：每用例真源=本用例
+    tmp 库，禁跨用例陈旧回载。显式 db_path 的测试按其覆盖为准。"""
+    import src.api.brain as brain_mod
+
+    monkeypatch.setenv("BRAIN_MEMORY_DB", str(tmp_path / "brain_memory.db"))
+    store = brain_mod.store
+    if getattr(store, "_persist", None) is not None:
+        monkeypatch.setattr(store, "_loaded", False)
+    sessions = brain_mod.sessions
+    if getattr(sessions, "_persist", None) is not None:
+        monkeypatch.setattr(sessions, "_loaded", False)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_learn_db(tmp_path, monkeypatch):
     """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
     单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试
