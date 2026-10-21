@@ -428,25 +428,25 @@ SHAPE_VERDICTS = {
         "evidence": "gateway.test_provider 成功返回含 status（src/gland/router.py:1009）；错误形"
         "（:987/:992/:1016）被 handler 升 502（api/gland.py:188-189）不出线；UI 消费"
         "（gland/page.tsx:185）可达",
-        "anchors": [(GR, 1014, '"status": "ok",')],
+        "anchors": [(GR, 1012, '"status": "ok",')],
     },
     ("gland.test_connection:175", "provider"): {
         "verdict": _V,
         "evidence": "成功返回键 provider 真产出（src/gland/router.py:1010）；UI 消费"
         "（gland/page.tsx:184）可达",
-        "anchors": [(GR, 1015, '"provider": provider_name,')],
+        "anchors": [(GR, 1013, '"provider": provider_name,')],
     },
     ("gland.test_connection:175", "model"): {
         "verdict": _V,
         "evidence": "成功返回键 model 真产出（src/gland/router.py:1011）；UI 消费"
         "（gland/page.tsx:186）可达",
-        "anchors": [(GR, 1016, '"model": model,')],
+        "anchors": [(GR, 1014, '"model": model,')],
     },
     ("gland.test_connection:175", "reply"): {
         "verdict": _V,
         "evidence": "成功返回键 reply 真产出（src/gland/router.py:1012）；UI 消费"
         "（gland/page.tsx:186）可达",
-        "anchors": [(GR, 1017, '"reply": reply.strip(),')],
+        "anchors": [(GR, 1015, '"reply": reply.strip(),')],
     },
     # ── graph get_entity_detail：entities 行直出 + relations 注入 ──
     ("graph.get_entity_detail:71", "id"): {
@@ -539,25 +539,25 @@ SHAPE_VERDICTS = {
         "verdict": _V,
         "evidence": "list_blacklist 元素含 ip（src/immune/access_control.py:72），handler 组装 "
         "{blacklist,whitelist}（api/immune.py:268-271）；UI 消费（immune/page.tsx:343）可达",
-        "anchors": [(AC, 72, '"ip": e.ip,')],
+        "anchors": [(AC, 142, '"ip": e.ip,')],
     },
     ("immune.list_ip_lists:265", "blacklist.reason"): {
         "verdict": _V,
         "evidence": "list_blacklist 元素含 reason（src/immune/access_control.py:73）；UI 消费"
         "（immune/page.tsx:343）可达",
-        "anchors": [(AC, 73, '"reason": e.reason,')],
+        "anchors": [(AC, 143, '"reason": e.reason,')],
     },
     ("immune.list_ip_lists:265", "whitelist.ip"): {
         "verdict": _V,
         "evidence": "list_whitelist 元素含 ip（src/immune/access_control.py:84）；UI 消费"
         "（immune/page.tsx:365）可达",
-        "anchors": [(AC, 84, '"ip": e.ip,')],
+        "anchors": [(AC, 154, '"ip": e.ip,')],
     },
     ("immune.list_ip_lists:265", "whitelist.reason"): {
         "verdict": _V,
         "evidence": "list_whitelist 元素含 reason（src/immune/access_control.py:84）；UI 消费"
         "（immune/page.tsx:365）可达",
-        "anchors": [(AC, 84, '"reason": e.reason,')],
+        "anchors": [(AC, 154, '"reason": e.reason,')],
     },
     ("immune.rate_limit_stats:169", "config"): {
         "verdict": _V,

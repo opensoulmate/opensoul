@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from src.immune.access_control import IPAccessControl
+from src.immune.access_persist import AccessPersistence
 from src.immune.audit import AuditAction, AuditLogger
 from src.immune.intrusion import IntrusionDetector
 from src.immune.moderator import ContentModerator
@@ -21,7 +22,8 @@ router = APIRouter()
 # ── Singletons ─────────────────────────────────────────────
 rate_limiter = RateLimiter()
 moderator = ContentModerator()
-ip_control = IPAccessControl()
+# RV-①b-② 生产接线：黑白名单持久化（构造期回载+增删/命中写穿，重启封禁不丢）。
+ip_control = IPAccessControl(persist=AccessPersistence())
 audit = AuditLogger()
 intrusion = IntrusionDetector()
 permission_service = PermissionService()  # P0-3 工具级权限引擎

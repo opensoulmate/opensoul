@@ -81,6 +81,16 @@ def _isolate_gland_usage_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_immune_access_db(tmp_path, monkeypatch):
+    """IMMUNE_ACCESS_DB 全测试隔离（RV-①b-② 增补）：IPAccessControl 黑白名单持久化
+    落盘口 AccessPersistence——src.api.immune 模块级 ip_control 单例 import 即构造
+    （IPAccessControl(persist=AccessPersistence())：构造期回载+增删/命中写穿），测试
+    绝不写生产 data/immune_access.db。库路径每次连接按 env 解析（memory_persist 同
+    纪律），env 每用例指向 tmp；显式 db_path/IMMUNE_ACCESS_DB 的测试按其覆盖为准。"""
+    monkeypatch.setenv("IMMUNE_ACCESS_DB", str(tmp_path / "immune_access.db"))
+
+
+@pytest.fixture(autouse=True)
 def _isolate_learn_db(tmp_path, monkeypatch):
     """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
     单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试
