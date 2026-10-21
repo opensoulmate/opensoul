@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     embedding_base_url: str = "https://api.openai.com/v1"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
+    # embedding provider（MEM-② 本地开源 embedding 接入）："openai"=托管 OpenAI
+    # 兼容 /embeddings（缺省，既有行为字节零变化）；"ollama"=本地开源 embedding
+    # 模型（POST {base}/api/embed，本机推理零云端上传，符合「文件不上传云端」）。
+    # 未知值如实报错禁静默当 openai。
+    embedding_provider: str = "openai"
 
     # NATS
     nats_url: str = ""

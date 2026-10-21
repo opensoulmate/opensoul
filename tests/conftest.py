@@ -13,6 +13,23 @@ BASE_URL = "http://localhost:8090"
 
 
 @pytest.fixture(autouse=True)
+def _isolate_embedding_provider(monkeypatch):
+    """embedding provider 全测试隔离（MEM-② 增补）：生产 .env 把 provider 配到
+    本地 ollama 后，测试面钉回 hermetic 缺省（provider=openai+无 key=既有「批量
+    空向量降级、零网络」测试形态），防生产配置泄进测试面打真模型/真网络。
+    需要 provider 行为的测试（test_embedding_local_provider）按其 monkeypatch
+    覆盖为准（同 NEST_DB 隔离先例）。"""
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "embedding_api_key", "")
+    try:
+        monkeypatch.setattr(settings, "embedding_provider", "openai")
+    except (AttributeError, ValueError):
+        # 控制组容缺：旧代码无该字段（结构性缺席由结构断言咬合，行为断言继续跑）
+        pass
+
+
+@pytest.fixture(autouse=True)
 def _isolate_nest_db(tmp_path, monkeypatch):
     """NEST_DB 全测试隔离（F3b-③a 增补）：数据面咨询 IsolationEngine 的审计日志
     落 NestStore——测试绝不写生产 data/nest.db（JobQueue 等 gate 调用会留审计行）。
