@@ -24,6 +24,7 @@ from src.a2a.models import (
     TaskStatus,
     part_text,
 )
+from src.a2a.push_persist import PushPersistence
 from src.a2a.task_persist import TaskPersistence
 
 logger = logging.getLogger(__name__)
@@ -580,7 +581,11 @@ class TaskManager:
     # PROCESS_BUDGET_S 同款纪律：类属性供测试短缩，真实计时语义不动）。
     ACP_FALLBACK_BUDGET_S = 10.0
 
-    def __init__(self, persist: TaskPersistence | None = None):
+    def __init__(
+        self,
+        persist: TaskPersistence | None = None,
+        push_persist: PushPersistence | None = None,
+    ):
         self.tasks: dict[str, Task] = {}
         # 任务行持久化真源（RV-①b-⑤-1）：缺省 None=纯内存既有语义零变化（测试/
         # 一次性实例）；接 persist=写穿+懒回载，重启任务不丢。构造零 IO（不建库）。
@@ -590,8 +595,11 @@ class TaskManager:
         # 扩展 Agent Card（§3.1.11）：None=未配置（能力位随之 False 不虚报）。
         self.extended_agent_card: AgentCard | None = None
         # 推送通知配置（§3.1.7-3.1.10）：task_id → config_id → config dict（插入序）。
-        # 与 tasks 同为进程内真源（重启即清，与既有 in-memory 任务边界一致）。
+        # 持久化真源（RV-①b-⑤-2）：push_persist 缺省 None=纯内存既有语义零变化；
+        # 接 push_persist=写穿+懒回载，重启配置不丢（含 webhook 投递依据）。
         self.push_configs: dict[str, dict[str, dict]] = {}
+        self._push_persist = push_persist
+        self._push_loaded = False
         # webhook 投递留痕（失败也留痕禁静默）：tests/live 取证回读口。
         self.push_delivery_log: list[dict] = []
         # 真流式事件总线（F4b-⑯）：task_id → 订阅队列列表。多并发流同收同序事件
@@ -646,6 +654,53 @@ class TaskManager:
         except Exception as e:
             logger.error(f"a2a task 写穿失败（该态只活内存）: {e}")
 
+    # === 推送配置持久化（RV-①b-⑤-2）：写穿单一点 + 首触懒回载 ===
+
+    def _ensure_push_loaded(self) -> None:
+        """首触懒回载（MEM-④/RV-①b-⑤-1 先例）：push_persist=None 或已回载=零操作。
+
+        回载失败不置 _push_loaded（下次触碰重试）+logger.error 可见，行真源仍在库；
+        只补缺不覆盖（self.push_configs 内存真源优先，禁回载洗掉进程内新态）。
+        """
+        if self._push_persist is None or self._push_loaded:
+            return
+        try:
+            rows = self._push_persist.load_all()
+        except Exception as e:
+            logger.error(f"a2a push config 回载失败（下次触碰重试）: {e}")
+            return
+        for task_id, config_id, cfg in rows:
+            slot = self.push_configs.setdefault(task_id, {})
+            if config_id not in slot:
+                slot[config_id] = cfg
+        self._push_loaded = True
+
+    def _sync_push_config(self, cfg: dict) -> None:
+        """推送配置写穿单一点（RV-①b-② _sync_entry/⑤-1 _sync_task 纪律：禁散落写点）。
+
+        写失败=记账旁路纪律（RV-①b-①）：logger.error 可见不阻断配置登记（配置
+        已在内存生效），代价是故障窗口内该配置只活内存重启丢（非谎报 durable）。
+        """
+        if self._push_persist is None:
+            return
+        try:
+            self._push_persist.upsert(
+                task_id=str(cfg.get("taskId", "")),
+                config_id=str(cfg.get("id", "")),
+                payload=json.dumps(cfg, ensure_ascii=False),
+            )
+        except Exception as e:
+            logger.error(f"a2a push config 写穿失败（该配置只活内存）: {e}")
+
+    def _drop_push_config(self, task_id: str, config_id: str) -> None:
+        """推送配置删除写穿单一点。失败旁路纪律同 _sync_push_config。"""
+        if self._push_persist is None:
+            return
+        try:
+            self._push_persist.delete(task_id=str(task_id), config_id=str(config_id))
+        except Exception as e:
+            logger.error(f"a2a push config 删除写穿失败（库行残留待清）: {e}")
+
     def get_agent_card(self) -> AgentCard:
         return self.agent_card
 
@@ -674,19 +729,25 @@ class TaskManager:
         if not cfg.get("id"):
             cfg["id"] = str(uuid4())
         self.push_configs.setdefault(task_id, {})[cfg["id"]] = cfg
+        self._sync_push_config(cfg)  # 写穿单一点（RV-①b-⑤-2）
         return dict(cfg)
 
     def get_push_config(self, task_id: str, config_id: str) -> dict | None:
+        self._ensure_push_loaded()
         cfg = self.push_configs.get(task_id, {}).get(config_id)
         return dict(cfg) if cfg else None
 
     def list_push_configs(self, task_id: str) -> list[dict]:
         """按登记序返回（翻页稳定序）。"""
+        self._ensure_push_loaded()
         return [dict(c) for c in self.push_configs.get(task_id, {}).values()]
 
     def delete_push_config(self, task_id: str, config_id: str) -> bool:
         """§3.1.10 幂等删除：配置不存在=同一效果（返回 False=本来就没有，不报错）。"""
-        return self.push_configs.get(task_id, {}).pop(config_id, None) is not None
+        self._ensure_push_loaded()
+        removed = self.push_configs.get(task_id, {}).pop(config_id, None) is not None
+        self._drop_push_config(task_id, config_id)  # 删行幂等，无行零效果
+        return removed
 
     async def _dispatch_push(self, task: Task, payload: dict) -> None:
         """§4.3.3 webhook 投递：POST 单键 StreamResponse 载荷到该任务的每个已配置
@@ -696,6 +757,7 @@ class TaskManager:
         - Authorization: {scheme} {credentials}（§4.3.3；无 authentication 不带）
         - 失败只留痕 push_delivery_log + warning，绝不影响任务本体（尽力投递）
         """
+        self._ensure_push_loaded()
         configs = self.push_configs.get(task.id)
         if not configs:
             return
@@ -732,6 +794,7 @@ class TaskManager:
         - 终态（completed/failed/canceled/rejected）={"task"}（全量 Task wire，
           含 artifacts/history 最新全貌）
         """
+        self._ensure_push_loaded()
         if not self.push_configs.get(task.id):
             return
         if task.status.state in _TERMINAL_STATES:
@@ -1587,7 +1650,8 @@ class TaskManager:
 
 
 # Global task manager instance
-# 生产单例：接任务行持久化（RV-①b-⑤-1）——写穿+懒回载，重启任务不丢。
-# TaskPersistence 构造零 IO（不建库），import 期安全；测试隔离=A2A_TASKS_DB
-# env 每用例指向 tmp（conftest 全测试隔离先例）。
-task_manager = TaskManager(persist=TaskPersistence())
+# 生产单例：接任务行持久化（RV-①b-⑤-1）+推送配置持久化（RV-①b-⑤-2）——写穿+
+# 懒回载，重启任务/推送配置不丢。TaskPersistence/PushPersistence 构造零 IO（不
+# 建库），import 期安全；测试隔离=A2A_TASKS_DB/A2A_PUSH_DB env 每用例指向 tmp
+# （conftest 全测试隔离先例）。
+task_manager = TaskManager(persist=TaskPersistence(), push_persist=PushPersistence())
