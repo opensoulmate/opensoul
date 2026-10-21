@@ -6,6 +6,7 @@ Like Xunlei/Thunder but pure Python.
 
 import asyncio
 import hashlib
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -13,6 +14,8 @@ from enum import StrEnum
 from pathlib import Path
 
 import httpx
+
+from src.api.download_persist import DownloadTaskPersistence
 
 logger = logging.getLogger(__name__)
 
@@ -84,22 +87,85 @@ class DownloadTask:
 class NativeDownloader:
     """Pure Python download engine with multi-segment + resume support."""
 
-    def __init__(self, max_concurrent: int = 3):
+    def __init__(
+        self,
+        max_concurrent: int = 3,
+        persist: DownloadTaskPersistence | None = None,
+    ):
         self._tasks: dict[str, DownloadTask] = {}
         self._running: dict[str, asyncio.Task] = {}
         self._max_concurrent = max_concurrent
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        # 任务行持久化可选参（RV-①b-⑥-2）：缺省 None=纯内存既有语义零变化；
+        # 在场=状态变更写穿+首触懒回载，重启任务不丢。
+        self._persist = persist
+        self._loaded = False
+
+    def _sync_task(self, task: DownloadTask) -> None:
+        """任务状态写穿单一点（RV-①b-② _sync_entry 纪律：禁散落写点漂移）。
+
+        全部任务变更点（建任务/状态迁移/进度收尾）共用本口落盘。写失败=记账旁路
+        纪律（RV-①b-①）：logger.error 可见不阻断下载本体。
+        """
+        if self._persist is None:
+            return
+        try:
+            self._persist.upsert(
+                task_id=str(task.id),
+                status=str(task.status.value),
+                payload=json.dumps(task.to_dict(), ensure_ascii=False),
+            )
+        except Exception as e:
+            logger.error(f"download task 落盘失败（下载本体不受阻）: {e}")
+
+    def _ensure_tasks_loaded(self) -> None:
+        """首触懒回载（RV-①b-⑥-1 同款）：persist 在场才回载，只回载一次。
+
+        重启后 worker 不在：在途态（pending/connecting/downloading）传输已停、
+        半成品保留——如实置 paused 走真续传口（resume() 重开 _run_download 从盘上
+        半成品续传），禁留 downloading 空壳=永远等不到 worker 的僵死任务。
+        回载只读不写（转换只改内存，状态回写随下一次变更点写穿）。
+        """
+        if self._persist is None or self._loaded:
+            return
+        self._loaded = True
+        try:
+            rows = self._persist.load_all()
+        except Exception as e:
+            logger.error(f"download task 回载失败（空任务起步）: {e}")
+            return
+        for data in rows:
+            try:
+                payload = dict(data)
+                payload.pop("progress_pct", None)
+                payload["status"] = DownloadStatus(payload["status"])
+                task = DownloadTask(**payload)
+            except Exception as e:
+                logger.error(f"download task 行不可解跳过: {e}")
+                continue
+            if task.status in (
+                DownloadStatus.PENDING,
+                DownloadStatus.CONNECTING,
+                DownloadStatus.DOWNLOADING,
+            ):
+                task.status = DownloadStatus.PAUSED
+            task._cancel_event = asyncio.Event()
+            task._pause_event = asyncio.Event()
+            self._tasks.setdefault(task.id, task)
 
     def list_tasks(self) -> list[DownloadTask]:
+        self._ensure_tasks_loaded()
         return list(self._tasks.values())
 
     def get_task(self, task_id: str) -> DownloadTask | None:
+        self._ensure_tasks_loaded()
         return self._tasks.get(task_id)
 
     async def add_download(
         self, url: str, dest: str, segments: int = DEFAULT_SEGMENTS
     ) -> DownloadTask:
         """Add a new download task."""
+        self._ensure_tasks_loaded()
         task_id = hashlib.md5(f"{url}:{dest}".encode()).hexdigest()[:12]
 
         # If task already exists and is done/error, allow re-download
@@ -126,6 +192,7 @@ class NativeDownloader:
             _pause_event=asyncio.Event(),
         )
         self._tasks[task_id] = task
+        self._sync_task(task)
 
         # Start download in background
         bg_task = asyncio.create_task(self._run_download(task))
@@ -135,16 +202,20 @@ class NativeDownloader:
         return task
 
     async def pause(self, task_id: str):
+        self._ensure_tasks_loaded()
         task = self._tasks.get(task_id)
         if task and task.status == DownloadStatus.DOWNLOADING:
             task.status = DownloadStatus.PAUSED
             task._pause_event.set()
+            self._sync_task(task)
 
     async def resume(self, task_id: str):
+        self._ensure_tasks_loaded()
         task = self._tasks.get(task_id)
         if task and task.status == DownloadStatus.PAUSED:
             task._pause_event.clear()
             task.status = DownloadStatus.DOWNLOADING
+            self._sync_task(task)
             if task_id in self._running:
                 # 原 worker 还活着：它正等在 _pause_event 上，清事件即续跑同一条
                 # 传输。修前无条件重开 _run_download = 两个写者同时写同一 dest
@@ -156,22 +227,31 @@ class NativeDownloader:
             bg_task.add_done_callback(lambda _: self._running.pop(task_id, None))
 
     async def cancel(self, task_id: str):
+        self._ensure_tasks_loaded()
         task = self._tasks.get(task_id)
         if task:
             task._cancel_event.set()
             task.status = DownloadStatus.CANCELLED
+            self._sync_task(task)
             if task_id in self._running:
                 self._running[task_id].cancel()
 
     async def remove(self, task_id: str):
+        self._ensure_tasks_loaded()
         await self.cancel(task_id)
         self._tasks.pop(task_id, None)
+        if self._persist is not None:
+            try:
+                self._persist.delete(task_id)
+            except Exception as e:
+                logger.error(f"download task 删行失败（内存已移除）: {e}")
 
     async def _run_download(self, task: DownloadTask):
         """Main download logic with multi-segment support."""
         async with self._semaphore:
             task.status = DownloadStatus.CONNECTING
             task.started_at = time.time()
+            self._sync_task(task)
 
             try:
                 dest_path = Path(task.dest)
@@ -200,6 +280,7 @@ class NativeDownloader:
                             task.status = DownloadStatus.DONE
                             task.downloaded_bytes = task.total_bytes
                             task.completed_at = time.time()
+                            self._sync_task(task)
                             return
                         task.downloaded_bytes = existing_size
 
@@ -214,14 +295,18 @@ class NativeDownloader:
             except httpx.ConnectError as e:
                 task.status = DownloadStatus.ERROR
                 task.error = f"连接失败: {str(e)}"
+                self._sync_task(task)
             except httpx.TimeoutException:
                 task.status = DownloadStatus.ERROR
                 task.error = "连接超时"
+                self._sync_task(task)
             except asyncio.CancelledError:
                 task.status = DownloadStatus.CANCELLED
+                self._sync_task(task)
             except Exception as e:
                 task.status = DownloadStatus.ERROR
                 task.error = f"下载失败: {str(e)}"
+                self._sync_task(task)
                 logger.error(f"Download error for {task.url}: {e}", exc_info=True)
 
     async def _download_single(
@@ -229,6 +314,7 @@ class NativeDownloader:
     ):
         """Single-segment download (for small files or when resume not supported)."""
         task.status = DownloadStatus.DOWNLOADING
+        self._sync_task(task)
         headers = {}
         mode = "wb"
         if resume_from > 0 and task.supports_resume:
@@ -243,6 +329,7 @@ class NativeDownloader:
             if resp.status_code not in (200, 206):
                 task.status = DownloadStatus.ERROR
                 task.error = f"HTTP {resp.status_code}"
+                self._sync_task(task)
                 return
 
             if task.total_bytes == 0:
@@ -282,12 +369,14 @@ class NativeDownloader:
         task.completed_at = time.time()
         task.speed = 0
         task.eta = 0
+        self._sync_task(task)
 
     async def _download_multi(
         self, client: httpx.AsyncClient, task: DownloadTask, resume_from: int = 0
     ):
         """Multi-segment parallel download."""
         task.status = DownloadStatus.DOWNLOADING
+        self._sync_task(task)
         remaining = task.total_bytes - resume_from
         seg_size = remaining // task.segments
         segments = []
@@ -360,6 +449,7 @@ class NativeDownloader:
             task.completed_at = time.time()
             task.speed = 0
             task.eta = 0
+            self._sync_task(task)
 
         except Exception as e:
             logger.error(f"Multi-segment download error: {e}")
@@ -395,5 +485,8 @@ _downloader: NativeDownloader | None = None
 def get_downloader() -> NativeDownloader:
     global _downloader
     if _downloader is None:
-        _downloader = NativeDownloader()
+        # 生产消费面唯一单例（download_api 7 消费点）：接任务行持久化
+        # （RV-①b-⑥-2），重启任务不丢；测试面显式构造 NativeDownloader()
+        # 缺省 persist=None 纯内存零变化。
+        _downloader = NativeDownloader(persist=DownloadTaskPersistence())
     return _downloader
