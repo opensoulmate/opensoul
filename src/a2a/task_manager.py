@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 import httpx
 
+from src.a2a.delivery_log_persist import DeliveryLogPersistence
 from src.a2a.models import (
     DEFAULT_AGENT_CARD,
     A2AError,
@@ -585,6 +586,7 @@ class TaskManager:
         self,
         persist: TaskPersistence | None = None,
         push_persist: PushPersistence | None = None,
+        delivery_persist: DeliveryLogPersistence | None = None,
     ):
         self.tasks: dict[str, Task] = {}
         # 任务行持久化真源（RV-①b-⑤-1）：缺省 None=纯内存既有语义零变化（测试/
@@ -601,7 +603,11 @@ class TaskManager:
         self._push_persist = push_persist
         self._push_loaded = False
         # webhook 投递留痕（失败也留痕禁静默）：tests/live 取证回读口。
+        # 持久化真源（RV-①b-⑤-3）：delivery_persist 缺省 None=纯内存既有语义零变化；
+        # 接 delivery_persist=写穿+懒回载，重启投递审计史不丢。
         self.push_delivery_log: list[dict] = []
+        self._delivery_persist = delivery_persist
+        self._delivery_log_loaded = False
         # 真流式事件总线（F4b-⑯）：task_id → 订阅队列列表。多并发流同收同序事件
         # （v1.0「Multiple concurrent streams allowed; all receive same ordered
         # events」）；队列元素=(StreamResponse 载荷 dict, 是否收尾帧)。与 tasks 同为
@@ -701,6 +707,51 @@ class TaskManager:
         except Exception as e:
             logger.error(f"a2a push config 删除写穿失败（库行残留待清）: {e}")
 
+    # === 投递留痕持久化（RV-①b-⑤-3）：写穿单一点 + 首触懒回载 ===
+
+    def _ensure_delivery_loaded(self) -> None:
+        """首触懒回载（MEM-④/RV-①b-⑤-1⑤-2 先例）：delivery_persist=None 或已回载=
+        零操作。
+
+        回载失败不置 _delivery_log_loaded（下次触碰重试）+logger.error 可见，行真源
+        仍在库；只补缺不覆盖（按 delivery_id 去重：内存已有行不被回载重复追加、
+        进程内新行不被回载洗掉）。
+        """
+        if self._delivery_persist is None or self._delivery_log_loaded:
+            return
+        try:
+            rows = self._delivery_persist.load_all()
+        except Exception as e:
+            logger.error(f"a2a push delivery 回载失败（下次触碰重试）: {e}")
+            return
+        seen = {str(e.get("delivery_id")) for e in self.push_delivery_log}
+        for entry in rows:
+            did = str(entry.get("delivery_id"))
+            if did in seen:
+                continue
+            seen.add(did)
+            self.push_delivery_log.append(entry)
+        self._delivery_log_loaded = True
+
+    def _sync_delivery_entry(self, entry: dict) -> None:
+        """投递留痕写穿单一点（RV-①b-② _sync_entry/⑤-1 _sync_task 纪律：禁散落写点）。
+
+        失败=记账旁路纪律（RV-①b-①）：logger.error 可见不阻断投递本身（内存留痕
+        仍在），代价是该行只活内存重启丢（非谎报 durable）。
+        """
+        if self._delivery_persist is None:
+            return
+        try:
+            self._delivery_persist.append(
+                delivery_id=str(entry.get("delivery_id", "")),
+                task_id=str(entry.get("task_id", "")),
+                config_id=str(entry.get("config_id") or ""),
+                ok=bool(entry.get("ok")),
+                payload=json.dumps(entry, ensure_ascii=False),
+            )
+        except Exception as e:
+            logger.error(f"a2a push delivery 写穿失败（该行只活内存）: {e}")
+
     def get_agent_card(self) -> AgentCard:
         return self.agent_card
 
@@ -758,6 +809,7 @@ class TaskManager:
         - 失败只留痕 push_delivery_log + warning，绝不影响任务本体（尽力投递）
         """
         self._ensure_push_loaded()
+        self._ensure_delivery_loaded()
         configs = self.push_configs.get(task.id)
         if not configs:
             return
@@ -770,6 +822,7 @@ class TaskManager:
                         f"{auth['scheme']} {auth.get('credentials') or ''}".rstrip()
                     )
                 entry = {
+                    "delivery_id": str(uuid4()),
                     "task_id": task.id,
                     "config_id": cfg.get("id"),
                     "url": cfg.get("url"),
@@ -783,6 +836,7 @@ class TaskManager:
                     entry["ok"] = False
                     entry["error"] = str(e)
                 self.push_delivery_log.append(entry)
+                self._sync_delivery_entry(entry)  # 写穿单一点（RV-①b-⑤-3）
                 if not entry.get("ok"):
                     logger.warning(f"push delivery failed: {entry}")
 
@@ -1650,8 +1704,13 @@ class TaskManager:
 
 
 # Global task manager instance
-# 生产单例：接任务行持久化（RV-①b-⑤-1）+推送配置持久化（RV-①b-⑤-2）——写穿+
-# 懒回载，重启任务/推送配置不丢。TaskPersistence/PushPersistence 构造零 IO（不
-# 建库），import 期安全；测试隔离=A2A_TASKS_DB/A2A_PUSH_DB env 每用例指向 tmp
-# （conftest 全测试隔离先例）。
-task_manager = TaskManager(persist=TaskPersistence(), push_persist=PushPersistence())
+# 生产单例：接任务行持久化（RV-①b-⑤-1）+推送配置持久化（RV-①b-⑤-2）+投递留痕
+# 持久化（RV-①b-⑤-3）——写穿+懒回载，重启任务/推送配置/投递审计史不丢。
+# TaskPersistence/PushPersistence/DeliveryLogPersistence 构造零 IO（不建库），
+# import 期安全；测试隔离=A2A_TASKS_DB/A2A_PUSH_DB/A2A_PUSH_LOG_DB env 每用例指向
+# tmp（conftest 全测试隔离先例）。
+task_manager = TaskManager(
+    persist=TaskPersistence(),
+    push_persist=PushPersistence(),
+    delivery_persist=DeliveryLogPersistence(),
+)

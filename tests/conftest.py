@@ -142,6 +142,22 @@ def _isolate_a2a_push_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_a2a_push_log_db(tmp_path, monkeypatch):
+    """A2A_PUSH_LOG_DB 全测试隔离（RV-①b-⑤-3 增补）：TaskManager 投递留痕持久化落盘口
+    DeliveryLogPersistence——模块级 task_manager 单例构造即接 delivery_persist（写穿+
+    首触懒回载），测试绝不写生产 data/a2a_push_delivery_log.db。库路径每次连接按 env
+    解析，env 每用例指向 tmp+懒回载标记每用例复位（_isolate_a2a_push_db 同款）：每用例
+    真源=本用例 tmp 库，禁跨用例陈旧回载。显式 db_path/A2A_PUSH_LOG_DB 的测试按其覆盖
+    为准。（内存 push_delivery_log 列表不强清：既有单例跨用例累积语义零变化。）"""
+    import src.a2a.task_manager as a2a_tm
+
+    monkeypatch.setenv("A2A_PUSH_LOG_DB", str(tmp_path / "a2a_push_delivery_log.db"))
+    inst = a2a_tm.task_manager
+    if getattr(inst, "_delivery_persist", None) is not None:
+        monkeypatch.setattr(inst, "_delivery_log_loaded", False)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_learn_db(tmp_path, monkeypatch):
     """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
     单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试
