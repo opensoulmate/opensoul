@@ -29,6 +29,8 @@ class Memory:
     access_count: int = 0
     archived: bool = False
     retention: float = 1.0
+    # MEM-① 语义检索面：查询期懒计算的向量缓存（None=未算/已失效）。
+    embedding: list[float] | None = None
 
 
 class MemoryStore:
@@ -154,8 +156,26 @@ class MemoryStore:
             for key in ("content", "importance", "tags", "metadata"):
                 if key in kwargs:
                     setattr(mem, key, kwargs[key])
+            if "content" in kwargs:
+                # MEM-①：内容变更→旧向量陈旧，缓存失效（禁拿旧文向量排名）
+                mem.embedding = None
             mem.last_accessed_at = time.time()
             return mem
+
+    def apply_embeddings(self, embeddings: dict[str, list[float]]) -> int:
+        """批量回填行向量缓存（MEM-① 语义检索面查询期懒计算，锁内落行）。
+
+        返回真落行数：行已消失/空向量不算（空向量=embedding 失败禁缓存）。
+        """
+        applied = 0
+        with self._lock:
+            for mid, vec in embeddings.items():
+                mem = self._memories.get(mid)
+                if mem is None or not vec:
+                    continue
+                mem.embedding = list(vec)
+                applied += 1
+        return applied
 
     def delete(self, memory_id: str) -> bool:
         """Delete a memory."""

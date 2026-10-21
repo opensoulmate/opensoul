@@ -264,7 +264,13 @@ class TestRecallQueryApi:
 
 class TestWiring:
     def test_recall_passes_query_to_both_store_search_calls(self):
-        """recall 体内全部 store.search 调用点必须带 query 关键字实参（两分支）。"""
+        """recall 体内 keyword 两分支 store.search 调用点必须带 query 关键字实参。
+
+        契约随更新（MEM-① 语义检索面，断言意图零丢失）：语义分支新增 2 个
+        pool 构建 store.search 调用点刻意无 query（语义排名不走字面过滤轴）——
+        锁死面收窄为「keyword 两分支恰 2 点各带 query=q」+「其余 2 点=语义
+        pool 构建」，F3b-㉜「禁声明了不消费」意图原样保留。
+        """
         src = (Path(__file__).resolve().parent.parent / "src" / "api" / "brain.py").read_text()
         tree = ast.parse(src)
         fn = next(
@@ -279,7 +285,11 @@ class TestWiring:
             and isinstance(c.func, ast.Attribute)
             and c.func.attr == "search"
         ]
-        assert len(calls) == 2, f"expect 2 store.search calls in recall, got {len(calls)}"
-        for c in calls:
-            kws = {k.arg for k in c.keywords}
-            assert "query" in kws, f"store.search call missing query kwarg: {ast.dump(c)}"
+        assert len(calls) == 4, f"expect 4 store.search calls in recall, got {len(calls)}"
+        with_query = [c for c in calls if any(k.arg == "query" for k in c.keywords)]
+        assert len(with_query) == 2, "keyword 两分支必须各带 query kwarg（F3b-㉜ 锁死面）"
+        for c in with_query:
+            kw = {k.arg: k.value for k in c.keywords}
+            assert isinstance(kw["query"], ast.Name) and kw["query"].id == "q", (
+                f"keyword 调用点必须真传 q: {ast.dump(c)}"
+            )

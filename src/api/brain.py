@@ -17,6 +17,7 @@ import time
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from src.hippo.memory_semantic import semantic_rank
 from src.services.tenant_binding import bind_identity
 
 logger = logging.getLogger(__name__)
@@ -629,6 +630,7 @@ async def recall(
     session_id: str = "",
     query: str = "",
     limit: int = 10,
+    mode: str = "keyword",
     user_id: str = "default",
     authorization: str | None = Header(None),
 ):
@@ -642,9 +644,57 @@ async def recall(
     F3b-㉜ query 真消费（修前声明了却零消费=静默忽略客户端检索词，F4b-②
     stream 参数同型收口）：字面子串匹配 content（大小写不敏感，store.search
     单一过滤源），空 query=零过滤契约零变化；过滤先于截断保 limit top-N。
+
+    MEM-① mode 语义检索面（F3b-㉜ 边界①留档「语义检索另拍」）：mode=keyword
+    （缺省）=上述字面契约字节零变化；mode=semantic=embedding 相似度排序
+    （cosine 降序，排名先于截断保 limit top-N——与 keyword 同一纪律），
+    检索键/归属闸与 keyword 同轴（F3b-㉛ 契约逐字），响应加性键 similarity
+    （逐行）+retrieval（unranked/degraded 可观测）。诚实失败面：非法 mode/语义
+    模式空 query 如实 422 禁静默当缺省；embedding 上游不可用如实 503 禁静默
+    降级成关键词结果（F4b-②「想要流式被静默降级」同型纪律）。
     """
     identity = bind_identity(authorization, "", user_id)
+    if mode not in ("keyword", "semantic"):
+        raise HTTPException(422, f"invalid mode: {mode!r} (expected 'keyword' or 'semantic')")
     q = query.strip() or None
+    if mode == "semantic":
+        if q is None:
+            # 语义检索无查询向量=无从排序；禁静默降级成关键词结果
+            raise HTTPException(422, "semantic mode requires a non-empty query")
+        if session_id:
+            _gate_session_owner(session_id, identity.user_id)
+            pool = store.search(session_id=session_id, limit=store.max_entries)
+        else:
+            # 过滤先于排名：排名 top-N 在可见集上取（keyword 同纪律）
+            pool = [
+                m
+                for m in store.search(limit=store.max_entries)
+                if _memory_owner(m) == identity.user_id
+            ]
+        rank = await semantic_rank(q, pool, store=store)
+        if rank.degraded:
+            raise HTTPException(503, f"semantic retrieval unavailable: {rank.reason}")
+        picked = rank.ranked[:limit]
+        return {
+            "memories": [
+                {
+                    "id": m.memory_id,
+                    "content": m.content,
+                    "importance": m.importance,
+                    "tags": m.tags,
+                    "retention": m.retention,
+                    "similarity": round(sim, 6),
+                }
+                for m, sim in picked
+            ],
+            "total": len(picked),
+            "retrieval": {
+                "mode": "semantic",
+                "candidates": rank.candidates,
+                "ranked": rank.embedded,
+                "unranked": rank.unranked,
+            },
+        }
     if session_id:
         _gate_session_owner(session_id, identity.user_id)
         memories = store.search(session_id=session_id, limit=limit, query=q)
