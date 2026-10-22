@@ -195,6 +195,7 @@ class RPAExecutor:
         max_history: int = 1000,
         persist=None,
         history_persist=None,
+        template_persist=None,
     ):
         self._tasks: dict[str, RPATask] = {}
         self._queue: deque[str] = deque()
@@ -217,6 +218,11 @@ class RPAExecutor:
         # 在场=历史行追加写穿+首触懒回载+计数读面对账行真源，重启执行史/计数不丢。
         self._history_persist = history_persist
         self._history_loaded = False
+        # 用户模板持久化可选参（RV-①b-⑦-3）：缺省 None=纯内存既有语义零变化；
+        # 在场=模板变更写穿+首触懒回载，重启用户模板不丢（builtin 种子=代码真源
+        # 不进表，回载只补缺不覆盖）。
+        self._template_persist = template_persist
+        self._templates_loaded = False
 
         # Load built-in templates
         for tpl in BUILTIN_TEMPLATES:
@@ -346,6 +352,60 @@ class RPAExecutor:
             self._tasks.setdefault(task.task_id, task)
             if task.status != TaskStatus.CANCELLED and task.task_id not in self._queue:
                 self._queue.append(task.task_id)
+
+    def _sync_template(self, template: TaskTemplate) -> None:
+        """用户模板写穿单一点（RV-①b-⑦-3，_sync_task 纪律：禁散落写点漂移）。
+
+        create_template 建/覆盖模板共用本口落盘。写失败=记账旁路纪律
+        （RV-①b-①）：logger.error 可见不阻断模板本体。
+        """
+        if self._template_persist is None:
+            return
+        try:
+            self._template_persist.upsert(
+                template_id=str(template.template_id),
+                tenant_id=template_row_tenant(template),
+                category=str(template.category),
+                payload=json.dumps(template.to_state(), ensure_ascii=False),
+            )
+        except Exception as e:
+            logger.error(f"limb template 落盘失败（模板本体不受阻）: {e}")
+
+    def _drop_template(self, template_id: str) -> None:
+        """删行单一点（delete_template 真消费；幂等缺行不抛）。"""
+        if self._template_persist is None:
+            return
+        try:
+            self._template_persist.delete(template_id)
+        except Exception as e:
+            logger.error(f"limb template 删行失败（模板本体不受阻）: {e}")
+
+    def _ensure_templates_loaded(self) -> None:
+        """用户模板首触懒回载（RV-①b-⑦-3，⑦-1 _ensure_tasks_loaded 同款）：
+        persist 在场才回载，只回载一次；首触=首次读（list/get/stats）或首次写
+        （create/delete 先回载再变更——不回载则覆盖劫持闸看不见既有行、删行后
+        旧行随重启复活）。
+
+        回载只补缺不覆盖（⑦-1 setdefault 同纪律）：内存在册更真禁回载洗内存
+        新态；builtin 种子（构造期已入册）恒不被库行洗掉=代码=真源（诚实边界④，
+        即使库里出现 builtin id 行也不覆盖种子）。回载失败=空模板起步+
+        logger.error 可见（诚实边界②）。
+        """
+        if self._template_persist is None or self._templates_loaded:
+            return
+        self._templates_loaded = True
+        try:
+            rows = self._template_persist.load_all()
+        except Exception as e:
+            logger.error(f"limb template 回载失败（空模板起步）: {e}")
+            return
+        for data in rows:
+            try:
+                template = TaskTemplate.from_state(data)
+            except Exception as e:
+                logger.error(f"limb template 行不可解跳过: {e}")
+                continue
+            self._templates.setdefault(template.template_id, template)
 
     # ── Task Management ────────────────────────────────────
 
@@ -639,6 +699,7 @@ class RPAExecutor:
     ) -> list[dict]:
         """tenant_id=显式租户=恒按 template_visible_to 过滤（builtin 共享目录全
         租户可见+其余行按行归属，DEC-⑩-①）；None=系统视图字节不变。"""
+        self._ensure_templates_loaded()
         templates = list(self._templates.values())
         if tenant_id is not None:
             templates = [t for t in templates if template_visible_to(t, tenant_id)]
@@ -652,6 +713,7 @@ class RPAExecutor:
         不差分泄露行存在性（③c-1 纪律），builtin=系统共享目录全租户可见
         （DEC-⑩-①）；None=系统视图字节不变。实例化源读（create_from_template）
         全经本口=未来消费方无法绕闸。"""
+        self._ensure_templates_loaded()
         template = self._templates.get(template_id)
         if template is None:
             return None
@@ -665,6 +727,7 @@ class RPAExecutor:
         （共享≠可写，⑦-㉑ builtin 改/删恒拒同款）；行归属不可被跨租户改写
         （⑦-③ 创建劫持闸同款）——显式租户覆盖他租户行=TemplateTenantDenied
         行零改写；None=系统视图字节不变。"""
+        self._ensure_templates_loaded()
         template_id = data.get("template_id") or f"tpl-{uuid.uuid4().hex[:8]}"
         existing = self._templates.get(template_id)
         if existing is not None:
@@ -686,6 +749,7 @@ class RPAExecutor:
             tenant_id=template_row_tenant(tenant_id),
         )
         self._templates[template_id] = template
+        self._sync_template(template)
         return template
 
     def delete_template(self, template_id: str, tenant_id: str | None = None) -> bool:
@@ -693,6 +757,7 @@ class RPAExecutor:
         # 禁第二套名单手抄 F4b-㉗；builtin 恒拒=共享≠可写 DEC-⑦-㉑ 同款）
         if is_builtin(template_id):
             return False
+        self._ensure_templates_loaded()
         existing = self._templates.get(template_id)
         if existing is None:
             return False
@@ -702,7 +767,10 @@ class RPAExecutor:
             tenant_id
         ):
             return False
-        return self._templates.pop(template_id, None) is not None
+        removed = self._templates.pop(template_id, None) is not None
+        if removed:
+            self._drop_template(template_id)
+        return removed
 
     # ── Stats ──────────────────────────────────────────────
 
@@ -717,6 +785,7 @@ class RPAExecutor:
         """
         self._ensure_tasks_loaded()
         self._ensure_history_loaded()
+        self._ensure_templates_loaded()
         counts = self._counter_truth()
         with self._lock:
             if tenant_id is not None:

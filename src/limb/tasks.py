@@ -67,6 +67,22 @@ class Action:
             metadata=data.get("metadata", {}),
         )
 
+    def to_state(self) -> dict:
+        """落盘形（RV-①b-⑦-3）：完整往返形——刻意与展示形 to_dict 分开（⑦-1
+        RPATask.to_state 纪律：to_dict 丢 condition/metadata，展示形不作落盘形）。
+        唯一逆=from_dict（读全部字段含 condition/metadata）。"""
+        return {
+            "action_type": self.action_type.value,
+            "target": self.target,
+            "value": self.value,
+            "description": self.description,
+            "timeout": self.timeout,
+            "retry": self.retry,
+            "optional": self.optional,
+            "condition": self.condition,
+            "metadata": self.metadata,
+        }
+
 
 @dataclass
 class StepResult:
@@ -108,6 +124,37 @@ class TaskTemplate:
             "tenant_id": template_row_tenant(self),
             "builtin": is_builtin(self.template_id),
         }
+
+    def to_state(self) -> dict:
+        """落盘形（RV-①b-⑦-3，⑦-1 RPATask.to_state 纪律）：完整往返形——展示形
+        to_dict 的 action_count/builtin 是派生键、actions.to_dict 丢
+        condition/metadata，刻意不作落盘形（禁拿展示形回载缺字段 fabricate）。"""
+        return {
+            "template_id": self.template_id,
+            "name": self.name,
+            "description": self.description,
+            "category": self.category,
+            "actions": [a.to_state() for a in self.actions],
+            "variables": [dict(v) for v in self.variables],
+            "tags": list(self.tags),
+            "tenant_id": template_row_tenant(self),
+        }
+
+    @classmethod
+    def from_state(cls, data: dict) -> TaskTemplate:
+        """从落盘状态重建模板行（to_state 唯一逆）。字段缺失/非法如实抛，
+        行取舍归回载方（跳过+可见）。"""
+        actions = [Action.from_dict(a) for a in data.get("actions", [])]
+        return cls(
+            template_id=str(data["template_id"]),
+            name=str(data.get("name", "")),
+            description=str(data.get("description", "")),
+            category=str(data.get("category", "custom")),
+            actions=actions,
+            variables=[dict(v) for v in data.get("variables", [])],
+            tags=[str(t) for t in data.get("tags", [])],
+            tenant_id=template_row_tenant(data.get("tenant_id")),
+        )
 
 
 # ── Built-in Templates ───────────────────────────────────

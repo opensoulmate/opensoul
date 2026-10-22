@@ -7,6 +7,7 @@ from src.limb.executor import RPAExecutor
 from src.limb.history_persist import HistoryPersistence
 from src.limb.task_persist import RPATaskPersistence
 from src.limb.tasks import TemplateTenantDenied
+from src.limb.template_persist import TemplatePersistence
 from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
@@ -16,7 +17,13 @@ router = APIRouter()
 # 变更写穿+首触懒回载，重启任务不丢。
 # 执行历史持久化生产接线（RV-①b-⑦-2）：历史行追加写穿+首触懒回载+计数读面
 # 对账行真源，重启执行史/计数不丢。
-executor = RPAExecutor(persist=RPATaskPersistence(), history_persist=HistoryPersistence())
+# 用户模板持久化生产接线（RV-①b-⑦-3）：模板变更写穿+首触懒回载，重启用户
+# 模板不丢（builtin 种子=代码真源不进表）。
+executor = RPAExecutor(
+    persist=RPATaskPersistence(),
+    history_persist=HistoryPersistence(),
+    template_persist=TemplatePersistence(),
+)
 
 
 # ── Request Schemas ────────────────────────────────────────
