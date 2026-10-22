@@ -17,6 +17,7 @@ from src.will.models import (
     TriggerType,
     WorkflowStatus,
 )
+from src.will.plan_persist import PlanPersistence
 
 router = APIRouter()
 engine = WorkflowEngine()
@@ -29,7 +30,7 @@ try:
         _seed_result = seed_system_orchestrations(engine)
 except Exception:
     pass  # seed失败不阻塞服务启动
-dag_planner = DAGPlanner()
+dag_planner = DAGPlanner(persist=PlanPersistence())
 
 
 # ── Request Schemas ────────────────────────────────────────────

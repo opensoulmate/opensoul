@@ -198,6 +198,10 @@ def test_前提_凭据随行与审计留痕环():
 def test_前提_计划by_ID消费与providers注册写点():
     assert "self._plans[plan_id] = plan" in _src("src/will/dag_planner.py")
     assert "get_plan(" in _src("src/api/will.py")
+    # RV-①b-⑫ 已落地（2026-10-23 契约随更新 F4b-⑯f 先例）：api 接线从
+    # `dag_planner = DAGPlanner()` 改为带 persist（计划注册表随写落盘+懒回载），
+    # 前提「计划只活内存」已收口；by-ID 消费前提（get_plan 闸门仍真源）不变。
+    assert "dag_planner = DAGPlanner(persist=" in _src("src/api/will.py")
     assert "self.providers[name] = cfg" in _src("src/gland/router.py")
 
 

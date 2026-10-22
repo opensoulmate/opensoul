@@ -499,6 +499,26 @@ def _isolate_goal_loop_faces(tmp_path, monkeypatch):
     monkeypatch.setattr(goal_loop_mod, "settings", Settings(llm_api_key=""))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_will_plans_db(tmp_path, monkeypatch):
+    """WILL_PLANS_DB 全测试隔离（RV-①b-⑫ 增补）：DAG 计划注册表持久化落盘口
+    PlanPersistence——src.api.will 模块级 dag_planner 单例（DAGPlanner
+    persist=PlanPersistence() 构造即接：写穿+首触懒回载），测试绝不写生产
+    data/will_plans.db。库路径每次连接按 env 解析，env 每用例指向 tmp+懒回载
+    标记每用例复位（_isolate_limb_tasks_db 同款）：每用例真源=本用例 tmp 库，
+    禁跨用例陈旧回载。显式 db_path/WILL_PLANS_DB 的测试按其覆盖为准。（内存
+    _plans 字典不强清：既有单例跨用例累积语义零变化——persist 模式读面恒对账
+    tmp 行真源，陈旧内存条目不进读面。）"""
+    import sys
+
+    monkeypatch.setenv("WILL_PLANS_DB", str(tmp_path / "will_plans.db"))
+    mod = sys.modules.get("src.api.will")
+    if mod is not None:
+        inst = getattr(mod, "dag_planner", None)
+        if inst is not None and getattr(inst, "_persist", None) is not None:
+            monkeypatch.setattr(inst, "_plans_loaded", False)
+
+
 class _LazyEvolutionEngine:
     """EvolutionEngine 懒替身：首次属性访问才构造 tmp 实例（数据面同真实现）。"""
 
