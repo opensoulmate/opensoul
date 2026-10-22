@@ -26,6 +26,8 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from src.immune.threat_persist import IntrusionPersistence
+
 
 class ThreatLevel(StrEnum):
     LOW = "low"
@@ -183,7 +185,7 @@ class IntrusionDetector:
     RATE_THRESHOLD = 200  # requests per minute = anomaly
     MAX_THREAT_HISTORY = 10000  # keep last N threats
 
-    def __init__(self):
+    def __init__(self, persist: IntrusionPersistence | None = None):
         self._lock = threading.Lock()
         self._ip_suspicion: dict[str, IPSuspicion] = {}
         self._threat_history: deque[ThreatEvent] = deque(maxlen=self.MAX_THREAT_HISTORY)
@@ -196,6 +198,11 @@ class IntrusionDetector:
             "by_type": defaultdict(int),
             "by_level": defaultdict(int),
         }
+        # RV-①b-⑪ 持久化接线（缺省 None=纯内存零变化）：威胁史/爆破证据窗随写
+        # 落盘+首触懒回载（诱导重启不再清爆破计数）。
+        self._persist = persist
+        self._threats_loaded = False
+        self._logins_loaded = False
 
     def inspect_request(
         self,
@@ -394,10 +401,12 @@ class IntrusionDetector:
 
     def record_login_attempt(self, ip: str, success: bool, path: str = "/api/login"):
         """Record a login attempt for brute-force detection."""
+        self._ensure_logins_loaded()
         now = time.time()
         threat = None
         with self._lock:
             self._login_attempts[ip].append(now)
+            self._sync_login(ip, now)
             if not success:
                 # Count failed attempts in window
                 cutoff = now - self.BRUTE_FORCE_WINDOW
@@ -428,6 +437,7 @@ class IntrusionDetector:
         limit: int = 50,
     ) -> list[dict]:
         """Query threat history with optional filters."""
+        self._ensure_threats_loaded()
         with self._lock:
             threats = list(self._threat_history)
 
@@ -478,6 +488,10 @@ class IntrusionDetector:
 
     def stats(self) -> dict:
         """Get intrusion detection statistics."""
+        self._ensure_threats_loaded()
+        # RV-①b-⑪ 计数真源（MEM-⑥ 纪律）：威胁派生计数恒对账行聚合，内存计数
+        # 降级缓存视图（total_inspected/total_blocked 无行真源仍是运行时计数）。
+        total_threats, by_type, by_level = self._counter_truth()
         with self._lock:
             active_blocks = sum(
                 1
@@ -489,13 +503,13 @@ class IntrusionDetector:
             )
             return {
                 "total_inspected": self._stats["total_inspected"],
-                "total_threats": self._stats["total_threats"],
+                "total_threats": total_threats,
                 "total_blocked": self._stats["total_blocked"],
                 "active_blocks": active_blocks,
                 "suspicious_ips": suspicious_ips,
                 "tracked_ips": len(self._ip_suspicion),
-                "by_type": dict(self._stats["by_type"]),
-                "by_level": dict(self._stats["by_level"]),
+                "by_type": by_type,
+                "by_level": by_level,
                 "recent_threats": len(self._threat_history),
                 "thresholds": {
                     "auto_block_threshold": self.AUTO_BLOCK_THRESHOLD,
@@ -532,6 +546,9 @@ class IntrusionDetector:
 
     def _record_threats(self, ip: str, threats: list[ThreatEvent]):
         """Record threats and auto-block if threshold exceeded."""
+        # RV-①b-⑪ 先载后录（_ensure_* 不取 self._lock 外的任何检测面锁；此调用点
+        # 在 with self._lock 之外——self._lock 非重入，锁内调用=自死锁）。
+        self._ensure_threats_loaded()
         with self._lock:
             sus = self._ip_suspicion.setdefault(ip, IPSuspicion(ip=ip))
             for threat in threats:
@@ -554,3 +571,118 @@ class IntrusionDetector:
                 self._stats["total_blocked"] += 1
                 for t in threats:
                     t.blocked = True
+
+        # RV-①b-⑪ 威胁史写穿单一点（auto-block 判定已毕、t.blocked 终值在场才落
+        # 行=行与内存 ThreatEvent 逐键保真；锁外写=不持检测锁做 DB IO）。
+        self._sync_threats(threats)
+
+    # ── RV-①b-⑪ 持久化接线（persist 缺省=纯内存零变化）────────────────────
+
+    def _sync_threats(self, threats: list[ThreatEvent]) -> None:
+        """威胁史追加写穿单一点（_sync_entry 纪律：禁散落写点漂移；全仓唯一调用
+        点=_record_threats 尾）。追加型：一次检出一行，禁 REPLACE=禁丢史。写失败=
+        记账旁路纪律（RV-①b-①）：logger.error 可见不阻断检测本体（诚实边界①：
+        该行只活内存、重启丢）。"""
+        if self._persist is None:
+            return
+        try:
+            for t in threats:
+                self._persist.insert_threat(
+                    threat_id=t.threat_id,
+                    attack_type=t.attack_type.value,
+                    threat_level=t.threat_level.value,
+                    source_ip=t.source_ip,
+                    path=t.path,
+                    method=t.method,
+                    detail=t.detail,
+                    matched_pattern=t.matched_pattern,
+                    blocked=t.blocked,
+                    timestamp=t.timestamp,
+                )
+        except Exception as e:
+            logging.getLogger(__name__).error("immune 威胁史落盘失败（记录本体已在内存）: %s", e)
+
+    def _sync_login(self, ip: str, ts: float) -> None:
+        """爆破证据窗写穿单一点（_sync_login 纪律：禁散落写点漂移；全仓唯一调用
+        点=record_login_attempt 的 append 处）。失败旁路纪律同 _sync_threats。"""
+        if self._persist is None:
+            return
+        try:
+            self._persist.insert_login(ip=ip, ts=ts)
+        except Exception as e:
+            logging.getLogger(__name__).error("immune 登录尝试落盘失败（记录本体已在内存）: %s", e)
+
+    def _ensure_threats_loaded(self) -> None:
+        """威胁史首触懒回载（RV-①b-⑧ _ensure_loaded 同款）：persist 在场才回载，
+        只回载一次；首触=首次读（get_threats/stats）或首次写（_record_threats 先
+        回载再追加——先载后录防在录条目被回载冲掉；首触先于任何追加=回载时 ring
+        恒空，生产不变量）。回载窗=最近 MAX_THREAT_HISTORY 行（ring 既有裁剪语义
+        不变，更旧行留在库不进内存）。坏行（枚举不在单一源集合）跳过+logger.error
+        可见（诚实边界④）。回载失败=空史起步+可见（诚实边界②）。
+
+        调用纪律：必须在 self._lock 之外调用（self._lock 非重入，内部收尾自取锁）。"""
+        if self._persist is None or self._threats_loaded:
+            return
+        self._threats_loaded = True
+        try:
+            rows = self._persist.load_threats(self.MAX_THREAT_HISTORY)
+        except Exception as e:
+            logging.getLogger(__name__).error("immune 威胁史回载失败（空史起步）: %s", e)
+            return
+        events: list[ThreatEvent] = []
+        for row in rows:
+            try:
+                events.append(
+                    ThreatEvent(
+                        threat_id=str(row["threat_id"]),
+                        attack_type=AttackType(row["attack_type"]),
+                        threat_level=ThreatLevel(row["threat_level"]),
+                        source_ip=str(row["source_ip"]),
+                        path=str(row["path"]),
+                        method=str(row["method"]),
+                        detail=str(row["detail"]),
+                        matched_pattern=str(row["matched_pattern"]),
+                        blocked=bool(row["blocked"]),
+                        timestamp=float(row["timestamp"]),
+                    )
+                )
+            except Exception as e:
+                logging.getLogger(__name__).error("immune 威胁史坏行跳过: %s", e)
+        with self._lock:
+            self._threat_history.clear()
+            self._threat_history.extend(events)
+
+    def _ensure_logins_loaded(self) -> None:
+        """爆破证据窗首触懒回载：persist 在场才回载，只回载一次；首触=record_login_
+        attempt（唯一读写口）。回载窗=每 IP 最近 100 条（deque maxlen 既有语义），
+        先载后录同 _ensure_threats_loaded。调用纪律同上（锁外调用）。"""
+        if self._persist is None or self._logins_loaded:
+            return
+        self._logins_loaded = True
+        try:
+            data = self._persist.load_login_attempts(100)
+        except Exception as e:
+            logging.getLogger(__name__).error("immune 登录尝试回载失败（空窗起步）: %s", e)
+            return
+        with self._lock:
+            self._login_attempts.clear()
+            for ip, timestamps in data.items():
+                self._login_attempts[ip].extend(timestamps)
+
+    def _counter_truth(self) -> tuple[int, dict, dict]:
+        """计数真源（RV-①b-⑦-2/⑧ _counter_truth 同款）：persist 在场=恒对账威胁
+        史行聚合（MEM-⑥ 纪律：计数器=行缓存视图）；缺省=纯内存计数器既有语义字节
+        不变。对账失败=logger.error 可见+回落内存计数缓存（缓存本职，禁静默假 0）。"""
+        if self._persist is not None:
+            try:
+                c = self._persist.threat_counters()
+                return int(c["total_threats"]), dict(c["by_type"]), dict(c["by_level"])
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "immune 威胁计数对账失败（回落内存计数缓存）: %s", e
+                )
+        return (
+            self._stats["total_threats"],
+            dict(self._stats["by_type"]),
+            dict(self._stats["by_level"]),
+        )

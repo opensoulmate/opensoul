@@ -129,6 +129,31 @@ def _isolate_immune_audit_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_immune_intrusion_db(tmp_path, monkeypatch):
+    """IMMUNE_INTRUSION_DB 全测试隔离（RV-①b-⑪ 增补）：IntrusionDetector 威胁史+
+    爆破证据窗持久化落盘口 IntrusionPersistence——src.api.immune 模块级 intrusion
+    单例构造即接 persist（写穿+首触懒回载），测试绝不写生产 data/immune_intrusion.db。
+    库路径每次连接按 env 解析（memory_persist 同纪律），env 每用例指向 tmp+懒回载
+    标记/内存 ring/证据窗/嫌疑面/计数缓存每用例复位（_isolate_immune_audit_db 同款）：
+    每用例真源=本用例 tmp 库，禁跨用例陈旧行残留。显式 db_path/IMMUNE_INTRUSION_DB
+    的测试按其覆盖为准。"""
+    import src.api.immune as immune_api
+
+    monkeypatch.setenv("IMMUNE_INTRUSION_DB", str(tmp_path / "immune_intrusion.db"))
+    inst = immune_api.intrusion
+    monkeypatch.setattr(inst, "_threats_loaded", False, raising=False)
+    monkeypatch.setattr(inst, "_logins_loaded", False, raising=False)
+    inst._threat_history.clear()
+    inst._login_attempts.clear()
+    inst._request_counts.clear()
+    inst._ip_suspicion.clear()
+    for _k in ("total_inspected", "total_threats", "total_blocked"):
+        inst._stats[_k] = 0
+    inst._stats["by_type"].clear()
+    inst._stats["by_level"].clear()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_pulse_signals_db(tmp_path, monkeypatch):
     """PULSE_SIGNALS_DB 全测试隔离（RV-①b-⑨ 增补）：PulseEngine 信号注册表持久化
     落盘口 SignalPersistence——src.api.pulse 模块级 engine 单例构造即接 persist

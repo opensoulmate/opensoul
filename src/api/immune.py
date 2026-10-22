@@ -13,6 +13,7 @@ from src.immune.intrusion import IntrusionDetector
 from src.immune.moderator import ContentModerator
 from src.immune.permission_engine import PermissionMode, PermissionService
 from src.immune.rate_limiter import RateLimitConfig, RateLimiter
+from src.immune.threat_persist import IntrusionPersistence
 from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
 
@@ -27,7 +28,8 @@ moderator = ContentModerator()
 ip_control = IPAccessControl(persist=AccessPersistence())
 # RV-①b-⑧ 生产接线：安全审计留痕持久化（log() 写穿+首触懒回载，重启审计史不丢）。
 audit = AuditLogger(persist=AuditPersistence())
-intrusion = IntrusionDetector()
+# RV-①b-⑪ 生产接线：威胁史+爆破证据窗持久化（写穿+首触懒回载，诱导重启不清爆破计数）。
+intrusion = IntrusionDetector(persist=IntrusionPersistence())
 permission_service = PermissionService()  # P0-3 工具级权限引擎
 
 

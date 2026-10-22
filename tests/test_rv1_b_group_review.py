@@ -203,6 +203,11 @@ def test_前提_计划by_ID消费与providers注册写点():
 
 def test_前提_检测留痕写点与heartbeat缺行fail_closed():
     assert "self._login_attempts[ip].append" in _src("src/immune/intrusion.py")
+    # RV-①b-⑪ 已落地（2026-10-23 契约随更新 F4b-⑯f 先例）：api 接线从
+    # `intrusion = IntrusionDetector()` 改为带 persist（威胁史/爆破证据窗随写
+    # 落盘+懒回载），前提「过程史/证据窗只活内存」已收口；检测窗本体前提
+    # （_login_attempts 内存 deque 窗仍为判定真源）不变。
+    assert "intrusion = IntrusionDetector(persist=" in _src("src/api/immune.py")
     nerve = _src("src/api/nerve.py")
     hb = nerve[nerve.index("def heartbeat") : nerve.index("def heartbeat") + 200]
     assert "return False" in hb
