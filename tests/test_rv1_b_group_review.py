@@ -183,7 +183,10 @@ def test_前提_脉冲信号API创建面与bootstrap一次性语义():
 def test_前提_凭据随行与审计留痕环():
     assert "callback_token" in _src("src/link/connector.py")
     assert "secret_token" in _src("src/api/soma_connector.py")
-    assert "audit = AuditLogger()" in _src("src/api/immune.py")
+    # RV-①b-⑧ 已落地（2026-10-23 契约随更新 F4b-⑯f 先例）：api 接线从
+    # `audit = AuditLogger()` 改为带 persist（留痕随写落盘），前提「留痕只活
+    # 内存」已收口；环本体前提（deque ring 仍纯内存回填）不变。
+    assert "audit = AuditLogger(persist=" in _src("src/api/immune.py")
     assert "deque(maxlen=max_entries)" in _src("src/immune/audit.py")
 
 

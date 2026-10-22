@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from src.immune.access_control import IPAccessControl
 from src.immune.access_persist import AccessPersistence
 from src.immune.audit import AuditAction, AuditLogger
+from src.immune.audit_persist import AuditPersistence
 from src.immune.intrusion import IntrusionDetector
 from src.immune.moderator import ContentModerator
 from src.immune.permission_engine import PermissionMode, PermissionService
@@ -24,7 +25,8 @@ rate_limiter = RateLimiter()
 moderator = ContentModerator()
 # RV-①b-② 生产接线：黑白名单持久化（构造期回载+增删/命中写穿，重启封禁不丢）。
 ip_control = IPAccessControl(persist=AccessPersistence())
-audit = AuditLogger()
+# RV-①b-⑧ 生产接线：安全审计留痕持久化（log() 写穿+首触懒回载，重启审计史不丢）。
+audit = AuditLogger(persist=AuditPersistence())
 intrusion = IntrusionDetector()
 permission_service = PermissionService()  # P0-3 工具级权限引擎
 
