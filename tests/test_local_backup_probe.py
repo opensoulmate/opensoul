@@ -39,7 +39,8 @@ class _RecorderRouter:
         self.add_calls = 0
         self._boom = boom
 
-    def add_provider(self, name, base_url, models=None, priority=0):
+    def add_provider(self, name, base_url, models=None, priority=0, persist_row=True):
+        # persist_row：RV-①b-⑩ ModelRouter.add_provider 契约随更新。
         self.add_calls += 1
         if self._boom:
             raise RuntimeError("add_provider blew up")

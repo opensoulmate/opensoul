@@ -66,7 +66,9 @@ class _RecorderRouter:
         self.keys = {}
         self.key_manager = self
 
-    def add_provider(self, name, base_url, models, priority):
+    def add_provider(self, name, base_url, models, priority, persist_row=True):
+        # persist_row：RV-①b-⑩ ModelRouter.add_provider 契约随更新（备胎注册恒
+        # persist_row=False，记录器照单全收不落盘语义本就无从体现）。
         self.providers[name] = {
             "base_url": base_url,
             "models": models,

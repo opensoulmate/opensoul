@@ -7,6 +7,7 @@ from src.gland.harness_profiles import (
     filter_tools_for,
     profile_for,
 )
+from src.gland.provider_persist import ProviderPersistence
 from src.gland.router import (
     AllProvidersFailedError,
     ModelRouter,
@@ -17,11 +18,17 @@ from src.gland.router import (
 
 router = APIRouter()
 
+# settings 补位跑过没有（每进程恰一次，与 providers dict 状态解耦——RV-①b-⑩）
+_BOOTSTRAPPED = False
+
 # ── singleton gateway ───────────────────────────────────────────
 # Bootstraps with env-based config; providers can be added/removed at runtime.
 # persist_usage=True（RV-①b-①）：用量 UI 真源（/usage /usage/recent /stats 消费的
 # token_meter）随写落盘、启动回载，service 重启用量不丢。
-gateway = ModelRouter(persist_usage=True)
+# persist_providers=ProviderPersistence()（RV-①b-⑩）：API 注册配置（POST/PATCH/
+# DELETE /providers 面）随写落盘、首触懒回载，重启注册配置不丢；settings 补位三
+# 件套不落行（其真源=bootstrap 重建）。钥面刻意不落（RV-①b-③ 拍板件）。
+gateway = ModelRouter(persist_usage=True, persist_providers=ProviderPersistence())
 
 
 def _register_local_backup() -> None:
@@ -44,12 +51,24 @@ def _register_local_backup() -> None:
 
 
 def _ensure_bootstrapped() -> None:
-    """Register default providers from settings on first use."""
-    if gateway.providers:
+    """Register default providers from settings on first use（每进程恰一次）。
+
+    RV-①b-⑩：判定从「providers dict 非空」代理改为显式 _BOOTSTRAPPED 进程旗标
+    ——dict 非空≠已补位（懒回载恢复的外部注册行也会让 dict 非空），代理会在
+    「外部行先回载」时跳过 settings 补位=丢失 openai/variant 默认注册（真断点）。
+    旗标语义=「settings 补位跑过没有」，与 dict 状态解耦。
+    """
+    global _BOOTSTRAPPED
+    if _BOOTSTRAPPED:
         # 补口：bootstrap时ollama不可达被探活豁免→未入链；ollama后启动时经探活
         # TTL重探可达即补注册——gateway单例不因启动时序永久丢备胎（幂等安全）。
         _register_local_backup()
         return
+    _BOOTSTRAPPED = True
+    # 外部注册行先回载（定序：恢复行在前、settings 补位 upsert 在后=撞名时补位
+    # 配置胜出与既有 upsert 语义一致；add_provider/persist_row=False 落行规则见
+    # ModelRouter.add_provider docstring）。
+    gateway.ensure_providers_loaded()
 
     # OpenAI-compatible (covers OpenAI, custom endpoints, MiMo, etc.)
     if settings.llm_base_url:
@@ -61,6 +80,7 @@ def _ensure_bootstrapped() -> None:
                 "embedding": settings.embedding_model,
             },
             priority=0,
+            persist_row=False,
         )
         if settings.llm_api_key:
             gateway.key_manager.add_key("openai", settings.llm_api_key)

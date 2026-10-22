@@ -294,6 +294,7 @@ def register_variant_backup(router, fallback_model: str) -> str | None:
         base_url=alt["base_url"],
         models={"chat": alt.get("model") or fallback_model},
         priority=5,
+        persist_row=False,
     )
     if alt.get("api_key"):
         router.key_manager.add_key(name, alt["api_key"])
@@ -381,7 +382,13 @@ def register_local_backup(
                         base_url,
                     )
                 return None
-        router.add_provider(name=name, base_url=base_url, models=models, priority=priority)
+        router.add_provider(
+            name=name,
+            base_url=base_url,
+            models=models,
+            priority=priority,
+            persist_row=False,
+        )
         return name
     except Exception:  # noqa: BLE001 — 备胎注册绝不反噬调用方
         return None

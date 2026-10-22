@@ -16,6 +16,7 @@ from src.gland.harness_profiles import (
     resolve_task,
 )
 from src.gland.key_manager import KeyManager
+from src.gland.provider_persist import ProviderPersistence
 from src.gland.token_meter import TokenMeter
 from src.gland.usage_persist import UsagePersistence
 
@@ -334,8 +335,22 @@ class ModelRouter:
     COOLDOWN_SECONDS = 60  # disable a provider for this long after repeated failures
     MAX_FAILURES = 3
 
-    def __init__(self, *, persist_usage: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        persist_usage: bool = False,
+        persist_providers: ProviderPersistence | None = None,
+    ) -> None:
         self.providers: dict[str, ProviderConfig] = {}
+        # RV-①b-⑩：persist_providers 在场时 API 注册配置随变更落盘+首触懒回载
+        # （重启注册配置不丢）；缺省 None=纯内存（一次性/测试用路由实例既有语义
+        # 零变化）。钥面刻意不落盘（RV-①b-③ 拍板件，凭据形态随 ㉛ 拍板）。
+        self._provider_persist = persist_providers
+        self._providers_loaded = False
+        # 落盘真源名集：POST 注册/回载进来的名字以落盘行为真源（update/remove
+        # 随写更行/删行）；settings bootstrap 补位名（persist_row=False）不进集
+        # ——其真源是 settings，API 改动为临时（重启回 settings 形，既有语义）。
+        self._persisted_provider_names: set[str] = set()
         self.key_manager = KeyManager()
         # RV-①b-①：persist_usage=True 的路由实例（生产 gateway 单例）用量行落盘
         # 回载，重启不丢；缺省 False=纯内存（一次性/测试用路由实例既有语义零变化）。
@@ -359,13 +374,84 @@ class ModelRouter:
 
     # ── provider management ──────────────────────────────────────
 
+    # RV-①b-⑩ provider 注册配置持久化（写穿单一点+首触懒回载）──────────
+
+    def ensure_providers_loaded(self) -> None:
+        """外部注册行首触懒回载（公开触发口：bootstrap 显式定序也走此口）。"""
+        self._ensure_providers_loaded()
+
+    def _ensure_providers_loaded(self) -> None:
+        """懒回载落盘行（只补缺不覆盖：内存新态不被回载洗，pulse ⑨ 同纪律）。
+
+        回载失败=空注册表起步+logger.error 可见，不置位 loaded=下次触碰重试；
+        不在回载故障上发明降级判法。
+        """
+        if self._provider_persist is None or self._providers_loaded:
+            return
+        try:
+            rows = self._provider_persist.load_all()
+        except Exception as exc:
+            logger.error("provider 注册回载失败（空注册表起步，下次触碰重试）: %s", exc)
+            return
+        for row in rows:
+            name = row["name"]
+            self._persisted_provider_names.add(name)
+            if name in self.providers:
+                continue  # 只补缺不覆盖
+            self.providers[name] = ProviderConfig(
+                name=name,
+                base_url=row["base_url"],
+                models=dict(row["models"]),
+                enabled=bool(row["enabled"]),
+                priority=int(row["priority"]),
+            )
+        self._providers_loaded = True
+
+    def _sync_provider_row(self, cfg: ProviderConfig) -> None:
+        """写穿单一点：当前态落盘。失败不阻断注册动作本体但 logger.error 可见
+        （记账旁路纪律：动作已进内存，为落盘失败炸掉运行时注册不成比例）。"""
+        if self._provider_persist is None:
+            return
+        try:
+            self._provider_persist.upsert(
+                {
+                    "name": cfg.name,
+                    "base_url": cfg.base_url,
+                    "models": dict(cfg.models),
+                    "enabled": cfg.enabled,
+                    "priority": cfg.priority,
+                }
+            )
+        except Exception as exc:
+            logger.error("provider 注册落盘失败（内存注册生效，重启该行丢）: %s", exc)
+
+    def _drop_provider_row(self, name: str) -> None:
+        """删行单一点：delete 幂等。失败不阻断移除本体但 logger.error 可见。"""
+        if self._provider_persist is None:
+            return
+        try:
+            self._provider_persist.delete(name)
+        except Exception as exc:
+            logger.error("provider 注册删行失败（内存已删，重启该行复活）: %s", exc)
+
     def add_provider(
         self,
         name: str,
         base_url: str,
         models: dict[str, str] | None = None,
         priority: int = 0,
+        *,
+        persist_row: bool = True,
     ) -> ProviderConfig:
+        """注册/覆盖 provider（upsert 语义）。
+
+        persist_row=True（缺省，外部注册面）=该名以落盘行为真源，随写落盘；
+        persist_row=False（settings bootstrap 补位/内部备胎注册）=不建行——补位名
+        真源是 settings，重启由 bootstrap 重建（RV-①c 定性「内置备份 provider 随
+        构造重建」）；若该名已有落盘行（外部注册撞名）则行随内存当前态更行防双源
+        漂移（补位 upsert 既有语义=内存以补位配置为准，行=内存影子）。
+        """
+        self._ensure_providers_loaded()
         cfg = ProviderConfig(
             name=name,
             base_url=base_url.rstrip("/"),
@@ -374,6 +460,12 @@ class ModelRouter:
         )
         self.providers[name] = cfg
         logger.info("Registered provider=%s base_url=%s priority=%d", name, base_url, priority)
+        if self._provider_persist is not None:
+            if persist_row:
+                self._persisted_provider_names.add(name)
+                self._sync_provider_row(cfg)
+            elif name in self._persisted_provider_names:
+                self._sync_provider_row(cfg)
         return cfg
 
     def has_provider(self, name: str) -> bool:
@@ -383,6 +475,7 @@ class ModelRouter:
         引擎层 add_provider 的 upsert 语义（内部备胎幂等重注册）不经此口——
         register_local_backup「已注册→幂等返回不重建ProviderConfig」即其真依赖。
         """
+        self._ensure_providers_loaded()
         return name in self.providers
 
     def remove_provider(self, name: str) -> int | None:
@@ -394,8 +487,12 @@ class ModelRouter:
         ——绝不顺带清同名钥（env bootstrap 钥可合法存在于未注册 provider，
         DELETE 不得变相清钥）。
         """
+        self._ensure_providers_loaded()
         if self.providers.pop(name, None) is None:
             return None
+        if name in self._persisted_provider_names:
+            self._persisted_provider_names.discard(name)
+            self._drop_provider_row(name)
         return self.key_manager.remove_provider_keys(name)
 
     def update_provider(self, name: str, changes: dict) -> ProviderConfig | None:
@@ -412,6 +509,7 @@ class ModelRouter:
         先移除钥（或 DELETE+POST 整体换）再改。base_url 给出但归一后与现值相同
         = 非改道，照常放行（不误伤）。
         """
+        self._ensure_providers_loaded()
         cfg = self.providers.get(name)
         if cfg is None:
             return None
@@ -451,6 +549,8 @@ class ModelRouter:
                 )
         for key, value in normalized.items():
             setattr(cfg, key, value)
+        if name in self._persisted_provider_names:
+            self._sync_provider_row(cfg)
         logger.info(
             "Updated provider=%s fields=%s keys_untouched=%d",
             name,
@@ -460,6 +560,7 @@ class ModelRouter:
         return cfg
 
     def list_providers(self) -> list[dict]:
+        self._ensure_providers_loaded()
         out = []
         for p in self.providers.values():
             out.append(
@@ -507,6 +608,7 @@ class ModelRouter:
         模型路由4按钮接线：cost模式本地provider优先，intelligence模式在线优先，
         balance/auto按priority（auto细粒度决策在chat层route_policy.resolve_target）。
         """
+        self._ensure_providers_loaded()
         candidates = []
         for p in self.providers.values():
             if not p.enabled:
@@ -985,6 +1087,7 @@ class ModelRouter:
 
     async def test_provider(self, provider_name: str) -> dict:
         """Send a minimal request to verify a provider is reachable."""
+        self._ensure_providers_loaded()
         provider = self.providers.get(provider_name)
         if not provider:
             return {"status": "error", "detail": f"Provider '{provider_name}' not found"}

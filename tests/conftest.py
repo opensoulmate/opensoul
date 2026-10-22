@@ -81,6 +81,25 @@ def _isolate_gland_usage_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_gland_providers_db(tmp_path, monkeypatch):
+    """GLAND_PROVIDERS_DB 全测试隔离（RV-①b-⑩ 增补）：provider 注册配置持久化落盘口
+    ProviderPersistence——src.api.gland 模块级 gateway 单例 import 即构造
+    （ModelRouter(persist_providers=ProviderPersistence())：注册/修改/删除写穿+首触
+    懒回载），测试绝不写生产 data/gland_providers.db。库路径每次连接按 env 解析
+    （memory_persist 同纪律），env 每用例指向 tmp+懒回载标记/落盘真源名集每用例复位
+    （echo _isolate_echo_history_db 同款）：每用例真源=本用例 tmp 库，禁跨用例陈旧行
+    残留。显式 db_path/GLAND_PROVIDERS_DB 的测试按其覆盖为准。"""
+    monkeypatch.setenv("GLAND_PROVIDERS_DB", str(tmp_path / "gland_providers.db"))
+    try:
+        from src.api.gland import gateway as gw
+
+        monkeypatch.setattr(gw, "_providers_loaded", False)
+        monkeypatch.setattr(gw, "_persisted_provider_names", set())
+    except Exception:  # noqa: BLE001 — 控制组容缺（旧代码无持久化态）
+        pass
+
+
+@pytest.fixture(autouse=True)
 def _isolate_immune_access_db(tmp_path, monkeypatch):
     """IMMUNE_ACCESS_DB 全测试隔离（RV-①b-② 增补）：IPAccessControl 黑白名单持久化
     落盘口 AccessPersistence——src.api.immune 模块级 ip_control 单例 import 即构造
