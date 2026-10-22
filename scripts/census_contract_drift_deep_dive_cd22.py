@@ -686,17 +686,19 @@ SHAPE_VERDICTS = {
         "anchors": [(NT, 174, 'd["usage"] = self.usage.to_dict()')],
     },
     # ── pulse get_stats：PulseEngine.get_stats 返回面 ──
+    # （RV-①b-⑨ timer.py 行位移 +117 锚点随位移同步 197/198/201→314/315/318，
+    #   断言意图零丢失、历史裁决文本不改写——RV-①b-④ 先例）
     ("pulse.get_stats:160", "total_signals"): {
         "verdict": _V,
         "evidence": "PulseEngine.get_stats 返回含 total_signals（src/pulse/timer.py:198），handler "
         "透传（api/pulse.py:163）；UI stats?.total_signals 消费（pulse/page.tsx:198）可达",
-        "anchors": [(PT, 198, '"total_signals": len(signals),')],
+        "anchors": [(PT, 315, '"total_signals": len(signals),')],
     },
     ("pulse.get_stats:160", "total_ticks"): {
         "verdict": _V,
         "evidence": "返回键 total_ticks 真产出（src/pulse/timer.py:197）；UI 消费（pulse/page.tsx:"
         "206）可达",
-        "anchors": [(PT, 197, '"total_ticks": self._total_ticks,')],
+        "anchors": [(PT, 314, '"total_ticks": self._total_ticks,')],
     },
     ("pulse.get_stats:160", "active_signals"): {
         "verdict": _F,
@@ -706,7 +708,7 @@ SHAPE_VERDICTS = {
         "（pulse/page.tsx:202）——回落从页面自身信号列表真算活跃数，无显示行为损失"
         "（消费点非缺陷：容错分支+本地构造形）",
         "anchors": [
-            (PT, 198, '"total_signals": len(signals),'),
+            (PT, 315, '"total_signals": len(signals),'),
             (U_PP, 202, "stats?.active_signals ?? signals.filter"),
         ],
     },
@@ -723,7 +725,7 @@ SHAPE_VERDICTS = {
         "已无 stats?.avg_drift_ms 平铺消费=修复真落地；锚点改锁修复后状态"
         "（平铺漂移复发先炸）",
         "anchors": [
-            (PT, 201, '"precision": {'),
+            (PT, 318, '"precision": {'),
             (U_PP, 210, "stats?.precision?.avg_drift_ms"),
         ],
     },

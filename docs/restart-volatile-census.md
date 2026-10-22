@@ -94,7 +94,7 @@ B 组~~零建设~~（2026-10-22 RV-①c 复核：15 条藏活事实扩 A 组 →
 | 候选 | 状态面 | 重启丢失的事实（本拍实查定性） |
 |---|---|---|
 | RV-①b-⑧ | `immune/audit.py` AuditLogger._log | 安全审计留痕 ring（maxlen=10000）：permission_denied/intrusion 等安全动作史，api/immune.py 单例 3+ 写点真消费；与 a2a push_delivery_log（RV-①b-⑤-3）同族留痕。**（已落 2026-10-23：immune_audit_log 追加表写穿+首触懒回载+计数对账行聚合，前提标记锁已契约随更新）** |
-| RV-①b-⑨ | `pulse/timer.py` PulseEngine._signals | 用户创建脉冲信号（POST /api/pulse/signals + by-ID/tick/pause/resume 契约）；bootstrap 种子信号也只在**首次** bootstrap 建（main.py `is_bootstrapped` 一次性）=重启后定时脉冲静默消失 |
+| RV-①b-⑨ | `pulse/timer.py` PulseEngine._signals | 用户创建脉冲信号（POST /api/pulse/signals + by-ID/tick/pause/resume 契约）；bootstrap 种子信号也只在**首次** bootstrap 建（main.py `is_bootstrapped` 一次性）=重启后定时脉冲静默消失。**（已落 2026-10-23：pulse_signals 状态快照表写穿+首触懒回载，前提标记锁已契约随更新）** |
 | RV-①b-⑩ | `gland/router.py` ModelRouter.providers | API 注册 provider 配置（name/base_url/models/priority）——内置备份 provider 随构造重建、API 注册零重建；钥面=KeyManager（RV-①b-③ 拍板件）另件 |
 | RV-①b-⑪ | `immune/intrusion.py` _threat_history/_login_attempts | 威胁事件史 + 失败登录时间窗（爆破检测证据）：auto-block 结果已持久化（RV-①b-②）但过程史/计数窗不落=诱导重启即清爆破计数 |
 | RV-①b-⑫ | `will/dag_planner.py` DAGPlanner._plans | API 创建执行计划（api/will.py get_plan by-ID :588/:626 消费）——plan_id 契约跨重启 404 |

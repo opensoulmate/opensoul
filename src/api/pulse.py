@@ -3,10 +3,11 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from src.pulse.signal_persist import SignalPersistence
 from src.pulse.timer import PulseEngine
 
 router = APIRouter()
-engine = PulseEngine()
+engine = PulseEngine(persist=SignalPersistence())
 
 
 class SignalCreateRequest(BaseModel):

@@ -110,6 +110,26 @@ def _isolate_immune_audit_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_pulse_signals_db(tmp_path, monkeypatch):
+    """PULSE_SIGNALS_DB 全测试隔离（RV-①b-⑨ 增补）：PulseEngine 信号注册表持久化
+    落盘口 SignalPersistence——src.api.pulse 模块级 engine 单例构造即接 persist
+    （PulseEngine(persist=SignalPersistence())：变更写穿+首触懒回载），测试绝不写
+    生产 data/pulse_signals.db。库路径每次连接按 env 解析（memory_persist 同
+    纪律），env 每用例指向 tmp+懒回载标记/内存注册表/计数每用例复位
+    （echo _isolate_echo_history_db 同款）：每用例真源=本用例 tmp 库，禁跨用例
+    陈旧行残留。显式 db_path/PULSE_SIGNALS_DB 的测试按其覆盖为准。"""
+    import src.api.pulse as pulse_api
+
+    monkeypatch.setenv("PULSE_SIGNALS_DB", str(tmp_path / "pulse_signals.db"))
+    inst = pulse_api.engine
+    if getattr(inst, "_persist", None) is not None:
+        monkeypatch.setattr(inst, "_loaded", False)
+        inst._signals.clear()
+        inst._tick_history.clear()
+        monkeypatch.setattr(inst, "_total_ticks", 0)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_echo_history_db(tmp_path, monkeypatch):
     """ECHO_HISTORY_DB 全测试隔离（RV-①b-④ 增补）：MessageDispatcher 历史行持久化
     落盘口 HistoryPersistence——src.api.echo 模块级 dispatcher 单例 import 即构造

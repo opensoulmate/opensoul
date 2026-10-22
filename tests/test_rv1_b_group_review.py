@@ -178,6 +178,11 @@ def test_前提_脉冲信号API创建面与bootstrap一次性语义():
     assert "def create_signal" in _src("src/api/pulse.py")
     main_src = _src("src/main.py")
     assert "if not bs.is_bootstrapped:" in main_src  # bootstrap 一次性=信号无重启重建
+    # RV-①b-⑨ 已落地（2026-10-23 契约随更新 F4b-⑯f 先例）：api 接线从
+    # `engine = PulseEngine()` 改为带 persist（信号随变更落盘+懒回载），前提
+    # 「信号无重启重建」已收口（跨重启由行回载非 bootstrap 重建）；bootstrap
+    # 一次性标记本体前提不变。
+    assert "engine = PulseEngine(persist=" in _src("src/api/pulse.py")
 
 
 def test_前提_凭据随行与审计留痕环():
