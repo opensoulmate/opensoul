@@ -379,7 +379,10 @@ class TestRecordMessageAuthority:
         """process_task=record_message+run_processing（委托后契约零变化）：首轮
         create+run_processing 后续接，入史恰一次 + agent 回复入史 + 终态 completed。"""
         msg0 = Message(role="user", parts=[{"type": "text", "text": "h"}])
-        task = await task_manager.create_task(msg0)
+        # 首轮建任务即带 STUB 元数据（本文件 llm_mode=stub 约定）：修前首轮不带 STUB=
+        # 走真实 LLM 路径，上游不可达时预算耗尽→failed（环境耦合假失败，RV-①c 逼出的
+        # 测试敏感性收口；断言意图零丢失=仍验委托后契约）。
+        task = await task_manager.create_task(msg0, metadata=dict(STUB))
         await task_manager.run_processing(task, msg0)
         msg = Message(role="user", parts=[{"type": "text", "text": "m"}])
         out = await task_manager.process_task(task.id, msg, metadata=dict(STUB))
