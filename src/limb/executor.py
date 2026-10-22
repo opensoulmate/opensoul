@@ -9,6 +9,8 @@ Handles:
 
 from __future__ import annotations
 
+import json
+import logging
 import re
 import threading
 import time
@@ -28,6 +30,8 @@ from src.limb.tasks import (
     template_row_tenant,
     template_visible_to,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TaskStatus(StrEnum):
@@ -123,11 +127,74 @@ class RPATask:
             d["actions"] = [a.to_dict() for a in self.actions]
         return d
 
+    def to_state(self) -> dict:
+        """任务行持久化状态（RV-①b-⑦-1）：完整往返形。to_dict 是 API 展示形
+        （results 输出截断 500 丢 screenshot_path、不带 variables），落盘/回载需
+        逐字段保真——刻意独立单一源，禁拿展示形当落盘形（回载缺字段=fabricate）。"""
+        return {
+            "task_id": self.task_id,
+            "name": self.name,
+            "status": self.status.value,
+            "priority": int(self.priority),
+            "created_at": self.created_at,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "current_step": int(self.current_step),
+            "error": self.error,
+            "tags": list(self.tags),
+            "variables": dict(self.variables),
+            "tenant_id": task_row_tenant(self),
+            "actions": [
+                {**a.to_dict(), "condition": a.condition, "metadata": dict(a.metadata)}
+                for a in self.actions
+            ],
+            "results": [
+                {
+                    "action_type": r.action_type,
+                    "success": bool(r.success),
+                    "action_index": int(r.action_index),
+                    "output": r.output,
+                    "error": r.error,
+                    "duration_ms": int(r.duration_ms),
+                    "screenshot_path": r.screenshot_path,
+                }
+                for r in self.results
+            ],
+        }
+
+    @classmethod
+    def from_state(cls, data: dict) -> RPATask:
+        """从落盘状态重建任务行（to_state 唯一逆）。字段缺失/非法如实抛，
+        行取舍归回载方（跳过+可见）。"""
+        actions = [Action.from_dict(a) for a in data.get("actions", [])]
+        results = [StepResult(**r) for r in data.get("results", [])]
+        return cls(
+            task_id=str(data["task_id"]),
+            name=str(data.get("name", "")),
+            actions=actions,
+            status=TaskStatus(data.get("status", "queued")),
+            priority=int(data.get("priority", 5)),
+            created_at=float(data.get("created_at") or time.time()),
+            started_at=data.get("started_at"),
+            completed_at=data.get("completed_at"),
+            current_step=int(data.get("current_step", 0)),
+            results=results,
+            error=str(data.get("error", "")),
+            tags=list(data.get("tags", [])),
+            variables=dict(data.get("variables", {})),
+            tenant_id=task_row_tenant(data.get("tenant_id")),
+        )
+
 
 class RPAExecutor:
     """Execute RPA tasks with queue management."""
 
-    def __init__(self, max_concurrent: int = 3, max_history: int = 1000):
+    def __init__(
+        self,
+        max_concurrent: int = 3,
+        max_history: int = 1000,
+        persist=None,
+    ):
         self._tasks: dict[str, RPATask] = {}
         self._queue: deque[str] = deque()
         self._history: list[dict] = []
@@ -141,10 +208,77 @@ class RPAExecutor:
         self._total_executed = 0
         self._total_succeeded = 0
         self._total_failed = 0
+        # 任务行持久化可选参（RV-①b-⑦-1，⑥-2 同款）：缺省 None=纯内存既有语义
+        # 零变化；在场=状态变更写穿+首触懒回载，重启任务不丢。
+        self._persist = persist
+        self._loaded = False
 
         # Load built-in templates
         for tpl in BUILTIN_TEMPLATES:
             self._templates[tpl.template_id] = tpl
+
+    # ── Persistence（RV-①b-⑦-1）──────────────────────────
+
+    def _sync_task(self, task: RPATask) -> None:
+        """任务状态写穿单一点（RV-①b-② _sync_entry 纪律：禁散落写点漂移）。
+
+        全部任务变更点（建任务/开始执行/终态/取消）共用本口落盘。写失败=记账
+        旁路纪律（RV-①b-①）：logger.error 可见不阻断任务本体。
+        """
+        if self._persist is None:
+            return
+        try:
+            self._persist.upsert(
+                task_id=str(task.task_id),
+                status=str(task.status.value),
+                payload=json.dumps(task.to_state(), ensure_ascii=False),
+            )
+        except Exception as e:
+            logger.error(f"limb task 落盘失败（任务本体不受阻）: {e}")
+
+    def _drop_task(self, task_id: str) -> None:
+        """删行单一点（delete_task 真消费；幂等缺行不抛）。"""
+        if self._persist is None:
+            return
+        try:
+            self._persist.delete(task_id)
+        except Exception as e:
+            logger.error(f"limb task 删行失败（任务本体不受阻）: {e}")
+
+    def _ensure_tasks_loaded(self) -> None:
+        """首触懒回载（RV-①b-⑥-2 同款）：persist 在场才回载，只回载一次。
+
+        重启后 worker 不在：在途态（running）执行已断——如实降 failed 带真因
+        （「执行被服务重启打断」），禁留 running 空壳=永远等不到 worker 的僵死
+        任务（⑥-2 在途态降 paused 同纪律，本执行器无续传口故终态化可见）。回载
+        只读不写（转换只改内存，状态回写随下一次变更点写穿）。
+
+        _queue 重建=行状态非 cancelled 的任务 id 按回载序（忠实还原既有内存语义：
+        创建即入队、执行不退队、取消才退队——既有怪癖本拍不改语义，留档另拍；
+        已删任务的 _queue 孤儿 id 无法从行重建=回载面如实少掉不 fabricate）。
+        """
+        if self._persist is None or self._loaded:
+            return
+        self._loaded = True
+        try:
+            rows = self._persist.load_all()
+        except Exception as e:
+            logger.error(f"limb task 回载失败（空任务起步）: {e}")
+            return
+        for data in rows:
+            try:
+                task = RPATask.from_state(data)
+            except Exception as e:
+                logger.error(f"limb task 行不可解跳过: {e}")
+                continue
+            if task.status == TaskStatus.RUNNING:
+                task.status = TaskStatus.FAILED
+                task.error = task.error or "interrupted by service restart"
+                if task.completed_at is None:
+                    task.completed_at = time.time()
+            self._tasks.setdefault(task.task_id, task)
+            if task.status != TaskStatus.CANCELLED and task.task_id not in self._queue:
+                self._queue.append(task.task_id)
 
     # ── Task Management ────────────────────────────────────
 
@@ -173,9 +307,11 @@ class RPAExecutor:
             variables=variables or {},
             tenant_id=task_row_tenant(tenant_id),
         )
+        self._ensure_tasks_loaded()
         with self._lock:
             self._tasks[task_id] = task
             self._queue.append(task_id)
+        self._sync_task(task)
         return task
 
     def create_from_template(
@@ -229,7 +365,9 @@ class RPAExecutor:
         by-ID 闸同款）：显式租户=跨租户回 None 与 not-found 同契约不差分泄露
         行存在性（③c-1 纪律），闸前置（跨租户恒 None 禁状态差分泄露）；
         None=系统视图字节不变。get/execute/cancel/delete 四 by-ID 面全经
-        本口=未来消费方无法绕闸。"""
+        本口=未来消费方无法绕闸。回载懒触点（RV-①b-⑦-1）：本口是 by-ID 读写
+        唯一入口，首触在此回载=重启后 by-ID 取回真源。"""
+        self._ensure_tasks_loaded()
         task = self._tasks.get(task_id)
         if task is None:
             return None
@@ -249,6 +387,7 @@ class RPAExecutor:
         """tenant_id=显式租户=恒按 task_row_tenant 过滤（过滤先于截断防跨租户
         行占名额，⑦-⑬ 同款）；None=系统视图字节不变。
         """
+        self._ensure_tasks_loaded()
         with self._lock:
             tasks = list(self._tasks.values())
         if tenant_id is not None:
@@ -271,6 +410,7 @@ class RPAExecutor:
             task.completed_at = time.time()
             if task_id in self._queue:
                 self._queue.remove(task_id)
+        self._sync_task(task)
         return True
 
     def delete_task(self, task_id: str, tenant_id: str | None = None) -> bool:
@@ -285,6 +425,7 @@ class RPAExecutor:
             if task.status == TaskStatus.RUNNING:
                 return False
             self._tasks.pop(task_id, None)
+        self._drop_task(task_id)
         return True
 
     # ── Execution ──────────────────────────────────────────
@@ -303,6 +444,7 @@ class RPAExecutor:
 
         task.status = TaskStatus.RUNNING
         task.started_at = time.time()
+        self._sync_task(task)
         self._running_count += 1
         run_key = task_row_tenant(task)
         self._tenant_running[run_key] = self._tenant_running.get(run_key, 0) + 1
@@ -322,6 +464,7 @@ class RPAExecutor:
                     task.error = result.error
                     task.completed_at = time.time()
                     self._total_failed += 1
+                    self._sync_task(task)
                     self._record_history(task)
                     return task
 
@@ -329,6 +472,7 @@ class RPAExecutor:
             task.current_step = len(task.actions)
             task.completed_at = time.time()
             self._total_succeeded += 1
+            self._sync_task(task)
             self._record_history(task)
 
         except Exception as e:
@@ -336,6 +480,7 @@ class RPAExecutor:
             task.error = str(e)
             task.completed_at = time.time()
             self._total_failed += 1
+            self._sync_task(task)
             self._record_history(task)
 
         finally:
@@ -500,6 +645,7 @@ class RPAExecutor:
         queue_length 按行键过滤、running/total_* 按分租户桶计数，禁泄露全局
         分布 ⑦-⑭⑰ 同款）+templates 计数恒按可见集聚合（⑦-㉒）；
         None=系统视图字节不变（/health 监控面）。"""
+        self._ensure_tasks_loaded()
         with self._lock:
             if tenant_id is not None:
                 key = task_row_tenant(tenant_id)

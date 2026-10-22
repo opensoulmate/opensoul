@@ -4,13 +4,16 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from src.limb.executor import RPAExecutor
+from src.limb.task_persist import RPATaskPersistence
 from src.limb.tasks import TemplateTenantDenied
 from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
 # ── Singletons ─────────────────────────────────────────────
-executor = RPAExecutor()
+# 任务行持久化生产接线（RV-①b-⑦-1）：构造零 IO import 期安全；任务状态每次
+# 变更写穿+首触懒回载，重启任务不丢。
+executor = RPAExecutor(persist=RPATaskPersistence())
 
 
 # ── Request Schemas ────────────────────────────────────────
