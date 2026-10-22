@@ -194,6 +194,7 @@ class RPAExecutor:
         max_concurrent: int = 3,
         max_history: int = 1000,
         persist=None,
+        history_persist=None,
     ):
         self._tasks: dict[str, RPATask] = {}
         self._queue: deque[str] = deque()
@@ -212,6 +213,10 @@ class RPAExecutor:
         # 零变化；在场=状态变更写穿+首触懒回载，重启任务不丢。
         self._persist = persist
         self._loaded = False
+        # 执行历史持久化可选参（RV-①b-⑦-2）：缺省 None=纯内存既有语义零变化；
+        # 在场=历史行追加写穿+首触懒回载+计数读面对账行真源，重启执行史/计数不丢。
+        self._history_persist = history_persist
+        self._history_loaded = False
 
         # Load built-in templates
         for tpl in BUILTIN_TEMPLATES:
@@ -244,6 +249,68 @@ class RPAExecutor:
             self._persist.delete(task_id)
         except Exception as e:
             logger.error(f"limb task 删行失败（任务本体不受阻）: {e}")
+
+    def _sync_history(self, entry: dict) -> None:
+        """执行历史追加写穿单一点（RV-①b-⑦-2，_sync_task 纪律：禁散落写点漂移）。
+
+        追加型历史表（echo_history 同纪律）：每次执行恰一行 INSERT 禁覆盖=禁丢
+        史（同任务多次执行多行如实各计）。写失败=记账旁路纪律（RV-①b-①）：
+        logger.error 可见不阻断执行本体。
+        """
+        if self._history_persist is None:
+            return
+        try:
+            self._history_persist.insert(**entry)
+        except Exception as e:
+            logger.error(f"limb 执行历史落盘失败（执行本体不受阻）: {e}")
+
+    def _ensure_history_loaded(self) -> None:
+        """执行历史首触懒回载（RV-①b-⑦-2，⑦-1 _ensure_tasks_loaded 同款）：
+        persist 在场才回载，只回载一次；首触=首次读（get_history/stats）或首次写
+        （_record_history 先回载再追加——回载替换内存窗，先载后录防在录条目被
+        回载冲掉；首触先于任何追加=回载时内存窗恒空，生产不变量）。
+
+        回载窗=最近 max_history 行（内存 _history 既有 1000 裁剪语义不变，更旧行
+        留在库不进内存——echo RV-①b-④ ③ 同语义）。计数不随窗裁剪：计数真源=
+        全表行聚合（_counter_truth 恒对账 counters()，内存计数器降级为缓存视图
+        MEM-⑥ 纪律）。回载失败=空历史起步+logger.error 可见（诚实边界②）。
+        """
+        if self._history_persist is None or self._history_loaded:
+            return
+        self._history_loaded = True
+        try:
+            rows = self._history_persist.load_recent(self._max_history)
+        except Exception as e:
+            logger.error(f"limb 执行历史回载失败（空历史起步）: {e}")
+            return
+        self._history = rows[-self._max_history :]
+
+    def _counter_truth(self) -> dict:
+        """计数真源（RV-①b-⑦-2「计数真源化」）：persist 在场=恒对账执行历史行
+        聚合（MEM-⑥ 纪律：计数器=行缓存视图，值读面读真源禁信第二套聚合列）；
+        缺省=纯内存计数器既有语义字节不变。对账失败=logger.error 可见+回落内存
+        计数缓存（缓存本职，禁静默假 0）。
+
+        返回形状：{"executed","succeeded","failed","by_tenant":{key:{...}}}
+        与 counters() 逐键一致（单一形状禁两套）。
+        """
+        if self._history_persist is None:
+            return {
+                "executed": self._total_executed,
+                "succeeded": self._total_succeeded,
+                "failed": self._total_failed,
+                "by_tenant": {k: dict(v) for k, v in self._tenant_counters.items()},
+            }
+        try:
+            return self._history_persist.counters()
+        except Exception as e:
+            logger.error(f"limb 执行历史计数对账失败（回落内存计数缓存）: {e}")
+            return {
+                "executed": self._total_executed,
+                "succeeded": self._total_succeeded,
+                "failed": self._total_failed,
+                "by_tenant": {k: dict(v) for k, v in self._tenant_counters.items()},
+            }
 
     def _ensure_tasks_loaded(self) -> None:
         """首触懒回载（RV-①b-⑥-2 同款）：persist 在场才回载，只回载一次。
@@ -644,8 +711,13 @@ class RPAExecutor:
         收口 ⑦-㉒ 留档「stats 任务计数键不随租户」：total_tasks/by_status/
         queue_length 按行键过滤、running/total_* 按分租户桶计数，禁泄露全局
         分布 ⑦-⑭⑰ 同款）+templates 计数恒按可见集聚合（⑦-㉒）；
-        None=系统视图字节不变（/health 监控面）。"""
+        None=系统视图字节不变（/health 监控面）。
+        计数真源化（RV-①b-⑦-2）：total_executed/succeeded/failed 恒对账执行
+        历史行聚合（_counter_truth），修前内存计数器重启归零漂移收口。
+        """
         self._ensure_tasks_loaded()
+        self._ensure_history_loaded()
+        counts = self._counter_truth()
         with self._lock:
             if tenant_id is not None:
                 key = task_row_tenant(tenant_id)
@@ -653,9 +725,7 @@ class RPAExecutor:
                 by_status = {}
                 for t in visible:
                     by_status[t.status.value] = by_status.get(t.status.value, 0) + 1
-                bucket = self._tenant_counters.get(
-                    key, {"executed": 0, "succeeded": 0, "failed": 0}
-                )
+                bucket = counts["by_tenant"].get(key, {"executed": 0, "succeeded": 0, "failed": 0})
                 executed = bucket["executed"]
                 return {
                     "total_tasks": len(visible),
@@ -684,11 +754,11 @@ class RPAExecutor:
                 "by_status": by_status,
                 "queue_length": len(self._queue),
                 "running": self._running_count,
-                "total_executed": self._total_executed,
-                "total_succeeded": self._total_succeeded,
-                "total_failed": self._total_failed,
-                "success_rate": round(self._total_succeeded / self._total_executed * 100, 1)
-                if self._total_executed
+                "total_executed": counts["executed"],
+                "total_succeeded": counts["succeeded"],
+                "total_failed": counts["failed"],
+                "success_rate": round(counts["succeeded"] / counts["executed"] * 100, 1)
+                if counts["executed"]
                 else 0,
                 "templates": sum(
                     1
@@ -700,7 +770,9 @@ class RPAExecutor:
     def get_history(self, limit: int = 50, tenant_id: str | None = None) -> list[dict]:
         """tenant_id=显式租户=恒按行租户键过滤（过滤先于截断防跨租户行占
         名额，⑦-⑬ 同款；行键=任务行继承 ③b-2）；None=系统视图字节不变。
+        回载懒触点（RV-①b-⑦-2）：首触在此回载=重启后历史取回真源。
         """
+        self._ensure_history_loaded()
         rows = self._history
         if tenant_id is not None:
             key = task_row_tenant(tenant_id)
@@ -710,6 +782,9 @@ class RPAExecutor:
     # ── Helpers ────────────────────────────────────────────
 
     def _record_history(self, task: RPATask):
+        # 首触懒回载先于追加（RV-①b-⑦-2）：回载替换内存窗，先载后录防在录条目
+        # 被回载冲掉（_ensure_history_loaded 生产不变量：首触先于任何追加）。
+        self._ensure_history_loaded()
         self._total_executed += 1
         key = task_row_tenant(task)
         bucket = self._tenant_counters.setdefault(key, {"executed": 0, "succeeded": 0, "failed": 0})
@@ -718,19 +793,19 @@ class RPAExecutor:
             bucket["succeeded"] += 1
         elif task.status == TaskStatus.FAILED:
             bucket["failed"] += 1
-        self._history.append(
-            {
-                "task_id": task.task_id,
-                "name": task.name,
-                "status": task.status.value,
-                "steps": len(task.results),
-                "elapsed_seconds": task.elapsed_seconds,
-                "error": task.error,
-                "completed_at": task.completed_at,
-                # 行键=任务行继承（DEC-⑦-㉔，③b-2 父行继承）
-                "tenant_id": key,
-            }
-        )
+        entry = {
+            "task_id": task.task_id,
+            "name": task.name,
+            "status": task.status.value,
+            "steps": len(task.results),
+            "elapsed_seconds": task.elapsed_seconds,
+            "error": task.error,
+            "completed_at": task.completed_at,
+            # 行键=任务行继承（DEC-⑦-㉔，③b-2 父行继承）
+            "tenant_id": key,
+        }
+        self._sync_history(entry)
+        self._history.append(entry)
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history :]
 
