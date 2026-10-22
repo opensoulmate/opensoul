@@ -28,13 +28,14 @@
 | ㉑ | remove_provider 清钥语义（孤钥清理） | H1-②b-④ 语义分界留档+最新周期日志候选「remove_provider 清钥语义（孤钥清理语义需拍板）」 | 取 B（整 provider 移除级联清钥：注册与其凭据同生共死）——**已按建议默认 B 先行执行 2026-10-18（GLAND-①）** | ~~"㉑取B"~~ 已落，异议回「㉑改A」（revert 回不触钥）/「㉑改C」（不触钥+孤钥可见性/单独批量清理口）即改道 |
 | ㉒ | add_provider 同名覆盖注册面清钥语义（同名再注册复用旧钥残留面） | ㉑ 诚实边界③留档件 | 取 A（同名 409 拒零副作用，替换=DELETE+POST）——**已按建议默认 A 先行执行 2026-10-18（GLAND-②）** | ~~"㉒取A"~~ 已落，异议回「㉒改B」（同名覆盖先清钥）/「㉒改C」（revert 静默覆盖）即改道 |
 | ㉓ | gland PATCH 就地改面语义（持钥 provider 改 base_url 拒 or 允许） | GLAND-② 诚实边界③「PATCH 就地改（不触钥）另拍」 | 取 A（持钥改道 409 原子拒；无钥/同值照常；不触钥）——**已按建议默认 A 先行执行 2026-10-18（GLAND-③）** | ~~"㉓取A"~~ 已落，异议回「㉓改B」（持钥也允许显式改道）/「㉓改C」（revert 撤 PATCH 面） |
-| ㉔ | sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db） | GLAND-④ 留档候选首件 | 取 D→B（先 `hermes doctor`/`hermes update` 防复发，再归档+sqlite3 .recover 抽取+对账+原子替换；对账不过落 C）——**本拍=决策材料件先落（SESS-①，零处置），处置涉 ~/opensoul 外数据需拍板** | "㉔取D→B" / "㉔取C" / "㉔维持" |
+| ㉔ | sessions db 损坏缺陷处置（~/.hermes/state.db 3.87GB not-a-db） | GLAND-④ 留档候选首件 | ~~取 D→B~~ **用户拍板改「干脆重建+不留档」（"坏库还留什么档啊 都用不了"），2026-10-22 已执行完毕**：源码树 `hermes sessions recover --allow-partial` 页级抢救重建（pip 0.20.5 无此子命令；纯 `sqlite3 .recover` 两份 dump 对账 canonical 行=0 全进 lost_and_found，不可用）→ 7,068 会话/799,219 消息归位+messages_fts/trigram 双索引 rebuilt+integrity ok → 原子 mv 换入（gateway 60s 重试自动挂载零重启，日志 `SQLite session store recovered`）→ session_search 真查询命中+hermes sessions stats 7,068/799,320 持续增长 → 坏库/corrupt.bak/recovered 半成品/两份 dump/scratch 全删不留档（腾 ~25G）。如实边界：抢救行时间戳归零（顺序保 rowid）、loss_detected 部分行未归位、4,304 存根会话挂 251,471 孤儿消息；"jsonl 转写=数据源"口径勘误（只到 2026-05，历史只在库内）；坑档+验证过的流程已回写 hermes-gateway-troubleshooting skill | ~~"㉔取D→B"~~ 已按拍板「重建+不留档」落，坏库已删无回滚余地 |
 | ㉕ | dedup 报告元素时间/类型显示恢复（真源补现 created_at/content_type） | CD-④ 诚实边界留档 | 取 B（真源补现：元素 item 补真列+UI 恢复时间行/类型徽章）——**已按建议默认 B 先行执行 2026-10-19（DEC-㉕-①/DEDUP-①）** | ~~"㉕取B"~~ 已落，异议回「㉕改A」（revert 回不显示时间/类型）即改道 |
 | ㉖ | gland 用量显示拆分恢复（真源补现 入/出 token 拆分等） | CD-⑤ 诚实边界② | 取 B1（入/出两轴）/ B（含 task 轴）/ A（维持收口）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉖-①）；B2（task 轴）已按「别停工等批」+DEC 自决先例先行执行 2026-10-20（DEC-㉖B2-①）** | ~~"㉖取B1"~~/~~"㉖B2"~~ 均已落，异议回「㉖改A」（revert B1）/「㉖B2改A」（revert B2）即改道 |
 | ㉗ | logs 页统计卡（㉗a recent_count 真源补现 / ㉗b 词表对齐） | CD-⑮ 深挖裁决 | ㉗a 取 B1（24h 窗口）/B2（缓冲计数）——**㉗a 已按建议默认 B1 先行执行 2026-10-20（DEC-㉗a-①）**；㉗b 取 B（问题类闭集）——**已按建议默认 B 先行执行 2026-10-20（DEC-㉗b-①）** | ~~"㉗a取B1"~~/~~"㉗b取B"~~ 已落，异议回「㉗a改A」（revert 回无卡）/「㉗a改B2」（改缓冲计数）/「㉗b改A」（revert 回精确查询形）即改道 |
 | ㉘ | system 页死显示恢复（㉘a uptime 语义 / ㉘b 活跃Agent·近期会话语义） | CD-⑱ 深挖裁决 | ㉘a 取 B1（进程 uptime）/B2（主机 uptime）——**B1 已按建议默认先行执行 2026-10-20（DEC-㉘a-①）**；㉘b 取 B（语义随拍）——**已按建议默认 B 先行执行 2026-10-20（DEC-㉘b-①）** | ~~"㉘a取B1"~~/~~"㉘b取B"~~ 已落，异议回「㉘a改A」（revert 回不显示）/「㉘a改B2」（改主机 uptime）/「㉘b改A」（revert 回不显示）即改道 |
 | ㉙ | timeline/proactive e2e 探针残留 194+2 行删除（TR-② 闸门回归清单） | TR-② 闸门复跑（2026-10-19） | 取 B（清单精确删+备份+回读，TL-④ 纪律）——**清点已落（TR-②，零删除），删除待拍板** | "㉙删"（cron 代跑）/ "㉙维持" |
 | ㉚ | dedup 身份轴处置（「留空全库」显式语义 vs 家族语义收口 vs admin 门） | F3b-⑮ 同族剩余面复核（dedup「留空全库」显式语义件复核） | 取 A（维持显式语义）/ B（家族语义收口，会移除 admin-ui dedup 页全库能力）/ C（保留全库+admin 门，需先拍 admin 语义）——**复核=决策材料件先落（F3b-⑮，零行为改动），语义变更涉现有功能契约待拍板** | "㉚取A" / "㉚取B" / "㉚取C" |
+| ㉛ | 凭据落盘形态统一拍板（RV-①b-③ KeyManager 钥 + RV-①b-⑮ connector secret/callback_token + soma component token） | RV-①c B 组深挖复核（2026-10-22）——涉凭据件与 RV-①b-③ 同一拍板面收拢成一件 | 取 A（明文落盘 data/ + 文件权限收口，本机单机部署与其余持久化同面）/ B（env/keyring 引导不落明文，API 注册凭据重启后须重注入）/ C（混合：注册元数据落盘+凭据只存哈希）——**决策材料件先落（TL-③/SESS-① 先例，零处置零代码），涉凭据不自决（RV-①b-③ 纪律）** | "㉛取A"（=RV-①b-③+⑮ 两件下拍代跑）/ "㉛取B" / "㉛取C" |
 
 ---
 
@@ -428,6 +429,45 @@ TL-⑰ 已按 TL-⑯ 建议执行：storm 22,030 行（OpenImmune 开发验证�
 **拍板方式**：回「**㉚取A**」/「**㉚取B**」/「**㉚取C**」。
 
 **诚实边界**：①单机单用户部署当前零活越权面（F3 审计口径），风险为潜在非活②dedup 删除已走主删除面（H1-①）不造幽灵搜索③B 会移除现有 admin-ui dedup 页全库能力（功能契约变更）④同型自报过滤面不入本件：knowledge_requests list（docstring「用户看自己的」未实现+review「管理员审批」零管理员门）、kb_sharing list（自报过滤+全列表）——F3b-⑮ 复核已登记为下拍修复候选（需 admin 语义同拍定）⑤hippo /sessions list user_id 无鉴权面=会话登记轴非知识档案家族（另轴候选）。
+
+## ㉛ 凭据落盘形态统一拍板（KeyManager 钥 + connector/component 注册凭据）
+
+**状态：待拍板（RV-①c 决策材料件先落，零处置零代码行为改动）**——依据：RV-①b-③「KeyManager
+钥涉凭据需拍板」+ RV-①c 复核新发现 RV-①b-⑮（connector secret/callback_token、soma component
+token 同为涉凭据落盘件）——两个「重启即丢」候选卡在同一个拍板面（**凭据要不要落盘、以什么形态
+落盘**），收拢成一件拍一次，避免逐件各问一遍。
+
+**现状（RV-①/RV-①c 实查）**：
+- `gland/key_manager.py` KeyManager `_slots/_indices`：API 注册的 LLM provider 钥仅 env 引导
+  （load_from_env），API add 注册钥零落盘——重启后钥丢、provider 调用 401。
+- `link/connector.py` IntegrationManager `_connectors`：API 创建连接器带 `secret`（调用方自配）
+  + `callback_token`（DEC-⑲ register 签发）——重启丢注册+凭据；DEC-⑲ 凭据门 fail-closed 下
+  外部 webhook **永久 401** 直到重注册重签。
+- `api/soma_connector.py` ComponentRegistry `_tokens`：外部组件注册 token（`_verify_token` 消费）
+  ——重启丢 token=已发凭据全失效。
+- 同族既有记档：DEC-⑬/⑲ 的 link_gateway `_webhooks/_systems` 回调 token 注册表同样内存
+  「重启即清=行本身无持久撤销面」（⑬ 边界②）——拍板落形态后可一并纳入。
+
+**选项**：
+- **A 明文落盘（建议）**：凭据随行写入 data/ 下 SQLite（或 json），文件权限 600 收口，与
+  RV-①b 全部持久化同面同纪律（坏行跳过/写失败旁路可见）。本机单机部署（F3b-② 匿名='default'
+  真态）语义下明文落盘与 .env 引导的暴露面同级；可用性完整（重启后凭据原样可用）。
+- **B 不落明文**：凭据只存 env/系统 keyring，或干脆不持久——API 注册凭据重启后必须重注入/
+  重签（外部 webhook/组件重接入手动），零明文落盘但可用性损失且「注册即得凭据」契约弱化。
+- **C 混合**：注册元数据（name/endpoint/能力）落盘、凭据只存哈希或不存——重启后注册行可见
+  但凭据作废需重签（介于 A/B 之间；实现面要拆「行」与「凭据」两真源，复杂度最高）。
+
+**权衡**：A 是 RV-①b 持久化纪律的自然延伸（同库同权限同旁路语义）+外部集成可用性完整；B
+零明文但每次重启后外部系统集体掉证（与 DEC-⑲ fail-closed 组合=接续期 webhook 全拒）；C 语义
+拆分复杂。**建议 A**（凭据与注册同生共死，㉑「注册与其凭据同生共死」原则延续）。
+
+**拍板方式**：回「**㉛取A**」（=RV-①b-③ KeyManager 钥 + RV-①b-⑮ connector/component 注册面
+两件下拍代跑，凭据随行落盘+600 权限）/「㉛取B」/「㉛取C」；也可只拍其中一件（如「㉛A 只做⑮」）。
+
+**诚实边界**：①A 的「明文」=本机文件系统明文（无静态加密）——若要静态加密（keyring/主密钥
+派生）属 C 的加强形，实现另拍②凭据轮换/撤销面（DEC-⑲-② 已有 callback-token rotate/delete）
+语义不变，持久化只是「重启不丢」③本件不改任何现有行为（决策材料件），拍板前不动代码
+④㉚/㉙ 与本件独立互不阻塞。
 
 ## 附：锚点核验
 
