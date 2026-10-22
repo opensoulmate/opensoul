@@ -200,6 +200,28 @@ def _isolate_download_tasks_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_download_plugin_tasks_db(tmp_path, monkeypatch):
+    """DOWNLOAD_PLUGIN_TASKS_DB 全测试隔离（RV-①b-⑥-3 增补）：DownloadPlugin 任务行
+    持久化落盘口 DownloadPluginTaskPersistence——src.api.download_plugins 模块级
+    manager 单例（get_download_manager 懒构造即接 persist：写穿+首触懒回载），
+    测试绝不写生产 data/download_plugin_tasks.db。库路径每次连接按 env 解析，
+    env 每用例指向 tmp+各插件类懒回载标记每用例复位（_isolate_download_tasks_db
+    同款）：每用例真源=本用例 tmp 库，禁跨用例陈旧回载。（内存 _running/_paused
+    注册表不强清：既有类级注册表跨用例累积语义零变化。）"""
+    import sys
+
+    monkeypatch.setenv("DOWNLOAD_PLUGIN_TASKS_DB", str(tmp_path / "download_plugin_tasks.db"))
+    mod = sys.modules.get("src.api.download_plugins")
+    if mod is not None:
+        mgr = getattr(mod, "_download_manager", None)
+        if mgr is not None:
+            for plugin in mgr._plugins.values():
+                cls = type(plugin)
+                if getattr(cls, "_persist", None) is not None:
+                    monkeypatch.setattr(cls, "_persist_loaded", False)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_learn_db(tmp_path, monkeypatch):
     """LEARN_DB 全测试隔离（F3b-③c-2②b 增补）：src.api.learn 模块级 CourseEngine
     单例 import 即构造（_ensure_schema+旧 JSON 迁移扫描 ~/.opensoul/learn）——测试

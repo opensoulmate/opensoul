@@ -13,6 +13,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from src.api.download_plugins_persist import DownloadPluginTaskPersistence
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +131,11 @@ class DownloadPlugin(ABC):
     _paused: dict[str, tuple[str, str, bool]]  # task_id -> (url, dest, resume)
     _resume_handles: dict[str, asyncio.Task]  # resume_download 派生的后台任务
     _canceled: dict[str, bool]  # 用户取消归因标记（_untrack 消费一次）
+    # 任务行持久化（RV-①b-⑥-3）：类级 _persist=落盘口（None=纯内存零变化）、
+    # _persist_loaded=懒回载一次性标志；进程手柄 proc 不持久化（诚实边界④：
+    # 重启后在途任务如实降 paused 走真续传口，禁谎报 downloading）
+    _persist: Optional["DownloadPluginTaskPersistence"]
+    _persist_loaded: bool
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
@@ -135,6 +144,98 @@ class DownloadPlugin(ABC):
         cls._paused = {}
         cls._resume_handles = {}
         cls._canceled = {}
+        cls._persist = None
+        cls._persist_loaded = False
+
+    @classmethod
+    def attach_persist(cls, persist) -> None:
+        """接线任务行持久化口（None=拆线回纯内存）。换口即重置懒回载标志
+        （新真源首触必回载），调用方=DownloadManager 构造/测试面。"""
+        cls._persist = persist
+        cls._persist_loaded = False
+
+    # ── 任务行持久化（写穿/懒回载/删行，全插件单一源） ──────────────
+    def _persist_key(self) -> str:
+        """行命名空间=插件类名（与「每插件类独立注册表」同轴，禁跨插件共享行）。"""
+        return type(self).__name__
+
+    def _sync_task(self, task_id: str, state: str, url: str, dest: str, resume: bool) -> None:
+        """写穿一行任务当前态（记账旁路纪律：落盘失败 logger.error 可见不阻断
+        传输本体——传输已发生，为落盘失败炸掉下载不成比例）。"""
+        import json
+
+        persist = type(self)._persist
+        if persist is None:
+            return
+        try:
+            persist.upsert(
+                plugin=self._persist_key(),
+                task_id=str(task_id),
+                state=str(state),
+                payload=json.dumps({"url": url, "dest": dest, "resume": resume}),
+            )
+        except Exception as e:
+            logger.error(f"download plugin 任务行落盘失败（旁路不阻断传输本体）: {e}")
+
+    def _drop_task(self, task_id: str) -> None:
+        """删一行任务（cancel/终态口；幂等）。失败同记账旁路纪律。"""
+        persist = type(self)._persist
+        if persist is None:
+            return
+        try:
+            persist.delete(plugin=self._persist_key(), task_id=str(task_id))
+        except Exception as e:
+            logger.error(f"download plugin 任务行删行失败（旁路不阻断）: {e}")
+
+    def _sync_registry_row(self, task_id: str) -> None:
+        """行随注册表终态单一对齐口：在册 _paused=写 'paused' 行，否则删行
+        （内存注册表=真源，行是影子；_untrack/cancel 后状态以此为准）。"""
+        ctx = self._paused.get(task_id)
+        if ctx is None:
+            self._drop_task(task_id)
+        else:
+            self._sync_task(task_id, "paused", ctx[0], ctx[1], ctx[2])
+
+    def _ensure_tasks_loaded(self) -> None:
+        """首触懒回载（RV-①b-⑥-2 同款）：persist 在场才回载，每插件类只回载一次。
+
+        回载语义：'paused' 行→_paused 续传上下文原样重建；'downloading' 行→
+        进程手柄已随重启消亡（诚实边界④），如实降 'paused'（内存与行双对齐），
+        续传上下文齐备走真续传口。行真源键冲突在册任务=内存在册更真禁覆盖。
+        回载失败=空注册表起步+真因可见（行仍在库下次触碰重试）。
+        """
+        cls = type(self)
+        persist = cls._persist
+        if persist is None or cls._persist_loaded:
+            return
+        cls._persist_loaded = True
+        try:
+            rows = persist.load_all(plugin=cls.__name__)
+        except Exception as e:
+            logger.error(f"download plugin 任务行回载失败（空注册表起步，真因可见）: {e}")
+            return
+        for row in rows:
+            task_id = row.get("task_id")
+            state = row.get("state")
+            url = row.get("url")
+            dest = row.get("dest")
+            if not isinstance(task_id, str) or not task_id:
+                logger.error("download plugin 任务行缺 task_id 跳过")
+                continue
+            if not isinstance(url, str) or not isinstance(dest, str):
+                logger.error(f"download plugin 任务行续传上下文不可解跳过: task_id={task_id}")
+                continue
+            resume = bool(row.get("resume"))
+            if task_id in cls._running or task_id in cls._paused:
+                continue  # 内存在册更真（如正在跑的新传输），禁行回载覆盖
+            if state == "paused":
+                cls._paused[task_id] = (url, dest, resume)
+            elif state == "downloading":
+                # 进程手柄不持久化也无法持久化：重启后在途任务如实降 paused
+                cls._paused[task_id] = (url, dest, resume)
+                self._sync_task(task_id, "paused", url, dest, resume)
+            else:
+                logger.error(f"download plugin 任务行 state 不可解跳过: {state!r}")
 
     def _track(
         self,
@@ -144,26 +245,29 @@ class DownloadPlugin(ABC):
         resume: bool,
         proc: asyncio.subprocess.Process,
     ) -> None:
+        self._ensure_tasks_loaded()
         self._running[task_id] = _RunningDownload(url=url, dest=dest, resume=resume, proc=proc)
+        self._sync_task(task_id, "downloading", url, dest, resume)
 
     def _untrack(self, task_id: str, progress: DownloadProgress | None = None) -> None:
         self._running.pop(task_id, None)
         canceled = self._canceled.pop(task_id, None) is not None  # 归因标记消费一次
-        if progress is None:
-            return
-        if task_id in self._paused:
-            if progress.status == "done":
-                # pause 落地前刚好跑完：没有可续的东西，续传上下文作废
-                self._paused.pop(task_id, None)
-            elif progress.status == "error":
-                # 这个 error 是 pause() 自己的 SIGTERM，不是传输故障——如实标 paused
-                progress.status = "paused"
+        if progress is not None:
+            if task_id in self._paused:
+                if progress.status == "done":
+                    # pause 落地前刚好跑完：没有可续的东西，续传上下文作废
+                    self._paused.pop(task_id, None)
+                elif progress.status == "error":
+                    # 这个 error 是 pause() 自己的 SIGTERM，不是传输故障——如实标 paused
+                    progress.status = "paused"
+                    progress.error = None
+            elif canceled and progress.status == "error":
+                # 这个 error 是 cancel() 的 kill 退出码，不是传输故障——如实标
+                # canceled（链式 fallback 禁把用户取消当失败掉下一插件=双跑同 dest）
+                progress.status = "canceled"
                 progress.error = None
-        elif canceled and progress.status == "error":
-            # 这个 error 是 cancel() 的 kill 退出码，不是传输故障——如实标
-            # canceled（链式 fallback 禁把用户取消当失败掉下一插件=双跑同 dest）
-            progress.status = "canceled"
-            progress.error = None
+        # 行随注册表终态对齐（在册 _paused=paused 行，否则删行；内存=真源）
+        self._sync_registry_row(task_id)
 
     async def pause(self, task_id: str) -> bool:
         """停传输并保留半成品+续传上下文。
@@ -171,11 +275,13 @@ class DownloadPlugin(ABC):
         True=任务现在确实处于 paused（运行中→已停；已停→幂等 True）；
         无此任务如实 False。
         """
+        self._ensure_tasks_loaded()
         running = self._running.get(task_id)
         if running is None:
             return task_id in self._paused
         self._paused[task_id] = (running.url, running.dest, running.resume)
         self._running.pop(task_id, None)
+        self._sync_task(task_id, "paused", running.url, running.dest, running.resume)
         running.proc.terminate()
         return True
 
@@ -185,11 +291,15 @@ class DownloadPlugin(ABC):
         False=如实拒绝：插件声明不支持续传（supports_resume=False）、
         无 paused 任务、或任务正在运行（没东西可续）。
         """
+        self._ensure_tasks_loaded()
         if not self.get_info().supports_resume:
             return False
         ctx = self._paused.pop(task_id, None)
         if ctx is None:
             return False
+        # 行随注册表对齐：paused 上下文已被消费即删行（重跑 _track 会落
+        # 'downloading' 行；删行在先防「重跑未起」悬挂陈旧行复活无人认领上下文）
+        self._drop_task(task_id)
         url, dest, _resume_flag = ctx
         handle = asyncio.create_task(self.download(url, dest, resume=True))
 
@@ -203,9 +313,12 @@ class DownloadPlugin(ABC):
 
     async def cancel(self, task_id: str) -> bool:
         """杀传输并丢弃续传上下文。True=确实取消了东西（运行中/已停/续传中）。"""
+        self._ensure_tasks_loaded()
         running = self._running.pop(task_id, None)
         paused = self._paused.pop(task_id, None)
         handle = self._resume_handles.pop(task_id, None)
+        # 行随注册表对齐：注册表已无此任务=删行（禁重启复活已取消任务）
+        self._drop_task(task_id)
         if handle is not None and not handle.done():
             # 用户取消归因：被杀传输收尾时如实标 canceled（_untrack 消费标记）
             self._canceled[task_id] = True
@@ -219,6 +332,7 @@ class DownloadPlugin(ABC):
     # ── 任务控制面 introspection（/tasks 路由单一判法，禁各端点手抄注册表） ──
     def task_states(self) -> dict[str, str]:
         """在途任务面：task_id -> 'downloading' | 'paused'（注册表原样，不 fabricate）。"""
+        self._ensure_tasks_loaded()
         states: dict[str, str] = {tid: "downloading" for tid in self._running}
         for tid in self._paused:
             states[tid] = "paused"
@@ -720,9 +834,14 @@ class CurlPlugin(DownloadPlugin):
 class DownloadManager:
     """Manages download plugins with auto-fallback and auto-update"""
 
-    def __init__(self):
+    def __init__(self, persist: Optional["DownloadPluginTaskPersistence"] = None):
         self._plugins: dict[str, DownloadPlugin] = {}
         self._register_builtins()
+        if persist is not None:
+            # 任务行持久化接线（RV-①b-⑥-3）：每插件类独立注册表=独立行命名空间，
+            # 逐类接线；缺省 None=纯内存零变化（直接构造的管理器不落盘）
+            for plugin in self._plugins.values():
+                type(plugin).attach_persist(persist)
 
     def _register_builtins(self):
         """Register built-in plugins"""
@@ -929,7 +1048,11 @@ _download_manager: DownloadManager | None = None
 def get_download_manager() -> DownloadManager:
     global _download_manager
     if _download_manager is None:
-        _download_manager = DownloadManager()
+        # 生产单例接线任务行持久化（RV-①b-⑥-3，get_downloader 同款先例）：
+        # 重启后 paused 插件任务+续传上下文不丢。缺省路径按 env 每次连接解析。
+        from src.api.download_plugins_persist import DownloadPluginTaskPersistence
+
+        _download_manager = DownloadManager(persist=DownloadPluginTaskPersistence())
     return _download_manager
 
 
