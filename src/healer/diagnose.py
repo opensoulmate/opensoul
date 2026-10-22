@@ -5,14 +5,18 @@ and notifies through OpenEcho when issues are detected or resolved.
 """
 
 import asyncio
+import json
 import logging
 import time
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Optional
 
 import httpx
+
+from src.healer.history_persist import HealerPersistence
 
 
 class Severity(StrEnum):
@@ -44,6 +48,9 @@ class DiagnosisResult:
     response_time_ms: float = 0
     detail: dict = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
+    # RV-①b-⑬ 行身份（加性契约）：一诊断一行的状态快照键（持久化影子行主键），
+    # heal 终值随影更新同一行；响应面 _result_to_dict 键集不变（entry_id 不出线）。
+    entry_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
 
 # ── Symptom strings produced by diagnose() (single source, HEAL-②b-②) ─
@@ -235,11 +242,18 @@ def _matches_trigger(symptoms: list[str], triggers) -> bool:
 class OrganHealer:
     """Auto-diagnose and heal organ failures."""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8090"):
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:8090",
+        persist: HealerPersistence | None = None,
+    ):
         self._base = base_url
         self._history: list[DiagnosisResult] = []
         self._max_history = 500
         self._custom_handlers: dict[str, Callable[[], Awaitable[bool]]] = {}
+        # RV-①b-⑬ 持久化接线（缺省 None=纯内存零变化）：状态快照写穿+首触懒回载。
+        self._persist = persist
+        self._history_loaded = False
 
     def register_handler(self, organ: str, handler: Callable[[], Awaitable[bool]]):
         """Register a custom healing handler for an organ."""
@@ -339,6 +353,7 @@ class OrganHealer:
                 result.action_success = success
                 if success:
                     result.severity = Severity.RECOVERED
+                self._sync_result(result)  # RV-①b-⑬ 终值随影落行
                 return result
             except Exception as exc:
                 logging.getLogger(__name__).debug("probe skipped: %s", exc)
@@ -351,6 +366,7 @@ class OrganHealer:
                 result.action_success = success
                 if success:
                     result.severity = Severity.RECOVERED
+                self._sync_result(result)  # RV-①b-⑬ 终值随影落行
                 return result
 
         # Generic attempt: try clearing cache if available
@@ -360,6 +376,7 @@ class OrganHealer:
             result.action_success = success
             if success:
                 result.severity = Severity.RECOVERED
+            self._sync_result(result)  # RV-①b-⑬ 终值随影落行
 
         return result
 
@@ -374,8 +391,16 @@ class OrganHealer:
             if result.action_success:
                 recheck = await self.diagnose(organ, endpoint)
                 if recheck.healthy:
-                    result.severity = Severity.RECOVERED
-                    result.healthy = True
+                    self.mark_recovered(result)
+        return result
+
+    def mark_recovered(self, result: DiagnosisResult) -> DiagnosisResult:
+        """标记修复成功（healthy=True+severity=RECOVERED）并终值随影落行（行=影子，
+        RV-①b-⑬）。api heal_all/cycle 两处同型直改字段收编此口=写穿单一点纪律
+        （_sync_result 唯一收口，禁 api 层散落字段直改致行与内存漂移）。"""
+        result.healthy = True
+        result.severity = Severity.RECOVERED
+        self._sync_result(result)
         return result
 
     # ── Notification ──────────────────────────────────────────
@@ -470,6 +495,7 @@ class OrganHealer:
 
     @property
     def history(self) -> list[dict]:
+        self._ensure_loaded()  # RV-①b-⑬ 首触懒回载（读面）
         return [
             {
                 "organ": r.organ,
@@ -486,6 +512,16 @@ class OrganHealer:
         ]
 
     def stats(self) -> dict:
+        # RV-①b-⑬ 计数真源（MEM-⑥）：persist 在场=恒对账修复史行聚合；对账失败=
+        # logger.error 可见+回落内存 _history 计算（缓存本职=本进程已录条目为界，
+        # 禁静默假 0）。缺省纯内存路径字节不变。
+        if self._persist is not None:
+            try:
+                return self._persist.counters()
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "healer 修复史计数对账失败（回落内存计算）: %s", e
+                )
         total = len(self._history)
         healed = sum(1 for r in self._history if r.severity == Severity.RECOVERED)
         failed = sum(1 for r in self._history if not r.healthy and r.severity != Severity.RECOVERED)
@@ -516,9 +552,78 @@ class OrganHealer:
     # ── Internal helpers ──────────────────────────────────────
 
     def _record(self, result: DiagnosisResult):
+        self._ensure_loaded()  # RV-①b-⑬ 先载后录（防在录条目被回载冲掉，⑪ 纪律）
         self._history.append(result)
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history :]
+        self._sync_result(result)  # RV-①b-⑬ 状态快照写穿
+
+    # ── RV-①b-⑬ 持久化接线（persist 缺省=纯内存零变化）────────────────────
+
+    def _sync_result(self, result: DiagnosisResult) -> None:
+        """修复史状态快照写穿单一点（RV-①b-⑥-3 _sync_task 写穿单一点纪律：内存=
+        真源、行=影子，entry_id=PK 一诊断一行随终值 upsert；调用点=_record 与终值
+        变更点 mark_recovered/heal 三路径）。写失败=记账旁路纪律（RV-①b-①）：
+        logger.error 可见不阻断诊断/修复本体（诚实边界①：该行只活内存、重启丢）。"""
+        if self._persist is None:
+            return
+        try:
+            self._persist.upsert_result(
+                entry_id=result.entry_id,
+                organ=result.organ,
+                healthy=result.healthy,
+                severity=result.severity.value,
+                symptoms=list(result.symptoms),
+                root_cause=result.root_cause,
+                recommended_action=result.recommended_action.value,
+                action_taken=result.action_taken.value,
+                action_success=result.action_success,
+                response_time_ms=result.response_time_ms,
+                timestamp=result.timestamp,
+            )
+        except Exception as e:
+            logging.getLogger(__name__).error("healer 修复史落盘失败（记录本体已在内存）: %s", e)
+
+    def _ensure_loaded(self) -> None:
+        """修复史首触懒回载（RV-①b-⑧ _ensure_loaded 同款）：persist 在场才回载，只回载
+        一次；首触=首次读（history）或首次写（_record 先载后录）。回载窗=最近
+        self._max_history 行（ring 既有裁剪语义不变，更旧行留在库不进内存）。坏行
+        （symptoms JSON 解析失败/枚举不在单一源集合）跳过+logger.error 可见（⑪ ④，
+        判定单点在此消费侧）。回载失败=空史起步+可见（⑪ ②）。
+        调用纪律：纯同步方法，事件循环内无 await 间隙=与 _record 的先载后录原子。"""
+        if self._persist is None or self._history_loaded:
+            return
+        self._history_loaded = True
+        try:
+            rows = self._persist.load_history(self._max_history)
+        except Exception as e:
+            logging.getLogger(__name__).error("healer 修复史回载失败（空史起步）: %s", e)
+            return
+        entries: list[DiagnosisResult] = []
+        for row in rows:
+            try:
+                symptoms = json.loads(row["symptoms"])
+                if not isinstance(symptoms, list):
+                    raise ValueError(f"symptoms 非 list: {type(symptoms).__name__}")
+                entries.append(
+                    DiagnosisResult(
+                        entry_id=str(row["entry_id"]),
+                        organ=str(row["organ"]),
+                        healthy=bool(row["healthy"]),
+                        severity=Severity(row["severity"]),
+                        symptoms=[str(s) for s in symptoms],
+                        root_cause=str(row["root_cause"]),
+                        recommended_action=Action(row["recommended_action"]),
+                        action_taken=Action(row["action_taken"]),
+                        action_success=bool(row["action_success"]),
+                        response_time_ms=float(row["response_time_ms"]),
+                        timestamp=float(row["timestamp"]),
+                    )
+                )
+            except Exception as e:
+                logging.getLogger(__name__).error("healer 修复史坏行跳过: %s", e)
+        self._history.clear()
+        self._history.extend(entries)
 
     def _recommend_action(self, organ: str, result: DiagnosisResult) -> Action:
         """推荐=可执行（声明从实现派生，HEAL-②b-②）：只推荐 heal() 真有执行路径的动作。

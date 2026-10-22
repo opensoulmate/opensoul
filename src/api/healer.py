@@ -17,13 +17,14 @@ from fastapi import APIRouter, Header, Query
 from pydantic import BaseModel
 
 from src.healer.diagnose import DiagnosisResult, OrganHealer, Severity
+from src.healer.history_persist import HealerPersistence
 from src.nerve.event_bridge import push_event
 from src.services.tenant_binding import bind_identity
 
 router = APIRouter()
 
-# Singleton
-healer = OrganHealer()
+# Singleton（RV-①b-⑬：修复史持久化真源接线，重启修复史/统计不丢）
+healer = OrganHealer(persist=HealerPersistence())
 
 # ── Organ health endpoints (same as diagnostics) ──────────────
 
@@ -193,8 +194,7 @@ async def heal_all_organs(authorization: str | None = Header(None)):
             if endpoint:
                 recheck = await healer.diagnose(healed.organ, endpoint)
                 if recheck.healthy:
-                    healed.healthy = True
-                    healed.severity = Severity.RECOVERED
+                    healer.mark_recovered(healed)  # RV-①b-⑬ 终值随影落行
 
     # Merge results
     all_results = []
@@ -267,8 +267,7 @@ async def full_healing_cycle(req: CycleRequest | None = None):
                     if endpoint:
                         recheck = await healer.diagnose(healed.organ, endpoint)
                         if recheck.healthy:
-                            results[i].healthy = True
-                            results[i].severity = Severity.RECOVERED
+                            healer.mark_recovered(results[i])  # RV-①b-⑬ 终值随影落行
 
     # Phase 3: Notify (if enabled)
     notify_result = None

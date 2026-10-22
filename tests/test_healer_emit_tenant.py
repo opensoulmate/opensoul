@@ -110,6 +110,15 @@ class _StubHealer:
         self.calls.append(("heal", result.organ))
         return self._res(result.organ, healthy=True, severity="recovered")
 
+    def mark_recovered(self, result):
+        # 契约随更新（RV-①b-⑬）：OrganHealer 新增随影口，桩同面镜像
+        self.calls.append(("mark_recovered", result.organ))
+        from src.healer.diagnose import Severity
+
+        result.healthy = True
+        result.severity = Severity.RECOVERED
+        return result
+
     async def notify(self, results):
         return {"notified": True}
 

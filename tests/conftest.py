@@ -192,6 +192,24 @@ def _isolate_echo_history_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_healer_history_db(tmp_path, monkeypatch):
+    """HEALER_HISTORY_DB 全测试隔离（RV-①b-⑬ 增补）：OrganHealer 修复史持久化落盘口
+    HealerPersistence——src.api.healer 模块级 healer 单例构造即接 persist
+    （OrganHealer(persist=HealerPersistence())：_record/heal 终值写穿+首触懒回载），
+    测试绝不写生产 data/healer_history.db。库路径每次连接按 env 解析（memory_persist
+    同纪律），env 每用例指向 tmp+懒回载标记/内存史每用例复位（echo
+    _isolate_echo_history_db 同款）：每用例真源=本用例 tmp 库，禁跨用例陈旧行残留。
+    显式 db_path/HEALER_HISTORY_DB 的测试按其覆盖为准。"""
+    import src.api.healer as healer_api
+
+    monkeypatch.setenv("HEALER_HISTORY_DB", str(tmp_path / "healer_history.db"))
+    inst = healer_api.healer
+    if getattr(inst, "_persist", None) is not None:
+        monkeypatch.setattr(inst, "_history_loaded", False)
+        inst._history.clear()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_a2a_tasks_db(tmp_path, monkeypatch):
     """A2A_TASKS_DB 全测试隔离（RV-①b-⑤-1 增补）：TaskManager 任务行持久化落盘口
     TaskPersistence——src.a2a.task_manager 模块级 task_manager 单例构造即接 persist
