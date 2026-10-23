@@ -557,6 +557,25 @@ def _isolate_heredity_registry_db(tmp_path, monkeypatch):
             monkeypatch.setattr(inst, "_registry_loaded", False)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_heredity_migration_db(tmp_path, monkeypatch):
+    """HEREDITY_MIGRATION_DB 全测试隔离（RV-①b-⑭-2 增补）：MigrationEngine 两面
+    （注册 schema/迁移脚本 applied 状态）持久化落盘口 MigrationPersistence——
+    src.api.heredity 模块级 engine 单例构造即接 persist（变更点写穿+首触懒回载），
+    测试绝不写生产 data/heredity_migration.db。库路径每次连接按 env 解析，env 每
+    用例指向 tmp+懒回载标记每用例复位（_isolate_heredity_registry_db 同款）：每
+    用例真源=本用例 tmp 库，禁跨用例陈旧回载。显式 db_path/HEREDITY_MIGRATION_DB
+    的测试按其覆盖为准。（内存两面不强清：既有单例跨用例累积语义零变化。）"""
+    import sys
+
+    monkeypatch.setenv("HEREDITY_MIGRATION_DB", str(tmp_path / "heredity_migration.db"))
+    mod = sys.modules.get("src.api.heredity")
+    if mod is not None:
+        inst = getattr(mod, "engine", None)
+        if inst is not None and getattr(inst, "_persist", None) is not None:
+            monkeypatch.setattr(inst, "_migration_loaded", False)
+
+
 class _LazyEvolutionEngine:
     """EvolutionEngine 懒替身：首次属性访问才构造 tmp 实例（数据面同真实现）。"""
 

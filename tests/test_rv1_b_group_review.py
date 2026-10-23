@@ -179,6 +179,17 @@ def test_前提_版本注册面仅种子import期重建_API注册零重建():
     assert "persist=RegistryPersistence()" in src
 
 
+def test_前提_注册schema与迁移脚本applied状态两面():
+    # RV-①b-⑭-2 已落地（2026-10-23 契约随更新 F4b-⑯f 先例）：api 接线从
+    # `engine = MigrationEngine()` 改为带 persist（注册 schema/迁移脚本 applied
+    # 状态随变更落盘+首触懒回载），前提「两面纯内存零重建」已收口（跨重启由行
+    # 回载非重建）；MigrationEngine 内存容器仍为判定真源（行=影子）不变。
+    src = _src("src/api/heredity.py")
+    assert "engine = MigrationEngine(" in src
+    assert "persist=MigrationPersistence()" in src
+    assert "def _ensure_loaded" in _src("src/heredity/migration.py")
+
+
 def test_前提_脉冲信号API创建面与bootstrap一次性语义():
     assert '@router.post("/signals")' in _src("src/api/pulse.py")
     assert "def create_signal" in _src("src/api/pulse.py")

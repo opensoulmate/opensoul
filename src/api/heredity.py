@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from src.heredity.evolution_loop import EvolutionEngine
 from src.heredity.migration import MigrationEngine
+from src.heredity.migration_persist import MigrationPersistence
 from src.heredity.registry_persist import RegistryPersistence
 from src.heredity.version_registry import VersionRegistry
 
@@ -65,7 +66,9 @@ registry = VersionRegistry(
     persist=RegistryPersistence(),
     seed_components=SEED_COMPONENTS,
 )
-engine = MigrationEngine()  # 注册 schema/迁移脚本两面=RV-①b-⑭-2 留待拍（仍纯内存）
+engine = MigrationEngine(
+    persist=MigrationPersistence(),
+)  # RV-①b-⑭-2 注册 schema/迁移脚本 applied 状态两面持久化（写穿+首触懒回载）
 evolution_engine = EvolutionEngine()  # P0-7 自进化闭环：声明→审批→落盘→回滚→记账
 
 
