@@ -125,7 +125,7 @@ def test_persist_failure_visible_not_blocking(tmp_path, caplog):
     from src.gland.token_meter import TokenMeter
 
     class _Boom:
-        def load_all(self):
+        def load_recent(self, limit):
             return []
 
         def insert(self, **_kw):
@@ -145,7 +145,7 @@ def test_reload_failure_visible_not_blocking(caplog):
     from src.gland.token_meter import TokenMeter
 
     class _BoomLoad:
-        def load_all(self):
+        def load_recent(self, limit):
             raise RuntimeError("db corrupt")
 
         def insert(self, **_kw):
@@ -191,9 +191,9 @@ def test_two_instances_share_table_idempotent(tmp_path):
         total_tokens=7,
         timestamp=2.0,
     )
-    rows = p1.load_all()
+    rows = p1.load_recent(100)
     assert [r["provider"] for r in rows] == ["a", "b"]  # 按落盘序=时间序
-    assert len(p2.load_all()) == 2
+    assert len(p2.load_recent(100)) == 2
 
 
 # ── ⑥ 真实路径接线（写了≠接线了）────────────────────────────────

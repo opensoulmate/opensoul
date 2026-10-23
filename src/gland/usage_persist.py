@@ -5,6 +5,12 @@
 recent_records/summary）随 service 重启归零=用量面显示空。本模块把用量行落
 SQLite：record() 随写随落盘，进程启动回载，重启用量不丢。
 
+GR-①b-①（内存窗+计数真源化）读口收口：load_recent(limit)=有界读（内存窗回填/
+读面回落共用，不为回载全表进内存）+ counters()=全表行聚合单一口（GROUP BY
+provider,model,user_id 单查询 Python 归集，禁第二套聚合查询 MEM-⑥ 纪律）；
+load_all 退场（修前唯一消费点=全量回载致 _records 无界，随内存窗收口一并替换，
+契约随更新）。
+
 铁律（本仓 SQLite 约定）：user_id/task 显式 str()、纯 sqlite3 语法（migrations 是
 PG 语法禁直接跑）、无 dict/list 列（UsageRecord 各字段均标量，无需 json.dumps）。
 
@@ -52,8 +58,22 @@ def default_db_path() -> str:
     return str(Path(__file__).resolve().parents[2] / "data" / "gland_usage.db")
 
 
+def _empty_counters() -> dict:
+    """counters() 零行形状（单一形状禁两套：与聚合产物逐键一致）。"""
+    return {
+        "call_count": 0,
+        "total_tokens": 0,
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "by_model": {},
+        "by_user": {},
+        "by_provider": {},
+    }
+
+
 class UsagePersistence:
-    """用量行持久化真源（单表 gland_usage：insert 写穿 + load_all 启动回载）。"""
+    """用量行持久化真源（单表 gland_usage：insert 写穿 + load_recent 有界回载 +
+    counters 计数真源）。"""
 
     def __init__(self, db_path: str | None = None):
         # 显式路径（测试/多实例）优先；缺省路径每次连接按 env 解析（缺省
@@ -115,15 +135,63 @@ class UsagePersistence:
             finally:
                 conn.close()
 
-    def load_all(self) -> list[dict]:
-        """回载全部用量行（按落盘序=时间序，与 recent_records 尾切语义对齐）。"""
+    def load_recent(self, limit: int = 1000) -> list[dict]:
+        """回载最近 limit 行（rowid 升序返回=回填序/尾切语义对齐，最旧行在前）。
+
+        回载只读不建库：库文件缺失=空账起步直接返回（防读口顺手建出空生产库——
+        写穿才建库，RV-①b-②④ 同纪律）。
+        """
         with self._lock:
+            path = self.explicit_path or default_db_path()
+            if not Path(path).exists():
+                return []
             conn = self._connect()
             try:
                 rows = conn.execute(
-                    "SELECT " + ", ".join(_COLUMNS) + " FROM gland_usage ORDER BY id"
+                    "SELECT " + ", ".join(_COLUMNS) + " FROM gland_usage ORDER BY id DESC LIMIT ?",
+                    (int(limit),),
                 ).fetchall()
             finally:
                 conn.close()
-        keys = _COLUMNS
-        return [dict(zip(keys, row)) for row in rows]
+        return [dict(zip(_COLUMNS, row)) for row in reversed(rows)]
+
+    def counters(self) -> dict:
+        """计数真源（GR-①b-①「计数真源化」）：全表行聚合单一口——GROUP BY
+        provider, model, user_id 单查询，Python 归集，禁第二套聚合查询（MEM-⑥）。
+
+        返回形状与 TokenMeter 缓存派生逐键一致（单一形状禁两套）：
+        {call_count, total_tokens, total_prompt_tokens, total_completion_tokens,
+         by_model, by_user, by_provider}。user_id NULL 行不进 by_user（与 record()
+        聚合口径一致：user_id 提供才计）；聚合恒算全表（内存窗裁剪不影响计数）。
+        """
+        with self._lock:
+            path = self.explicit_path or default_db_path()
+            if not Path(path).exists():
+                return _empty_counters()
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT provider, model, user_id, COUNT(*), "
+                    "SUM(prompt_tokens), SUM(completion_tokens), SUM(total_tokens) "
+                    "FROM gland_usage GROUP BY provider, model, user_id"
+                ).fetchall()
+            finally:
+                conn.close()
+        out = _empty_counters()
+        for provider, model, user_id, cnt, prompt, completion, total in rows:
+            n = int(cnt)
+            out["call_count"] += n
+            out["total_tokens"] += int(total)
+            out["total_prompt_tokens"] += int(prompt)
+            out["total_completion_tokens"] += int(completion)
+            out["by_model"][model] = out["by_model"].get(model, 0) + int(total)
+            if user_id is not None:
+                out["by_user"][str(user_id)] = out["by_user"].get(str(user_id), 0) + int(total)
+            prov = out["by_provider"].setdefault(
+                str(provider), {"prompt": 0, "completion": 0, "total": 0, "requests": 0}
+            )
+            prov["prompt"] += int(prompt)
+            prov["completion"] += int(completion)
+            prov["total"] += int(total)
+            prov["requests"] += n
+        return out

@@ -36,7 +36,7 @@ verdict 单一源（classify_memory/classify_db 纯函数，未归类如实抛�
 |---|---|---|
 | `hippo/dream_distiller.py` DreamDistiller.`_dream_history` | append×5，零裁剪（RV-①c 观察件）；`total_dreams=len(...)` 计数派生；展示 `recent_dreams=[-5:]` | 真无界；裁剪即破坏总计数→须计数真源化先行 |
 | `vital/alert.py` AlertManager.`_history` | append@131，零裁剪（观察件） | 真无界（告警史每告警一行） |
-| `gland/token_meter.py` TokenMeter.`_records` | append@83/143 每 LLM 调用一行；`call_count=len(_records)` 计数派生；`recent_records` 展示窗缺省 50；DB 真源已落（gland_usage，RV-①b-①） | 真无界且与自身 DB 真源不对称（DB 全量 load_all、内存永不清） |
+| `gland/token_meter.py` TokenMeter.`_records` | append@83/143 每 LLM 调用一行；`call_count=len(_records)` 计数派生；`recent_records` 展示窗缺省 50；DB 真源已落（gland_usage，RV-①b-①） | 真无界且与自身 DB 真源不对称（DB 全量 load_all、内存永不清）——**已收口：GR-①b-① 内存窗+计数真源化（2026-10-23），现行源码判 grow_with_trim（delitem@111）** |
 | `a2a/task_manager.py` TaskManager.`push_delivery_log` | append@733/838 每投递一行；DB 真源已落（a2a_push_delivery_log，RV-①b-⑤-3） | 真无界（留痕语义但内存面无界+DB 面无删口） |
 | `a2a/task_manager.py` TaskManager.`tasks`/`push_configs` | setdefault/setitem 每任务一行，零驱逐（A2A 无 delete-task RPC）；DB 真源已落（RV-①b-⑤-1/⑤-2）；live 实证 a2a_tasks 208 行持续增长 | 真无界（任务生命周期无终态驱逐） |
 
@@ -101,7 +101,7 @@ live 单机真态快照（2026-10-23）：
 
 | # | 切片 | 车道 | 依据 |
 |---|---|---|---|
-| ① | TokenMeter._records 内存窗+计数真源化 | **可续无需拍板** | DB=全量真源（usage_persist.load_all），读面回落 DB 后内存窗=纯缓存尺寸（零可观测变化=零新阈值）；`call_count` 恒对账 gland_usage 行聚合（MEM-⑥）；API 键形零变化 |
+| ① | TokenMeter._records 内存窗+计数真源化 | **已落（GR-①b-①，2026-10-23）** | DB=全量真源（usage_persist.load_all），读面回落 DB 后内存窗=纯缓存尺寸（零可观测变化=零新阈值）；`call_count` 恒对账 gland_usage 行聚合（MEM-⑥）；API 键形零变化。落地形态：records_window=1000 类属性（缓存尺寸非数据阈值）+persist 在场才裁+recent_records 回落 load_recent+计数/预算判定恒读 counters() 行聚合；load_all 随全量回载收口退场（契约随更新） |
 | ② | a2a push_delivery_log 内存窗+计数真源化 | **可续无需拍板** | 同款：DB=全量真源（delivery_log_persist.load_all），读面回落 DB 后内存窗=纯缓存尺寸，零新阈值 |
 | ③ | a2a tasks/push_configs 终态驱逐+按需回查 | 待拍板（A 终态保留 N 条 / B TTL / C 维持无界） | A2A GetTask 保留语义+驱逐阈值=产品语义 |
 | ④ | DreamDistiller._dream_history 裁窗+计数真源化 | 待拍板（total_dreams=历史总量 vs 窗内量+窗阈值） | 计数派生耦合，语义取舍=产品语义 |
