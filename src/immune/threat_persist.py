@@ -290,21 +290,3 @@ class IntrusionPersistence:
         for ip, ts in rows:
             out.setdefault(str(ip), []).append(float(ts))
         return out
-
-    def login_count(self, ip: str | None = None) -> int:
-        """登录尝试行数（探针/取证回读口）。库缺失=0。"""
-        with self._lock:
-            path = self.explicit_path or default_db_path()
-            if not Path(path).exists():
-                return 0
-            conn = self._connect()
-            try:
-                if ip is None:
-                    row = conn.execute(f"SELECT COUNT(*) FROM {_LOGIN_TABLE}").fetchone()
-                else:
-                    row = conn.execute(
-                        f"SELECT COUNT(*) FROM {_LOGIN_TABLE} WHERE ip = ?", (str(ip),)
-                    ).fetchone()
-            finally:
-                conn.close()
-        return int(row[0])

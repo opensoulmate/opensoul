@@ -294,16 +294,3 @@ class HealerPersistence:
             ),
             "recent_healthy_rate": recent_healthy_rate,
         }
-
-    def row_count(self) -> int:
-        """修复史行数（探针/取证回读口）。库缺失=0。"""
-        with self._lock:
-            path = self.explicit_path or default_db_path()
-            if not Path(path).exists():
-                return 0
-            conn = self._connect()
-            try:
-                row = conn.execute(f"SELECT COUNT(*) FROM {_TABLE}").fetchone()
-            finally:
-                conn.close()
-        return int(row[0])

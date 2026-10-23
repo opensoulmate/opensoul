@@ -38,6 +38,18 @@ def _threat_rows(tmp_path, name: str = DB):
         return [dict(r) for r in conn.execute("SELECT * FROM intrusion_threats ORDER BY row_id")]
 
 
+def _login_count(tmp_path, ip: str | None = None, name: str = DB) -> int:
+    """登录行直读回读口（探针/取证回读=直查行真源，不经 persist 方法面）。"""
+    if not (tmp_path / name).exists():
+        return 0
+    with sqlite3.connect(tmp_path / name) as conn:
+        if ip is None:
+            return conn.execute("SELECT COUNT(*) FROM intrusion_logins").fetchone()[0]
+        return conn.execute(
+            "SELECT COUNT(*) FROM intrusion_logins WHERE ip = ?", (str(ip),)
+        ).fetchone()[0]
+
+
 # ── 行语义（persist 层）────────────────────────────────────────────────────────
 
 
@@ -109,8 +121,8 @@ def test_登录行往返与per_ip窗互不混(tmp_path):
     p.insert_login(ip="10.0.0.2", ts=99.0)
     data = p.load_login_attempts(per_ip_limit=2)
     assert data == {"10.0.0.1": [2.0, 3.0], "10.0.0.2": [99.0]}  # 每 IP 最近 2 条升序、不混 IP
-    assert p.login_count("10.0.0.1") == 4
-    assert p.login_count() == 5
+    assert _login_count(tmp_path, "10.0.0.1") == 4
+    assert _login_count(tmp_path) == 5
 
 
 def test_回载只读不建库(tmp_path):
@@ -182,8 +194,8 @@ def test_登录尝试逐次落行成败都记(tmp_path):
     det = _detector(tmp_path)
     for ok in (True, False, True):
         det.record_login_attempt("192.0.2.9", success=ok)
-    p = _persist(tmp_path)
-    assert p.login_count("192.0.2.9") == 3  # 内存 _login_attempts 只存时间戳=成败都记
+    _persist(tmp_path)
+    assert _login_count(tmp_path, "192.0.2.9") == 3  # 内存 _login_attempts 只存时间戳=成败都记
 
 
 def test_写穿单一点静态锁():

@@ -161,7 +161,7 @@ def test_回载只读不建库(tmp_path):
     p = _persist(tmp_path)
     assert p.load_history(10) == []
     assert p.counters()["total_diagnoses"] == 0
-    assert p.row_count() == 0
+    assert _row_count(tmp_path) == 0
     assert not (tmp_path / DB).exists()  # 构造/读零 IO，写穿才建库
 
 
@@ -294,7 +294,7 @@ def test_回载窗ring语义只取最近N行(tmp_path):
     h = OrganHealer(base_url=DEAD, persist=p)
     h._max_history = 3  # ring 窗语义=只回填最近 N，更旧行留库不进内存
     assert [e["organ"] for e in h.history] == ["organ2", "organ3", "organ4"]
-    assert p.row_count() == 5  # 裁剪不裁行
+    assert _row_count(tmp_path) == 5  # 裁剪不裁行
 
 
 def test_坏行跳过可见不丢整段史(tmp_path, caplog):
