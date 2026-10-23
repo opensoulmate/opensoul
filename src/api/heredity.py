@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from src.heredity.evolution_loop import EvolutionEngine
 from src.heredity.migration import MigrationEngine
+from src.heredity.registry_persist import RegistryPersistence
 from src.heredity.version_registry import VersionRegistry
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,6 @@ _retention_state: dict = {
     "last_sweep_retired": 0,
     "last_sweep_error": "",
 }
-
-# ── Singletons ─────────────────────────────────────────────
-registry = VersionRegistry()
-engine = MigrationEngine()
-evolution_engine = EvolutionEngine()  # P0-7 自进化闭环：声明→审批→落盘→回滚→记账
 
 # ── Seed with all known components ─────────────────────────
 SEED_COMPONENTS = [
@@ -61,8 +57,16 @@ SEED_COMPONENTS = [
     ("opentrajectory", "OpenTrajectory", "0.1.0", {"opensoul": ">=0.1.0"}),
 ]
 
-for cid, cname, ver, deps in SEED_COMPONENTS:
-    registry.register(cid, cname, ver, dependencies=deps)
+# ── Singletons ─────────────────────────────────────────────
+# RV-①b-⑭-1：注册表三面持久化（组件版本/迁移计划/changelog + platform_version）；
+# SEED 随首触懒播只补缺（修前 import 期无条件播种=import 副作用写库污染测试面
+# +无条件播种会把 API 注册新版本顶回旧版 current，只补缺=根因修）。
+registry = VersionRegistry(
+    persist=RegistryPersistence(),
+    seed_components=SEED_COMPONENTS,
+)
+engine = MigrationEngine()  # 注册 schema/迁移脚本两面=RV-①b-⑭-2 留待拍（仍纯内存）
+evolution_engine = EvolutionEngine()  # P0-7 自进化闭环：声明→审批→落盘→回滚→记账
 
 
 # ── Request Schemas ────────────────────────────────────────

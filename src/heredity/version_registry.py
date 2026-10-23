@@ -1,9 +1,21 @@
-"""Version Registry — Track component versions, dependencies, and compatibility."""
+"""Version Registry — Track component versions, dependencies, and compatibility.
 
+RV-①b-⑭-1：_components/_migrations/_changelog 三面 + platform_version 持久化——
+状态快照表「内存=真源、行=影子」（healer RV-①b-⑬ 同族）：变更点写穿（写穿单一点
+_sync_cv/_sync_migration/_sync_changelog/_sync_platform）+首触懒回载（先载后录、
+只补缺不覆盖）+SEED 只补缺随回载播种。persist 缺省 None=纯内存零变化。
+细节/诚实边界见 registry_persist.py。
+"""
+
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
+
+from .registry_persist import RegistryPersistence
+
+logger = logging.getLogger(__name__)
 
 
 class VersionStatus(StrEnum):
@@ -33,6 +45,7 @@ class ComponentVersion:
     breaking_changes: list[str] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     retired_at: float | None = None
+    cv_id: str = field(default_factory=lambda: f"cv_{uuid.uuid4().hex[:12]}")
 
 
 @dataclass
@@ -64,11 +77,209 @@ class ChangelogEntry:
 class VersionRegistry:
     """Central registry for all component versions."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        persist: RegistryPersistence | None = None,
+        seed_components: list[tuple] | None = None,
+    ):
         self._components: dict[str, list[ComponentVersion]] = {}
         self._migrations: list[MigrationPlan] = []
         self._changelog: list[ChangelogEntry] = []
         self._platform_version = "1.0.0"
+        # ── RV-①b-⑭-1 三面持久化（persist 缺省 None=纯内存零变化）──
+        self._persist = persist
+        # SEED 组件随首触懒播（只补缺不覆盖）：修前 import 期无条件播种+写库会
+        # 在测试收集期 import 污染生产库（MARROW-①「import 副作用」同型），且
+        # 无条件播种会把 API 注册的新版本顶回旧版 current——只补缺=根因修。
+        self._seed_components: list[tuple] = list(seed_components or [])
+        self._registry_loaded = False
+        self._loading = False
+
+    # ── RV-①b-⑭-1 三面持久化 ────────────────────────────────────
+    def _ensure_loaded(self) -> None:
+        """首触懒回载（RV-①b-⑬ _ensure_loaded 同款）：读/写双首触——写口不回载=
+        回载旧行冲掉在录新态（⑦-3 纪律）。先载后录（回载先于一切变更/播种）+
+        只补缺不覆盖（内存在册更真禁回载洗内存新态，⑫ 纪律）；回载失败不置位
+        下次触碰重试（registry_persist 诚实边界②）。加载完成后补播 SEED 缺件
+        （component_id 已在册=跳过，禁顶掉 API 注册版本状态）。_loading 反重入
+        哨兵（播种走 register() 复用同一写穿口，禁第二套注册路径）。
+        坏行（状态枚举/JSON 不可解）跳过+logger.error 可见（persist 层坏行+
+        本层枚举坏行双防线）。"""
+        if self._registry_loaded or self._loading or self._persist is None:
+            return
+        self._loading = True
+        try:
+            load_ok = True
+            try:
+                cv_rows = self._persist.load_component_versions()
+                mig_rows = self._persist.load_migrations()
+                cl_rows = self._persist.load_changelog()
+                platform = self._persist.get_meta("platform_version")
+            except Exception as e:
+                logger.error(f"heredity 注册表回载失败（空注册表起步，下次触碰重试）: {e}")
+                cv_rows, mig_rows, cl_rows, platform = [], [], [], None
+                load_ok = False
+            # 只补缺：cv_id 精确行身份 + (component_id, version) 自然键防
+            # 「回载失败→SEED 已落内存→重试回载」双行（宁稳勿重，边界见
+            # registry_persist）；批内同自然键多行（同版本重复注册）各行独立
+            # cv_id 逐行进内存不折叠。
+            pre_cv_ids = {cv.cv_id for cv in self._iter_cvs()}
+            pre_natural = {(cv.component_id, cv.version) for cv in self._iter_cvs()}
+            for row in cv_rows:
+                try:
+                    cv = ComponentVersion(
+                        component_id=row["component_id"],
+                        component_name=row["component_name"],
+                        version=row["version"],
+                        status=VersionStatus(row["status"]),
+                        release_notes=row["release_notes"],
+                        dependencies=row["dependencies"],
+                        config_schema=row["config_schema"],
+                        breaking_changes=row["breaking_changes"],
+                        created_at=row["created_at"],
+                        retired_at=row["retired_at"],
+                        cv_id=row["cv_id"],
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"heredity 组件版本坏行跳过（cv_id={row.get('cv_id')}，状态不可解）: {e}"
+                    )
+                    continue
+                if cv.cv_id in pre_cv_ids or (cv.component_id, cv.version) in pre_natural:
+                    continue
+                pre_cv_ids.add(cv.cv_id)
+                self._components.setdefault(cv.component_id, []).append(cv)
+            seen_mig = {m.migration_id for m in self._migrations}
+            for row in mig_rows:
+                if row["migration_id"] in seen_mig:
+                    continue
+                try:
+                    migration = MigrationPlan(
+                        migration_id=row["migration_id"],
+                        component_id=row["component_id"],
+                        from_version=row["from_version"],
+                        to_version=row["to_version"],
+                        steps=row["steps"],
+                        status=MigrationStatus(row["status"]),
+                        dry_run=row["dry_run"],
+                        started_at=row["started_at"],
+                        completed_at=row["completed_at"],
+                        error=row["error"],
+                        rollback_plan=row["rollback_plan"],
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"heredity 迁移计划坏行跳过（migration_id={row.get('migration_id')}，状态不可解）: {e}"
+                    )
+                    continue
+                seen_mig.add(migration.migration_id)
+                self._migrations.append(migration)
+            seen_cl = {e.entry_id for e in self._changelog}
+            for row in cl_rows:
+                if row["entry_id"] in seen_cl:
+                    continue
+                seen_cl.add(row["entry_id"])
+                self._changelog.append(
+                    ChangelogEntry(
+                        entry_id=row["entry_id"],
+                        component_id=row["component_id"],
+                        version=row["version"],
+                        change_type=row["change_type"],
+                        description=row["description"],
+                        author=row["author"],
+                        timestamp=row["timestamp"],
+                    )
+                )
+            if platform:
+                self._platform_version = platform
+            # 回载失败不置位=下次触碰重试（只补缺防重试双行，见上）
+            self._registry_loaded = load_ok
+            # SEED 只补缺随回载播种（在册 component_id 跳过——API 注册面重启
+            # 不被种子顶回旧版）；播种写穿复用 register() 同一写穿口。
+            for cid, cname, ver, deps in self._seed_components:
+                if cid not in self._components:
+                    self.register(cid, cname, ver, dependencies=deps)
+        finally:
+            self._loading = False
+
+    def _iter_cvs(self):
+        for versions in self._components.values():
+            yield from versions
+
+    def _sync_cv(self, cv: ComponentVersion) -> None:
+        """组件版本行写穿单一点（全变更点共用禁散落写点）：记账旁路——写失败
+        logger.error 可见不阻断注册动作本体（registry_persist 诚实边界①）。"""
+        if self._persist is None:
+            return
+        try:
+            self._persist.upsert_component(
+                {
+                    "cv_id": cv.cv_id,
+                    "component_id": cv.component_id,
+                    "component_name": cv.component_name,
+                    "version": cv.version,
+                    "status": cv.status.value,
+                    "release_notes": cv.release_notes,
+                    "dependencies": cv.dependencies,
+                    "config_schema": cv.config_schema,
+                    "breaking_changes": cv.breaking_changes,
+                    "created_at": cv.created_at,
+                    "retired_at": cv.retired_at,
+                }
+            )
+        except Exception as e:
+            logger.error(f"heredity 组件版本落盘失败（该行只活内存重启丢，非谎报 durable）: {e}")
+
+    def _sync_migration(self, migration: MigrationPlan) -> None:
+        """迁移计划行写穿单一点（create/execute/rollback 三变更点共用）。"""
+        if self._persist is None:
+            return
+        try:
+            self._persist.upsert_migration(
+                {
+                    "migration_id": migration.migration_id,
+                    "component_id": migration.component_id,
+                    "from_version": migration.from_version,
+                    "to_version": migration.to_version,
+                    "steps": migration.steps,
+                    "status": migration.status.value,
+                    "dry_run": migration.dry_run,
+                    "started_at": migration.started_at,
+                    "completed_at": migration.completed_at,
+                    "error": migration.error,
+                    "rollback_plan": migration.rollback_plan,
+                }
+            )
+        except Exception as e:
+            logger.error(f"heredity 迁移计划落盘失败（该行只活内存重启丢，非谎报 durable）: {e}")
+
+    def _sync_changelog(self, entry: ChangelogEntry) -> None:
+        """changelog 追加写穿单一点（append 表：撞主键如实抛进旁路日志禁覆盖）。"""
+        if self._persist is None:
+            return
+        try:
+            self._persist.append_changelog(
+                {
+                    "entry_id": entry.entry_id,
+                    "component_id": entry.component_id,
+                    "version": entry.version,
+                    "change_type": entry.change_type,
+                    "description": entry.description,
+                    "author": entry.author,
+                    "timestamp": entry.timestamp,
+                }
+            )
+        except Exception as e:
+            logger.error(f"heredity changelog 落盘失败（该行只活内存重启丢，非谎报 durable）: {e}")
+
+    def _sync_platform(self) -> None:
+        """platform_version 标量写穿单一点（meta kv）。"""
+        if self._persist is None:
+            return
+        try:
+            self._persist.set_meta("platform_version", str(self._platform_version))
+        except Exception as e:
+            logger.error(f"heredity platform_version 落盘失败（该值只活内存重启丢）: {e}")
 
     # ── Component Registration ────────────────────────────
 
@@ -83,6 +294,7 @@ class VersionRegistry:
         breaking_changes: list[str] = None,
     ) -> ComponentVersion:
         """Register a new version for a component."""
+        self._ensure_loaded()  # RV-①b-⑭-1 先载后录（写首触同款，⑦-3 纪律）
         cv = ComponentVersion(
             component_id=component_id,
             component_name=component_name,
@@ -98,7 +310,9 @@ class VersionRegistry:
         for existing in self._components[component_id]:
             if existing.status == VersionStatus.ACTIVE:
                 existing.status = VersionStatus.DEPRECATED
+                self._sync_cv(existing)  # RV-①b-⑭-1 状态迁移随影落行
         self._components[component_id].append(cv)
+        self._sync_cv(cv)  # RV-①b-⑭-1 新版本行写穿
 
         # Auto-add changelog
         self._add_changelog(
@@ -111,6 +325,7 @@ class VersionRegistry:
 
     def get_current(self, component_id: str) -> ComponentVersion | None:
         """Get the current active version of a component."""
+        self._ensure_loaded()
         versions = self._components.get(component_id, [])
         for v in reversed(versions):
             if v.status in (VersionStatus.ACTIVE, VersionStatus.DRAFT):
@@ -119,10 +334,12 @@ class VersionRegistry:
 
     def get_all_versions(self, component_id: str) -> list[ComponentVersion]:
         """Get all versions for a component."""
+        self._ensure_loaded()
         return self._components.get(component_id, [])
 
     def list_components(self) -> list[dict]:
         """List all registered components with their current version."""
+        self._ensure_loaded()
         result = []
         for cid, versions in self._components.items():
             current = self.get_current(cid)
@@ -144,6 +361,7 @@ class VersionRegistry:
 
     def check_compatibility(self, component_id: str) -> dict:
         """Check if a component's dependencies are satisfied."""
+        self._ensure_loaded()
         current = self.get_current(component_id)
         if not current:
             return {"compatible": False, "error": "Component not registered"}
@@ -174,6 +392,7 @@ class VersionRegistry:
 
     def get_dependency_graph(self) -> dict:
         """Get the full dependency graph of all components."""
+        self._ensure_loaded()
         graph = {}
         for cid, versions in self._components.items():
             current = self.get_current(cid)
@@ -195,6 +414,7 @@ class VersionRegistry:
         dry_run: bool = False,
     ) -> MigrationPlan:
         """Create a migration plan for upgrading a component."""
+        self._ensure_loaded()  # RV-①b-⑭-1 先载后录
         migration = MigrationPlan(
             migration_id=f"mig_{uuid.uuid4().hex[:12]}",
             component_id=component_id,
@@ -217,10 +437,12 @@ class VersionRegistry:
             ],
         )
         self._migrations.append(migration)
+        self._sync_migration(migration)  # RV-①b-⑭-1 计划行写穿
         return migration
 
     def execute_migration(self, migration_id: str) -> MigrationPlan:
         """Execute a migration plan."""
+        self._ensure_loaded()
         migration = None
         for m in self._migrations:
             if m.migration_id == migration_id:
@@ -262,10 +484,12 @@ class VersionRegistry:
             migration.status = MigrationStatus.FAILED
             migration.error = str(e)
 
+        self._sync_migration(migration)  # RV-①b-⑭-1 终值随影落行（成功/失败同点）
         return migration
 
     def rollback_migration(self, migration_id: str) -> MigrationPlan:
         """Rollback a migration."""
+        self._ensure_loaded()
         migration = None
         for m in self._migrations:
             if m.migration_id == migration_id:
@@ -281,10 +505,12 @@ class VersionRegistry:
             "fix",
             f"Migration rolled back: {migration.to_version} → {migration.from_version}",
         )
+        self._sync_migration(migration)  # RV-①b-⑭-1 状态迁移随影落行
         return migration
 
     def list_migrations(self, component_id: str = None) -> list[MigrationPlan]:
         """List migrations, optionally filtered by component."""
+        self._ensure_loaded()
         if component_id:
             return [m for m in self._migrations if m.component_id == component_id]
         return self._migrations
@@ -300,9 +526,11 @@ class VersionRegistry:
             description=description,
         )
         self._changelog.append(entry)
+        self._sync_changelog(entry)  # RV-①b-⑭-1 追加写穿（append 表语义）
 
     def get_changelog(self, component_id: str = None, limit: int = 50) -> list[dict]:
         """Get changelog entries."""
+        self._ensure_loaded()
         entries = self._changelog
         if component_id:
             entries = [e for e in entries if e.component_id == component_id]
@@ -324,16 +552,19 @@ class VersionRegistry:
 
     def get_platform_version(self) -> dict:
         """Get overall platform version info."""
+        self._ensure_loaded()
+        stats = self.get_stats()
         return {
             "platform_version": self._platform_version,
-            "total_components": len(self._components),
-            "total_migrations": len(self._migrations),
-            "total_changelog_entries": len(self._changelog),
+            "total_components": stats["total_components"],
+            "total_migrations": stats["total_migrations"],
+            "total_changelog_entries": stats["total_changelog_entries"],
             "components": self.list_components(),
         }
 
     def bump_platform_version(self, bump_type: str = "patch") -> str:
         """Bump platform version (major/minor/patch)."""
+        self._ensure_loaded()
         parts = self._platform_version.split(".")
         major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
         if bump_type == "major":
@@ -352,11 +583,29 @@ class VersionRegistry:
             "feature",
             f"Platform bumped to {self._platform_version}",
         )
+        self._sync_platform()  # RV-①b-⑭-1 标量写穿（meta kv）
         return self._platform_version
 
     # ── Stats ─────────────────────────────────────────────
 
     def get_stats(self) -> dict:
+        self._ensure_loaded()
+        if self._persist is not None:
+            # RV-①b-⑭-1 计数恒对账行聚合（MEM-⑥ 行真源：写失败窗口行滞后内存
+            # 以行为准=重启后续算口径）；对账失败回落内存派生禁假 0。
+            try:
+                counters = self._persist.counters()
+                return {
+                    "total_components": counters["total_components"],
+                    "total_versions": counters["total_versions"],
+                    "version_statuses": counters["version_statuses"],
+                    "total_migrations": counters["total_migrations"],
+                    "migration_statuses": counters["migration_statuses"],
+                    "total_changelog_entries": counters["total_changelog_entries"],
+                    "platform_version": counters["platform_version"] or self._platform_version,
+                }
+            except Exception as e:
+                logger.error(f"heredity 计数对账失败（回落内存派生，禁假 0）: {e}")
         statuses = {}
         for versions in self._components.values():
             for v in versions:

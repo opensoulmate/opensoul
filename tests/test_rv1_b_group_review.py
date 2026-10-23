@@ -167,10 +167,16 @@ def _src(path: str) -> str:
 def test_前提_版本注册面仅种子import期重建_API注册零重建():
     src = _src("src/api/heredity.py")
     assert "SEED_COMPONENTS" in src
-    assert "for cid, cname, ver, deps in SEED_COMPONENTS:" in src
-    assert "registry.register(cid, cname, ver, dependencies=deps)" in src
     # API 注册面在场（用户/外部注册的事实写点）
     assert '@router.post("/components")' in src
+    # RV-①b-⑭-1 已落地（2026-10-23 契约随更新 F4b-⑯f 先例）：API 注册面已
+    # 持久化（VersionRegistry(persist=...) 随写落盘+首触懒回载），前提「API 注册
+    # 零重建」已收口；SEED 28 组件从 import 期无条件播种改随首触懒播只补缺
+    # （seed_components=SEED_COMPONENTS 单一源），「仅种子 import 期重建」前提
+    # 同步收口（种子跨重启由行回载+只补缺非 import 重建）。
+    assert "registry = VersionRegistry(" in src
+    assert "seed_components=SEED_COMPONENTS" in src
+    assert "persist=RegistryPersistence()" in src
 
 
 def test_前提_脉冲信号API创建面与bootstrap一次性语义():
