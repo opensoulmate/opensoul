@@ -299,6 +299,74 @@ class TestAcquireScheduling:
         assert "main.py" in pm.file_index
 
 
+class TestEventLoopNonBlocking:
+    """周期#677 brain 认知回路修复①：扫描/刷新/落盘移出事件循环＋成本上界。"""
+
+    def test_acquire_scan_does_not_block_event_loop(self, tmp_path, monkeypatch):
+        """构造全量扫描期间事件循环保持调度（心跳协程持续 tick）。
+
+        修前：ProjectMemory 构造（_build_index 全树扫描）同步跑在事件循环上，
+        扫描期间循环零调度——repo_root=/home/climbing 实测冻结 uvicorn 全体端点
+        ≥3min（周期#676 取证）。本测试用慢扫描桩放大窗口，硬证期间 tick 数。
+        """
+        repo = _make_repo(tmp_path)
+        orig = pm_mod.ProjectMemory._build_index
+
+        def slow_scan(self):
+            time.sleep(0.4)
+            orig(self)
+
+        monkeypatch.setattr(pm_mod.ProjectMemory, "_build_index", slow_scan)
+        pm_mod._SHARED.clear()
+        ticks = 0
+
+        async def heartbeat():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.05)
+                ticks += 1
+
+        async def run():
+            hb = asyncio.ensure_future(heartbeat())
+            pm = await pm_mod.acquire_project_memory(str(repo))
+            hb.cancel()
+            return pm
+
+        pm = asyncio.run(run())
+        assert "main.py" in pm.file_index
+        assert ticks >= 3, f"扫描期间事件循环被阻塞（tick={ticks}，修前形态）"
+
+    def test_max_files_cap_bounds_index(self, tmp_path, monkeypatch):
+        """文件数上界硬证：超出 MAX_FILES 如实截断（禁无界扫描）。"""
+        monkeypatch.setattr(pm_mod, "MAX_FILES", 5)
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        for i in range(20):
+            (repo / f"f{i}.py").write_text("x = 1\n", encoding="utf-8")
+        pm = pm_mod.ProjectMemory(str(repo))
+        assert len(pm.file_index) == 5
+
+    def test_count_lines_matches_text_iteration(self, tmp_path):
+        """_count_lines 语义=文本迭代行数（尾行无换行也计 1）。"""
+        p = tmp_path / "a.py"
+        p.write_text("a\nb\nc", encoding="utf-8")  # 尾行无换行=3 行
+        assert pm_mod._count_lines(p) == 3
+        p.write_text("a\nb\n", encoding="utf-8")  # 2 行
+        assert pm_mod._count_lines(p) == 2
+        p.write_text("", encoding="utf-8")  # 空文件=0 行
+        assert pm_mod._count_lines(p) == 0
+
+    def test_refresh_cap_falls_back_to_rebuild(self, tmp_path, monkeypatch):
+        """增量刷新超上界：seen 不完整禁推断删除，如实回落全量重建。"""
+        repo = _make_repo(tmp_path)
+        pm = pm_mod.ProjectMemory(str(repo))
+        for i in range(10):
+            (repo / f"g{i}.py").write_text("x = 1\n", encoding="utf-8")
+        monkeypatch.setattr(pm_mod, "MAX_FILES", 5)
+        asyncio.run(pm.refresh_incremental())
+        assert len(pm.file_index) == 5  # rebuild 有界截断，非误删成空
+
+
 class TestHttpWiring:
     def _client(self):
         import src.api.brain as brain_api

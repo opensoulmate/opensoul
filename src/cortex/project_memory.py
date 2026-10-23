@@ -1,6 +1,7 @@
 """Project Memory — 代码库文件索引、依赖图谱、核心组件识别，支持增量刷新。"""
 
 import ast
+import asyncio
 import hashlib
 import json
 import logging
@@ -46,6 +47,30 @@ IGNORE_DIRS = {
 
 CORE_FILE_PERCENTILE = 0.9
 
+# ── 扫描上界＋事件循环解阻（周期#677 brain 认知回路修复①）────────────────
+# 修前：brain think 首取/缓存回载失败回落构造走同步全量 _build_index（os.walk
+# 全树＋逐文件文本行计数）直接跑在 uvicorn 事件循环上——repo_root=/home/climbing
+# 实测冻结 8090 全体端点（含 /health）≥3min（周期#676 取证）。修＝三件套：
+# ①扫描/刷新/落盘移出事件循环（asyncio.to_thread）②文件数上限＋行计数二进制
+# 分块（成本有界，禁再无界）③缓存回载快路径（既有 autoload 语义不变）。
+MAX_FILES = int(os.environ.get("PROJECT_MEMORY_MAX_FILES", "20000"))
+
+
+def _count_lines(path: Path) -> int:
+    """行计数（语义＝文本迭代行数：尾行无换行也计 1），二进制分块禁整文件解码。"""
+    n = 0
+    last_byte = b""
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(1 << 20)
+            if not chunk:
+                break
+            n += chunk.count(b"\n")
+            last_byte = chunk[-1:]
+    if last_byte and last_byte != b"\n":
+        n += 1
+    return n
+
 
 class ProjectMemory:
     """项目记忆：文件索引、依赖图谱、核心组件识别"""
@@ -70,24 +95,38 @@ class ProjectMemory:
     def _build_index(self):
         logger.info("扫描项目: %s", self.repo_root)
         start = datetime.now()
+        scanned = 0
+        capped = False
         for root, dirs, files in os.walk(self.repo_root):
             dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
             for fname in files:
                 fpath = Path(root) / fname
                 ext = fpath.suffix.lower()
                 if ext in LANG_MAP:
+                    if scanned >= MAX_FILES:
+                        capped = True
+                        break
                     rel_path = str(fpath.relative_to(self.repo_root))
                     try:
                         stat = fpath.stat()
                         self.file_index[rel_path] = FileInfo(
                             path=rel_path,
                             language=LANG_MAP[ext],
-                            lines=sum(1 for _ in open(fpath, errors="replace")),
+                            lines=_count_lines(fpath),
                             size_bytes=stat.st_size,
                             last_modified=datetime.fromtimestamp(stat.st_mtime),
                         )
+                        scanned += 1
                     except Exception:
                         pass
+            if capped:
+                break
+        if capped:
+            logger.warning(
+                "扫描达到文件数上限 %d（PROJECT_MEMORY_MAX_FILES），索引为部分（如实截断）: %s",
+                MAX_FILES,
+                self.repo_root,
+            )
         self._build_dependency_graph()
         self._identify_core_files()
         self._last_scan = start
@@ -232,7 +271,12 @@ class ProjectMemory:
         RuntimeError（dict changed size during iteration）②新增文件永不发现
         （只遍历既有 file_index）③变更文件 import 边永不同步（图陈旧）④删除
         文件幽灵边残留（import_graph/dependency_graph 不清）。
+        事件循环解阻（周期#677 修复①）：同步扫描体移线程执行（to_thread），
+        禁在 uvicorn 事件循环上跑 os.walk/行计数。
         """
+        await asyncio.to_thread(self._refresh_incremental_sync)
+
+    def _refresh_incremental_sync(self):
         if not self._last_scan:
             self.rebuild()
             return
@@ -252,13 +296,18 @@ class ProjectMemory:
                 except OSError:
                     continue
                 seen.add(rel_path)
+                if len(seen) > MAX_FILES:
+                    # 超上界：seen 不完整=「删除幽灵」判定不可信，如实回落
+                    # 全量重建（_build_index 自身有界），禁在截断集上推断删除。
+                    self.rebuild()
+                    return
                 info = self.file_index.get(rel_path)
                 if info is None:
                     topology_changed = True
                     continue
                 mod_time = datetime.fromtimestamp(stat.st_mtime)
                 if mod_time > info.last_modified or stat.st_size != info.size_bytes:
-                    info.lines = sum(1 for _ in open(fpath, errors="replace"))
+                    info.lines = _count_lines(fpath)
                     info.size_bytes = stat.st_size
                     info.last_modified = mod_time
                     changed.append(rel_path)
@@ -413,17 +462,25 @@ async def acquire_project_memory(
     pm = _SHARED.get(key)
     created = False
     if pm is None:
+        # 周期#677 修复①：构造（缓存回载失败回落=全量扫描）移出事件循环
+        # （to_thread）——修前同步 _build_index 直跑 uvicorn 循环，repo_root=
+        # /home/climbing 实测冻结 8090 全体端点 ≥3min。并发首取不持锁跨 await
+        # （锁只护 dict 读写），重复构造择一既有实例、多余扫描丢弃。
+        pm = await asyncio.to_thread(
+            ProjectMemory, repo_root, cache_path=str(cache_file), autoload=True
+        )
         with _SHARED_LOCK:
-            pm = _SHARED.get(key)
-            if pm is None:
-                pm = ProjectMemory(repo_root, cache_path=str(cache_file), autoload=True)
+            existing = _SHARED.get(key)
+            if existing is None:
                 _SHARED[key] = pm
                 created = True
+            else:
+                pm = existing
     if created or force_refresh or pm.stale_for(ttl_s):
         try:
             if force_refresh or pm.stale_for(ttl_s):
                 await pm.refresh_incremental()
-            pm.save_cache()
+            await asyncio.to_thread(pm.save_cache)
         except Exception as e:
             logger.warning("project_memory 刷新/落盘失败（沿用既有索引，不阻断）: %s", e)
     return pm
