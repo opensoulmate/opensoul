@@ -91,6 +91,7 @@ async def vital_stats(request: Request):
     alert_mgr = _get_alert_mgr(request)
     snap = collector.snapshot
     report = await checker.check()
+    alert_counters = alert_mgr.counters()
 
     return {
         "status": "ok",
@@ -117,8 +118,10 @@ async def vital_stats(request: Request):
             "healthy": sum(1 for c in report.components if c.status.value == "ok"),
         },
         "alerts": {
-            "total": len(alert_mgr.history),
-            "active": sum(1 for a in alert_mgr.history if not a.resolved),
+            # GR-①b-⑤ 计数真源：total/active 恒对账 alert_history 行聚合
+            # （内存窗裁剪/重启不漏计；缺省 persist=None 走缓存派生=修前字节同义）
+            "total": alert_counters["total"],
+            "active": alert_counters["active"],
         },
     }
 
@@ -140,7 +143,9 @@ async def alerts(request: Request):
                 "resolved": a.resolved,
                 "ts": a.ts,
             }
-            for a in alert_mgr.history
+            # GR-①b-⑤ 全量史读面：窗覆盖全史=窗快路径，窗不足回落行真源
+            # （任何 N 值读面输出不变；写失败行窗内可见=修前面，见 full_history）
+            for a in alert_mgr.full_history()
         ]
     }
 

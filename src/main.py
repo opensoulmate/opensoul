@@ -104,6 +104,7 @@ from src.middleware.intrusion_middleware import IntrusionDetectionMiddleware
 from src.middleware.metrics_middleware import MetricsMiddleware
 from src.plugin_loader import load_all_plugins
 from src.vital.alert import AlertManager
+from src.vital.alert_persist import AlertPersistence
 from src.vital.collector import MetricsCollector
 from src.vital.health import HealthChecker
 
@@ -316,7 +317,7 @@ async def lifespan(app: FastAPI):
     # Vital services
     collector = MetricsCollector()
     checker = HealthChecker()
-    alert_mgr = AlertManager(collector)
+    alert_mgr = AlertManager(collector, persist=AlertPersistence())
     app.state.vital_collector = collector
     app.state.vital_checker = checker
     app.state.vital_alert_mgr = alert_mgr

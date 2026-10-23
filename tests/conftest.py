@@ -212,6 +212,27 @@ def _isolate_dream_history_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_alert_history_db(tmp_path, monkeypatch):
+    """ALERT_HISTORY_DB 全测试隔离（GR-①b-⑤ 增补）：AlertManager 告警史持久化落盘口
+    AlertPersistence——src/main lifespan 构造 AlertManager(collector,
+    persist=AlertPersistence())（_record_alert 写穿+构造回载），测试绝不写生产
+    data/alert_history.db。库路径每次连接按 env 解析，env 每用例指向 tmp；已构造的
+    AlertManager 内存史/firing 复位（dream _isolate_dream_history_db 同款：每用例
+    真源=本用例 tmp 库，禁跨用例陈旧行/陈旧 firing 残留）。单例仅在模块已被 import
+    时复位（sys.modules 探测——不主动 import src.main：import 有 app 构造副作用）。
+    显式 db_path/ALERT_HISTORY_DB 的测试按其覆盖为准。"""
+    import sys
+
+    monkeypatch.setenv("ALERT_HISTORY_DB", str(tmp_path / "alert_history.db"))
+    mod = sys.modules.get("src.main")
+    app_obj = getattr(mod, "app", None) if mod is not None else None
+    mgr = getattr(getattr(app_obj, "state", None), "vital_alert_mgr", None)
+    if mgr is not None:
+        mgr._history.clear()
+        mgr._firing.clear()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_healer_history_db(tmp_path, monkeypatch):
     """HEALER_HISTORY_DB 全测试隔离（RV-①b-⑬ 增补）：OrganHealer 修复史持久化落盘口
     HealerPersistence——src.api.healer 模块级 healer 单例构造即接 persist

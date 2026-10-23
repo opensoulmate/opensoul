@@ -197,10 +197,10 @@ def _mem_entry(module: str, cls: str | None, attr: str) -> dict:
 
 def test_前提_观察件真无界形态在场():
     """RV-①c 观察件（dream_distiller/vital alert）判 grow_only=增长域开域依据；
-    契约随更新（GR-①b-④，F4b-⑯f 先例）：_dream_history 已由 GR-①b-④ 落内存窗
-    裁剪——工件快照判 grow_only（历史定性不改写），本锁改钉**现行源码**判
-    grow_with_trim（delitem 裁剪真在）=收口不许静默回退无界；alert._history
-    未裁剪照旧 grow_only（GR-①b-⑤ 待拍板件）。"""
+    契约随更新（GR-①b-④/⑤，F4b-⑯f 先例）：_dream_history 已由 GR-①b-④、
+    alert._history 已由 GR-①b-⑤ 落内存窗裁剪——工件快照判 grow_only（历史定性
+    不改写），本锁改钉**现行源码**判 grow_with_trim（delitem 裁剪真在）=收口不许
+    静默回退无界。"""
     assert (
         _mem_entry("src/hippo/dream_distiller.py", "DreamDistiller", "_dream_history")["verdict"]
         == "grow_only"
@@ -213,6 +213,11 @@ def test_前提_观察件真无界形态在场():
     mem, _db = tool.scan_file(root / "src/hippo/dream_distiller.py")
     entry = next(e for e in mem if e["class"] == "DreamDistiller" and e["attr"] == "_dream_history")
     assert entry["verdict"] == "grow_with_trim"
+    mem_alert, _ = tool.scan_file(root / "src/vital/alert.py")
+    entry_alert = next(
+        e for e in mem_alert if e["class"] == "AlertManager" and e["attr"] == "_history"
+    )
+    assert entry_alert["verdict"] == "grow_with_trim"
     assert any(op.startswith("delitem@") for op in entry["trim_ops"])
 
 
