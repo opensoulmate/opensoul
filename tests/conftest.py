@@ -192,6 +192,26 @@ def _isolate_echo_history_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_dream_history_db(tmp_path, monkeypatch):
+    """DREAM_HISTORY_DB 全测试隔离（GR-①b-④ 增补）：DreamDistiller 梦史持久化落盘口
+    DreamPersistence——src.api.hippo 模块级 _dream_distiller 单例构造即接 persist
+    （DreamDistiller(persist=DreamPersistence())：_record_dream 写穿+构造回载），
+    测试绝不写生产 data/dream_history.db。库路径每次连接按 env 解析（memory_persist
+    同纪律），env 每用例指向 tmp+单例内存史复位（echo _isolate_echo_history_db 同款：
+    每用例真源=本用例 tmp 库，禁跨用例陈旧行残留）。单例仅在模块已被 import 时复位
+    （sys.modules 探测——不主动 import src.api.hippo：该模块 import 有单例构造副作用
+    （_lt_store/_register_job_handlers），禁为隔离而触发）。显式 db_path/
+    DREAM_HISTORY_DB 的测试按其覆盖为准。"""
+    import sys
+
+    monkeypatch.setenv("DREAM_HISTORY_DB", str(tmp_path / "dream_history.db"))
+    mod = sys.modules.get("src.api.hippo")
+    inst = getattr(mod, "_dream_distiller", None) if mod is not None else None
+    if inst is not None:
+        inst._dream_history.clear()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_healer_history_db(tmp_path, monkeypatch):
     """HEALER_HISTORY_DB 全测试隔离（RV-①b-⑬ 增补）：OrganHealer 修复史持久化落盘口
     HealerPersistence——src.api.healer 模块级 healer 单例构造即接 persist

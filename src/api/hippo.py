@@ -817,8 +817,10 @@ async def ltm_audit_stats():
 # ── Dream Distillation (CowAgent + nanobot + kilocode echo blocker) ──
 
 from src.hippo.dream_distiller import DreamDistiller
+from src.hippo.dream_persist import DreamPersistence
 
-_dream_distiller = DreamDistiller(ltm_store=_lt_store)
+# GR-①b-④：梦史真源落盘（data/dream_history.db）——内存窗=展示缓存，重启梦史/计数不丢
+_dream_distiller = DreamDistiller(ltm_store=_lt_store, persist=DreamPersistence())
 
 
 class DreamRequest(BaseModel):

@@ -104,13 +104,18 @@ live 单机真态快照（2026-10-23）：
 | ① | TokenMeter._records 内存窗+计数真源化 | **已落（GR-①b-①，2026-10-23）** | DB=全量真源（usage_persist.load_all），读面回落 DB 后内存窗=纯缓存尺寸（零可观测变化=零新阈值）；`call_count` 恒对账 gland_usage 行聚合（MEM-⑥）；API 键形零变化。落地形态：records_window=1000 类属性（缓存尺寸非数据阈值）+persist 在场才裁+recent_records 回落 load_recent+计数/预算判定恒读 counters() 行聚合；load_all 随全量回载收口退场（契约随更新） |
 | ② | a2a push_delivery_log 内存窗+计数真源化 | **已落（GR-①b-②，2026-10-23）** | 同款：DB=全量真源（delivery_log_persist.load_all 全史回读口保留），读面回落 DB 后内存窗=纯缓存尺寸，零新阈值。落地形态：delivery_log_window=1000 类属性+persist 在场才裁（delitem）+懒回载 load_all→load_recent 有界读（全量回载=修前重启即无界）+recent_delivery_log 读面窗不足回落行真源（任何 N 值读面输出不变）；计数面：本面无 len 派生计数耦合（grep 实证 0 消费点），计数真源=count() 全表聚合既有口、窗裁剪不丢审计史（测试锁死），不发明新计数消费面（宁窄勿滥） |
 | ③ | a2a tasks/push_configs 终态驱逐+按需回查 | 待拍板（A 终态保留 N 条 / B TTL / C 维持无界） | A2A GetTask 保留语义+驱逐阈值=产品语义 |
-| ④ | DreamDistiller._dream_history 裁窗+计数真源化 | 待拍板（total_dreams=历史总量 vs 窗内量+窗阈值） | 计数派生耦合，语义取舍=产品语义 |
+| ④ | DreamDistiller._dream_history 裁窗+计数真源化 | **已落（GR-①b-④，2026-10-23）** | 真源先行（dream_persist 行真源落盘）→内存窗=纯缓存（任何 N 值读面输出不变=零新阈值）；total_dreams 保持**历史总量**语义（counters 恒全表行聚合 MEM-⑥，「窗内量」语义未选=零产品决策）——「窗阈值/语义取舍」随真源在场消解，可续无需拍板。落地形态：history_window=1000 类属性（缓存尺寸非数据阈值）+persist 在场才裁（delitem）+_record_dream 五写点单一收口+load_recent 有界回载+counters() 行聚合（对账失败回落缓存禁假 0）+recent_dreams 窗不足回落行真源 |
 | ⑤ | AlertManager._history 裁窗 | 待拍板（告警史保留阈值） | 阈值=产品口味 |
 | ⑥ | 键基数面老化（_ip_suspicion per-IP 优先） | 待拍板（TTL） | IP 域无界=中风险；TTL=阈值 |
 | ⑦ | DB retention 统一拍板（39 张无删口表） | 待拍板（审计「不可抹除」vs 生长治理；A 分级保留 B 归档 C 不动） | 涉审计可删性=治理语义，禁自决 |
 
 ③~⑦ 阈值/语义涉产品口味（用户记忆「阈值留拍板」），不自决；①② DB 全量真源已在场、
 内存改窗+读面回落 DB=零可观测变化（窗口尺寸是纯缓存内部量），可续无需拍板。
+（GR-①b-④ 勘误/补充 2026-10-23：④ 的「待拍板」前提是『只裁窗无真源』——真源先行
+（dream_persist 落行）后窗=纯缓存零阈值、total_dreams 保持历史总量语义，产品取舍
+消解=可续无需拍板已落。⑤ alert 若同走「真源先行→窗=纯缓存」路线，其「保留阈值」
+前提同样消解，可复核；③/⑥/⑦ 待拍板照旧——③涉 A2A GetTask 保留语义、⑥TTL、
+⑦审计可删性，均非真源先行可消解。）
 
 ## 六、诚实边界
 

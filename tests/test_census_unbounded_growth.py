@@ -197,12 +197,23 @@ def _mem_entry(module: str, cls: str | None, attr: str) -> dict:
 
 def test_前提_观察件真无界形态在场():
     """RV-①c 观察件（dream_distiller/vital alert）判 grow_only=增长域开域依据；
-    建设件落地裁剪后本锁须契约随更新复核判定。"""
+    契约随更新（GR-①b-④，F4b-⑯f 先例）：_dream_history 已由 GR-①b-④ 落内存窗
+    裁剪——工件快照判 grow_only（历史定性不改写），本锁改钉**现行源码**判
+    grow_with_trim（delitem 裁剪真在）=收口不许静默回退无界；alert._history
+    未裁剪照旧 grow_only（GR-①b-⑤ 待拍板件）。"""
     assert (
         _mem_entry("src/hippo/dream_distiller.py", "DreamDistiller", "_dream_history")["verdict"]
         == "grow_only"
     )
     assert _mem_entry("src/vital/alert.py", "AlertManager", "_history")["verdict"] == "grow_only"
+    # 现行源码面：内存窗真裁（判法单一源 scan_file 实扫，非工件快照）
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parent.parent
+    mem, _db = tool.scan_file(root / "src/hippo/dream_distiller.py")
+    entry = next(e for e in mem if e["class"] == "DreamDistiller" and e["attr"] == "_dream_history")
+    assert entry["verdict"] == "grow_with_trim"
+    assert any(op.startswith("delitem@") for op in entry["trim_ops"])
 
 
 def test_前提_判法收口面_filter滑动认得():

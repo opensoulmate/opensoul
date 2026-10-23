@@ -217,13 +217,19 @@ class DreamDistiller:
     - kilocode memory echo blocker (skip digest if recall was used this turn)
     """
 
-    def __init__(self, ltm_store, llm_call: Callable | None = None):
+    # GR-①b-④ 内存窗（缓存尺寸非数据阈值——行真源恒全表落库、任何 N 值读面输出
+    # 不变=零可观测变化零新阈值；persist 在场才裁=无真源裁=丢唯一副本；N<=0 不裁）
+    history_window: int = 1000
+
+    def __init__(self, ltm_store, llm_call: Callable | None = None, persist=None):
         """Initialize with a LongTermMemoryStore and optional LLM caller.
 
         Args:
             ltm_store: LongTermMemoryStore instance for CRUD operations
             llm_call: async callable(system_prompt, user_prompt) -> str
                       If None, uses the gland router.
+            persist: DreamPersistence 梦史行真源（GR-①b-④）。缺省 None=纯内存
+                     既有语义字节不变（无真源不裁窗=不丢唯一副本）。
         """
         self._store = ltm_store
         self._llm_call = llm_call
@@ -232,6 +238,9 @@ class DreamDistiller:
         self._recall_count_this_turn: int = 0
         # Dream history
         self._dream_history: list[dict] = []
+        self._persist = persist
+        if persist is not None:
+            self._reload_from_persist()
 
     # ── Memory echo blocker (kilocode recalledMemory, 15-line pattern) ──
 
@@ -266,6 +275,78 @@ class DreamDistiller:
             "digest_blocked": self.should_skip_digest(),
         }
 
+    # ── Dream history（GR-①b-④ 内存窗+行真源+计数真源化） ──
+
+    def _record_dream(self, record: dict) -> None:
+        """梦史写点单一收口（5 个 append 点共用，禁两套写史逻辑）。
+
+        内存窗 append + persist 写穿 + 窗裁剪（delitem 形态=普查判定单一源可认）：
+        窗=展示缓存，行真源恒在库；计数不随窗裁剪（计数真源=行聚合，_counter_truth）。
+        """
+        self._dream_history.append(record)
+        if self._persist is None:
+            return
+        try:
+            self._persist.insert(record)
+        except Exception as exc:  # noqa: BLE001 — 记账旁路纪律（蒸馏本体已跑完，落盘失败可见不阻断）
+            logger.error("dream history persist failed (in-memory record intact): %s", exc)
+
+        # GR-①b-④ 内存窗裁剪（persist 在场才裁=无真源裁=丢唯一副本；N<=0 不裁）
+        if self.history_window > 0 and len(self._dream_history) > self.history_window:
+            del self._dream_history[: len(self._dream_history) - self.history_window]
+
+    def _reload_from_persist(self) -> None:
+        """启动回载：内存窗回填（GR-①b-④——只回载最近 history_window 行作展示缓存，
+        修前无落盘口；全量回载=重启即无界）。回载失败不阻断构造（记账旁路纪律：
+        梦史面故障绝不吃掉 import/service 启动），logger.error 可见+空史起步。
+        """
+        if self._persist is None:
+            return
+        try:
+            rows = self._persist.load_recent(self._reload_limit())
+        except Exception as exc:  # noqa: BLE001 — 记账旁路纪律
+            logger.error("dream history reload failed (starting with empty history): %s", exc)
+            return
+        self._dream_history.extend(rows)
+
+    def _reload_limit(self) -> int:
+        """回载行数上界=内存窗（N<=0=不裁窗语义，回载上界如实放开）。"""
+        return self.history_window if self.history_window > 0 else 2**63 - 1
+
+    def _cache_counters(self) -> dict:
+        """内存计数缓存视图（_counter_truth 回落面；persist=None 纯内存真源面）。
+        与 DreamPersistence.counters() 逐键同形状（单一形状禁两套）。"""
+        return {
+            "total_dreams": len(self._dream_history),
+            "total_applied": sum(h.get("applied", 0) for h in self._dream_history),
+            "echo_blocked": sum(1 for h in self._dream_history if h.get("echo_blocked")),
+        }
+
+    def _counter_truth(self) -> dict:
+        """计数真源（GR-①b-④「计数真源化」MEM-⑥ 纪律）：persist 在场=恒对账
+        dream_history 行聚合（计数器=行缓存视图，值读面读真源禁信第二套聚合列；
+        聚合恒算全表=内存窗裁剪/回载窗不漏计=历史总量语义不变）；缺省=纯内存
+        计数器既有语义字节不变。对账失败=logger.error 可见+回落内存计数缓存
+        （缓存本职，禁静默假 0）。"""
+        if self._persist is None:
+            return self._cache_counters()
+        try:
+            return self._persist.counters()
+        except Exception as exc:  # noqa: BLE001 — 记账旁路纪律
+            logger.error("dream counter truth failed (falling back to cache): %s", exc)
+            return self._cache_counters()
+
+    def _recent_dreams(self, limit: int = 5) -> list[dict]:
+        """recent_dreams 读面（GR-①b-① recent_records 同款回落纪律）：窗足够=窗尾
+        快路径；窗不足回落行真源（任何 N 值读面输出不变）；回落失败降级窗可见非静默。"""
+        if self._persist is None or len(self._dream_history) >= limit:
+            return self._dream_history[-limit:]
+        try:
+            return self._persist.load_recent(limit)
+        except Exception as exc:  # noqa: BLE001 — 记账旁路纪律
+            logger.error("dream recent fallback failed (window tail shown): %s", exc)
+            return self._dream_history[-limit:]
+
     # ── Dream distillation pipeline ──
 
     async def dream(
@@ -297,12 +378,12 @@ class DreamDistiller:
                 "this turn — answers from memory must not be distilled back (echo blocker)"
             )
             logger.info(f"Dream {dream_id}: echo blocked ({self.echo_stats})")
-            self._dream_history.append(result.to_dict())
+            self._record_dream(result.to_dict())
             return result
 
         if not messages:
             result.error = "No messages to distill"
-            self._dream_history.append(result.to_dict())
+            self._record_dream(result.to_dict())
             return result
 
         # Gather existing memories
@@ -340,7 +421,7 @@ class DreamDistiller:
         except Exception as e:
             result.error = f"LLM call failed: {e}"
             logger.error(f"Dream {dream_id}: LLM error: {e}")
-            self._dream_history.append(result.to_dict())
+            self._record_dream(result.to_dict())
             return result
 
         # 非str响应（OpenAI风格dict等）统一经权威解包点（router.extract_chat_text）——
@@ -355,7 +436,7 @@ class DreamDistiller:
 
         if not actions:
             logger.info(f"Dream {dream_id}: no actions parsed from response")
-            self._dream_history.append(result.to_dict())
+            self._record_dream(result.to_dict())
             return result
 
         # Execute actions against the store
@@ -375,7 +456,7 @@ class DreamDistiller:
             f"{result.skipped} skipped, {result.failed} failed "
             f"(actions: {result.counts})"
         )
-        self._dream_history.append(result.to_dict())
+        self._record_dream(result.to_dict())
         return result
 
     def _execute_action(self, action: DreamAction) -> bool:
@@ -506,14 +587,17 @@ class DreamDistiller:
         return "\n".join(lines)
 
     def get_stats(self) -> dict:
-        """Get Dream distillation statistics."""
-        total_dreams = len(self._dream_history)
-        total_applied = sum(h.get("applied", 0) for h in self._dream_history)
-        total_echo_blocked = sum(1 for h in self._dream_history if h.get("echo_blocked"))
+        """Get Dream distillation statistics.
+
+        GR-①b-④ 计数真源化（MEM-⑥）：total_dreams/total_actions_applied/
+        echo_blocked_count 恒对账 dream_history 行聚合（历史总量语义不变——修前
+        即全量遍历派生的总量，窗裁剪不漏计）；recent_dreams 窗不足回落行真源。
+        """
+        counters = self._counter_truth()
         return {
-            "total_dreams": total_dreams,
-            "total_actions_applied": total_applied,
-            "echo_blocked_count": total_echo_blocked,
+            "total_dreams": counters["total_dreams"],
+            "total_actions_applied": counters["total_applied"],
+            "echo_blocked_count": counters["echo_blocked"],
             "current_turn_echo": self.echo_stats,
-            "recent_dreams": self._dream_history[-5:],
+            "recent_dreams": self._recent_dreams(),
         }
