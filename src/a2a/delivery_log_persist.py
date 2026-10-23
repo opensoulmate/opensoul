@@ -29,7 +29,8 @@ a2a_tasks 快照表刻意不同）——一次投递尝试一行，只增不改�
 ③行内单条不可解（payload 坏行）跳过该行并 logger.error 可见，不因单行坏数据丢
   整库审计史（禁静默丢：跳过必留日志真因）。
 ④无老化/裁剪面：投递审计史只增不删（审计语义；如需老化另拍）。
-⑤读面=库行 SQL 取证+count()/load_all() 回读口，无 HTTP API（push_delivery_log
+⑤读面=库行 SQL 取证+count()/load_all()（全史回读）/load_recent()（有界读，
+  GR-①b-② 内存窗回填/读面回落用）回读口，无 HTTP API（push_delivery_log
   既有读面就是 tests/live SQL 取证，本拍不扩 API 面）。
 """
 
@@ -117,10 +118,6 @@ class DeliveryLogPersistence:
         单行不可解（json 坏行）跳过该行并 logger.error 可见（诚实边界③）。
         delivery_id 以列值为权威（payload 内同键以列值覆盖防漂移）。
         """
-        import json
-        import logging
-
-        logger = logging.getLogger(__name__)
         with self._lock:
             path = self.explicit_path or default_db_path()
             if not Path(path).exists():
@@ -132,6 +129,36 @@ class DeliveryLogPersistence:
                 ).fetchall()
             finally:
                 conn.close()
+        return self._decode(rows)
+
+    def load_recent(self, limit: int = 1000) -> list[dict]:
+        """回载最近 limit 行（rowid 升序返回=投递序，最旧行在前；GR-①b-② 有界读）。
+
+        内存窗回填/读面回落用（GR-①b-② load_recent 同款纪律）：修前懒回载唯一
+        读口 load_all 全量进内存=重启即无界。回载只读不建库（load_all 同纪律）；
+        行解码语义与 load_all 同一 _decode 单一源（禁两套解码漂移）。
+        """
+        with self._lock:
+            path = self.explicit_path or default_db_path()
+            if not Path(path).exists():
+                return []
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    f"SELECT {', '.join(_COLUMNS)} FROM {_TABLE} ORDER BY rowid DESC LIMIT ?",
+                    (int(limit),),
+                ).fetchall()
+            finally:
+                conn.close()
+        return self._decode(list(reversed(rows)))
+
+    def _decode(self, rows) -> list[dict]:
+        """行→entry dict 单一解码口（load_all/load_recent 共用）：列值为权威
+        （payload 内同键以列值覆盖防漂移）；坏行跳过+logger.error 可见（诚实边界③）。"""
+        import json
+        import logging
+
+        logger = logging.getLogger(__name__)
         out: list[dict] = []
         for delivery_id, task_id, config_id, ok, payload in rows:
             try:

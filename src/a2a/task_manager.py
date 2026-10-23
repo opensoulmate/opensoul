@@ -582,6 +582,12 @@ class TaskManager:
     # PROCESS_BUDGET_S 同款纪律：类属性供测试短缩，真实计时语义不动）。
     ACP_FALLBACK_BUDGET_S = 10.0
 
+    # webhook 投递留痕内存窗（GR-①b-②）：push_delivery_log 只保留最近 N 条作
+    # 缓存——缓存尺寸非数据阈值（行真源恒全表落库，读面 recent_delivery_log 回落
+    # DB 零可观测变化，任何 N 值读面输出不变=零新阈值）。仅 delivery_persist 在场
+    # 才裁（无真源可回落时裁=丢唯一副本）；N<=0=不裁。
+    delivery_log_window: int = 1000
+
     def __init__(
         self,
         persist: TaskPersistence | None = None,
@@ -715,12 +721,13 @@ class TaskManager:
 
         回载失败不置 _delivery_log_loaded（下次触碰重试）+logger.error 可见，行真源
         仍在库；只补缺不覆盖（按 delivery_id 去重：内存已有行不被回载重复追加、
-        进程内新行不被回载洗掉）。
+        进程内新行不被回载洗掉）。GR-①b-②：回载行数有界（load_recent 替换 load_all
+        全量进内存=修前重启即无界），回填后内存窗裁剪。
         """
         if self._delivery_persist is None or self._delivery_log_loaded:
             return
         try:
-            rows = self._delivery_persist.load_all()
+            rows = self._delivery_persist.load_recent(self._delivery_reload_limit())
         except Exception as e:
             logger.error(f"a2a push delivery 回载失败（下次触碰重试）: {e}")
             return
@@ -732,6 +739,36 @@ class TaskManager:
             seen.add(did)
             self.push_delivery_log.append(entry)
         self._delivery_log_loaded = True
+        self._trim_delivery_log()
+
+    def _delivery_reload_limit(self) -> int:
+        """回载行数上界=内存窗（GR-①b-②；N<=0=不裁窗语义，回载上界如实放开）。"""
+        return self.delivery_log_window if self.delivery_log_window > 0 else 2**63 - 1
+
+    def _trim_delivery_log(self) -> None:
+        """内存窗裁剪（GR-①b-②，delitem 形态=普查判定单一源可认）：窗=缓存，
+        行真源恒在库（recent_delivery_log 读面回落 DB 零可观测变化）；仅
+        delivery_persist 在场才裁（无真源裁=丢唯一副本）；N<=0 不裁。"""
+        if self._delivery_persist is None:
+            return
+        if self.delivery_log_window > 0 and len(self.push_delivery_log) > self.delivery_log_window:
+            del self.push_delivery_log[: len(self.push_delivery_log) - self.delivery_log_window]
+
+    def recent_delivery_log(self, limit: int = 50) -> list[dict]:
+        """投递留痕读面（GR-①b-②）：最近 limit 条 entry（投递序尾切，最旧行在前）。
+
+        GR-①b-② 读面回落：内存窗不足 limit=回落行真源（窗=纯缓存、真源=全表，
+        读面输出与裁窗前逐字一致=零可观测变化）；回落失败降级内存窗可见非静默。
+        """
+        if self._delivery_persist is not None and limit > len(self.push_delivery_log):
+            try:
+                rows = self._delivery_persist.load_recent(limit)
+            except Exception as e:  # noqa: BLE001 — 读故障降级缓存（禁静默空）
+                logger.error(f"a2a push delivery 读面回落失败（降级内存窗）: {e}")
+                rows = None
+            if rows is not None:
+                return rows
+        return list(self.push_delivery_log[-limit:])
 
     def _sync_delivery_entry(self, entry: dict) -> None:
         """投递留痕写穿单一点（RV-①b-② _sync_entry/⑤-1 _sync_task 纪律：禁散落写点）。
@@ -837,6 +874,7 @@ class TaskManager:
                     entry["error"] = str(e)
                 self.push_delivery_log.append(entry)
                 self._sync_delivery_entry(entry)  # 写穿单一点（RV-①b-⑤-3）
+                self._trim_delivery_log()  # 内存窗裁剪（GR-①b-②，写点后随裁）
                 if not entry.get("ok"):
                     logger.warning(f"push delivery failed: {entry}")
 

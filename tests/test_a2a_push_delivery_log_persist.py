@@ -323,7 +323,7 @@ def test_write_failure_visible_not_blocking(tmp_path, caplog):
         def append(self, **kw):
             raise RuntimeError("disk full")
 
-        def load_all(self):
+        def load_recent(self, limit=1000):  # GR-①b-② 契约随更新（懒回载读口）
             return []
 
     from src.a2a.task_manager import TaskManager
@@ -345,7 +345,7 @@ def test_reload_failure_retries_next_touch(tmp_path, caplog):
         def append(self, **kw):
             pass
 
-        def load_all(self):
+        def load_recent(self, limit=1000):  # 懒回载读口（GR-①b-② load_all→load_recent 契约随更新）
             calls["n"] += 1
             if calls["n"] == 1:
                 raise RuntimeError("db locked")

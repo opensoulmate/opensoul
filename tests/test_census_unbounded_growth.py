@@ -227,20 +227,24 @@ def test_前提_事件流型候选在场():
     """GR-①b 候拍清单依赖的事件流型真无界面真在工件里（工件=2026-10-23 快照）。
 
     契约随更新（GR-① 诚实边界⑥，F4b-⑯f 先例）：TokenMeter._records 已由
-    GR-①b-① 落内存窗裁剪——工件快照判 grow_only（历史定性不改写），本锁改钉
-    **现行源码**判 grow_with_trim（delitem 裁剪真在）=收口不许静默回退无界。"""
-    assert (
-        _mem_entry("src/a2a/task_manager.py", "TaskManager", "push_delivery_log")["verdict"]
-        == "grow_only"
-    )
+    GR-①b-① 落内存窗裁剪、push_delivery_log 已由 GR-①b-② 落内存窗裁剪——
+    工件快照判 grow_only（历史定性不改写），本锁改钉**现行源码**判 grow_with_trim
+    （delitem 裁剪真在）=收口不许静默回退无界。"""
     assert _mem_entry("src/a2a/task_manager.py", "TaskManager", "tasks")["verdict"] == "grow_only"
     # 现行源码面：内存窗真裁（判法单一源 scan_file 实扫，非工件快照）
     from pathlib import Path as _Path
 
-    mem, _db = tool.scan_file(_Path(__file__).resolve().parent.parent / "src/gland/token_meter.py")
+    root = _Path(__file__).resolve().parent.parent
+    mem, _db = tool.scan_file(root / "src/gland/token_meter.py")
     entry = next(e for e in mem if e["class"] == "TokenMeter" and e["attr"] == "_records")
     assert entry["verdict"] == "grow_with_trim"
     assert any(op.startswith("delitem@") for op in entry["trim_ops"])
+    mem2, _db2 = tool.scan_file(root / "src/a2a/task_manager.py")
+    entry2 = next(
+        e for e in mem2 if e["class"] == "TaskManager" and e["attr"] == "push_delivery_log"
+    )
+    assert entry2["verdict"] == "grow_with_trim"
+    assert any(op.startswith("delitem@") for op in entry2["trim_ops"])
 
 
 def test_前提_DB无删口面在场():
